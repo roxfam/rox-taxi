@@ -1,0 +1,172 @@
+{
+  "theme": "Caribbean Luxury Neuter",
+  "emotional_tone": "Vibrant, welcoming, trustworthy, tropical but premium. Evokes the warmth of the sun and the clarity of Bahamian waters while ensuring a frictionless booking experience.",
+  "typography": {
+    "headings": {
+      "family": "Playfair Display",
+      "weights": ["400", "700", "900"],
+      "usage": "H1-H4, large expressive metrics. Adds editorial, travel-magazine elegance."
+    },
+    "body": {
+      "family": "Manrope",
+      "weights": ["400", "500", "600"],
+      "usage": "Paragraphs, labels, data tables, and standard UI components. Ensures high readability."
+    },
+    "mono": {
+      "family": "JetBrains Mono",
+      "usage": "Booking references, tracking IDs, admin dashboard data."
+    },
+    "scale_rules": {
+      "h1": "text-5xl sm:text-6xl tracking-tight leading-none",
+      "h2": "text-4xl sm:text-5xl tracking-tight",
+      "h3": "text-2xl sm:text-3xl",
+      "h4": "text-xl sm:text-2xl",
+      "body": "text-base leading-relaxed text-foreground/80",
+      "label": "text-xs tracking-[0.2em] uppercase text-foreground/60"
+    }
+  },
+  "colors": {
+    "light_mode": {
+      "background": "#FAF9F6",
+      "surface": "#FFFFFF",
+      "primary": "#00B4D8",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#1A365D",
+      "secondary_foreground": "#FFFFFF",
+      "accent": "#FF7F50",
+      "accent_foreground": "#FFFFFF",
+      "muted": "#F1F5F9",
+      "muted_foreground": "#64748B",
+      "border": "#E2E8F0"
+    },
+    "dark_mode": {
+      "background": "#0B192C",
+      "surface": "#112240",
+      "primary": "#00B4D8",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#E2E8F0",
+      "secondary_foreground": "#0F172A",
+      "accent": "#FF7F50",
+      "accent_foreground": "#FFFFFF",
+      "muted": "#1E293B",
+      "muted_foreground": "#94A3B8",
+      "border": "#1E293B"
+    },
+    "rules": [
+      "Never use pure black or pure white. Tint greys with ocean blue.",
+      "Use Coral Pink (#FF7F50) exclusively for high-conversion CTAs (Book Now, Pay).",
+      "Turquoise (#00B4D8) is for branding, active states, and sub-actions.",
+      "Deep Navy (#1A365D) for strong contrast text and footer backgrounds."
+    ]
+  },
+  "layouts": {
+    "marketing_pages": [
+      "Generous spacing: use py-24 or py-32 for sections to let the Caribbean imagery breathe.",
+      "Hero Sections: Immersive full-bleed images with a backdrop-blur-md glassmorphism booking widget floating on top.",
+      "The 'Bento' Grid for Excursions: Use asymmetrical grid-cols-1 md:grid-cols-12 for showcasing tours. e.g., Hero image col-span-8, side features col-span-4.",
+      "Overlap elements: Break the box by allowing images to overlap sections using -mt-12 or similar."
+    ],
+    "dashboard_pages": [
+      "Dense, functional bento grids for Admin metrics.",
+      "Use subtle rounded borders (rounded-xl) and 1px border-border.",
+      "Flat Solid surfaces, no glassmorphism for admin tables to keep data crisp."
+    ]
+  },
+  "visual_enhancers": {
+    "surfaces": [
+      "Glassmorphism (Customer): For sticky navs and floating booking bars over hero images. Use bg-white/70 backdrop-blur-xl border border-white/20.",
+      "Flat Solid (Admin): Solid backgrounds with strict 1px borders."
+    ],
+    "shadows": [
+      "Use soft ambient shadows for cards: shadow-[0_8px_30px_rgb(0,0,0,0.04)].",
+      "Interactive lift: hover:-translate-y-1 hover:shadow-[0_20px_40px_rgb(0,180,216,0.1)]."
+    ],
+    "motion": [
+      "Smooth entrance fades and staggered lists for tour options using framer-motion.",
+      "Parallax scroll on hero images.",
+      "Micro-interactions: Buttons should scale down slightly on active (scale-95)."
+    ]
+  },
+  "components": {
+    "buttons": "Pill-shaped (rounded-full) for customer-facing CTAs. Sharp or slightly rounded (rounded-md) for Admin dashboard. Never default to generic rectangular buttons.",
+    "inputs": "Shadcn UI heavily customized. Minimalist floating labels or large, airy inputs with p-6 and bg-transparent border-b-2 focus:border-primary. Dropdowns should never have transparent backgrounds.",
+    "cards": "Borderless cards with soft image overlays. When hovering over a tour card, image scales slightly and a gradient overlay reveals the price/book button.",
+    "tables": "Admin only. Dense, left-aligned, sticky header.",
+    "tracker": "Horizontal stepper for desktop, vertical for mobile. Use lucide-icons with primary color for completed steps."
+  },
+  "image_urls": {
+    "hero_backgrounds": [
+      {
+        "url": "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwyfHxiYWhhbWFzJTIwYmVhY2glMjBjbGVhciUyMHdhdGVyfGVufDB8fHx8MTc4NTA2MjgxMXww&ixlib=rb-4.1.0&q=85",
+        "category": "hero",
+        "description": "Clear water beach for main homepage hero"
+      }
+    ],
+    "tours": [
+      {
+        "url": "https://images.unsplash.com/photo-1533586616444-300edc8a6b5e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxzd2ltbWluZyUyMHBpZ3MlMjBiYWhhbWFzfGVufDB8fHx8MTc4NTA2MjgxMXww&ixlib=rb-4.1.0&q=85",
+        "category": "tour",
+        "description": "Swimming pigs excursion"
+      },
+      {
+        "url": "https://images.pexels.com/photos/4166305/pexels-photo-4166305.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "tour",
+        "description": "Boat tour and island hopping"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1680635601834-581581c6cdfa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwyfHxzbm9ya2VsaW5nJTIwYmFoYW1hcyUyMGNsZWFyJTIwd2F0ZXJ8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
+        "category": "tour",
+        "description": "Snorkeling clear waters"
+      }
+    ],
+    "vehicles": [
+      {
+        "url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
+        "category": "transport",
+        "description": "Luxury SUV for taxi and car rentals"
+      }
+    ]
+  },
+  "icons": "lucide-react (Install with: yarn add lucide-react)",
+  "accessibility": [
+    "Ensure contrast ratio is above 4.5:1. Pay special attention to white text over light turquoise or coral.",
+    "Use text-shadow on hero images if text is placed directly over imagery.",
+    "Add data-testid attributes to all interactive elements."
+  ],
+  "libraries": {
+    "motion": "framer-motion",
+    "icons": "lucide-react",
+    "scrolling": "lenis",
+    "dates": "date-fns",
+    "toasts": "sonner"
+  },
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN.",
+    "Use .js/.jsx extensions for components if the project uses JS.",
+    "All interactive and key informational elements MUST include a `data-testid` attribute to facilitate robust automated testing."
+  ],
+  "instructions_to_main_agent": [
+    "Implement the customer facing pages (Home, Taxi Booking, Tours, Car Rentals, Tracker, Checkout) using the Caribbean Luxury Neuter theme.",
+    "Implement the Admin Dashboard using a clean, strict grid.",
+    "Setup routing using React Router for these pages.",
+    "Use Playfair Display for headings and Manrope for body text by linking them in index.html.",
+    "Add framer-motion for smooth page transitions and micro-interactions.",
+    "Use the provided image URLs to replace placeholders.",
+    "Ensure the booking tracking flow includes visual states (Confirmed, Driver Assigned, En Route, Arrived, Completed) using a stepped progress bar.",
+    "Include payment UI mocking Stripe checkout and providing Zelle manual instructions.",
+    "Add a Facebook page link integration for 'roxtaxiservice'.",
+    "Ensure responsive design (mobile-first) is fully functional, especially the booking widgets."
+  ]
+}
