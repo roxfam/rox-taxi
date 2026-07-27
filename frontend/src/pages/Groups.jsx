@@ -110,6 +110,11 @@ export default function Groups() {
               <div className="flex items-center gap-2"><Check className="w-4 h-4 text-[#D4A94A]" /> Volume pricing from 8 guests</div>
               <div className="flex items-center gap-2"><Check className="w-4 h-4 text-[#D4A94A]" /> Dedicated concierge on event day</div>
             </div>
+            <div className="mt-8">
+              <a href="/wedding-builder" data-testid="groups-cta-builder" className="btn-shine inline-flex items-center gap-2 rounded-full bg-[#D4A94A] text-[#0B192C] px-6 py-3 text-sm font-semibold hover:bg-[#e0b856] shadow-[0_10px_25px_rgba(212,169,74,0.4)]">
+                <Heart className="w-4 h-4" /> Try the Wedding Package Builder
+              </a>
+            </div>
           </motion.div>
         </div>
       </section>

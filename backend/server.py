@@ -184,6 +184,8 @@ class GroupInquiryCreate(BaseModel):
     customer_email: EmailStr
     customer_phone: str
     notes: Optional[str] = None
+    package: Optional[Dict[str, Any]] = None  # wedding-builder structured selection
+    estimated_total: Optional[float] = None
 
 
 class GroupInquiryStatusUpdate(BaseModel):

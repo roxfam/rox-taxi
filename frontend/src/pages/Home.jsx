@@ -166,18 +166,19 @@ export default function Home() {
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
-                  to="/groups"
-                  data-testid="home-groups-cta-btn"
+                  to="/wedding-builder"
+                  data-testid="home-wedding-builder-btn"
                   className="btn-shine inline-flex items-center gap-2 rounded-full bg-[#D4A94A] text-[#0B192C] px-7 py-4 text-sm font-semibold hover:bg-[#e0b856] active:scale-95 shadow-[0_10px_25px_rgba(212,169,74,0.4)]"
                 >
-                  Request a group quote <ArrowRight className="w-4 h-4" />
+                  Build a wedding package <ArrowRight className="w-4 h-4" />
                 </Link>
-                <a
-                  href="/contact"
+                <Link
+                  to="/groups"
+                  data-testid="home-groups-cta-btn"
                   className="rounded-full border border-white/20 text-white px-7 py-4 text-sm font-semibold hover:bg-white/5"
                 >
-                  Or talk to us
-                </a>
+                  Group inquiry form
+                </Link>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
