@@ -83,7 +83,8 @@ export default function Layout({ children }) {
                 <img
                   src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
                   alt="Rox Taxi Service and Tours"
-                  className="h-14 w-auto max-w-[80px] object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-[0_3px_10px_rgba(212,169,74,0.35)]"
+                  className="h-16 w-auto max-w-[96px] object-contain group-hover:scale-110 transition-transform duration-300 drop-shadow-[0_6px_16px_rgba(212,169,74,0.6)] contrast-125 saturate-150"
+                  style={{ filter: "drop-shadow(0 3px 6px rgba(11,25,44,0.35)) drop-shadow(0 8px 20px rgba(212,169,74,0.55))" }}
                   data-testid="brand-logo-img"
                 />
                 <div className="hidden sm:flex flex-col leading-none" data-testid="brand-name">
@@ -322,7 +323,8 @@ export default function Layout({ children }) {
                     <img
                       src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
                       alt="Rox Taxi Service and Tours"
-                      className="h-12 w-auto max-w-[54px] object-contain drop-shadow-[0_3px_10px_rgba(212,169,74,0.45)]"
+                      className="h-14 w-auto max-w-[64px] object-contain contrast-125 saturate-150"
+                      style={{ filter: "drop-shadow(0 3px 6px rgba(11,25,44,0.35)) drop-shadow(0 6px 16px rgba(212,169,74,0.6))" }}
                     />
                   ) : (
                     <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center text-white shadow-[0_6px_16px_rgba(212,169,74,0.4)]">
@@ -510,7 +512,8 @@ export default function Layout({ children }) {
                 <img
                   src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
                   alt="Rox Taxi Service and Tours"
-                  className="h-24 w-auto max-w-[220px] object-contain drop-shadow-[0_6px_20px_rgba(212,169,74,0.35)]"
+                  className="h-32 w-auto max-w-[280px] object-contain contrast-125 saturate-150"
+                  style={{ filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4)) drop-shadow(0 12px 30px rgba(212,169,74,0.65))" }}
                   data-testid="footer-logo-img"
                 />
               ) : (
