@@ -183,6 +183,8 @@ class SiteConfigUpdate(BaseModel):
     paypal_me_url: Optional[str] = None
     tripadvisor_url: Optional[str] = None
     logo_url: Optional[str] = None
+    notify_email_enabled: Optional[bool] = None
+    notify_sms_enabled: Optional[bool] = None
 
 
 class GroupInquiryCreate(BaseModel):
@@ -475,6 +477,8 @@ async def seed_db():
             "whatsapp_number": WHATSAPP_NUMBER,
             "paypal_me_url": PAYPAL_ME_URL,
             "tripadvisor_url": TRIPADVISOR_URL,
+            "notify_email_enabled": True,
+            "notify_sms_enabled": True,
         })
     else:
         # backfill new fields if missing (idempotent)
@@ -482,6 +486,8 @@ async def seed_db():
         if not cfg.get("whatsapp_number"): patch["whatsapp_number"] = WHATSAPP_NUMBER
         if not cfg.get("paypal_me_url"): patch["paypal_me_url"] = PAYPAL_ME_URL
         if not cfg.get("tripadvisor_url"): patch["tripadvisor_url"] = TRIPADVISOR_URL
+        if "notify_email_enabled" not in cfg: patch["notify_email_enabled"] = True
+        if "notify_sms_enabled" not in cfg: patch["notify_sms_enabled"] = True
         if patch:
             await db.site_config.update_one({"_id": "main"}, {"$set": patch})
 
@@ -585,7 +591,13 @@ async def create_booking(req: BookingCreate):
     await db.bookings.insert_one(booking)
     if req.payment_method == "zelle":
         try:
-            notify_booking_confirmed(clean(dict(booking)))
+            prefs = await db.site_config.find_one({"_id": "main"}) or {}
+            report = notify_booking_confirmed(clean(dict(booking)), prefs)
+            await db.bookings.update_one(
+                {"id": booking["id"]},
+                {"$set": {"notification_status": report, "notified_at": now_iso()}},
+            )
+            booking["notification_status"] = report
         except Exception as e:  # noqa: BLE001
             logging.warning("notify err: %s", e)
     return clean(booking)
@@ -1281,6 +1293,25 @@ async def admin_update_site(req: SiteConfigUpdate, _: str = Depends(require_admi
     return cfg
 
 
+@api_router.post("/admin/bookings/{booking_id}/resend-notification")
+async def admin_resend_notification(booking_id: str, _: str = Depends(require_admin)):
+    """Manually re-send the booking-confirmation email + SMS and update the stored report."""
+    booking = await db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    prefs = await db.site_config.find_one({"_id": "main"}) or {}
+    try:
+        report = notify_booking_confirmed(clean(dict(booking)), prefs)
+    except Exception as e:  # noqa: BLE001
+        logging.warning("resend notify err: %s", e)
+        raise HTTPException(500, f"Notification error: {e}") from e
+    await db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$set": {"notification_status": report, "notified_at": now_iso()}},
+    )
+    return {"booking_id": booking["id"], "notification_status": report}
+
+
 # ---------------- Payments ----------------
 
 @api_router.post("/payments/checkout")
@@ -1331,7 +1362,12 @@ async def _mark_paid(session_id: str, booking_id: Optional[str]):
         if res.modified_count:
             booking = await db.bookings.find_one({"id": booking_id})
             try:
-                notify_booking_confirmed(clean(dict(booking)))
+                prefs = await db.site_config.find_one({"_id": "main"}) or {}
+                report = notify_booking_confirmed(clean(dict(booking)), prefs)
+                await db.bookings.update_one(
+                    {"id": booking_id},
+                    {"$set": {"notification_status": report, "notified_at": now_iso()}},
+                )
             except Exception as e:  # noqa: BLE001
                 logging.warning("notify err: %s", e)
 

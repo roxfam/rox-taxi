@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, money } from "../lib/api";
-import BookingModal, { Field } from "./BookingFlow";
-import { Car, ArrowRight, Plane, Anchor, ShoppingBag, Utensils, Palmtree, MapPin, Ship, Hotel } from "lucide-react";
+import BookingModal from "./BookingFlow";
+import { Car, ArrowRight, Plane, Anchor, ShoppingBag, Utensils, Palmtree, MapPin, Ship, Hotel, ChevronDown } from "lucide-react";
 
 /**
  * Popular Nassau destinations. Each entry is mapped to the taxi service that
@@ -21,6 +21,23 @@ const NASSAU_DESTINATIONS = [
   { name: "Junkanoo Beach",                   area: "West Bay Street",          match: "cable beach",         Icon: Palmtree },
   { name: "Sandy Toes / Rose Island",         area: "Boat departure · Marina",  match: "hourly",              Icon: Anchor },
   { name: "Custom stop — pick anywhere",      area: "Hourly charter",           match: "hourly",              Icon: MapPin },
+];
+
+// Options exposed in the pickup/dropoff dropdowns inside the booking modal.
+// Airport + cruise port are pinned to the top since they cover the vast
+// majority of transfers.
+const LOCATION_OPTIONS = [
+  "LPIA — Nassau Airport",
+  "Cruise Port / Prince George Wharf",
+  "Atlantis Paradise Island",
+  "Baha Mar Resort",
+  "Cable Beach",
+  "Downtown Nassau / Bay Street",
+  "British Colonial Hilton",
+  "Paradise Island Beach",
+  "Junkanoo Beach",
+  "Fish Fry — Arawak Cay",
+  "Sandy Toes / Rose Island",
 ];
 
 function pickServiceFor(destName, services) {
@@ -178,12 +195,90 @@ export default function Taxi() {
           initialPickup={prefill.pickup}
           onClose={() => { setSelected(null); setPrefill({ dropoff: "", pickup: "" }); }}
           extraFields={(form, setForm) => (
-            <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Pickup location" val={form.pickup_location} on={(e) => setForm({ ...form, pickup_location: e.target.value })} testid="taxi-pickup" />
-              <Field label="Dropoff location" val={form.dropoff_location} on={(e) => setForm({ ...form, dropoff_location: e.target.value })} testid="taxi-dropoff" />
+            <div className="grid sm:grid-cols-2 gap-4" data-testid="taxi-route-selector">
+              <LocationSelect
+                label="Pickup location"
+                icon={<MapPin className="w-4 h-4 text-[#0B3B5C]" />}
+                value={form.pickup_location}
+                onChange={(v) => setForm({ ...form, pickup_location: v })}
+                options={LOCATION_OPTIONS}
+                placeholder="Select pickup…"
+                testid="taxi-pickup"
+              />
+              <LocationSelect
+                label="Dropoff location"
+                icon={<ArrowRight className="w-4 h-4 text-[#E86A3C]" />}
+                value={form.dropoff_location}
+                onChange={(v) => setForm({ ...form, dropoff_location: v })}
+                options={LOCATION_OPTIONS}
+                placeholder="Select dropoff…"
+                testid="taxi-dropoff"
+              />
             </div>
           )}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Dropdown of preset Nassau locations with a "Custom address" escape hatch.
+ * Uses a native <select> so it plays nicely with mobile keyboards.
+ */
+function LocationSelect({ label, icon, value, onChange, options, placeholder, testid }) {
+  const preset = options.includes(value);
+  const [mode, setMode] = useState(!value || preset ? "preset" : "custom");
+
+  const handleSelect = (v) => {
+    if (v === "__custom__") {
+      setMode("custom");
+      onChange("");
+      return;
+    }
+    setMode("preset");
+    onChange(v);
+  };
+
+  return (
+    <div>
+      <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2 flex items-center gap-1.5">
+        {icon} {label}
+      </label>
+
+      {mode === "preset" ? (
+        <div className="relative">
+          <select
+            value={preset ? value : ""}
+            onChange={(e) => handleSelect(e.target.value)}
+            data-testid={`${testid}-select`}
+            className="w-full appearance-none rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 pr-10 text-sm text-[#0B3B5C] focus:border-[#D4A94A] focus:outline-none focus:ring-2 focus:ring-[#D4A94A]/20 cursor-pointer"
+          >
+            <option value="" disabled>{placeholder}</option>
+            {options.map((o) => <option key={o} value={o}>{o}</option>)}
+            <option value="__custom__">Other — type a custom address…</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94a3b8]" />
+        </div>
+      ) : (
+        <div className="flex gap-2 items-start">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Hotel, street or landmark"
+            data-testid={`${testid}-custom-input`}
+            className="flex-1 rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm focus:border-[#D4A94A] focus:outline-none focus:ring-2 focus:ring-[#D4A94A]/20"
+          />
+          <button
+            type="button"
+            onClick={() => { setMode("preset"); onChange(""); }}
+            data-testid={`${testid}-back-to-list`}
+            className="text-[10px] uppercase tracking-[0.15em] text-[#64748B] hover:text-[#0B3B5C] px-2 py-2"
+          >
+            ← List
+          </button>
+        </div>
       )}
     </div>
   );

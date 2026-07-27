@@ -253,8 +253,47 @@ function SiteConfigPanel() {
         <F l="Zelle email" v={cfg.zelle_email || ""} on={(v) => setCfg({ ...cfg, zelle_email: v })} testid="site-zelle-email" />
         <F l="Zelle phone" v={cfg.zelle_phone || ""} on={(v) => setCfg({ ...cfg, zelle_phone: v })} testid="site-zelle-phone" />
         <F l="Contact phone" v={cfg.phone || ""} on={(v) => setCfg({ ...cfg, phone: v })} testid="site-phone" />
+
+        <div className="pt-4 mt-4 border-t border-[#E2E8F0]">
+          <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold mb-3">Notification preferences</div>
+          <div className="space-y-2">
+            <Toggle
+              label="Send booking confirmation emails"
+              hint="Delivered via SendGrid or SMTP (Namecheap Private Email) on paid bookings."
+              checked={cfg.notify_email_enabled !== false}
+              onChange={(v) => setCfg({ ...cfg, notify_email_enabled: v })}
+              testid="notify-email-toggle"
+            />
+            <Toggle
+              label="Send booking confirmation SMS"
+              hint="Delivered via Twilio to the customer's phone number on paid bookings."
+              checked={cfg.notify_sms_enabled !== false}
+              onChange={(v) => setCfg({ ...cfg, notify_sms_enabled: v })}
+              testid="notify-sms-toggle"
+            />
+          </div>
+        </div>
+
         <button onClick={save} disabled={saving} data-testid="site-save" className="mt-2 rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm">Save</button>
       </div>
     </div>
+  );
+}
+
+function Toggle({ label, hint, checked, onChange, testid }) {
+  return (
+    <label className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${checked ? "border-[#059669]/40 bg-[#059669]/5" : "border-[#E2E8F0] bg-white hover:bg-[#F8FAFC]"}`} data-testid={testid}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-1 accent-[#059669]"
+        data-testid={`${testid}-checkbox`}
+      />
+      <span className="flex-1">
+        <span className="block text-sm font-semibold text-[#0B3B5C]">{label}</span>
+        <span className="block text-[11px] text-[#64748B] mt-0.5">{hint}</span>
+      </span>
+    </label>
   );
 }

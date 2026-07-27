@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money } from "../lib/api";
-import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X } from "lucide-react";
+import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw } from "lucide-react";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -148,6 +148,7 @@ export default function AdminDashboard() {
                   <th className="px-4 py-3">Total</th>
                   <th className="px-4 py-3">Deposit</th>
                   <th className="px-4 py-3">Pay</th>
+                  <th className="px-4 py-3">Notify</th>
                   <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
@@ -215,6 +216,9 @@ export default function AdminDashboard() {
                         <span className={`text-xs px-2 py-1 rounded ${b.payment_status === "paid" ? "bg-[#D4A94A]/10 text-[#D4A94A]" : "bg-[#E86A3C]/10 text-[#E86A3C]"}`}>{b.payment_method} · {b.payment_status}</span>
                       </td>
                       <td className="px-4 py-3">
+                        <NotifyCell booking={b} onRefresh={load} />
+                      </td>
+                      <td className="px-4 py-3">
                         <select
                           value={b.status}
                           onChange={(e) => changeStatus(b.id, e.target.value)}
@@ -228,7 +232,7 @@ export default function AdminDashboard() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="text-center py-12 text-[#64748B]">No bookings for this filter yet.</td></tr>
+                  <tr><td colSpan={9} className="text-center py-12 text-[#64748B]">No bookings for this filter yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -243,6 +247,102 @@ export default function AdminDashboard() {
           onClose={() => setDepositModal(null)}
           onDone={() => { setDepositModal(null); load(); }}
         />
+      )}
+    </div>
+  );
+}
+
+function NotifyCell({ booking, onRefresh }) {
+  const [resending, setResending] = useState(false);
+  const status = booking.notification_status || null;
+  const notifiedAt = booking.notified_at;
+  const paid = booking.payment_status === "paid";
+
+  const badge = (channel, meta) => {
+    const Icon = channel === "email" ? Mail : MessageSquare;
+    const label = channel === "email" ? "Email" : "SMS";
+    if (!meta) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-[#F1F5F9] text-[#94a3b8]"
+          title={`${label} — not sent yet`}
+          data-testid={`notify-${channel}-${booking.id}`}
+        >
+          <Icon className="w-3 h-3" /> {label} —
+        </span>
+      );
+    }
+    if (!meta.enabled) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-[#F1F5F9] text-[#94a3b8]"
+          title={`${label} disabled by admin`}
+          data-testid={`notify-${channel}-${booking.id}`}
+        >
+          <Icon className="w-3 h-3" /> {label} off
+        </span>
+      );
+    }
+    if (meta.sent) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-[#059669]/10 text-[#059669] font-semibold"
+          title={`${label} sent via ${meta.provider}`}
+          data-testid={`notify-${channel}-${booking.id}`}
+        >
+          <Icon className="w-3 h-3" /> {label} ✓
+        </span>
+      );
+    }
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-[#DC2626]/10 text-[#DC2626] font-semibold"
+        title={`${label} failed: ${meta.error || "unknown error"}`}
+        data-testid={`notify-${channel}-${booking.id}`}
+      >
+        <Icon className="w-3 h-3" /> {label} ✗
+      </span>
+    );
+  };
+
+  const resend = async () => {
+    setResending(true);
+    try {
+      const { data } = await api.post(`/admin/bookings/${booking.id}/resend-notification`);
+      const rep = data?.notification_status || {};
+      const okEmail = rep.email?.sent;
+      const okSms = rep.sms?.sent;
+      if (okEmail && okSms) toast.success("Email + SMS re-sent");
+      else if (okEmail || okSms) toast.success(`Re-sent ${okEmail ? "email" : ""}${okEmail && okSms ? " + " : ""}${okSms ? "SMS" : ""}`);
+      else toast.warning("Re-send attempted — check credentials");
+      onRefresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Re-send failed");
+    } finally {
+      setResending(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1" data-testid={`notify-cell-${booking.id}`}>
+      <div className="flex gap-1 flex-wrap">
+        {badge("email", status?.email)}
+        {badge("sms", status?.sms)}
+      </div>
+      {notifiedAt && (
+        <div className="text-[9px] text-[#94a3b8]" data-testid={`notify-time-${booking.id}`}>
+          {new Date(notifiedAt).toLocaleString()}
+        </div>
+      )}
+      {paid && (
+        <button
+          onClick={resend}
+          disabled={resending}
+          className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-[#0B3B5C] hover:text-[#D4A94A] disabled:opacity-60"
+          data-testid={`notify-resend-${booking.id}`}
+        >
+          <RotateCw className={`w-3 h-3 ${resending ? "animate-spin" : ""}`} /> {resending ? "Sending…" : "Re-send"}
+        </button>
       )}
     </div>
   );

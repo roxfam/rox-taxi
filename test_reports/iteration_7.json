@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 7: Tested notification prefs (site-config flags), per-booking notification_status persistence, admin resend endpoint, admin dashboard 'Notify' column with Email/SMS badges + resend button, admin manage Site Config toggles, taxi pickup/dropoff dropdown selects with 'Other — type custom' fallback, and the new Home hero H1 copy. 7/8 backend tests pass, all frontend flows verified. One minor backend bug: POST /api/bookings response body does not include notified_at (data is persisted to DB and appears in admin GET, just missing from the create response).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/bookings (zelle)", "issue": "notification_status is included in the response body but notified_at is only persisted via $set on the DB doc — the returned dict never gets booking['notified_at'] = now_iso(). Admin GET /api/admin/bookings does return notified_at correctly. Fix: after the update_one, add booking['notified_at'] = now_iso() before returning clean(booking). server.py ~ line 596-600."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Taxi booking modal", "issues": ["Date & Time field uses browser default datetime-local picker (mm/dd/yyyy input) instead of a shadcn Calendar/DateTime component — inconsistent with app's design language."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_notifications_iter7.py",
+    "/app/test_reports/pytest/iter7_notify.xml"
+  ],
+  "action_items": [
+    "Minor: In create_booking (server.py ~L596-600), set booking['notified_at'] = now_iso() on the local dict too so the POST response body includes notified_at (matches DB and admin GET). Update the test assertion afterward.",
+    "Optional design: replace <input type='datetime-local'> in Taxi booking modal with shadcn Calendar + time picker for consistency with the rest of the UI."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1675 lines — same DRY/size concern from iter6 still applies; consider splitting into routers (bookings, admin, payments, catalog).",
+    "notify_booking_confirmed writes 'Disabled by admin' or 'No email address' to the same 'error' field. Consumers can't distinguish 'not sent because disabled' from 'not sent because of a provider failure' without also checking the enabled flag. Consider a separate reason/status enum (disabled|missing_contact|failed|sent).",
+    "POST /api/admin/bookings/{id}/resend-notification always resends even if prefs disable email/sms — that's arguably correct (admin explicit action), but there's no override flag to force-send when prefs=false; both channels will just report enabled=false. Consider a { force: true } body param.",
+    "notified_at only being persisted (not returned in booking response) is a subtle inconsistency between POST /bookings and GET /admin/bookings for the same record."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_notifications_iter7.py (new)"
+  ],
+  "success_rate": {"backend": "87.5% (7/8)", "frontend": "100% verified for scoped changes"},
+  "test_credentials": "admin@roxtaxi.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created 2 zelle test bookings against airport-nassau ($35 taxi) with customer name TEST_Notify User, email test_notify@example.com, phone +15005550006 (Twilio magic test number). These persist in DB with notification_status attached — safe to leave for the demo since Twilio was not actually called (creds cause 'Twilio not configured' path).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Admin login endpoint is POST /api/auth/login (not /api/admin/login as review request stated). Test module uses BASE_URL from /app/frontend/.env fallback if REACT_APP_BACKEND_URL isn't in env. Zelle booking path is what triggers notification_status persistence (Stripe path defers until _mark_paid). notify_email/sms status dicts contain sent/provider/error/enabled — all four keys are asserted. Frontend AdminDashboard renders NotifyCell only for paid rows w/ resend button, but Email/SMS badges appear for every booking that has a notification_status object.",
+  "rca of the issue": "For the minor notified_at gap: server.py's create_booking does `await db.bookings.update_one(..., {'$set': {'notification_status': report, 'notified_at': now_iso()}})` (L596-599), then only mutates the local dict with `booking['notification_status'] = report` (L600). It never sets `booking['notified_at']`, so `return clean(booking)` omits it. GET /admin/bookings reads back from DB, so it correctly includes notified_at — that's why admin dashboard shows the timestamp fine. Fix: add `booking['notified_at'] = now_iso()` on line 600, using the same timestamp captured once."
+}

@@ -1,6 +1,13 @@
-"""Email + SMS notifications. No-op if credentials aren't configured yet."""
+"""Email + SMS notifications. No-op if credentials aren't configured yet.
+
+Every send helper returns a delivery-status dict so the caller can persist it
+against the booking (used for admin dashboard delivery badges):
+
+    {"sent": bool, "provider": str, "error": Optional[str]}
+"""
 import os
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +27,12 @@ def _booking_summary_text(b: dict) -> str:
     )
 
 
-def send_email(to_email: str, subject: str, html: str, text: str | None = None) -> bool:
+def send_email(to_email: str, subject: str, html: str, text: Optional[str] = None) -> dict:
     """Send email via SendGrid if configured, otherwise fall back to plain SMTP
-    (Namecheap Private Email, Gmail SMTP, or any generic SMTP host)."""
+    (Namecheap Private Email, Gmail SMTP, or any generic SMTP host).
+
+    Returns a status dict: {sent, provider, error}.
+    """
     api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
     sender_sg = os.environ.get("SENDGRID_FROM_EMAIL", "").strip()
 
@@ -33,9 +43,14 @@ def send_email(to_email: str, subject: str, html: str, text: str | None = None) 
             from sendgrid.helpers.mail import Mail
             message = Mail(from_email=sender_sg, to_emails=to_email, subject=subject, html_content=html, plain_text_content=text or "")
             resp = SendGridAPIClient(api_key).send(message)
-            return 200 <= resp.status_code < 300
+            if 200 <= resp.status_code < 300:
+                return {"sent": True, "provider": "sendgrid", "error": None}
+            return {"sent": False, "provider": "sendgrid", "error": f"SendGrid HTTP {resp.status_code}"}
         except Exception as e:  # noqa: BLE001
             logger.warning("SendGrid error: %s — falling back to SMTP", e)
+            sendgrid_err = str(e)
+    else:
+        sendgrid_err = None
 
     # 2) Generic SMTP path (Namecheap Private Email, Zoho, Gmail, etc.)
     host = os.environ.get("SMTP_HOST", "").strip()
@@ -46,7 +61,7 @@ def send_email(to_email: str, subject: str, html: str, text: str | None = None) 
     use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
     if not (host and user and pw and sender):
         logger.info("Neither SendGrid nor SMTP configured; skipping email to %s", to_email)
-        return False
+        return {"sent": False, "provider": "none", "error": sendgrid_err or "Email not configured"}
     try:
         import smtplib, ssl
         from email.mime.multipart import MIMEMultipart
@@ -74,31 +89,51 @@ def send_email(to_email: str, subject: str, html: str, text: str | None = None) 
                 server.login(user, pw)
                 server.sendmail(sender, [to_email], msg.as_string())
         logger.info("SMTP email sent to %s via %s", to_email, host)
-        return True
+        return {"sent": True, "provider": "smtp", "error": None}
     except Exception as e:  # noqa: BLE001
         logger.warning("SMTP error: %s", e)
-        return False
+        return {"sent": False, "provider": "smtp", "error": str(e)}
 
 
-def send_sms(to_number: str, body: str) -> bool:
+def send_sms(to_number: str, body: str) -> dict:
     sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
     token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
     from_num = os.environ.get("TWILIO_FROM_NUMBER", "").strip()
     if not (sid and token and from_num):
         logger.info("Twilio not configured; skipping SMS to %s", to_number)
-        return False
+        return {"sent": False, "provider": "twilio", "error": "Twilio not configured"}
     try:
         from twilio.rest import Client
         client = Client(sid, token)
         client.messages.create(from_=from_num, to=to_number, body=body)
-        return True
+        return {"sent": True, "provider": "twilio", "error": None}
     except Exception as e:  # noqa: BLE001
         logger.warning("Twilio error: %s", e)
-        return False
+        return {"sent": False, "provider": "twilio", "error": str(e)}
 
 
-def notify_booking_confirmed(booking: dict) -> None:
-    """Send email + SMS on confirmed booking."""
+def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dict:
+    """Send email + SMS on confirmed booking.
+
+    Args:
+        booking: booking dict.
+        prefs: optional site config prefs {notify_email_enabled: bool, notify_sms_enabled: bool}.
+
+    Returns:
+        Delivery report: {
+          "email": {"sent","provider","error","enabled"},
+          "sms":   {"sent","provider","error","enabled"},
+        }
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+
+    report = {
+        "email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+        "sms": {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
+    }
+
     subject = f"Booking {booking['id']} confirmed — Rox Taxi Service and Tours"
     body_text = _booking_summary_text(booking)
     html = f"""
@@ -116,7 +151,18 @@ def notify_booking_confirmed(booking: dict) -> None:
       <p style="color:#64748B;font-size:13px;margin-top:24px;">Track your booking anytime at <a style="color:#00B4D8;" href="https://roxtaxi.com/track?id={booking['id']}">roxtaxi.com/track</a>.</p>
     </div>
     """
-    send_email(booking["customer_email"], subject, html, body_text)
 
-    sms = f"Rox Taxi: Booking {booking['id']} confirmed for {booking['item_name']} on {booking['booking_date']}. Total {_fmt_money(booking.get('total',0))}. Track: roxtaxi.com/track?id={booking['id']}"
-    send_sms(booking["customer_phone"], sms)
+    if email_enabled and booking.get("customer_email"):
+        result = send_email(booking["customer_email"], subject, html, body_text)
+        report["email"].update(result)
+    else:
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+
+    if sms_enabled and booking.get("customer_phone"):
+        sms = f"Rox Taxi: Booking {booking['id']} confirmed for {booking['item_name']} on {booking['booking_date']}. Total {_fmt_money(booking.get('total',0))}. Track: roxtaxi.com/track?id={booking['id']}"
+        result = send_sms(booking["customer_phone"], sms)
+        report["sms"].update(result)
+    else:
+        report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+
+    return report
