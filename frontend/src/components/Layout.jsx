@@ -87,8 +87,8 @@ export default function Layout({ children }) {
                   data-testid="brand-logo-img"
                 />
                 <div className="hidden sm:flex flex-col leading-none" data-testid="brand-name">
-                  <span className={`serif text-xl tracking-tight font-bold transition-colors ${scrolled ? "text-[#0B3B5C]" : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]"}`}>Rox Taxi Service</span>
-                  <span className={`text-[10px] tracking-[0.28em] uppercase mt-1 font-semibold transition-colors ${scrolled ? "text-[#D4A94A]" : "text-[#F5E1A4]/90 drop-shadow-[0_1px_4px_rgba(0,0,0,0.4)]"}`}>and Tours</span>
+                  <span className="serif text-xl tracking-tight font-bold text-[#0B3B5C] drop-shadow-[0_2px_8px_rgba(255,255,255,0.65)]">Rox Taxi Service</span>
+                  <span className="text-[10px] tracking-[0.28em] uppercase mt-1 font-bold text-[#D4A94A] drop-shadow-[0_1px_4px_rgba(255,255,255,0.5)]">and Tours</span>
                 </div>
               </>
             ) : (
@@ -318,12 +318,22 @@ export default function Layout({ children }) {
             >
               <div className="p-6 flex items-center justify-between border-b border-[#F1F5F9]">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center text-white">
-                    <Waves className="w-4 h-4" />
-                  </div>
+                  {config.logo_url ? (
+                    <img
+                      src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
+                      alt="Rox Taxi Service and Tours"
+                      className="h-12 w-auto max-w-[54px] object-contain drop-shadow-[0_3px_10px_rgba(212,169,74,0.45)]"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center text-white shadow-[0_6px_16px_rgba(212,169,74,0.4)]">
+                      <Waves className="w-4 h-4" />
+                    </div>
+                  )}
                   <div className="leading-none">
-                    <div className="serif text-lg text-[#0B3B5C]">Rox Taxi</div>
-                    <div className="text-[10px] tracking-[0.3em] uppercase text-[#64748B]">Nassau · PI</div>
+                    <div className="serif text-lg text-[#0B3B5C] font-bold tracking-tight" data-testid="mobile-drawer-brand">
+                      ROX TAXI <span className="text-[#D4A94A]">SERVICE</span>
+                    </div>
+                    <div className="text-[10px] tracking-[0.32em] uppercase text-[#D4A94A] font-bold mt-1">&amp; TOURS</div>
                   </div>
                 </div>
                 <button
