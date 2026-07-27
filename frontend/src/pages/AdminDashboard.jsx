@@ -69,6 +69,7 @@ export default function AdminDashboard() {
             <nav className="hidden sm:flex items-center gap-1 text-sm">
               <button onClick={() => nav("/admin")} className="px-3 py-1.5 rounded-md bg-[#0B3B5C] text-white" data-testid="admin-nav-bookings">Bookings</button>
               <button onClick={() => nav("/admin/manage")} className="px-3 py-1.5 rounded-md hover:bg-[#F1F5F9] text-[#64748B]" data-testid="admin-nav-manage">Manage catalog</button>
+              <button onClick={() => nav("/admin/groups")} className="px-3 py-1.5 rounded-md hover:bg-[#F1F5F9] text-[#64748B]" data-testid="admin-nav-groups">Group inquiries</button>
             </nav>
           </div>
           <div className="flex items-center gap-2">

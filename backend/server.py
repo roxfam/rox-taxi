@@ -174,6 +174,22 @@ class SiteConfigUpdate(BaseModel):
     tripadvisor_url: Optional[str] = None
 
 
+class GroupInquiryCreate(BaseModel):
+    event_type: str  # wedding | corporate | family_reunion | cruise_group | bachelor | other
+    event_date: str  # ISO date
+    guest_count: int = Field(..., ge=2, le=500)
+    needs: List[str] = []  # ["taxi","tours","rentals"]
+    budget_range: Optional[str] = None
+    customer_name: str
+    customer_email: EmailStr
+    customer_phone: str
+    notes: Optional[str] = None
+
+
+class GroupInquiryStatusUpdate(BaseModel):
+    status: str  # new | contacted | quoted | won | lost
+
+
 # ---------------- Admin JWT auth ----------------
 
 def make_admin_token(email: str) -> str:
@@ -680,6 +696,62 @@ async def admin_stats(_: str = Depends(require_admin)):
     revenue_docs = await revenue_cursor.to_list(1)
     revenue = revenue_docs[0]["sum"] if revenue_docs else 0
     return {"total": total, "paid": paid, "pending": pending, "active": active, "revenue": revenue}
+
+
+# ---------------- Group & Wedding inquiries ----------------
+# NOTE: These literal routes MUST be declared before /admin/{kind} to avoid shadowing.
+
+@api_router.post("/group-inquiries")
+async def create_group_inquiry(req: GroupInquiryCreate):
+    inquiry = req.model_dump()
+    inquiry["id"] = "GRP-" + uuid.uuid4().hex[:8].upper()
+    inquiry["status"] = "new"
+    inquiry["created_at"] = now_iso()
+    inquiry["updated_at"] = now_iso()
+    await db.group_inquiries.insert_one(inquiry)
+
+    try:
+        from notifications import send_email, send_sms
+        subject = f"Group inquiry {inquiry['id']} — {req.event_type} · {req.guest_count} pax"
+        text = (
+            f"New group inquiry:\n"
+            f"ID: {inquiry['id']}\n"
+            f"Event: {req.event_type}\n"
+            f"Date: {req.event_date}\n"
+            f"Guests: {req.guest_count}\n"
+            f"Needs: {', '.join(req.needs or []) or 'n/a'}\n"
+            f"Budget: {req.budget_range or 'n/a'}\n"
+            f"Name: {req.customer_name}\n"
+            f"Email: {req.customer_email}\n"
+            f"Phone: {req.customer_phone}\n"
+            f"Notes: {req.notes or ''}"
+        )
+        send_email(req.customer_email, f"We received your group inquiry {inquiry['id']}", f"<pre>{text}</pre>", text)
+        if ADMIN_EMAIL:
+            send_email(ADMIN_EMAIL, subject, f"<pre>{text}</pre>", text)
+        send_sms(req.customer_phone, f"Rox: Got your group inquiry {inquiry['id']} for {req.guest_count} guests on {req.event_date}. We'll reply within 2 hours.")
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("group notify err: %s", e)
+
+    return clean(inquiry)
+
+
+@api_router.get("/admin/group-inquiries")
+async def admin_list_group_inquiries(_: str = Depends(require_admin)):
+    docs = await db.group_inquiries.find({}).sort("created_at", -1).to_list(500)
+    return [clean(d) for d in docs]
+
+
+@api_router.patch("/admin/group-inquiries/{inquiry_id}/status")
+async def admin_update_group_status(inquiry_id: str, req: GroupInquiryStatusUpdate, _: str = Depends(require_admin)):
+    res = await db.group_inquiries.update_one(
+        {"id": inquiry_id.upper()},
+        {"$set": {"status": req.status, "updated_at": now_iso()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Inquiry not found")
+    doc = await db.group_inquiries.find_one({"id": inquiry_id.upper()})
+    return clean(doc)
 
 
 # ---------------- Admin CRUD (tours / taxi / rentals / site config) ----------------

@@ -1,7 +1,7 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Facebook, Phone, MapPin, Waves, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info } from "lucide-react";
+import { Menu, X, Facebook, Phone, MapPin, Waves, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart } from "lucide-react";
 import { api } from "../lib/api";
 import ChatWidget from "./ChatWidget";
 import { WhatsAppIcon, TripAdvisorIcon } from "./BrandIcons";
@@ -11,6 +11,7 @@ const NAV = [
   { to: "/taxi", label: "Taxi", icon: Car },
   { to: "/tours", label: "Tours", icon: ShipWheel },
   { to: "/rentals", label: "Rentals", icon: MapPinned },
+  { to: "/groups", label: "Groups", icon: Heart },
   { to: "/track", label: "Track", icon: Search },
   { to: "/about", label: "About", icon: Info },
   { to: "/contact", label: "Contact", icon: MessageCircle },

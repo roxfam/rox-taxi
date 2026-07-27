@@ -10,10 +10,12 @@ import CarRental from "./pages/CarRental";
 import Track from "./pages/Track";
 import Contact from "./pages/Contact";
 import About from "./pages/About";
+import Groups from "./pages/Groups";
 import { PaymentSuccess, PaymentCancel } from "./pages/PaymentReturn";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminManage from "./pages/AdminManage";
+import AdminGroups from "./pages/AdminGroups";
 import MyBookings from "./pages/MyBookings";
 import AuthCallback from "./pages/AuthCallback";
 import { AuthProvider } from "./lib/auth";
@@ -42,12 +44,14 @@ function AppRouter() {
       <Route path="/track" element={<CustomerShell><Track /></CustomerShell>} />
       <Route path="/contact" element={<CustomerShell><Contact /></CustomerShell>} />
       <Route path="/about" element={<CustomerShell><About /></CustomerShell>} />
+      <Route path="/groups" element={<CustomerShell><Groups /></CustomerShell>} />
       <Route path="/my-bookings" element={<CustomerShell><MyBookings /></CustomerShell>} />
       <Route path="/payment/success" element={<CustomerShell><PaymentSuccess /></CustomerShell>} />
       <Route path="/payment/cancel" element={<CustomerShell><PaymentCancel /></CustomerShell>} />
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/admin/manage" element={<AdminManage />} />
+      <Route path="/admin/groups" element={<AdminGroups />} />
     </Routes>
   );
 }

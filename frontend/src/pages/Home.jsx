@@ -152,6 +152,53 @@ export default function Home() {
         </div>
       </section>
 
+      {/* GROUP & WEDDING CTA */}
+      <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24" data-testid="home-groups-cta">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B3B5C] via-[#0B3B5C] to-[#0B192C] px-8 sm:px-14 py-16 text-white">
+          <div className="absolute -top-24 -right-16 w-96 h-96 rounded-full bg-[#D4A94A]/20 blur-3xl" />
+          <div className="absolute -bottom-24 -left-16 w-96 h-96 rounded-full bg-[#E86A3C]/15 blur-3xl" />
+          <div className="relative grid md:grid-cols-2 gap-10 items-center">
+            <div>
+              <span className="text-xs tracking-[0.3em] uppercase text-[#D4A94A]">Weddings · Groups · Corporate</span>
+              <h2 className="serif text-5xl sm:text-6xl mt-4 leading-[0.9]">Planning something <em className="italic text-[#F5E1A4]">bigger</em>?</h2>
+              <p className="mt-5 text-white/70 max-w-md leading-relaxed">
+                Weddings, cruise groups, bachelor weekends, corporate retreats — tell us what you're planning and our concierge team returns a custom quote within two hours.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  to="/groups"
+                  data-testid="home-groups-cta-btn"
+                  className="btn-shine inline-flex items-center gap-2 rounded-full bg-[#D4A94A] text-[#0B192C] px-7 py-4 text-sm font-semibold hover:bg-[#e0b856] active:scale-95 shadow-[0_10px_25px_rgba(212,169,74,0.4)]"
+                >
+                  Request a group quote <ArrowRight className="w-4 h-4" />
+                </Link>
+                <a
+                  href="/contact"
+                  className="rounded-full border border-white/20 text-white px-7 py-4 text-sm font-semibold hover:bg-white/5"
+                >
+                  Or talk to us
+                </a>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { n: "20+", l: "Weddings / year" },
+                { n: "8.4k", l: "Group guests" },
+                { n: "2h", l: "Quote turnaround" },
+                { n: "8+", l: "Volume discount from" },
+                { n: "24/7", l: "Concierge line" },
+                { n: "12yr", l: "In business" },
+              ].map((s) => (
+                <div key={s.l} className="rounded-2xl bg-white/5 border border-white/10 p-4">
+                  <div className="serif text-3xl text-[#D4A94A]">{s.n}</div>
+                  <div className="text-[10px] tracking-widest uppercase text-white/60 mt-1">{s.l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* HOW IT WORKS */}
       <section className="bg-[#0B192C] text-white py-24" data-testid="how-it-works">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 grid md:grid-cols-2 gap-14 items-center">

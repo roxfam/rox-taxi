@@ -35,3 +35,9 @@ Website offering taxi and tours in the Bahamas — Nassau + Paradise Island focu
 - P2: Real GPS driver tracking with driver mobile app
 - P2: Multi-language (English/Spanish)
 - P2: SEO blog, testimonials submission
+
+## Update (later Feb 2026)
+- Added **Groups & Weddings** module: `/groups` public page with a beautiful form (event type chips, date, guest count stepper, need checkboxes, budget bands, contact) → POST /api/group-inquiries stores inquiry + fires customer confirmation email/SMS + notifies admin (when SendGrid/Twilio keys present).
+- Admin console gained a third tab **Group inquiries** at `/admin/groups` with status pipeline (new → contacted → quoted → won → lost).
+- Home page has a dedicated "Planning something bigger?" CTA card + stats.
+- Route ordering fixed to prevent `/admin/group-inquiries` from being shadowed by `/admin/{kind}`.
