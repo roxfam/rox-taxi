@@ -105,6 +105,7 @@ LUGGAGE_FEE_USD = 3.0
 LUGGAGE_MAX = 10
 EXTRA_PASSENGER_FEE_USD = 5.0
 EXTRA_PASSENGER_INCLUDED = 2  # first 2 passengers included in the flat fare; each additional adds the fee
+RENTAL_DEPOSIT_USD = 150.0  # refundable security deposit applied automatically to every car rental booking
 
 # Days closed (weekly). Python weekday: Monday=0..Sunday=6. Saturday=5.
 CANCELLATION_FEE_PCT = 0.15  # 15% cancellation fee
@@ -550,6 +551,7 @@ async def create_booking(req: BookingCreate):
 
     luggage_fee = 0.0
     passenger_fee = 0.0
+    deposit_amount = 0.0
     if req.service_type == "taxi":
         extra = max(0, min(int(req.extra_luggage or 0), LUGGAGE_MAX))
         luggage_fee = extra * LUGGAGE_FEE_USD
@@ -558,8 +560,12 @@ async def create_booking(req: BookingCreate):
         if int(req.passengers) > EXTRA_PASSENGER_INCLUDED:
             passenger_fee = (int(req.passengers) - EXTRA_PASSENGER_INCLUDED) * EXTRA_PASSENGER_FEE_USD
         booking["passenger_fee"] = passenger_fee
+    if req.service_type == "rental":
+        deposit_amount = RENTAL_DEPOSIT_USD
+        booking["deposit_amount"] = deposit_amount
+        booking["deposit_status"] = "held"  # released back to customer after vehicle return
 
-    booking["total"] = round(base + luggage_fee + passenger_fee, 2)
+    booking["total"] = round(base + luggage_fee + passenger_fee + deposit_amount, 2)
 
     await db.bookings.insert_one(booking)
     if req.payment_method == "zelle":
@@ -580,6 +586,12 @@ async def get_fees():
         "extra_passenger_fee_usd": EXTRA_PASSENGER_FEE_USD,
         "extra_passenger_included": EXTRA_PASSENGER_INCLUDED,
         "passenger_policy": f"Taxi flat rate covers up to {EXTRA_PASSENGER_INCLUDED} passengers. Each additional passenger is +${EXTRA_PASSENGER_FEE_USD:.0f}.",
+        "rental_deposit_usd": RENTAL_DEPOSIT_USD,
+        "rental_deposit_policy": (
+            f"A refundable security deposit of ${RENTAL_DEPOSIT_USD:.0f} is added automatically to every car "
+            "rental booking. It is released back to the customer after the vehicle is returned undamaged, with a "
+            "full tank and on time."
+        ),
         "closed_weekdays": sorted(CLOSED_WEEKDAYS),
         "closed_weekdays_labels": ["Saturday"],
         "closed_policy": "Taxi service and car rentals are closed on Saturdays.",

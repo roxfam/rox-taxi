@@ -18,6 +18,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminManage from "./pages/AdminManage";
 import AdminGroups from "./pages/AdminGroups";
 import MyBookings from "./pages/MyBookings";
+import Login from "./pages/Login";
 import AuthCallback from "./pages/AuthCallback";
 import { AuthProvider } from "./lib/auth";
 import { useEffect } from "react";
@@ -48,6 +49,7 @@ function AppRouter() {
       <Route path="/groups" element={<CustomerShell><Groups /></CustomerShell>} />
       <Route path="/wedding-builder" element={<CustomerShell><WeddingBuilder /></CustomerShell>} />
       <Route path="/my-bookings" element={<CustomerShell><MyBookings /></CustomerShell>} />
+      <Route path="/login" element={<CustomerShell><Login /></CustomerShell>} />
       <Route path="/payment/success" element={<CustomerShell><PaymentSuccess /></CustomerShell>} />
       <Route path="/payment/cancel" element={<CustomerShell><PaymentCancel /></CustomerShell>} />
       <Route path="/admin/login" element={<AdminLogin />} />

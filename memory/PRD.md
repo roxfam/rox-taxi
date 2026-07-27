@@ -1,43 +1,66 @@
-# Rox Taxi Service and Tours — Bahamas · PRD
+# Rox Taxi Service & Tours — Bahamas
 
-## Problem statement
-Website offering taxi and tours in the Bahamas — Nassau + Paradise Island focus. Includes excursions, taxi tracking, prices per service, online pre-booking, car rental page with online booking (Zelle / Credit Card / PayPal via Stripe / PayPal direct), Facebook + WhatsApp + TripAdvisor + Google Reviews links, admin panel, live AI chat, customer Google login.
+## Original Problem Statement
+A booking website for taxi, tours, and car rentals in The Bahamas (Nassau & Paradise Island focus).
+Must support: pre-booking excursions/tours, car rentals, taxi status tracking, online payments
+(Stripe, PayPal, Zelle), Facebook page integration, admin panel, group/wedding bookings with PDF
+quotes, Claude AI live chat widget, luggage fees, extra-passenger fees, 15% cancellation fee
+(48-hr notice), Saturday blackout dates, custom logo, Namecheap hosting compatibility.
 
-## Brand
-- Company: **Rox Taxi Service and Tours** (Nassau, Bahamas)
-- Facebook: https://www.facebook.com/roxtaxiservice/
-- Palette: Gold #D4A94A · Deep Navy #0B3B5C · Coral #E86A3C · Ivory #FBF7EF
-- Type: Instrument Serif (display) + Geist (body) + Geist Mono
+## Architecture
+- **Frontend**: React 19 + Tailwind + Framer Motion + Shadcn UI, Cormorant Garamond serif headings
+- **Backend**: FastAPI + Motor (async MongoDB)
+- **Integrations**: Claude Sonnet 4.6 (chat, Emergent LLM Key), Stripe BYOK (Flow B), Emergent Google Auth
+- **Placeholders**: Twilio SMS + SendGrid email (keys to be added by user, graceful fallback)
 
-## Implemented (Feb 2026)
-- Public browsing: taxi services, tours, car rentals (Nassau/PI focus)
-- Featured excursions: Blue Lagoon, Paradise Island/Atlantis, Rose Island snorkel, Three-Island hopping, Exuma pigs (removed from home tagline per request)
-- 5 rental cars: 2019 Chevy Spark, 2001 Nissan Sentra Orange, 2019 Chevy Malibu, 2025 Chevy Trax SUV, 2022 Chrysler Town & Country Mini-Van (with blackout dates per car)
-- Booking flow: mandatory passengers, +$3/extra bag (first bag + carry-on free), +$5 group fee 3+ pax, per-day rentals
-- Saturdays closed for taxi + rentals (backend rejects, frontend warns)
-- 15% cancellation fee with 48hr notice policy; POST /api/bookings/{id}/cancel
-- Payment: Stripe (Flow B / BYOK — Bahamas not sandbox eligible), PayPal.me direct link, Zelle manual instructions
-- Booking status tracker: Confirmed → Driver Assigned → En Route → Arrived → Completed
-- Google Reviews section (6 seeded, avg 4.9, 187+ reviews) — links to google search for Rox Taxi
-- Live AI chat (Claude Sonnet 4.6 via SSE streaming, session memory)
-- Bahamas image slider on home (Blue Lagoon, Atlantis, Bay Street, Cable Beach, Junkanoo, Queen's Staircase, Exuma, Rose Island)
-- Modern menu: pill nav with sliding indicator on desktop, animated hamburger + slide-in drawer on mobile
-- Elegant social/contact chips (WhatsApp, Phone, Facebook, TripAdvisor) with hover glow + tooltips
-- About page (`/about`) — stats, story, values, team, CTA
-- Admin console: /admin (bookings + stats), /admin/manage (CRUD tours/taxi/rentals/site config)
-- Customer Google login (Emergent Managed Auth) → /my-bookings
-- Notifications: SendGrid + Twilio wired (keys pending — no-op safely)
-- Elegant hero photo (Bahamas overwater villa)
+## Key Constants
+- `LUGGAGE_FEE_USD=3`, `LUGGAGE_MAX=10`
+- `EXTRA_PASSENGER_FEE_USD=5`, `EXTRA_PASSENGER_INCLUDED=2`
+- `RENTAL_DEPOSIT_USD=150` — refundable, applied automatically on rental bookings
+- `CANCELLATION_FEE_PCT=0.15`, `CANCELLATION_NOTICE_HOURS=48`
+- `CLOSED_WEEKDAYS={5}` (Saturday), applies to taxi + rental
 
-## Backlog
-- P1: Wire in SendGrid + Twilio keys once provided; email/SMS on paid confirmation
-- P1: Move Roxi (chat) to auto-create draft bookings from chat conversation
-- P2: Real GPS driver tracking with driver mobile app
-- P2: Multi-language (English/Spanish)
-- P2: SEO blog, testimonials submission
+## What's Implemented (Feb 2026)
+- Home, Taxi, Tours, Rentals, Groups, Wedding Builder, Track, About, Contact, MyBookings, Login, PaymentReturn
+- Admin: Login, Dashboard, Manage, Groups
+- Bookings CRUD with pricing logic (base + luggage + extra pax + rental deposit)
+- Cancellation policy (15% within 48hr, non-refundable inside 48hr)
+- Saturday blackout for taxi + rental
+- Wedding package builder → PDF quote
+- Live Claude chat widget with SSE streaming
+- Dynamic logo upload (admin panel)
+- Emergent Google Auth + session cookies
+- **[Feb 2026]** Bolder animated serif headings (site-wide) with entrance reveal + italic accent lift
+- **[Feb 2026]** Book Now dropdown in header (Taxi / Tours / Rentals direct links) — desktop + mobile
+- **[Feb 2026]** $150 refundable security deposit auto-applied to every car rental (backend + frontend)
+- **[Feb 2026]** Popular Nassau destinations quick-picker on Taxi page (12 destinations mapped to best-fit service)
+- **[Feb 2026]** Dedicated `/login` page + header "Sign in" button + mobile drawer login link
 
-## Update (later Feb 2026)
-- Added **Groups & Weddings** module: `/groups` public page with a beautiful form (event type chips, date, guest count stepper, need checkboxes, budget bands, contact) → POST /api/group-inquiries stores inquiry + fires customer confirmation email/SMS + notifies admin (when SendGrid/Twilio keys present).
-- Admin console gained a third tab **Group inquiries** at `/admin/groups` with status pipeline (new → contacted → quoted → won → lost).
-- Home page has a dedicated "Planning something bigger?" CTA card + stats.
-- Route ordering fixed to prevent `/admin/group-inquiries` from being shadowed by `/admin/{kind}`.
+## Key API Endpoints
+- `POST /api/bookings` — creates booking, applies deposit for rentals
+- `GET /api/fees` — public fee reference (includes rental deposit policy)
+- `POST /api/bookings/{id}/cancel` — cancellation with 15% fee
+- `GET /api/rentals`, `GET /api/rentals/{id}/availability`
+- `POST /api/auth/session`, `GET /api/auth/me`, `POST /api/auth/logout`
+- `GET /api/my/bookings` — authenticated user's bookings
+- `POST /api/admin/upload-logo`
+
+## Roadmap
+### P0
+- (none open)
+
+### P1
+- Wire Twilio SMS + SendGrid email notifications (backend logic exists as no-op fallback; add keys when ready)
+- Stripe live-mode key when user is ready to accept real payments
+
+### P2
+- Refactor `server.py` (~1360 lines) into `routes/`, `models/`, `services/`
+- Regression pytest coverage under `/app/backend/tests` for pricing (deposit + luggage + pax combinations)
+- Admin: deposit release/capture workflow UI (mark deposit refunded/forfeited per booking)
+
+## Files of Reference
+- Backend: `/app/backend/server.py`, `/app/backend/notifications.py`
+- Frontend pages: `/app/frontend/src/pages/{Home,Taxi,Tours,CarRental,BookingFlow,MyBookings,Login,WeddingBuilder,Groups}.jsx`
+- Frontend layout: `/app/frontend/src/components/Layout.jsx`
+- Frontend auth: `/app/frontend/src/lib/auth.jsx`
+- Global styles: `/app/frontend/src/index.css`

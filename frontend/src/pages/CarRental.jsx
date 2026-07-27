@@ -31,6 +31,12 @@ export default function CarRental() {
           <div className="md:col-span-5 text-[#64748B] leading-relaxed">
             Pay online with credit card, PayPal or Zelle. Unlimited mileage, full insurance available, and free
             delivery to Nassau airport (LPIA) or your hotel. Live blackout dates shown per car.
+            <div className="mt-4 inline-flex items-start gap-2 rounded-2xl border border-[#D4A94A]/30 bg-[#D4A94A]/10 px-4 py-3 text-xs text-[#0B3B5C]" data-testid="rental-deposit-banner">
+              <Info className="w-4 h-4 text-[#D4A94A] shrink-0 mt-0.5" />
+              <span>
+                <span className="font-semibold">$150 refundable security deposit</span> is added automatically at checkout, and released back once your vehicle is returned undamaged with a full tank.
+              </span>
+            </div>
           </div>
         </div>
       </section>

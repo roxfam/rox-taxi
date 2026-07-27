@@ -1,7 +1,14 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Facebook, Phone, MapPin, Waves, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart } from "lucide-react";
+import { Menu, X, Facebook, Phone, MapPin, Waves, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart, ChevronDown, User as UserIcon } from "lucide-react";
+import { useAuth } from "../lib/auth";
+
+const BOOK_OPTIONS = [
+  { to: "/taxi", label: "Taxi & Transfers", sub: "Airport · City · Hourly", Icon: Car, color: "#E86A3C" },
+  { to: "/tours", label: "Tours & Excursions", sub: "Blue Lagoon · Atlantis · more", Icon: ShipWheel, color: "#0B3B5C" },
+  { to: "/rentals", label: "Car Rentals", sub: "Compact to Mini-Van", Icon: MapPinned, color: "#D4A94A" },
+];
 import { api } from "../lib/api";
 import ChatWidget from "./ChatWidget";
 import { WhatsAppIcon, TripAdvisorIcon } from "./BrandIcons";
@@ -22,8 +29,27 @@ const NAV_DESKTOP = NAV.filter(n => n.label !== "About");
 export default function Layout({ children }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [bookOpen, setBookOpen] = useState(false);
   const [config, setConfig] = useState({ facebook_url: "https://www.facebook.com/roxtaxiservice/" });
+  const bookRef = useRef(null);
   const { pathname } = useLocation();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!bookOpen) return;
+    const onDocClick = (e) => {
+      if (bookRef.current && !bookRef.current.contains(e.target)) setBookOpen(false);
+    };
+    const onEsc = (e) => { if (e.key === "Escape") setBookOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [bookOpen]);
+
+  useEffect(() => setBookOpen(false), [pathname]);
 
   useEffect(() => {
     api.get("/site-config").then((r) => setConfig(r.data)).catch(() => {});
@@ -144,13 +170,90 @@ export default function Layout({ children }) {
               <TripAdvisorIcon className="w-[22px] h-[22px]" />
               <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] tracking-widest uppercase text-[#00AF87] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-semibold">TripAdvisor</span>
             </a>
-            <Link
-              to="/taxi"
-              data-testid="header-book-now-btn"
-              className="hidden md:inline-flex btn-shine ml-1 rounded-full bg-[#E86A3C] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#d55a30] active:scale-95 items-center gap-1.5 shadow-[0_10px_25px_rgba(232,106,60,0.35)]"
-            >
-              Book Now
-            </Link>
+            {user ? (
+              <Link
+                to="/my-bookings"
+                data-testid="header-account-link"
+                title={user.name || user.email}
+                className="hidden md:inline-flex group relative w-11 h-11 rounded-full bg-white/70 backdrop-blur-md border border-white/80 items-center justify-center hover:bg-[#D4A94A] hover:border-[#D4A94A] hover:scale-110 text-[#D4A94A] hover:text-white transition-all duration-300 shadow-[0_4px_12px_rgba(212,169,74,0.12)] hover:shadow-[0_10px_25px_rgba(212,169,74,0.4)] overflow-hidden"
+              >
+                {user.picture ? (
+                  <img src={user.picture} alt={user.name || "You"} className="w-full h-full object-cover" />
+                ) : (
+                  <UserIcon className="w-[18px] h-[18px]" />
+                )}
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                data-testid="header-login-link"
+                title="Sign in"
+                className="hidden md:inline-flex group relative items-center gap-2 h-11 rounded-full bg-white/70 backdrop-blur-md border border-white/80 px-4 text-sm font-semibold text-[#0B3B5C] hover:bg-[#0B3B5C] hover:border-[#0B3B5C] hover:text-white transition-all duration-300 shadow-[0_4px_12px_rgba(11,59,92,0.08)] hover:shadow-[0_10px_25px_rgba(11,59,92,0.35)] whitespace-nowrap"
+              >
+                <UserIcon className="w-4 h-4" /> Sign in
+              </Link>
+            )}
+            <div ref={bookRef} className="hidden md:block relative ml-1">
+              <button
+                type="button"
+                onClick={() => setBookOpen((v) => !v)}
+                data-testid="header-book-now-btn"
+                aria-haspopup="menu"
+                aria-expanded={bookOpen}
+                className="btn-shine rounded-full bg-[#E86A3C] text-white pl-5 pr-4 py-2.5 text-sm font-semibold hover:bg-[#d55a30] active:scale-95 inline-flex items-center gap-1.5 shadow-[0_10px_25px_rgba(232,106,60,0.35)]"
+              >
+                Book Now
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${bookOpen ? "rotate-180" : ""}`} />
+              </button>
+              <AnimatePresence>
+                {bookOpen && (
+                  <motion.div
+                    key="book-menu"
+                    initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                    transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
+                    role="menu"
+                    data-testid="header-book-menu"
+                    className="absolute right-0 mt-3 w-[320px] rounded-2xl bg-white/95 backdrop-blur-xl border border-white/80 shadow-[0_25px_60px_rgba(11,25,44,0.18)] overflow-hidden"
+                  >
+                    <div className="px-5 py-3 border-b border-[#F1F5F9]">
+                      <div className="text-[10px] tracking-[0.3em] uppercase text-[#94a3b8] font-semibold">Choose a service</div>
+                    </div>
+                    <ul className="p-2">
+                      {BOOK_OPTIONS.map((opt, i) => (
+                        <motion.li
+                          key={opt.to}
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.04 + i * 0.05 }}
+                        >
+                          <Link
+                            to={opt.to}
+                            role="menuitem"
+                            onClick={() => setBookOpen(false)}
+                            data-testid={`book-menu-${opt.to.replace("/", "")}`}
+                            className="group flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-[#FBF7EF] transition-colors"
+                          >
+                            <span
+                              className="w-11 h-11 rounded-xl flex items-center justify-center text-white transition-transform group-hover:scale-110"
+                              style={{ background: `linear-gradient(135deg, ${opt.color}, ${opt.color}cc)` }}
+                            >
+                              <opt.Icon className="w-5 h-5" />
+                            </span>
+                            <span className="flex-1">
+                              <span className="block text-sm font-semibold text-[#0B3B5C]">{opt.label}</span>
+                              <span className="block text-xs text-[#64748B]">{opt.sub}</span>
+                            </span>
+                            <ChevronDown className="w-4 h-4 -rotate-90 text-[#94a3b8] group-hover:text-[#0B3B5C] group-hover:translate-x-1 transition-all" />
+                          </Link>
+                        </motion.li>
+                      ))}
+                    </ul>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* Modern animated hamburger */}
             <button
@@ -264,7 +367,7 @@ export default function Layout({ children }) {
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.35 }}
-                  className="mt-6"
+                  className="mt-6 grid grid-cols-2 gap-2"
                 >
                   <Link
                     to="/my-bookings"
@@ -273,17 +376,48 @@ export default function Layout({ children }) {
                   >
                     <Ticket className="w-4 h-4" /> <span className="font-semibold text-sm">My Bookings</span>
                   </Link>
+                  <Link
+                    to={user ? "/my-bookings" : "/login"}
+                    data-testid="mobile-login-link"
+                    className="flex items-center gap-3 rounded-2xl bg-[#0B3B5C]/5 border border-[#0B3B5C]/15 text-[#0B3B5C] px-4 py-3"
+                  >
+                    {user && user.picture ? (
+                      <img src={user.picture} alt="" className="w-6 h-6 rounded-full object-cover" />
+                    ) : (
+                      <UserIcon className="w-4 h-4" />
+                    )}
+                    <span className="font-semibold text-sm truncate">{user ? (user.name?.split(" ")[0] || "Account") : "Sign in"}</span>
+                  </Link>
                 </motion.div>
               </nav>
 
               <div className="p-6 border-t border-[#F1F5F9] space-y-4">
-                <Link
-                  to="/taxi"
-                  data-testid="mobile-book-now-btn"
-                  className="btn-shine block text-center rounded-full bg-[#E86A3C] text-white px-5 py-3.5 text-sm font-semibold hover:bg-[#d55a30] shadow-[0_10px_25px_rgba(232,106,60,0.35)]"
-                >
-                  Book Now
-                </Link>
+                <div>
+                  <div className="text-[10px] tracking-[0.3em] uppercase text-[#94a3b8] font-semibold mb-2 text-center" data-testid="mobile-book-now-label">Book Now</div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {BOOK_OPTIONS.map((opt) => (
+                      <Link
+                        key={opt.to}
+                        to={opt.to}
+                        onClick={() => setOpen(false)}
+                        data-testid={`mobile-book-${opt.to.replace("/", "")}`}
+                        className="group flex items-center gap-3 rounded-2xl border border-[#EFE7D5] bg-white hover:bg-[#FBF7EF] transition-all px-4 py-3 hover:-translate-y-0.5 hover:shadow-[0_10px_25px_rgba(11,25,44,0.08)]"
+                      >
+                        <span
+                          className="w-10 h-10 rounded-xl flex items-center justify-center text-white"
+                          style={{ background: `linear-gradient(135deg, ${opt.color}, ${opt.color}cc)` }}
+                        >
+                          <opt.Icon className="w-5 h-5" />
+                        </span>
+                        <span className="flex-1">
+                          <span className="block text-sm font-semibold text-[#0B3B5C]">{opt.label}</span>
+                          <span className="block text-[11px] text-[#64748B]">{opt.sub}</span>
+                        </span>
+                        <ChevronDown className="w-4 h-4 -rotate-90 text-[#94a3b8] group-hover:text-[#0B3B5C] group-hover:translate-x-1 transition-all" />
+                      </Link>
+                    ))}
+                  </div>
+                </div>
 
                 <div>
                   <div className="text-[10px] tracking-[0.3em] uppercase text-[#94a3b8] font-semibold mb-3 text-center">Reach us instantly</div>

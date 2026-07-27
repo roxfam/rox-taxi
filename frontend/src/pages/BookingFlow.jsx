@@ -26,15 +26,15 @@ function isClosedDate(dateStr, days = 1) {
  *  - defaultDays?: number
  *  - onClose: () => void
  */
-export default function BookingModal({ item, serviceType, extraFields, defaultDays = 1, onClose }) {
+export default function BookingModal({ item, serviceType, extraFields, defaultDays = 1, initialDropoff = "", initialPickup = "", onClose }) {
   const nav = useNavigate();
   const [form, setForm] = useState({
     customer_name: "",
     customer_email: "",
     customer_phone: "",
     booking_date: "",
-    pickup_location: "",
-    dropoff_location: "",
+    pickup_location: initialPickup,
+    dropoff_location: initialDropoff,
     passengers: 1,
     days: defaultDays,
     extra_luggage: 0,
@@ -43,6 +43,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const LUGGAGE_FEE = 3;
   const PASSENGER_FEE = 5;
   const PASSENGER_INCLUDED = 2;
+  const RENTAL_DEPOSIT = 150;
   const [payMethod, setPayMethod] = useState("stripe");
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
   const [loading, setLoading] = useState(false);
@@ -56,7 +57,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const passengerFee = serviceType === "taxi" && Number(form.passengers || 0) > PASSENGER_INCLUDED
     ? (Number(form.passengers) - PASSENGER_INCLUDED) * PASSENGER_FEE
     : 0;
-  const total = base + luggageFee + passengerFee;
+  const rentalDeposit = serviceType === "rental" ? RENTAL_DEPOSIT : 0;
+  const total = base + luggageFee + passengerFee + rentalDeposit;
 
   const submit = async () => {
     if (!form.customer_name || !form.customer_email || !form.customer_phone || !form.booking_date) {
@@ -161,6 +163,23 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 </div>
               )}
 
+              {serviceType === "rental" && (
+                <div className="rounded-xl border border-[#D4A94A]/30 bg-[#D4A94A]/8 p-4" data-testid="rental-deposit-section" style={{ backgroundColor: "rgba(212,169,74,0.08)" }}>
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full bg-[#D4A94A]/15 flex items-center justify-center shrink-0">
+                      <AlertTriangle className="w-4 h-4 text-[#D4A94A]" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-[#0B3B5C]">Refundable security deposit</div>
+                      <div className="text-xs text-[#64748B] mt-1 leading-relaxed">
+                        A <span className="mono font-semibold text-[#D4A94A]">$150</span> hold is added automatically to every car rental. It's fully refunded after the vehicle is returned undamaged, with a full tank and on time.
+                      </div>
+                    </div>
+                    <div className="mono font-semibold text-[#0B3B5C] text-sm shrink-0" data-testid="rental-deposit-amount">+${RENTAL_DEPOSIT.toFixed(2)}</div>
+                  </div>
+                </div>
+              )}
+
               {serviceType === "taxi" && (
                 <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4" data-testid="luggage-section">
                   <div className="flex items-center justify-between gap-3">
@@ -221,7 +240,10 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
               <div className="pt-4 border-t border-[#E2E8F0] flex items-center justify-between">
                 <div>
                   <div className="text-xs text-[#64748B]">Total</div>
-                  <div className="serif text-2xl text-[#0B3B5C]">{money(total)}</div>
+                  <div className="serif text-2xl text-[#0B3B5C]" data-testid="booking-total">{money(total)}</div>
+                  {serviceType === "rental" && (
+                    <div className="text-[11px] text-[#64748B] mt-0.5" data-testid="booking-total-deposit-note">Includes ${RENTAL_DEPOSIT} refundable deposit</div>
+                  )}
                 </div>
                 <button
                   onClick={() => setStep(2)}
