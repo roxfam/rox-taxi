@@ -83,12 +83,12 @@ export default function Layout({ children }) {
                 <img
                   src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
                   alt="Rox Taxi Service and Tours"
-                  className={`h-12 w-auto max-w-[64px] object-contain group-hover:scale-105 transition-all duration-300 ${scrolled ? "brightness-[0.15]" : "drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]"}`}
+                  className="h-14 w-auto max-w-[80px] object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-[0_3px_10px_rgba(212,169,74,0.35)]"
                   data-testid="brand-logo-img"
                 />
                 <div className="hidden sm:flex flex-col leading-none" data-testid="brand-name">
-                  <span className={`serif text-xl tracking-tight transition-colors ${scrolled ? "text-[#0B3B5C]" : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]"}`}>Rox Taxi Service</span>
-                  <span className={`text-[10px] tracking-[0.28em] uppercase mt-0.5 transition-colors ${scrolled ? "text-[#64748B]" : "text-white/80"}`}>and Tours</span>
+                  <span className={`serif text-xl tracking-tight font-bold transition-colors ${scrolled ? "text-[#0B3B5C]" : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]"}`}>Rox Taxi Service</span>
+                  <span className={`text-[10px] tracking-[0.28em] uppercase mt-1 font-semibold transition-colors ${scrolled ? "text-[#D4A94A]" : "text-[#F5E1A4]/90 drop-shadow-[0_1px_4px_rgba(0,0,0,0.4)]"}`}>and Tours</span>
                 </div>
               </>
             ) : (
@@ -482,58 +482,124 @@ export default function Layout({ children }) {
 
       <main className="flex-1">{children}</main>
 
-      <footer className="bg-[#0B192C] text-white/80 mt-24" data-testid="site-footer">
-        <div className="max-w-7xl mx-auto px-6 lg:px-10 py-16 grid md:grid-cols-4 gap-10">
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center">
-                <Waves className="w-4 h-4 text-white" />
+      <footer className="relative bg-[#0B192C] text-white/80 mt-32 overflow-hidden" data-testid="site-footer">
+        {/* Elegant top accent */}
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#D4A94A]/60 to-transparent" />
+        <div className="absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full bg-[#D4A94A]/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full bg-[#E86A3C]/8 blur-3xl pointer-events-none" />
+
+        <div className="relative max-w-7xl mx-auto px-6 lg:px-10 pt-20 pb-10">
+          {/* Wordmark row */}
+          <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-8 pb-14 border-b border-white/10">
+            <div className="max-w-xl">
+              <div className="flex items-center gap-3 mb-5">
+                <span className="w-10 h-[1px] bg-[#D4A94A]" />
+                <span className="text-[10px] tracking-[0.35em] uppercase text-[#D4A94A] font-bold">Est. Bahamas</span>
               </div>
-              <span className="serif text-xl text-white">Rox Taxi Service and Tours</span>
+              {config.logo_url ? (
+                <img
+                  src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
+                  alt="Rox Taxi Service and Tours"
+                  className="h-24 w-auto max-w-[220px] object-contain drop-shadow-[0_6px_20px_rgba(212,169,74,0.35)]"
+                  data-testid="footer-logo-img"
+                />
+              ) : (
+                <div className="serif text-4xl sm:text-5xl text-white leading-[0.95] tracking-tight">
+                  Rox Taxi <em className="italic text-[#D4A94A]">Service</em>
+                  <br />
+                  <span className="text-white/70">&amp; Tours.</span>
+                </div>
+              )}
+              <p className="serif italic text-white/55 mt-6 text-base leading-relaxed max-w-md">
+                Your trusted ride and adventure partner across Nassau, Paradise Island, and the Out Islands of The Bahamas.
+              </p>
             </div>
-            <p className="text-sm text-white/60 leading-relaxed">
-              Your trusted ride and adventure partner across Nassau, Paradise Island, and the Out Islands of The Bahamas.
-            </p>
-          </div>
-          <div>
-            <h4 className="text-xs tracking-[0.3em] uppercase text-white/50 mb-4">Services</h4>
-            <ul className="space-y-2 text-sm">
-              <li><Link to="/taxi" className="hover:text-[#D4A94A]">Airport & City Taxi</Link></li>
-              <li><Link to="/tours" className="hover:text-[#D4A94A]">Tours & Excursions</Link></li>
-              <li><Link to="/rentals" className="hover:text-[#D4A94A]">Car Rentals</Link></li>
-              <li><Link to="/track" className="hover:text-[#D4A94A]">Track a Booking</Link></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-xs tracking-[0.3em] uppercase text-white/50 mb-4">Contact</h4>
-            <ul className="space-y-3 text-sm">
-              <li className="flex items-start gap-2"><Phone className="w-4 h-4 mt-0.5 text-[#D4A94A]" /> +1 (242) 000-0000</li>
-              <li className="flex items-start gap-2"><MapPin className="w-4 h-4 mt-0.5 text-[#D4A94A]" /> Nassau, New Providence, Bahamas</li>
-              <li>
-                <a href={config.facebook_url || "https://www.facebook.com/roxtaxiservice/"} target="_blank" rel="noreferrer" data-testid="footer-facebook-link" className="inline-flex items-center gap-2 hover:text-[#D4A94A]">
-                  <Facebook className="w-4 h-4" /> facebook.com/roxtaxiservice
-                </a>
-              </li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-xs tracking-[0.3em] uppercase text-white/50 mb-4">Follow us</h4>
-            <div className="flex flex-wrap gap-2">
-              <a href={config.facebook_url || "https://www.facebook.com/roxtaxiservice/"} target="_blank" rel="noreferrer" className="w-11 h-11 rounded-full bg-white/10 hover:bg-[#1877F2] hover:scale-110 flex items-center justify-center transition-all duration-300 hover:shadow-[0_10px_25px_rgba(24,119,242,0.5)]" data-testid="footer-facebook-link" title="Facebook"><Facebook className="w-5 h-5" /></a>
-              <a href={`https://wa.me/${(config.whatsapp_number || "+12420000000").replace(/[^\d]/g,"")}`} target="_blank" rel="noreferrer" className="w-11 h-11 rounded-full bg-white/10 hover:bg-[#25D366] hover:scale-110 flex items-center justify-center transition-all duration-300 hover:shadow-[0_10px_25px_rgba(37,211,102,0.5)]" data-testid="footer-whatsapp" title="WhatsApp"><WhatsAppIcon className="w-5 h-5" /></a>
-              <a href={config.tripadvisor_url || "https://www.tripadvisor.com/Search?q=Rox+Taxi+Bahamas"} target="_blank" rel="noreferrer" className="w-11 h-11 rounded-full bg-white/10 hover:bg-[#00AF87] hover:scale-110 flex items-center justify-center transition-all duration-300 hover:shadow-[0_10px_25px_rgba(0,175,135,0.5)]" data-testid="footer-tripadvisor" title="TripAdvisor"><TripAdvisorIcon className="w-6 h-6" /></a>
-              <a href={`tel:${(config.phone || "+12420000000").replace(/[^+\d]/g,"")}`} className="w-11 h-11 rounded-full bg-white/10 hover:bg-[#D4A94A] hover:scale-110 flex items-center justify-center transition-all duration-300 hover:shadow-[0_10px_25px_rgba(212,169,74,0.5)]" data-testid="footer-phone" title="Call"><Phone className="w-5 h-5" /></a>
+            <div className="flex flex-wrap gap-2.5" data-testid="footer-socials">
+              <a href={config.facebook_url || "https://www.facebook.com/roxtaxiservice/"} target="_blank" rel="noreferrer" title="Facebook" data-testid="footer-facebook-link" className="group relative w-12 h-12 rounded-full bg-white/[0.06] border border-white/10 hover:border-[#1877F2]/60 hover:bg-[#1877F2] hover:scale-110 flex items-center justify-center transition-all duration-300 hover:shadow-[0_15px_30px_rgba(24,119,242,0.5)]">
+                <span className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 60%)" }} />
+                <Facebook className="relative w-[18px] h-[18px]" />
+              </a>
+              <a href={`https://wa.me/${(config.whatsapp_number || "+12420000000").replace(/[^\d]/g,"")}`} target="_blank" rel="noreferrer" title="WhatsApp" data-testid="footer-whatsapp" className="group relative w-12 h-12 rounded-full bg-white/[0.06] border border-white/10 hover:border-[#25D366]/60 hover:bg-[#25D366] hover:scale-110 flex items-center justify-center transition-all duration-300 hover:shadow-[0_15px_30px_rgba(37,211,102,0.5)]">
+                <span className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 60%)" }} />
+                <WhatsAppIcon className="relative w-[18px] h-[18px]" />
+              </a>
+              <a href={config.tripadvisor_url || "https://www.tripadvisor.com/Search?q=Rox+Taxi+Bahamas"} target="_blank" rel="noreferrer" title="TripAdvisor" data-testid="footer-tripadvisor" className="group relative w-12 h-12 rounded-full bg-white/[0.06] border border-white/10 hover:border-[#00AF87]/60 hover:bg-[#00AF87] hover:scale-110 flex items-center justify-center transition-all duration-300 hover:shadow-[0_15px_30px_rgba(0,175,135,0.5)]">
+                <span className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 60%)" }} />
+                <TripAdvisorIcon className="relative w-[22px] h-[22px]" />
+              </a>
+              <a href={`tel:${(config.phone || "+12420000000").replace(/[^+\d]/g,"")}`} title="Call" data-testid="footer-phone" className="group relative w-12 h-12 rounded-full bg-white/[0.06] border border-white/10 hover:border-[#D4A94A]/60 hover:bg-[#D4A94A] hover:scale-110 flex items-center justify-center transition-all duration-300 hover:shadow-[0_15px_30px_rgba(212,169,74,0.5)]">
+                <span className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 60%)" }} />
+                <Phone className="relative w-[18px] h-[18px]" />
+              </a>
             </div>
-            <p className="text-sm text-white/60 leading-relaxed mt-6">
-              Credit Card, PayPal via Stripe, direct PayPal.me, and Zelle accepted.
-            </p>
-            <Link to="/admin/login" className="text-xs text-white/40 hover:text-[#D4A94A] mt-4 inline-block" data-testid="footer-admin-link">
-              Admin
-            </Link>
+          </div>
+
+          {/* Link columns */}
+          <div className="grid md:grid-cols-4 gap-12 mt-14">
+            <div className="md:col-span-1">
+              <h4 className="serif text-lg text-white font-bold mb-1">Services</h4>
+              <div className="w-8 h-[2px] bg-[#D4A94A] mb-5" />
+              <ul className="space-y-3 text-sm">
+                <li><Link to="/taxi" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Airport &amp; City Taxi</Link></li>
+                <li><Link to="/tours" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Tours &amp; Excursions</Link></li>
+                <li><Link to="/rentals" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Car Rentals</Link></li>
+                <li><Link to="/track" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Track a Booking</Link></li>
+              </ul>
+            </div>
+            <div className="md:col-span-1">
+              <h4 className="serif text-lg text-white font-bold mb-1">Company</h4>
+              <div className="w-8 h-[2px] bg-[#D4A94A] mb-5" />
+              <ul className="space-y-3 text-sm">
+                <li><Link to="/groups" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Groups &amp; Weddings</Link></li>
+                <li><Link to="/wedding-builder" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Wedding Builder</Link></li>
+                <li><Link to="/about" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />About Us</Link></li>
+                <li><Link to="/contact" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Contact</Link></li>
+              </ul>
+            </div>
+            <div className="md:col-span-1">
+              <h4 className="serif text-lg text-white font-bold mb-1">Contact</h4>
+              <div className="w-8 h-[2px] bg-[#D4A94A] mb-5" />
+              <ul className="space-y-3 text-sm">
+                <li className="flex items-start gap-3 text-white/60">
+                  <span className="w-8 h-8 rounded-full bg-[#D4A94A]/10 border border-[#D4A94A]/20 flex items-center justify-center shrink-0 mt-0.5"><Phone className="w-3.5 h-3.5 text-[#D4A94A]" /></span>
+                  <a href={`tel:${(config.phone || "+12420000000").replace(/[^+\d]/g,"")}`} className="hover:text-[#D4A94A] transition-colors">{config.phone || "+1 (242) 000-0000"}</a>
+                </li>
+                <li className="flex items-start gap-3 text-white/60">
+                  <span className="w-8 h-8 rounded-full bg-[#D4A94A]/10 border border-[#D4A94A]/20 flex items-center justify-center shrink-0 mt-0.5"><MapPin className="w-3.5 h-3.5 text-[#D4A94A]" /></span>
+                  <span>Nassau, New Providence, Bahamas</span>
+                </li>
+                <li className="flex items-start gap-3 text-white/60">
+                  <span className="w-8 h-8 rounded-full bg-[#D4A94A]/10 border border-[#D4A94A]/20 flex items-center justify-center shrink-0 mt-0.5"><Facebook className="w-3.5 h-3.5 text-[#D4A94A]" /></span>
+                  <a href={config.facebook_url || "https://www.facebook.com/roxtaxiservice/"} target="_blank" rel="noreferrer" data-testid="footer-facebook-link" className="hover:text-[#D4A94A] transition-colors">facebook.com/roxtaxiservice</a>
+                </li>
+              </ul>
+            </div>
+            <div className="md:col-span-1">
+              <h4 className="serif text-lg text-white font-bold mb-1">Payments</h4>
+              <div className="w-8 h-[2px] bg-[#D4A94A] mb-5" />
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="rounded-lg bg-white/[0.05] border border-white/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70">Card</span>
+                <span className="rounded-lg bg-white/[0.05] border border-white/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70">PayPal</span>
+                <span className="rounded-lg bg-white/[0.05] border border-white/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70">Stripe</span>
+                <span className="rounded-lg bg-white/[0.05] border border-white/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70">Zelle</span>
+              </div>
+              <p className="serif italic text-xs text-white/45 leading-relaxed">
+                All payments secured &amp; encrypted end-to-end. Refunds honored per our cancellation policy.
+              </p>
+            </div>
           </div>
         </div>
-        <div className="border-t border-white/10 py-6 text-center text-xs text-white/40">
-          &copy; {new Date().getFullYear()} Rox Taxi Service and Tours Bahamas. All rights reserved.
+
+        <div className="relative border-t border-white/10">
+          <div className="max-w-7xl mx-auto px-6 lg:px-10 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
+            <div className="text-white/40 tracking-wide">
+              &copy; {new Date().getFullYear()} <span className="serif italic text-white/60">Rox Taxi Service and Tours Bahamas.</span> All rights reserved.
+            </div>
+            <div className="flex items-center gap-5">
+              <span className="text-white/30 tracking-[0.25em] uppercase">Made with care in Nassau</span>
+              <Link to="/admin/login" className="text-white/30 hover:text-[#D4A94A] tracking-[0.25em] uppercase transition-colors" data-testid="footer-admin-link">Admin</Link>
+            </div>
+          </div>
         </div>
       </footer>
 
