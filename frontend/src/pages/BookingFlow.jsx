@@ -101,6 +101,10 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
           origin_url: window.location.origin,
         });
         window.location.href = c.checkout_url;
+      } else if (payMethod === "paypal") {
+        const paypalUrl = (cfg.paypal_me_url || "https://www.paypal.com/paypalme/roxtaxiservice") + `/${total.toFixed(2)}`;
+        setStep(4);
+        window.open(paypalUrl, "_blank", "noopener,noreferrer");
       } else {
         setStep(3);
       }
@@ -236,9 +240,17 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   active={payMethod === "stripe"}
                   onClick={() => setPayMethod("stripe")}
                   icon={<CreditCard className="w-5 h-5" />}
-                  title="Credit Card & PayPal"
+                  title="Credit Card & PayPal (via Stripe)"
                   desc="Securely processed via Stripe. Card 4242 4242 4242 4242 works in test mode."
                   testid="pay-method-stripe"
+                />
+                <PayCard
+                  active={payMethod === "paypal"}
+                  onClick={() => setPayMethod("paypal")}
+                  icon={<Wallet className="w-5 h-5" />}
+                  title="PayPal — Direct"
+                  desc="Reserve now and pay us directly via PayPal.me. We'll confirm once payment lands."
+                  testid="pay-method-paypal"
                 />
                 <PayCard
                   active={payMethod === "zelle"}
@@ -265,7 +277,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     className="btn-shine rounded-full bg-[#E86A3C] text-white px-6 py-3 text-sm font-semibold hover:bg-[#d55a30] active:scale-95 disabled:opacity-60"
                     data-testid="booking-submit-payment-btn"
                   >
-                    {loading ? "Processing..." : payMethod === "stripe" ? "Pay with Stripe" : "Reserve & See Zelle Info"}
+                    {loading ? "Processing..." : payMethod === "stripe" ? "Pay with Stripe" : payMethod === "paypal" ? "Reserve & Open PayPal" : "Reserve & See Zelle Info"}
                   </button>
                 </div>
               </div>
@@ -302,6 +314,9 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   Include your booking code in the Zelle memo so we can match your payment. Once received, we'll
                   update your booking status. You can track progress on the Track page anytime.
                 </p>
+                <p className="text-xs text-[#94a3b8] mt-3 leading-relaxed border-t border-[#E2E8F0] pt-3">
+                  <strong>Cancellation policy:</strong> Cancel 48+ hours before service to receive a refund minus a 15% cancellation fee. Cancellations within 48 hours are non-refundable.
+                </p>
               </div>
 
               <div className="mt-6 flex gap-3 justify-end">
@@ -313,6 +328,42 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 >
                   Track Booking
                 </button>
+              </div>
+            </div>
+          )}
+
+          {step === 4 && booking && (
+            <div data-testid="paypal-instructions">
+              <div className="flex items-center gap-2 text-[#003087]">
+                <CheckCircle2 className="w-6 h-6" />
+                <span className="font-semibold">Booking reserved — complete payment on PayPal.</span>
+              </div>
+              <p className="text-sm text-[#64748B] mt-2">Your confirmation code:</p>
+              <div className="mt-2 flex items-center gap-2">
+                <code className="mono text-2xl bg-[#F1F5F9] px-4 py-2 rounded-lg text-[#0B3B5C]" data-testid="paypal-booking-code">{booking.id}</code>
+                <button onClick={() => { navigator.clipboard.writeText(booking.id); toast.success("Copied"); }} className="p-2 rounded-lg hover:bg-[#F1F5F9]" data-testid="paypal-copy-code"><Copy className="w-4 h-4" /></button>
+              </div>
+              <div className="mt-6 rounded-2xl border border-[#E2E8F0] p-5">
+                <h4 className="serif text-lg text-[#0B3B5C]">Pay via PayPal directly</h4>
+                <p className="text-sm text-[#64748B] mt-2">A PayPal window opened in a new tab. If it didn't:</p>
+                <a
+                  href={(siteCfg.paypal_me_url || "https://www.paypal.com/paypalme/roxtaxiservice") + `/${total.toFixed(2)}`}
+                  target="_blank" rel="noreferrer"
+                  data-testid="paypal-open-link"
+                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#003087] text-white px-5 py-3 text-sm font-semibold hover:bg-[#00266b]"
+                >
+                  Open PayPal — {money(total)}
+                </a>
+                <p className="text-xs text-[#64748B] mt-4 leading-relaxed">
+                  Add "Booking {booking.id}" in the PayPal note. We'll confirm the moment your payment lands.
+                </p>
+                <p className="text-xs text-[#94a3b8] mt-3 leading-relaxed border-t border-[#E2E8F0] pt-3">
+                  <strong>Cancellation policy:</strong> Cancel 48+ hours before service to receive a refund minus a 15% cancellation fee. Cancellations within 48 hours are non-refundable.
+                </p>
+              </div>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button onClick={onClose} className="rounded-full border border-[#E2E8F0] px-5 py-2.5 text-sm" data-testid="paypal-close-btn">Close</button>
+                <button onClick={() => nav(`/track?id=${booking.id}`)} className="btn-shine rounded-full bg-[#0B3B5C] text-white px-6 py-2.5 text-sm font-semibold" data-testid="paypal-track-btn">Track Booking</button>
               </div>
             </div>
           )}

@@ -34,10 +34,14 @@ STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
 ZELLE_EMAIL = os.environ.get('ZELLE_EMAIL', '')
 ZELLE_PHONE = os.environ.get('ZELLE_PHONE', '')
 FACEBOOK_URL = os.environ.get('FACEBOOK_URL', '')
+WHATSAPP_NUMBER = os.environ.get('WHATSAPP_NUMBER', '')
+PAYPAL_ME_URL = os.environ.get('PAYPAL_ME_URL', '')
+TRIPADVISOR_URL = os.environ.get('TRIPADVISOR_URL', '')
+PHONE_NUMBER = os.environ.get('PHONE_NUMBER', '')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
 CHAT_SYSTEM = (
-    "You are Roxi, the friendly live-chat concierge for Rox Taxi & Tours based in Nassau, "
+    "You are Roxi, the friendly live-chat concierge for Rox Taxi Service and Tours based in Nassau, "
     "The Bahamas. Our specialty is taxi service across Nassau and Paradise Island. Be warm, brief and specific.\n\n"
     "TAXI SERVICES (our primary business — Nassau + Paradise Island focus):\n"
     "- LPIA Airport → Downtown Nassau / Cable Beach: $35 (up to 3 pax)\n"
@@ -104,6 +108,9 @@ EXTRA_PASSENGER_FEE_USD = 5.0
 EXTRA_PASSENGER_THRESHOLD = 3  # 3+ passengers triggers the fee
 
 # Days closed (weekly). Python weekday: Monday=0..Sunday=6. Saturday=5.
+CANCELLATION_FEE_PCT = 0.15  # 15% cancellation fee
+CANCELLATION_NOTICE_HOURS = 48  # 48-hour notice required for eligible refund
+
 CLOSED_WEEKDAYS = {5}
 CLOSED_APPLIES_TO = {"taxi", "rental"}
 
@@ -162,6 +169,9 @@ class SiteConfigUpdate(BaseModel):
     zelle_phone: Optional[str] = None
     facebook_url: Optional[str] = None
     phone: Optional[str] = None
+    whatsapp_number: Optional[str] = None
+    paypal_me_url: Optional[str] = None
+    tripadvisor_url: Optional[str] = None
 
 
 # ---------------- Admin JWT auth ----------------
@@ -405,8 +415,19 @@ async def seed_db():
         await db.site_config.insert_one({
             "_id": "main",
             "zelle_email": ZELLE_EMAIL, "zelle_phone": ZELLE_PHONE,
-            "facebook_url": FACEBOOK_URL, "phone": "+1 (242) 000-0000",
+            "facebook_url": FACEBOOK_URL, "phone": PHONE_NUMBER or "+1 (242) 000-0000",
+            "whatsapp_number": WHATSAPP_NUMBER,
+            "paypal_me_url": PAYPAL_ME_URL,
+            "tripadvisor_url": TRIPADVISOR_URL,
         })
+    else:
+        # backfill new fields if missing (idempotent)
+        patch = {}
+        if not cfg.get("whatsapp_number"): patch["whatsapp_number"] = WHATSAPP_NUMBER
+        if not cfg.get("paypal_me_url"): patch["paypal_me_url"] = PAYPAL_ME_URL
+        if not cfg.get("tripadvisor_url"): patch["tripadvisor_url"] = TRIPADVISOR_URL
+        if patch:
+            await db.site_config.update_one({"_id": "main"}, {"$set": patch})
 
 
 # ---------------- Public catalog ----------------
@@ -518,6 +539,72 @@ async def get_fees():
         "closed_weekdays_labels": ["Saturday"],
         "closed_policy": "Taxi service and car rentals are closed on Saturdays.",
         "closed_applies_to": sorted(CLOSED_APPLIES_TO),
+        "cancellation_fee_pct": CANCELLATION_FEE_PCT,
+        "cancellation_notice_hours": CANCELLATION_NOTICE_HOURS,
+        "cancellation_policy": (
+            f"Cancellations made at least {CANCELLATION_NOTICE_HOURS} hours before the service will be refunded "
+            f"minus a {int(CANCELLATION_FEE_PCT*100)}% cancellation fee. Cancellations within "
+            f"{CANCELLATION_NOTICE_HOURS} hours are non-refundable."
+        ),
+    }
+
+
+@api_router.post("/bookings/{booking_id}/cancel")
+async def cancel_booking(booking_id: str):
+    """Public cancel endpoint. Applies 15% fee when ≥48hr notice, else no refund."""
+    doc = await db.bookings.find_one({"id": booking_id.upper()})
+    if not doc:
+        raise HTTPException(404, "Booking not found")
+    if doc.get("status") == "cancelled":
+        raise HTTPException(400, "Booking already cancelled")
+    if doc.get("status") == "completed":
+        raise HTTPException(400, "Cannot cancel a completed booking")
+
+    try:
+        service_dt = _parse_booking_date(doc["booking_date"])
+    except Exception:
+        raise HTTPException(400, "Cannot parse booking date")
+    if service_dt.tzinfo is None:
+        service_dt = service_dt.replace(tzinfo=timezone.utc)
+
+    hours_until = (service_dt - now_utc()).total_seconds() / 3600.0
+    eligible = hours_until >= CANCELLATION_NOTICE_HOURS
+
+    total = float(doc.get("total") or 0.0)
+    paid = doc.get("payment_status") == "paid"
+    fee = round(total * CANCELLATION_FEE_PCT, 2) if eligible else (total if paid else 0.0)
+    refund = round(max(0.0, total - fee), 2) if paid else 0.0
+
+    await db.bookings.update_one(
+        {"id": doc["id"]},
+        {"$set": {
+            "status": "cancelled",
+            "cancellation": {
+                "cancelled_at": now_iso(),
+                "hours_notice": round(hours_until, 2),
+                "eligible_for_refund": eligible,
+                "fee": fee,
+                "refund_estimate": refund,
+                "fee_pct": CANCELLATION_FEE_PCT,
+            },
+            "updated_at": now_iso(),
+        }},
+    )
+    return {
+        "id": doc["id"],
+        "status": "cancelled",
+        "hours_notice": round(hours_until, 2),
+        "eligible_for_refund": eligible,
+        "cancellation_fee": fee,
+        "refund_estimate": refund,
+        "payment_status": doc.get("payment_status"),
+        "message": (
+            f"Cancelled with {round(hours_until,1)}h notice. Refund estimate: ${refund:.2f} (fee ${fee:.2f})."
+            if paid and eligible else
+            "Cancelled. Refund not eligible — booking was within the 48-hour window."
+            if paid and not eligible else
+            "Cancelled. No payment had been received."
+        ),
     }
 
 
@@ -546,7 +633,7 @@ REVIEWS_SEED = [
 @api_router.get("/reviews")
 async def list_reviews():
     return {
-        "place": "Rox Taxi & Tours",
+        "place": "Rox Taxi Service and Tours",
         "rating": 4.9,
         "total": 187,
         "source": "Google",
@@ -808,7 +895,7 @@ async def chat_history(session_id: str):
 
 @api_router.get("/")
 async def root():
-    return {"service": "Rox Taxi & Tours Bahamas API", "status": "running", "focus": "Nassau & Paradise Island"}
+    return {"service": "Rox Taxi Service and Tours Bahamas API", "status": "running", "focus": "Nassau & Paradise Island"}
 
 
 app.include_router(api_router)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, money, STATUS_STEPS, STATUS_INDEX } from "../lib/api";
-import { Check, Search, MapPin, User, Calendar as CalIcon, Loader2 } from "lucide-react";
+import { Check, Search, MapPin, User, Calendar as CalIcon, Loader2, XCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Track() {
@@ -9,6 +9,7 @@ export default function Track() {
   const [code, setCode] = useState(params.get("id") || "");
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const fetchBooking = async (id) => {
     if (!id) return;
@@ -21,6 +22,21 @@ export default function Track() {
       setBooking(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cancelBooking = async () => {
+    if (!booking) return;
+    if (!window.confirm("Cancel this booking?\n\nCancellations 48+ hours before service = refund minus 15% fee.\nCancellations within 48 hours = non-refundable.")) return;
+    setCancelling(true);
+    try {
+      const { data } = await api.post(`/bookings/${booking.id}/cancel`);
+      toast.success(data.message || "Cancelled");
+      await fetchBooking(booking.id);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Cancel failed");
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -131,6 +147,38 @@ export default function Track() {
             {booking.status === "pending_payment" && (
               <div className="mt-8 rounded-xl bg-[#E86A3C]/10 border border-[#E86A3C]/20 p-4 text-sm text-[#7c3a20]">
                 Payment is still pending. Complete payment to activate your booking.
+              </div>
+            )}
+
+            {/* Cancellation section */}
+            {booking.status !== "cancelled" && booking.status !== "completed" && (
+              <div className="mt-6 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-5 flex flex-wrap items-center justify-between gap-4" data-testid="cancel-section">
+                <div className="flex items-start gap-3 max-w-xl">
+                  <AlertTriangle className="w-5 h-5 text-[#D4A94A] mt-0.5 shrink-0" />
+                  <div className="text-sm text-[#334155] leading-relaxed">
+                    <div className="font-semibold text-[#0B3B5C]">Cancellation policy</div>
+                    <div className="text-[#64748B] mt-0.5">Cancel 48+ hours before service to receive a refund minus a <strong>15% cancellation fee</strong>. Within 48 hours = non-refundable.</div>
+                  </div>
+                </div>
+                <button
+                  onClick={cancelBooking}
+                  disabled={cancelling}
+                  data-testid="cancel-booking-btn"
+                  className="rounded-full bg-white border border-[#E2E8F0] text-[#0B3B5C] px-4 py-2.5 text-sm font-semibold hover:border-red-500 hover:text-red-600 active:scale-95 disabled:opacity-60 inline-flex items-center gap-2"
+                >
+                  <XCircle className="w-4 h-4" /> {cancelling ? "Cancelling…" : "Cancel booking"}
+                </button>
+              </div>
+            )}
+
+            {booking.status === "cancelled" && booking.cancellation && (
+              <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5" data-testid="cancelled-info">
+                <div className="font-semibold text-red-800">Booking cancelled</div>
+                <div className="mt-1 text-sm text-red-700 space-y-1">
+                  <div>Notice given: <span className="mono">{booking.cancellation.hours_notice}h</span></div>
+                  <div>Cancellation fee: <span className="mono">{money(booking.cancellation.fee)}</span> ({Math.round((booking.cancellation.fee_pct||0.15)*100)}%)</div>
+                  <div>Refund estimate: <span className="mono font-semibold">{money(booking.cancellation.refund_estimate)}</span></div>
+                </div>
               </div>
             )}
           </div>

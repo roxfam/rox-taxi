@@ -9,6 +9,7 @@ import Tours from "./pages/Tours";
 import CarRental from "./pages/CarRental";
 import Track from "./pages/Track";
 import Contact from "./pages/Contact";
+import About from "./pages/About";
 import { PaymentSuccess, PaymentCancel } from "./pages/PaymentReturn";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -40,6 +41,7 @@ function AppRouter() {
       <Route path="/rentals" element={<CustomerShell><CarRental /></CustomerShell>} />
       <Route path="/track" element={<CustomerShell><Track /></CustomerShell>} />
       <Route path="/contact" element={<CustomerShell><Contact /></CustomerShell>} />
+      <Route path="/about" element={<CustomerShell><About /></CustomerShell>} />
       <Route path="/my-bookings" element={<CustomerShell><MyBookings /></CustomerShell>} />
       <Route path="/payment/success" element={<CustomerShell><PaymentSuccess /></CustomerShell>} />
       <Route path="/payment/cancel" element={<CustomerShell><PaymentCancel /></CustomerShell>} />

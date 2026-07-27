@@ -31,7 +31,7 @@ export default function AdminLogin() {
       <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-[#E2E8F0] bg-white p-10 shadow-[0_20px_60px_rgba(0,0,0,0.06)]">
         <div className="w-12 h-12 rounded-xl bg-[#0B3B5C] text-white flex items-center justify-center mb-6"><Lock className="w-5 h-5" /></div>
         <h1 className="serif text-3xl text-[#0B3B5C]">Admin sign-in</h1>
-        <p className="text-sm text-[#64748B] mt-2">Manage bookings, statuses and revenue for Rox Taxi & Tours.</p>
+        <p className="text-sm text-[#64748B] mt-2">Manage bookings, statuses and revenue for Rox Taxi Service and Tours.</p>
 
         <div className="mt-8 space-y-4">
           <div>

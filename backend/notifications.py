@@ -57,7 +57,7 @@ def send_sms(to_number: str, body: str) -> bool:
 
 def notify_booking_confirmed(booking: dict) -> None:
     """Send email + SMS on confirmed booking."""
-    subject = f"Booking {booking['id']} confirmed — Rox Taxi & Tours"
+    subject = f"Booking {booking['id']} confirmed — Rox Taxi Service and Tours"
     body_text = _booking_summary_text(booking)
     html = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">

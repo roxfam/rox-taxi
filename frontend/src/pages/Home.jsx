@@ -6,7 +6,7 @@ import { api, money } from "../lib/api";
 import NassauCarousel from "../components/NassauCarousel";
 import GoogleReviews from "../components/GoogleReviews";
 
-const HERO_IMG = "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwyfHxiYWhhbWFzJTIwYmVhY2glMjBjbGVhciUyMHdhdGVyfGVufDB8fHx8MTc4NTA2MjgxMXww&ixlib=rb-4.1.0&q=85";
+const HERO_IMG = "https://images.pexels.com/photos/2549018/pexels-photo-2549018.jpeg?auto=compress&cs=tinysrgb&w=1920";
 
 export default function Home() {
   const [tours, setTours] = useState([]);
@@ -19,7 +19,7 @@ export default function Home() {
       {/* HERO */}
       <section className="relative min-h-[92vh] overflow-hidden" data-testid="hero-section">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${HERO_IMG})` }} />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0B192C]/40 via-transparent to-[#0B192C]/60" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0B192C]/50 via-[#0B192C]/15 to-[#0B192C]/80" />
         <div className="relative max-w-7xl mx-auto px-6 lg:px-10 pt-32 pb-24 grid lg:grid-cols-12 gap-10">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
@@ -28,7 +28,7 @@ export default function Home() {
             className="lg:col-span-7 text-white"
           >
             <span className="inline-block text-xs tracking-[0.3em] uppercase text-white/80 mb-6" data-testid="hero-tagline">
-              Nassau · Paradise Island · Exuma
+              Nassau · Paradise Island
             </span>
             <h1 className="serif text-6xl sm:text-7xl lg:text-8xl leading-[0.9] tracking-tight">
               Nassau, on your <em className="italic text-[#F5E1A4]">terms</em>.
