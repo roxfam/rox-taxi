@@ -1,0 +1,33 @@
+{
+  "summary": "Backend-only regression test for the rental data update (Compact Spark -> White + new image, Sentra Orange -> renamed to versa-white 2021 Nissan Versa). All 6 tests in the new suite FAILED: the API is still returning the OLD data (spark-compact color=Silver with old image, sentra-orange still present, versa-white missing). Root cause: main agent updated the data via mongosh only, but the RENTALS_SEED constant in /app/backend/server.py is unchanged. On every backend startup, seed_db() upserts RENTALS_SEED into db.rentals (line 464-465) and then delete_many any id not in CURRENT_RENTAL_IDS (line 467), which reverts the mongosh edits and would delete a new 'versa-white' document. DB-only updates are not persistent for this app — the seed constant is the source of truth.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/rentals", "issue": "spark-compact still returns color='Silver' and old image (photo-1580273916550...). Expected color='White' and image photo-1630019636119-6f3b65ce35dd. RENTALS_SEED in server.py line 424-428 was not updated.", "priority": "HIGH"},
+      {"endpoint": "/api/rentals", "issue": "sentra-orange still exists and versa-white does not exist. Expected: sentra-orange renamed to versa-white with 2021 Nissan Versa fields (name, make=Nissan, model=Versa, year=2021, color=White, image photo-1557775209-f28ede453ae3). RENTALS_SEED line 429-433 unchanged.", "priority": "HIGH"},
+      {"endpoint": "seed_db startup", "issue": "seed_db() runs on every backend startup and upserts RENTALS_SEED (server.py:454-467), overwriting any direct mongosh edits. Also delete_many removes ids not in CURRENT_RENTAL_IDS, which would remove a newly-added 'versa-white' doc from mongosh.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_rentals_update.py",
+    "/app/test_reports/pytest/rentals_update.xml"
+  ],
+  "action_items": [
+    "Update RENTALS_SEED in /app/backend/server.py:424-433. For spark-compact set color='White' and image_url to the new unsplash photo-1630019636119-6f3b65ce35dd URL, and adjust name if needed (add ' LT'). For the sedan replace the entry entirely: id='versa-white', name='2021 Nissan Versa — Sedan (White)' (or similar), year=2021, make='Nissan', model='Versa', color='White', image_url containing photo-1557775209-f28ede453ae3. Do not just mongosh-edit — the seed will overwrite it on next restart.",
+    "After updating server.py, restart backend (`sudo supervisorctl restart backend`) so seed_db reseeds, then rerun /app/backend/tests/test_rentals_update.py."
+  ],
+  "critical_code_review_comments": [
+    "seed_db() is destructive: it delete_many({'id': {'$nin': CURRENT_RENTAL_IDS}}) — any admin CRUD adds to rentals will be wiped on restart. Consider gating reseed behind an env flag or only inserting missing ids.",
+    "server.py is 1639 lines — should be split (routers per resource, seed data in a separate module).",
+    "Booking payload schema requires item_name, price, passengers, payment_method — clients that only send item_id will 422. Consider server-side lookup by item_id to auto-fill item_name/price to reduce client trust surface (also prevents price tampering)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "0% (0/6 rental-update tests passing — data not deployed)", "frontend": "n/a"},
+  "test_credentials": "Admin admin@roxtaxi.com/admin123 (not used — endpoint is public GET)",
+  "seed_data_creation": "None. Booking creation tests were written but couldn't validate the deposit math because target data isn't in DB and BookingCreate requires item_name/price/passengers/payment_method (existing schema). Once seed is fixed, extend the booking tests with the full payload to verify total = price*days + 150.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The pattern in this app: RENTALS_SEED / TOURS_SEED / TAXI_SERVICES in server.py are the source of truth — startup reseeds them and prunes anything else. Any data changes must be made in these Python constants. Rerun /app/backend/tests/test_rentals_update.py after seed update. Booking payload requires item_name, price, passengers, payment_method fields in addition to item_id.",
+  "rca of the issue": "1) main agent used mongosh to update db.rentals. 2) FastAPI backend hot-reloaded (or was restarted) which triggered @app.on_event('startup') -> seed_db(). 3) seed_db upserted the unchanged RENTALS_SEED back over the mongosh edits, restoring color=Silver on spark-compact and keeping id=sentra-orange. If versa-white had been inserted, the subsequent delete_many({'id': {'$nin': CURRENT_RENTAL_IDS}}) would have deleted it. Mitigation: edit RENTALS_SEED (Python constant) and let seed_db propagate, then retest."
+}

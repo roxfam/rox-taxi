@@ -77,22 +77,22 @@ export default function Layout({ children }) {
       >
         <div className="max-w-7xl mx-auto px-5 lg:px-10 flex items-center justify-between h-20">
           {/* Brand */}
-          <Link to="/" className="flex items-center gap-3 group" data-testid="brand-logo">
+          <Link to="/" className="flex items-center gap-3 group shrink-0" data-testid="brand-logo">
             {config.logo_url ? (
               <>
                 <img
                   src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
                   alt="Rox Taxi Service and Tours"
-                  className="h-16 w-auto max-w-[96px] object-contain group-hover:scale-110 transition-transform duration-300 contrast-125 saturate-150"
+                  className="h-14 lg:h-16 w-auto max-w-[64px] lg:max-w-[80px] object-contain group-hover:scale-110 transition-transform duration-300 contrast-125 saturate-150 shrink-0"
                   data-testid="brand-logo-img"
                 />
-                <div className="hidden sm:flex flex-col leading-[0.95] gap-1" data-testid="brand-name">
-                  <span className="serif text-2xl font-extrabold tracking-tight text-[#0B3B5C] drop-shadow-[0_2px_10px_rgba(255,255,255,0.75)]">
+                <div className="hidden sm:flex flex-col leading-[0.95] gap-1 whitespace-nowrap" data-testid="brand-name">
+                  <span className="serif text-lg xl:text-xl font-extrabold tracking-tight text-[#0B3B5C] drop-shadow-[0_2px_10px_rgba(255,255,255,0.75)]">
                     Rox Taxi <em className="italic font-black text-[#D4A94A]">Service</em>
                   </span>
                   <span className="inline-flex items-center gap-2 mt-0.5">
-                    <span className="w-6 h-[1.5px] bg-gradient-to-r from-[#D4A94A] to-transparent" />
-                    <span className="text-[9px] tracking-[0.4em] uppercase font-black text-[#D4A94A]">and Tours</span>
+                    <span className="w-5 h-[1.5px] bg-gradient-to-r from-[#D4A94A] to-transparent" />
+                    <span className="text-[9px] tracking-[0.35em] uppercase font-black text-[#D4A94A]">and Tours</span>
                   </span>
                 </div>
               </>
@@ -102,7 +102,7 @@ export default function Layout({ children }) {
                   <Waves className="w-5 h-5" />
                   <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-[#E86A3C] ring-2 ring-white" />
                 </div>
-                <div className="flex flex-col leading-none">
+                <div className="flex flex-col leading-none whitespace-nowrap">
                   <span className="serif text-xl text-[#0B3B5C] tracking-tight">Rox Taxi Service</span>
                   <span className="text-[10px] tracking-[0.28em] uppercase text-[#64748B] mt-0.5">and Tours</span>
                 </div>

@@ -98,6 +98,7 @@ class BookingCreate(BaseModel):
     passengers: int = Field(..., ge=1, le=20)  # mandatory
     days: Optional[int] = 1
     extra_luggage: Optional[int] = 0
+    additional_drivers: Optional[int] = Field(0, ge=0, le=4)
     notes: Optional[str] = None
     payment_method: str
 
@@ -107,6 +108,8 @@ LUGGAGE_MAX = 10
 EXTRA_PASSENGER_FEE_USD = 5.0
 EXTRA_PASSENGER_INCLUDED = 2  # first 2 passengers included in the flat fare; each additional adds the fee
 RENTAL_DEPOSIT_USD = 150.0  # refundable security deposit applied automatically to every car rental booking
+ADDITIONAL_DRIVER_FEE_USD = 25.0  # flat fee per extra registered driver on a car rental
+ADDITIONAL_DRIVER_MAX = 4
 
 # Days closed (weekly). Python weekday: Monday=0..Sunday=6. Saturday=5.
 CANCELLATION_FEE_PCT = 0.15  # 15% cancellation fee
@@ -559,6 +562,7 @@ async def create_booking(req: BookingCreate):
     luggage_fee = 0.0
     passenger_fee = 0.0
     deposit_amount = 0.0
+    additional_driver_fee = 0.0
     if req.service_type == "taxi":
         extra = max(0, min(int(req.extra_luggage or 0), LUGGAGE_MAX))
         luggage_fee = extra * LUGGAGE_FEE_USD
@@ -571,8 +575,12 @@ async def create_booking(req: BookingCreate):
         deposit_amount = RENTAL_DEPOSIT_USD
         booking["deposit_amount"] = deposit_amount
         booking["deposit_status"] = "held"  # released back to customer after vehicle return
+        extra_drivers = max(0, min(int(req.additional_drivers or 0), ADDITIONAL_DRIVER_MAX))
+        additional_driver_fee = extra_drivers * ADDITIONAL_DRIVER_FEE_USD
+        booking["additional_drivers"] = extra_drivers
+        booking["additional_driver_fee"] = additional_driver_fee
 
-    booking["total"] = round(base + luggage_fee + passenger_fee + deposit_amount, 2)
+    booking["total"] = round(base + luggage_fee + passenger_fee + deposit_amount + additional_driver_fee, 2)
 
     await db.bookings.insert_one(booking)
     if req.payment_method == "zelle":
@@ -598,6 +606,12 @@ async def get_fees():
             f"A refundable security deposit of ${RENTAL_DEPOSIT_USD:.0f} is added automatically to every car "
             "rental booking. It is released back to the customer after the vehicle is returned undamaged, with a "
             "full tank and on time."
+        ),
+        "additional_driver_fee_usd": ADDITIONAL_DRIVER_FEE_USD,
+        "additional_driver_max": ADDITIONAL_DRIVER_MAX,
+        "additional_driver_policy": (
+            f"Each additional registered driver on a car rental is ${ADDITIONAL_DRIVER_FEE_USD:.0f} (max "
+            f"{ADDITIONAL_DRIVER_MAX} additional drivers). The primary driver is always included."
         ),
         "closed_weekdays": sorted(CLOSED_WEEKDAYS),
         "closed_weekdays_labels": ["Saturday"],

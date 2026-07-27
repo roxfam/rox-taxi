@@ -39,12 +39,15 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     passengers: 1,
     days: defaultDays,
     extra_luggage: 0,
+    additional_drivers: 0,
     notes: "",
   });
   const LUGGAGE_FEE = 3;
   const PASSENGER_FEE = 5;
   const PASSENGER_INCLUDED = 2;
   const RENTAL_DEPOSIT = 150;
+  const ADDITIONAL_DRIVER_FEE = 25;
+  const ADDITIONAL_DRIVER_MAX = 4;
   const [payMethod, setPayMethod] = useState("stripe");
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
   const [loading, setLoading] = useState(false);
@@ -185,6 +188,51 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                       </div>
                     </div>
                     <div className="mono font-semibold text-[#0B3B5C] text-sm shrink-0" data-testid="rental-deposit-amount">+${RENTAL_DEPOSIT.toFixed(2)}</div>
+                  </div>
+                </div>
+              )}
+
+              {serviceType === "rental" && (
+                <div className="rounded-xl border border-[#0B3B5C]/15 bg-white p-4" data-testid="additional-drivers-section">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full bg-[#0B3B5C]/10 flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4 text-[#0B3B5C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <div className="text-sm font-semibold text-[#0B3B5C]">Additional drivers</div>
+                          <div className="text-xs text-[#64748B] mt-1 leading-relaxed">
+                            The primary driver is included. Each additional registered driver is <span className="mono font-semibold text-[#0B3B5C]">${ADDITIONAL_DRIVER_FEE}</span> flat.
+                          </div>
+                        </div>
+                        <div className="inline-flex items-center gap-2" data-testid="additional-drivers-stepper">
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, additional_drivers: Math.max(0, Number(form.additional_drivers || 0) - 1) })}
+                            disabled={Number(form.additional_drivers || 0) <= 0}
+                            className="w-8 h-8 rounded-full border border-[#E2E8F0] text-[#0B3B5C] text-lg font-bold hover:bg-[#F1F5F9] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                            data-testid="additional-drivers-decrement"
+                            aria-label="Remove additional driver"
+                          >−</button>
+                          <span className="mono w-8 text-center text-base font-bold text-[#0B3B5C]" data-testid="additional-drivers-count">{Number(form.additional_drivers || 0)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, additional_drivers: Math.min(ADDITIONAL_DRIVER_MAX, Number(form.additional_drivers || 0) + 1) })}
+                            disabled={Number(form.additional_drivers || 0) >= ADDITIONAL_DRIVER_MAX}
+                            className="w-8 h-8 rounded-full border border-[#E2E8F0] text-[#0B3B5C] text-lg font-bold hover:bg-[#F1F5F9] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                            data-testid="additional-drivers-increment"
+                            aria-label="Add additional driver"
+                          >+</button>
+                        </div>
+                      </div>
+                      {Number(form.additional_drivers || 0) > 0 && (
+                        <div className="mt-3 flex items-center justify-between text-xs pt-3 border-t border-[#F1F5F9]" data-testid="additional-drivers-line">
+                          <span className="text-[#64748B]">{Number(form.additional_drivers)} additional {Number(form.additional_drivers) === 1 ? "driver" : "drivers"} × ${ADDITIONAL_DRIVER_FEE}</span>
+                          <span className="mono font-semibold text-[#0B3B5C]" data-testid="additional-drivers-fee">+${additionalDriverFee.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
