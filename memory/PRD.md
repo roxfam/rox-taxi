@@ -35,6 +35,7 @@ quotes, Claude AI live chat widget, luggage fees, extra-passenger fees, 15% canc
 - **[Feb 2026]** $150 refundable security deposit auto-applied to every car rental (backend + frontend)
 - **[Feb 2026]** Popular Nassau destinations quick-picker on Taxi page (12 destinations mapped to best-fit service)
 - **[Feb 2026]** Dedicated `/login` page + header "Sign in" button + mobile drawer login link
+- **[Feb 2026]** PayPal Checkout (Smart Buttons) via PayPal Orders v2 REST — sandbox mode. Creates order via `POST /api/paypal/create-order`, captures via `POST /api/paypal/capture-order/{id}`. Config exposed via `GET /api/paypal/config`. Client renders buttons in-modal using `@paypal/react-paypal-js`.
 
 ## Key API Endpoints
 - `POST /api/bookings` — creates booking, applies deposit for rentals
@@ -44,6 +45,9 @@ quotes, Claude AI live chat widget, luggage fees, extra-passenger fees, 15% canc
 - `POST /api/auth/session`, `GET /api/auth/me`, `POST /api/auth/logout`
 - `GET /api/my/bookings` — authenticated user's bookings
 - `POST /api/admin/upload-logo`
+- `GET /api/paypal/config` — public client_id + mode
+- `POST /api/paypal/create-order` — create a PayPal order for a booking
+- `POST /api/paypal/capture-order/{order_id}` — capture approved order & mark booking paid
 
 ## Roadmap
 ### P0

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle } from "lucide-react";
+import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { api, money } from "../lib/api";
 
 function isClosedDate(dateStr, days = 1) {
@@ -49,6 +50,11 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const [loading, setLoading] = useState(false);
   const [booking, setBooking] = useState(null);
   const [siteCfg, setSiteCfg] = useState({ zelle_email: "payments@roxtaxi.com", zelle_phone: "+1-242-000-0000" });
+  const [paypalCfg, setPaypalCfg] = useState({ client_id: "", configured: false, mode: "sandbox" });
+
+  useEffect(() => {
+    api.get("/paypal/config").then((r) => setPaypalCfg(r.data)).catch(() => {});
+  }, []);
 
   const setF = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -105,6 +111,9 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
           origin_url: window.location.origin,
         });
         window.location.href = c.checkout_url;
+      } else if (payMethod === "paypal_checkout") {
+        // Booking is reserved — reveal PayPal Smart Buttons for in-page capture
+        setStep(5);
       } else if (payMethod === "paypal") {
         const paypalUrl = (cfg.paypal_me_url || "https://www.paypal.com/paypalme/roxtaxiservice") + `/${total.toFixed(2)}`;
         setStep(4);
@@ -268,11 +277,21 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   desc="Securely processed via Stripe. Card 4242 4242 4242 4242 works in test mode."
                   testid="pay-method-stripe"
                 />
+                {paypalCfg.configured && (
+                  <PayCard
+                    active={payMethod === "paypal_checkout"}
+                    onClick={() => setPayMethod("paypal_checkout")}
+                    icon={<PayPalGlyph />}
+                    title={`PayPal Checkout${paypalCfg.mode === "sandbox" ? " (sandbox)" : ""}`}
+                    desc="Pay in seconds with PayPal Smart Buttons — no redirect. Log in, approve and you're back on this page."
+                    testid="pay-method-paypal-checkout"
+                  />
+                )}
                 <PayCard
                   active={payMethod === "paypal"}
                   onClick={() => setPayMethod("paypal")}
                   icon={<Wallet className="w-5 h-5" />}
-                  title="PayPal — Direct"
+                  title="PayPal — Direct (PayPal.me)"
                   desc="Reserve now and pay us directly via PayPal.me. We'll confirm once payment lands."
                   testid="pay-method-paypal"
                 />
@@ -301,7 +320,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     className="btn-shine rounded-full bg-[#E86A3C] text-white px-6 py-3 text-sm font-semibold hover:bg-[#d55a30] active:scale-95 disabled:opacity-60"
                     data-testid="booking-submit-payment-btn"
                   >
-                    {loading ? "Processing..." : payMethod === "stripe" ? "Pay with Stripe" : payMethod === "paypal" ? "Reserve & Open PayPal" : "Reserve & See Zelle Info"}
+                    {loading ? "Processing..." : payMethod === "stripe" ? "Pay with Stripe" : payMethod === "paypal_checkout" ? "Reserve & Show PayPal" : payMethod === "paypal" ? "Reserve & Open PayPal" : "Reserve & See Zelle Info"}
                   </button>
                 </div>
               </div>
@@ -391,9 +410,101 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
               </div>
             </div>
           )}
+          {step === 5 && booking && (
+            <div data-testid="paypal-checkout-step">
+              <div className="flex items-center gap-2 text-[#003087]">
+                <CheckCircle2 className="w-6 h-6" />
+                <span className="font-semibold">Booking reserved — complete payment with PayPal.</span>
+              </div>
+              <p className="text-sm text-[#64748B] mt-2">
+                Confirmation code <code className="mono bg-[#F1F5F9] px-2 py-0.5 rounded text-[#0B3B5C]" data-testid="paypal-checkout-code">{booking.id}</code>
+                {" · "}
+                <span className="mono text-[#E86A3C] font-semibold">{money(total)}</span>
+              </p>
+
+              <div className="mt-6 rounded-2xl border border-[#E2E8F0] p-5 bg-[#FBF7EF]/60" data-testid="paypal-buttons-wrapper">
+                {paypalCfg.client_id ? (
+                  <PayPalScriptProvider
+                    options={{
+                      clientId: paypalCfg.client_id,
+                      currency: "USD",
+                      intent: "capture",
+                      components: "buttons",
+                    }}
+                  >
+                    <PayPalButtons
+                      style={{ layout: "vertical", shape: "pill", label: "pay", height: 48 }}
+                      createOrder={async () => {
+                        const { data } = await api.post("/paypal/create-order", { booking_id: booking.id });
+                        return data.order_id;
+                      }}
+                      onApprove={async (data) => {
+                        try {
+                          const { data: res } = await api.post(`/paypal/capture-order/${data.orderID}`);
+                          if (res?.payment_status === "paid") {
+                            toast.success("Payment received! Your booking is confirmed.");
+                            nav(`/payment/success?booking_id=${booking.id}&provider=paypal`);
+                          } else {
+                            toast.error("Payment could not be verified. Please contact us.");
+                          }
+                        } catch (err) {
+                          toast.error(err?.response?.data?.detail || "PayPal capture failed.");
+                        }
+                      }}
+                      onError={(err) => {
+                        console.error("PayPal error:", err);
+                        toast.error("PayPal error — please try another payment method.");
+                      }}
+                      onCancel={() => {
+                        toast.info("PayPal payment cancelled. Your booking is still reserved.");
+                      }}
+                    />
+                  </PayPalScriptProvider>
+                ) : (
+                  <div className="text-sm text-[#64748B]">PayPal is not configured. Please choose another payment method.</div>
+                )}
+                {paypalCfg.mode === "sandbox" && (
+                  <div className="mt-3 text-[11px] text-[#94a3b8] leading-relaxed" data-testid="paypal-sandbox-note">
+                    Sandbox mode — use a PayPal sandbox buyer account (e.g. sb-*@personal.example.com).
+                    Real cards will not be charged.
+                  </div>
+                )}
+                <p className="text-xs text-[#94a3b8] mt-4 leading-relaxed border-t border-[#E2E8F0] pt-3">
+                  <strong>Cancellation policy:</strong> Cancel 48+ hours before service to receive a refund minus a 15% cancellation fee. Cancellations within 48 hours are non-refundable.
+                </p>
+              </div>
+
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  onClick={() => setStep(2)}
+                  className="rounded-full border border-[#E2E8F0] px-5 py-2.5 text-sm hover:border-[#0B3B5C]"
+                  data-testid="paypal-checkout-change-method"
+                >
+                  ← Change payment method
+                </button>
+                <button
+                  onClick={onClose}
+                  className="rounded-full border border-[#E2E8F0] px-5 py-2.5 text-sm"
+                  data-testid="paypal-checkout-close"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+function PayPalGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+      <path fill="#003087" d="M7.076 21.337H4.5l2.4-14.674h4.276c2.16 0 3.66.44 4.5 1.32.84.88.98 2.06.42 3.54-.14.36-.32.7-.54 1.02-.22.32-.48.62-.78.9a5 5 0 0 1-1.72.94c-.7.24-1.5.36-2.4.36H8.176l-1.1 6.594z" />
+      <path fill="#0070E0" d="M18.9 8.72c-.2 1.24-.68 2.28-1.44 3.12-.76.84-1.72 1.48-2.88 1.92-1.16.44-2.52.66-4.08.66h-.9l-.98 6.02c-.04.24-.24.42-.5.42h-2.14a.4.4 0 0 1-.4-.48l.36-2.24 1.1-6.594h2.482c.9 0 1.7-.12 2.4-.36a5 5 0 0 0 1.72-.94c.3-.28.56-.58.78-.9.22-.32.4-.66.54-1.02.56-1.48.42-2.66-.42-3.54.12.12.24.24.36.36.98.98 1.28 2.36.82 4.16z" />
+      <path fill="#003087" d="M15.196 6.663c-.14-.06-.28-.12-.44-.16-.16-.06-.32-.1-.5-.14-.62-.14-1.3-.2-2.04-.2H8.6a.5.5 0 0 0-.5.42l-1.98 12.234-.06.34a.5.5 0 0 0 .5.6h2.646l.66-4.184-.02.14.06-.34a.5.5 0 0 1 .5-.42h1.16c2.4 0 4.28-.98 4.82-3.8v-.02c.02-.08.04-.16.04-.24.16-1-.02-1.68-.56-2.28-.16-.16-.36-.32-.58-.44z" />
+    </svg>
   );
 }
 

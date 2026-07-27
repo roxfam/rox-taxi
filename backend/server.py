@@ -19,6 +19,7 @@ from emergentintegrations.payments.stripe.checkout import (
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 from fastapi.responses import StreamingResponse
 from notifications import notify_booking_confirmed
+import paypal_client
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1280,6 +1281,88 @@ async def stripe_webhook(request: Request):
         booking_id = (result.metadata or {}).get("booking_id")
         await _mark_paid(result.session_id, booking_id)
     return {"status": "ok"}
+
+
+# ---------------- PayPal Checkout (Smart Buttons) ----------------
+
+
+class PayPalCreateOrderRequest(BaseModel):
+    booking_id: str
+
+
+@api_router.get("/paypal/config")
+async def paypal_config():
+    """Public config for the frontend PayPalScriptProvider."""
+    return paypal_client.public_config()
+
+
+@api_router.post("/paypal/create-order")
+async def paypal_create_order(req: PayPalCreateOrderRequest):
+    if not paypal_client.is_configured():
+        raise HTTPException(503, "PayPal is not configured on the server")
+    booking = await db.bookings.find_one({"id": req.booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    if booking.get("payment_status") == "paid":
+        raise HTTPException(409, "Booking already paid")
+
+    try:
+        order = await paypal_client.create_order(
+            amount=float(booking["total"]),
+            booking_id=booking["id"],
+            description=f"{booking.get('item_name','Rox Taxi booking')} — {booking['id']}",
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.exception("PayPal create-order failed")
+        raise HTTPException(502, f"PayPal error: {e}") from e
+
+    await db.payment_transactions.insert_one({
+        "provider": "paypal",
+        "session_id": order["id"],
+        "booking_id": booking["id"],
+        "amount": float(booking["total"]),
+        "currency": "usd",
+        "status": order.get("status", "CREATED"),
+        "payment_status": "pending",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    })
+    return {"order_id": order["id"], "status": order.get("status")}
+
+
+@api_router.post("/paypal/capture-order/{order_id}")
+async def paypal_capture_order(order_id: str):
+    if not paypal_client.is_configured():
+        raise HTTPException(503, "PayPal is not configured on the server")
+
+    tx = await db.payment_transactions.find_one({"session_id": order_id, "provider": "paypal"})
+    if not tx:
+        raise HTTPException(404, "PayPal order not found")
+
+    try:
+        result = await paypal_client.capture_order(order_id)
+    except Exception as e:  # noqa: BLE001
+        logging.exception("PayPal capture failed")
+        raise HTTPException(502, f"PayPal capture error: {e}") from e
+
+    status = (result.get("status") or "").upper()
+    if status != "COMPLETED":
+        await db.payment_transactions.update_one(
+            {"session_id": order_id},
+            {"$set": {"status": status or "UNKNOWN", "updated_at": now_iso()}},
+        )
+        raise HTTPException(402, f"PayPal capture not completed (status={status})")
+
+    # Payment succeeded — mark booking paid + notify
+    await _mark_paid(order_id, tx["booking_id"])
+    booking = await db.bookings.find_one({"id": tx["booking_id"]}, {"_id": 0})
+    return {
+        "order_id": order_id,
+        "status": status,
+        "booking_id": tx["booking_id"],
+        "payment_status": "paid",
+        "booking": clean(dict(booking)) if booking else None,
+    }
 
 
 # ---------------- Live Chat (SSE) ----------------
