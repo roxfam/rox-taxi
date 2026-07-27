@@ -6,7 +6,7 @@ import { api, money } from "../lib/api";
 import NassauCarousel from "../components/NassauCarousel";
 import GoogleReviews from "../components/GoogleReviews";
 
-const HERO_IMG = "https://images.pexels.com/photos/2549018/pexels-photo-2549018.jpeg?auto=compress&cs=tinysrgb&w=1920";
+const HERO_IMG = "https://images.pexels.com/photos/1450353/pexels-photo-1450353.jpeg?auto=compress&cs=tinysrgb&w=1920";
 
 export default function Home() {
   const [tours, setTours] = useState([]);
@@ -68,38 +68,46 @@ export default function Home() {
             className="lg:col-span-5 lg:pt-10"
           >
             <div className="glass rounded-3xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
-              <h3 className="serif text-2xl text-[#0B3B5C] mb-2">Quick book</h3>
-              <p className="text-sm text-[#64748B] mb-6">Pick a service and get pricing in seconds.</p>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="w-10 h-[1px] bg-[#D4A94A]" />
+                <span className="text-[10px] tracking-[0.35em] uppercase text-[#D4A94A] font-bold">Reserve</span>
+              </div>
+              <h3 className="serif text-4xl text-[#0B3B5C] font-bold leading-none tracking-tight">
+                Quick <em className="italic text-[#D4A94A]">book</em>.
+              </h3>
+              <p className="serif text-base text-[#64748B] mt-3 mb-7 italic font-medium">
+                Pick a service and get pricing in seconds.
+              </p>
               <div className="grid grid-cols-1 gap-3">
-                <Link to="/taxi" data-testid="quickbook-taxi" className="flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#D4A94A] hover:-translate-y-0.5 transition-transform">
+                <Link to="/taxi" data-testid="quickbook-taxi" className="group flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#D4A94A] hover:-translate-y-0.5 hover:shadow-[0_15px_35px_rgba(212,169,74,0.18)] transition-all duration-300">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-[#D4A94A]/10 flex items-center justify-center text-[#D4A94A]"><Car className="w-5 h-5" /></div>
+                    <div className="w-11 h-11 rounded-xl bg-[#D4A94A]/10 flex items-center justify-center text-[#D4A94A] group-hover:scale-110 transition-transform"><Car className="w-5 h-5" /></div>
                     <div>
-                      <div className="font-semibold text-[#0B3B5C]">Taxi & Airport Transfers</div>
-                      <div className="text-xs text-[#64748B]">from $20 · Nassau + Paradise Island</div>
+                      <div className="serif text-lg text-[#0B3B5C] font-bold leading-tight">Taxi &amp; Airport Transfers</div>
+                      <div className="text-[11px] tracking-[0.15em] uppercase text-[#64748B] mt-1 font-semibold">from $20 · Nassau + Paradise Island</div>
                     </div>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-[#0B3B5C]" />
+                  <ArrowRight className="w-5 h-5 text-[#0B3B5C] group-hover:translate-x-1 group-hover:text-[#D4A94A] transition-all" />
                 </Link>
-                <Link to="/tours" data-testid="quickbook-tours" className="flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#D4A94A] hover:-translate-y-0.5 transition-transform">
+                <Link to="/tours" data-testid="quickbook-tours" className="group flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#E86A3C] hover:-translate-y-0.5 hover:shadow-[0_15px_35px_rgba(232,106,60,0.18)] transition-all duration-300">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-[#E86A3C]/10 flex items-center justify-center text-[#E86A3C]"><ShipWheel className="w-5 h-5" /></div>
+                    <div className="w-11 h-11 rounded-xl bg-[#E86A3C]/10 flex items-center justify-center text-[#E86A3C] group-hover:scale-110 transition-transform"><ShipWheel className="w-5 h-5" /></div>
                     <div>
-                      <div className="font-semibold text-[#0B3B5C]">Tours & Excursions</div>
-                      <div className="text-xs text-[#64748B]">Blue Lagoon, Atlantis, snorkeling & more</div>
+                      <div className="serif text-lg text-[#0B3B5C] font-bold leading-tight">Tours &amp; Excursions</div>
+                      <div className="text-[11px] tracking-[0.15em] uppercase text-[#64748B] mt-1 font-semibold">Blue Lagoon · Atlantis · Snorkeling</div>
                     </div>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-[#0B3B5C]" />
+                  <ArrowRight className="w-5 h-5 text-[#0B3B5C] group-hover:translate-x-1 group-hover:text-[#E86A3C] transition-all" />
                 </Link>
-                <Link to="/rentals" data-testid="quickbook-rentals" className="flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#D4A94A] hover:-translate-y-0.5 transition-transform">
+                <Link to="/rentals" data-testid="quickbook-rentals" className="group flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#0B3B5C] hover:-translate-y-0.5 hover:shadow-[0_15px_35px_rgba(11,59,92,0.18)] transition-all duration-300">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-[#0B3B5C]/10 flex items-center justify-center text-[#0B3B5C]"><MapPinned className="w-5 h-5" /></div>
+                    <div className="w-11 h-11 rounded-xl bg-[#0B3B5C]/10 flex items-center justify-center text-[#0B3B5C] group-hover:scale-110 transition-transform"><MapPinned className="w-5 h-5" /></div>
                     <div>
-                      <div className="font-semibold text-[#0B3B5C]">Car Rentals</div>
-                      <div className="text-xs text-[#64748B]">Compact to Mini-Van · from $39/day</div>
+                      <div className="serif text-lg text-[#0B3B5C] font-bold leading-tight">Car Rentals</div>
+                      <div className="text-[11px] tracking-[0.15em] uppercase text-[#64748B] mt-1 font-semibold">Compact to Mini-Van · from $39 / day</div>
                     </div>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-[#0B3B5C]" />
+                  <ArrowRight className="w-5 h-5 text-[#0B3B5C] group-hover:translate-x-1 transition-all" />
                 </Link>
               </div>
             </div>

@@ -79,11 +79,18 @@ export default function Layout({ children }) {
           {/* Brand */}
           <Link to="/" className="flex items-center gap-3 group" data-testid="brand-logo">
             {config.logo_url ? (
-              <img
-                src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
-                alt="Rox Taxi Service and Tours"
-                className="h-12 w-auto max-w-[180px] object-contain group-hover:scale-105 transition-transform"
-              />
+              <>
+                <img
+                  src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
+                  alt="Rox Taxi Service and Tours"
+                  className={`h-12 w-auto max-w-[64px] object-contain group-hover:scale-105 transition-all duration-300 ${scrolled ? "brightness-[0.15]" : "drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]"}`}
+                  data-testid="brand-logo-img"
+                />
+                <div className="hidden sm:flex flex-col leading-none" data-testid="brand-name">
+                  <span className={`serif text-xl tracking-tight transition-colors ${scrolled ? "text-[#0B3B5C]" : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]"}`}>Rox Taxi Service</span>
+                  <span className={`text-[10px] tracking-[0.28em] uppercase mt-0.5 transition-colors ${scrolled ? "text-[#64748B]" : "text-white/80"}`}>and Tours</span>
+                </div>
+              </>
             ) : (
               <>
                 <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center text-white shadow-[0_8px_20px_rgba(212,169,74,0.4)] group-hover:rotate-6 transition-transform duration-300">
@@ -91,8 +98,8 @@ export default function Layout({ children }) {
                   <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-[#E86A3C] ring-2 ring-white" />
                 </div>
                 <div className="flex flex-col leading-none">
-                  <span className="serif text-xl text-[#0B3B5C] tracking-tight">Rox Taxi</span>
-                  <span className="text-[10px] tracking-[0.25em] uppercase text-[#64748B]">Service &amp; Tours</span>
+                  <span className="serif text-xl text-[#0B3B5C] tracking-tight">Rox Taxi Service</span>
+                  <span className="text-[10px] tracking-[0.28em] uppercase text-[#64748B] mt-0.5">and Tours</span>
                 </div>
               </>
             )}
