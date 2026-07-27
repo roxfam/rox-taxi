@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 4 backend-only verification of rental $150 security deposit, admin deposit release/forfeit (auto-refund via Zelle manual path), PayPal LIVE Orders v2 config + create/capture flow, site-config logo swap, Saturday blackout, 48h cancellation policy, and Twilio+SMTP live notifications no-throw. All 26 pytest tests pass (26/26).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/site-config", "issue": "Field is exposed as `phone` (not `phone_number` as the review request wording implies). Frontend must read `phone`. Not a bug — just a naming inconsistency between review copy and code."},
+      {"endpoint": "notifications (Twilio)", "issue": "Trial account rejects unverified BS numbers (HTTP 400 error 21211). Correctly caught and logged as WARNING; API returns 200 to caller. Expected behavior per review note. Main agent should upgrade Twilio to paid account before go-live to un-limit numbers."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration4.py",
+    "/app/test_reports/pytest/iteration4.xml"
+  ],
+  "action_items": [
+    "None — all critical flows pass. Consider upgrading Twilio from trial to a paid subaccount before go-live so SMS lands on unverified customer numbers.",
+    "Consider renaming site-config `phone` -> `phone_number` for consistency with review copy, or update copy to say `phone`."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1625 lines — should be split into modules (auth, bookings, admin, payments, deposits, notifications, pdf, chat).",
+    "`_attempt_deposit_refund` returns provider=booking.get('payment_method','manual') on the manual fallback — good; message contains 'Manual payment method — issue refund by hand' which drives the Zelle test.",
+    "PayPal secret is correctly withheld from /api/paypal/config (verified via key scan).",
+    "`_validate_open_day` iterates from booking_date for `days` days — a 3-day rental starting Friday will trip the Saturday check. Documented behavior; ensure UI messaging matches.",
+    "cancel endpoint uses simple minute math on `booking_date` — if `booking_date` lacks timezone we assume UTC; matches _parse_booking_date normalization."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration4.py (new)",
+    "/app/test_reports/pytest/iteration4.xml (new)",
+    "/app/test_reports/iteration_4.json (new)"
+  ],
+  "success_rate": {"backend": "100% (26/26)", "frontend": "N/A (skipped per review request)"},
+  "test_credentials": "admin@roxtaxi.com / admin123 verified via POST /api/auth/login (returns JWT with 3 segments; wrong-password returns 401).",
+  "seed_data_creation": "~15 TEST_ prefixed bookings created across the run (TEST_Deposit_1d/3d/pp/notify, TEST_TaxiNoDep_p1/p4, TEST_Deposit_auth/invalid/zrelease/forfeit/no-auto/paid/no-dep, TEST_TaxiNoDep_cancel_soon, TEST_Deposit_cancel_far). Six of them were force-marked payment_status='paid' via mongosh to exercise deposit refund + cancellation paths. All are prefixed TEST_ for cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 4 covered: (1) rental $150 deposit flat per booking not per-day (verified with days=1→total=229, days=3→total=387, deposit_amount=150 in both), (2) taxi bookings never carry deposit_amount/deposit_status (verified pax=1 and pax=4 with +$10 passenger fee), (3) /api/fees exposes rental_deposit_usd=150 + rental_deposit_policy string, (4) /api/admin/stats requires JWT and returns deposits_held/released/forfeited/held_amount, (5) PATCH /api/admin/bookings/{id}/deposit — Pydantic accepts 'released'|'forfeited'|'held' only (rejects 'bogus' with 422), refuses non-rental bookings with 400 ('This booking has no security deposit'), released+auto_refund on Zelle-paid booking returns deposit_refund_provider='zelle' + deposit_refund_status='failed' + deposit_refund_error containing 'Manual payment method — issue refund by hand', forfeit path sets deposit_forfeited_at and does NOT attempt refund, release+auto_refund=false does NOT set any deposit_refund_* fields, (6) /api/paypal/config returns mode='live' configured=true client_id present and NO secret key exposed, (7) /api/paypal/create-order returns 404/unknown, 409/already-paid, and a real order_id with status='CREATED' from PayPal LIVE (order was created but NOT captured to avoid real charge), (8) /api/paypal/capture-order/{unknown} returns 404, (9) /api/site-config exposes logo_url matching /api/uploads/logo-*.png plus facebook_url/whatsapp_number/paypal_me_url/zelle_email/zelle_phone/phone (backend key is 'phone', not 'phone_number'), (10) /api/uploads/logo-*.png returns PNG magic bytes, (11) Saturday POST /api/bookings rental returns 400 with 'Saturday' in body, (12) cancel with 48h+ notice + payment_status=paid returns eligible_for_refund=true, cancellation_fee=15% of total ($229 → $34.35, refund_estimate=$194.65), cancel within 48h returns eligible_for_refund=false and refund_estimate=0, (13) SMTP works LIVE — logs show 'SMTP email sent to test_*@example.com via mail.privateemail.com' on every zelle booking; Twilio LIVE call is made and gracefully warns 'HTTP 400 error 21211: Invalid To Phone Number' on unverified BS numbers (trial limitation) — no 500 raised, booking API always returns 200. PayPal LIVE credentials work end-to-end for create-order. Do NOT run capture_order happy path — that would charge real cash.",
+  "rca of the issue": "No new issues. Previous iteration_3 fix (const PASSENGER_INCLUDED = 2 in BookingFlow.jsx) is intact — backend still uses EXTRA_PASSENGER_INCLUDED=2 and passenger fee formula (pax-2)*$5 verified. Zelle deposit-release flow correctly falls through _attempt_deposit_refund's paypal/stripe branches to the manual fallback returning provider=payment_method ('zelle') + error containing 'Manual payment method' — exactly matching the review contract."
+}
