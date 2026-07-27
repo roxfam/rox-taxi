@@ -128,6 +128,14 @@ export default function WeddingBuilder() {
         <h1 className="serif text-5xl sm:text-6xl text-[#0B3B5C] mt-6 leading-[0.9]">Package sent for <em className="italic text-[#D4A94A]">approval</em>.</h1>
         <p className="text-[#64748B] mt-4 max-w-md mx-auto">Reference <span className="mono font-semibold text-[#0B3B5C]" data-testid="wedding-inquiry-id">{submitted.id}</span> · Estimated <span className="mono font-semibold text-[#E86A3C]">{money(submitted.estimated_total)}</span>. Our concierge will confirm final pricing within 2 hours.</p>
         <div className="mt-8 flex flex-wrap gap-3 justify-center">
+          <a
+            href={`${(process.env.REACT_APP_BACKEND_URL || "")}/api/wedding-package/${submitted.id}/quote.pdf`}
+            target="_blank" rel="noreferrer"
+            data-testid="wedding-download-pdf"
+            className="rounded-full bg-[#D4A94A] text-[#0B192C] px-6 py-3 text-sm font-semibold hover:bg-[#e0b856] active:scale-95 shadow-[0_10px_25px_rgba(212,169,74,0.4)]"
+          >
+            Download PDF quote
+          </a>
           <button onClick={() => nav("/")} className="rounded-full bg-[#0B3B5C] text-white px-6 py-3 text-sm font-semibold">Back to home</button>
           <a href={`https://wa.me/12420000000?text=Following%20up%20on%20wedding%20package%20${submitted.id}`} target="_blank" rel="noreferrer" className="rounded-full bg-[#25D366] text-white px-6 py-3 text-sm font-semibold">WhatsApp us</a>
         </div>

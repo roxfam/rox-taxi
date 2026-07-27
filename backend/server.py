@@ -54,7 +54,6 @@ CHAT_SYSTEM = (
     "- Blue Lagoon Island beach day (Nassau harbour): $89 (6h)\n"
     "- Rose Island snorkeling (off Paradise Island): $65 (4h)\n"
     "- Paradise Island / Atlantis city tour: $45 (3h)\n"
-    "- Exuma Swimming Pigs day tour: $285 (8h, flight from Nassau)\n"
     "- Three-island boat hopping from Nassau: $149 (7h)\n"
     "CAR RENTALS (delivered free to LPIA or any Nassau/Paradise Island hotel): Nissan Versa $55/day, "
     "Toyota Corolla $69/day, Toyota RAV4 SUV $115/day, Mercedes GLE $245/day, 12-seater van $175/day.\n\n"
@@ -347,11 +346,6 @@ TOURS_SEED = [
      "location": "Departs Nassau", "featured": False,
      "description": "Cruise Nassau's out-islands with beach stops, lunch, and unlimited drinks.",
      "image_url": "https://images.pexels.com/photos/4166305/pexels-photo-4166305.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-     "category": "excursion", "active": True},
-    {"id": "swimming-pigs", "name": "Exuma Swimming Pigs Day Tour", "price": 285.0, "duration": "8 hours",
-     "location": "Flight from Nassau", "featured": False,
-     "description": "Fly from Nassau to the Exumas — swim with the famous pigs, feed iguanas and snorkel with reef sharks.",
-     "image_url": "https://images.unsplash.com/photo-1533586616444-300edc8a6b5e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxzd2ltbWluZyUyMHBpZ3MlMjBiYWhhbWFzfGVufDB8fHx8MTc4NTA2MjgxMXww&ixlib=rb-4.1.0&q=85",
      "category": "excursion", "active": True},
 ]
 
@@ -754,6 +748,182 @@ async def admin_update_group_status(inquiry_id: str, req: GroupInquiryStatusUpda
         raise HTTPException(404, "Inquiry not found")
     doc = await db.group_inquiries.find_one({"id": inquiry_id.upper()})
     return clean(doc)
+
+
+# ---- Wedding package PDF ----
+
+def _build_wedding_pdf(inquiry: dict) -> bytes:
+    from io import BytesIO
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak,
+    )
+
+    NAVY = colors.HexColor("#0B3B5C")
+    GOLD = colors.HexColor("#D4A94A")
+    CORAL = colors.HexColor("#E86A3C")
+    GREY = colors.HexColor("#64748B")
+    SAND = colors.HexColor("#FBF7EF")
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=0.75 * inch, rightMargin=0.75 * inch, topMargin=0.75 * inch, bottomMargin=0.75 * inch)
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("title", parent=styles["Title"], fontName="Times-Italic", fontSize=32, textColor=NAVY, spaceAfter=6, leading=34)
+    sub = ParagraphStyle("sub", parent=styles["Normal"], fontName="Helvetica", fontSize=9, textColor=GREY, spaceAfter=18, letterSpacing=1)
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontName="Times-Italic", fontSize=18, textColor=NAVY, spaceBefore=10, spaceAfter=8)
+    p = ParagraphStyle("p", parent=styles["Normal"], fontName="Helvetica", fontSize=10, textColor=colors.HexColor("#0B192C"), leading=14, spaceAfter=6)
+    small = ParagraphStyle("small", parent=styles["Normal"], fontName="Helvetica", fontSize=8, textColor=GREY, leading=11)
+
+    story = []
+
+    # Header
+    story.append(Paragraph("ROX TAXI SERVICE AND TOURS", sub))
+    story.append(Paragraph(f"Wedding Package for <font color='#D4A94A'><i>{inquiry.get('customer_name','the happy couple')}</i></font>", title))
+    story.append(Paragraph(f"REFERENCE {inquiry['id']} · EVENT DATE {inquiry.get('event_date','')} · {inquiry.get('guest_count',0)} GUESTS", sub))
+
+    # Line items
+    lines = []
+    pkg = inquiry.get("package") or {}
+    for tid, count in (pkg.get("transport") or {}).items():
+        if not count:
+            continue
+        s = await_none = None
+    # (services fetched below asynchronously — handled by caller)
+
+    # We render item rows using stored labels via callback in the endpoint
+    for row in inquiry.get("_pdf_rows", []):
+        lines.append(row)
+
+    if lines:
+        story.append(Paragraph("Your package", h2))
+        tbl = Table([["Item", "Amount"]] + lines, colWidths=[4.5 * inch, 1.5 * inch], hAlign="LEFT")
+        tbl.setStyle(TableStyle([
+            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE", (0,0), (-1,-1), 9),
+            ("TEXTCOLOR", (0,0), (-1,0), NAVY),
+            ("BACKGROUND", (0,0), (-1,0), SAND),
+            ("LINEBELOW", (0,0), (-1,0), 0.5, NAVY),
+            ("LINEBELOW", (0,-1), (-1,-1), 0.5, GREY),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, SAND]),
+            ("ALIGN", (1,0), (1,-1), "RIGHT"),
+            ("FONTNAME", (1,1), (1,-1), "Courier"),
+            ("TEXTCOLOR", (1,1), (1,-1), NAVY),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("LEFTPADDING", (0,0), (-1,-1), 10),
+            ("RIGHTPADDING", (0,0), (-1,-1), 10),
+            ("TOPPADDING", (0,0), (-1,-1), 8),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+        ]))
+        story.append(tbl)
+        story.append(Spacer(1, 12))
+
+    # Totals
+    subtotal = float(inquiry.get("_subtotal", 0))
+    disc_pct = float(inquiry.get("_disc_pct", 0))
+    discount = subtotal * disc_pct
+    total = float(inquiry.get("estimated_total") or (subtotal - discount))
+
+    totals_rows = [
+        ["Subtotal", f"${subtotal:,.2f}"],
+    ]
+    if disc_pct:
+        totals_rows.append([f"Group discount ({int(disc_pct*100)}%)", f"-${discount:,.2f}"])
+    totals_rows.append(["Estimated total", f"${total:,.2f}"])
+
+    tot = Table(totals_rows, colWidths=[4.5 * inch, 1.5 * inch], hAlign="LEFT")
+    tot.setStyle(TableStyle([
+        ("FONTSIZE", (0,0), (-1,-1), 10),
+        ("FONTNAME", (0,-1), (-1,-1), "Times-Bold"),
+        ("FONTSIZE", (0,-1), (-1,-1), 14),
+        ("TEXTCOLOR", (0,-1), (-1,-1), CORAL),
+        ("ALIGN", (1,0), (1,-1), "RIGHT"),
+        ("LINEABOVE", (0,-1), (-1,-1), 0.5, NAVY),
+        ("TOPPADDING", (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+    ]))
+    story.append(tot)
+
+    story.append(Spacer(1, 24))
+    story.append(Paragraph("What happens next", h2))
+    story.append(Paragraph(
+        "Our concierge will confirm final pricing within <b>2 hours</b> during business hours. Once you approve, "
+        "we send a Stripe / PayPal / Zelle link and lock in your date. Cancellations at least 48 hours before the "
+        "service are refundable minus a 15% fee.",
+        p,
+    ))
+
+    if inquiry.get("notes"):
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("Your notes", h2))
+        story.append(Paragraph(inquiry["notes"].replace("\n", "<br/>"), p))
+
+    story.append(Spacer(1, 30))
+    story.append(Paragraph(
+        "Rox Taxi Service and Tours · Nassau, New Providence · The Bahamas<br/>"
+        "hello@roxtaxi.com · facebook.com/roxtaxiservice · Estimate valid 30 days from date of issue.",
+        small,
+    ))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+@api_router.get("/wedding-package/{inquiry_id}/quote.pdf")
+async def wedding_quote_pdf(inquiry_id: str):
+    from fastapi.responses import Response
+    doc = await db.group_inquiries.find_one({"id": inquiry_id.upper()})
+    if not doc:
+        raise HTTPException(404, "Inquiry not found")
+
+    # Compute line labels + subtotal server-side using catalog
+    pkg = doc.get("package") or {}
+    rows = []
+    subtotal = 0.0
+
+    for tid, count in (pkg.get("transport") or {}).items():
+        if not count:
+            continue
+        s = await db.taxi_services.find_one({"id": tid})
+        if not s: continue
+        amt = float(s["price"]) * int(count)
+        rows.append([f"{s['name']} × {count}", f"${amt:,.2f}"])
+        subtotal += amt
+    for tour_id, guests in (pkg.get("tourItems") or {}).items():
+        t = await db.tours.find_one({"id": tour_id})
+        if not t: continue
+        amt = float(t["price"]) * int(guests)
+        rows.append([f"{t['name']} × {guests} guest(s)", f"${amt:,.2f}"])
+        subtotal += amt
+    for rid, days in (pkg.get("rentalItems") or {}).items():
+        r = await db.rentals.find_one({"id": rid})
+        if not r: continue
+        amt = float(r["price"]) * int(days)
+        rows.append([f"{r['name']} × {days} day(s)", f"${amt:,.2f}"])
+        subtotal += amt
+
+    ADDON_PRICES = {"ceremony": 550.0, "rehearsal": 220.0, "afterparty": 300.0}
+    ADDON_LABELS = {"ceremony": "Ceremony-day concierge (10hr)", "rehearsal": "Rehearsal-dinner transport", "afterparty": "After-party late-night shuttle"}
+    for a in (pkg.get("addons") or []):
+        if a in ADDON_PRICES:
+            rows.append([ADDON_LABELS[a], f"${ADDON_PRICES[a]:,.2f}"])
+            subtotal += ADDON_PRICES[a]
+
+    guests = int(doc.get("guest_count", 0))
+    disc_pct = 0.20 if guests >= 50 else 0.15 if guests >= 25 else 0.10 if guests >= 8 else 0.0
+
+    doc["_pdf_rows"] = rows
+    doc["_subtotal"] = subtotal
+    doc["_disc_pct"] = disc_pct
+
+    pdf_bytes = _build_wedding_pdf(doc)
+    filename = f"Rox-Wedding-Quote-{doc['id']}.pdf"
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------- Admin CRUD (tours / taxi / rentals / site config) ----------------

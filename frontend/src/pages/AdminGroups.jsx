@@ -91,6 +91,16 @@ export default function AdminGroups() {
                     <select value={i.status} onChange={(e) => changeStatus(i.id, e.target.value)} className="rounded-md border border-[#E2E8F0] px-2 py-1.5 text-xs bg-white" data-testid={`group-status-${i.id}`}>
                       {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
+                    {i.event_type === "wedding" && i.package && (
+                      <a
+                        href={`${process.env.REACT_APP_BACKEND_URL}/api/wedding-package/${i.id}/quote.pdf`}
+                        target="_blank" rel="noreferrer"
+                        data-testid={`group-pdf-${i.id}`}
+                        className="block mt-1 text-[10px] text-[#D4A94A] hover:underline"
+                      >
+                        Download PDF quote →
+                      </a>
+                    )}
                   </td>
                 </tr>
               ))}

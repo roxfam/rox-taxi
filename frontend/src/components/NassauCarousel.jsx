@@ -34,11 +34,6 @@ const SLIDES = [
     img: "https://images.pexels.com/photos/2422915/pexels-photo-2422915.jpeg?auto=compress&cs=tinysrgb&w=1920",
   },
   {
-    name: "Exuma Sandbar",
-    tag: "Out islands",
-    img: "https://images.pexels.com/photos/1024960/pexels-photo-1024960.jpeg?auto=compress&cs=tinysrgb&w=1920",
-  },
-  {
     name: "Rose Island Reef",
     tag: "Off Paradise Island",
     img: "https://images.pexels.com/photos/3601456/pexels-photo-3601456.jpeg?auto=compress&cs=tinysrgb&w=1920",

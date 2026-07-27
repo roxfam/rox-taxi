@@ -34,7 +34,7 @@ export default function Home() {
               Nassau, on your <em className="italic text-[#F5E1A4]">terms</em>.
             </h1>
             <p className="mt-8 max-w-xl text-lg text-white/85 leading-relaxed">
-              Book a taxi, tour or car rental in under a minute. Pay with card, PayPal or Zelle — then watch your ride move from confirmed to arrived, live.
+              Book a taxi, tour or car rental in under a minute. Nassau &amp; Paradise Island specialists — pay with card, PayPal or Zelle, then watch your ride move from confirmed to arrived, live.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link
@@ -86,7 +86,7 @@ export default function Home() {
                     <div className="w-11 h-11 rounded-xl bg-[#E86A3C]/10 flex items-center justify-center text-[#E86A3C]"><ShipWheel className="w-5 h-5" /></div>
                     <div>
                       <div className="font-semibold text-[#0B3B5C]">Tours & Excursions</div>
-                      <div className="text-xs text-[#64748B]">Swimming Pigs, Blue Lagoon, more</div>
+                      <div className="text-xs text-[#64748B]">Blue Lagoon, Atlantis, snorkeling & more</div>
                     </div>
                   </div>
                   <ArrowRight className="w-5 h-5 text-[#0B3B5C]" />
