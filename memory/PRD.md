@@ -36,6 +36,7 @@ quotes, Claude AI live chat widget, luggage fees, extra-passenger fees, 15% canc
 - **[Feb 2026]** Popular Nassau destinations quick-picker on Taxi page (12 destinations mapped to best-fit service)
 - **[Feb 2026]** Dedicated `/login` page + header "Sign in" button + mobile drawer login link
 - **[Feb 2026]** PayPal Checkout (Smart Buttons) via PayPal Orders v2 REST — **LIVE mode**. Creates order via `POST /api/paypal/create-order`, captures via `POST /api/paypal/capture-order/{id}`. Config exposed via `GET /api/paypal/config`. Client renders buttons in-modal using `@paypal/react-paypal-js`. Verified with real live PayPal token + order.
+- **[Feb 2026]** Twilio SMS notifications wired live — `notify_booking_confirmed` sends confirmation SMS from `+12202228965`. Account is TRIAL (upgrade to production to text unverified numbers). SendGrid still awaiting API key; SMTP fallback available for email.
 
 ## Key API Endpoints
 - `POST /api/bookings` — creates booking, applies deposit for rentals
