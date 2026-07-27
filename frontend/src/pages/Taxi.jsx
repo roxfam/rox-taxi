@@ -17,7 +17,7 @@ export default function Taxi() {
         <div className="max-w-7xl mx-auto px-6 lg:px-10 grid md:grid-cols-2 gap-10 items-end">
           <div>
             <span className="text-xs tracking-[0.3em] uppercase text-[#00B4D8]">Airport & City Rides</span>
-            <h1 className="serif text-5xl sm:text-6xl mt-3 leading-none">Bahamas Taxi Service</h1>
+            <h1 className="serif text-6xl sm:text-7xl mt-3 leading-[0.9]">Bahamas <em className="italic text-[#FFD8B1]">taxi</em>, done right.</h1>
           </div>
           <p className="text-white/80 leading-relaxed max-w-md md:justify-self-end">
             Fixed, transparent pricing for airport transfers, hotel pickups, and hourly charters — driven by
@@ -57,7 +57,6 @@ export default function Taxi() {
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Pickup location" val={form.pickup_location} on={(e) => setForm({ ...form, pickup_location: e.target.value })} testid="taxi-pickup" />
               <Field label="Dropoff location" val={form.dropoff_location} on={(e) => setForm({ ...form, dropoff_location: e.target.value })} testid="taxi-dropoff" />
-              <Field label="Passengers" type="number" val={form.passengers} on={(e) => setForm({ ...form, passengers: e.target.value })} testid="taxi-passengers" />
             </div>
           )}
         />

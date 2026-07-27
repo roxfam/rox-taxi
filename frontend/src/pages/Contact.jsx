@@ -10,7 +10,7 @@ export default function Contact() {
   return (
     <div data-testid="contact-page" className="max-w-5xl mx-auto px-6 lg:px-10 py-24">
       <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Get in touch</span>
-      <h1 className="serif text-5xl sm:text-6xl text-[#1A365D] mt-3">Say hello.</h1>
+      <h1 className="serif text-6xl sm:text-7xl text-[#1A365D] mt-3 leading-[0.9]">Say <em className="italic text-[#00B4D8]">hello</em>.</h1>
       <p className="mt-5 max-w-2xl text-[#64748B] leading-relaxed">
         Have a special group booking, a corporate charter, or a question about your trip? Reach us on Facebook, WhatsApp,
         email or phone — we typically respond in under an hour, 24/7.

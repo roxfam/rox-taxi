@@ -25,7 +25,7 @@ export default function Tours() {
       <section className="bg-gradient-to-br from-[#00B4D8] to-[#0077B6] text-white py-24 relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 relative z-10">
           <span className="text-xs tracking-[0.3em] uppercase text-white/80">Bahamas Excursions</span>
-          <h1 className="serif text-5xl sm:text-6xl mt-3 leading-none max-w-3xl">Tours that feel like a movie scene.</h1>
+          <h1 className="serif text-6xl sm:text-7xl mt-3 leading-[0.9] max-w-4xl">Tours that feel like a <em className="italic">movie scene</em>.</h1>
           <p className="mt-6 text-white/85 max-w-xl leading-relaxed">
             From swimming with pigs in Exuma to snorkeling reef gardens off Rose Island, our excursions are curated by
             local captains and priced up-front.
@@ -68,7 +68,6 @@ export default function Tours() {
           extraFields={(form, setForm) => (
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Hotel / Pickup location" val={form.pickup_location} on={(e) => setForm({ ...form, pickup_location: e.target.value })} testid="tour-pickup" />
-              <Field label="Number of guests" type="number" val={form.passengers} on={(e) => setForm({ ...form, passengers: e.target.value })} testid="tour-passengers" />
             </div>
           )}
         />

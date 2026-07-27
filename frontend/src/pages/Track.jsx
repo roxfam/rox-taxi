@@ -49,7 +49,7 @@ export default function Track() {
       <section className="bg-[#0B192C] text-white py-24">
         <div className="max-w-3xl mx-auto px-6 lg:px-10">
           <span className="text-xs tracking-[0.3em] uppercase text-[#00B4D8]">Booking Tracker</span>
-          <h1 className="serif text-5xl sm:text-6xl mt-3 leading-none">Where's my ride?</h1>
+          <h1 className="serif text-6xl sm:text-7xl mt-3 leading-[0.9]">Where's my <em className="italic text-[#FFD8B1]">ride</em>?</h1>
           <p className="mt-5 text-white/70 max-w-lg">Enter your confirmation code (e.g. <span className="mono">A1B2C3D4</span>) to see live booking status.</p>
 
           <form onSubmit={submit} className="mt-8 flex gap-3">

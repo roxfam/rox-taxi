@@ -1,0 +1,35 @@
+{
+  "summary": "Verified Home page + backend endpoints for Rox Taxi Bahamas. Home renders end-to-end without JS errors, all key sections present (hero, quick-book, Nassau slider, featured tours, how-it-works, Google reviews, chat FAB, modern pill nav + mobile drawer). 7/8 backend tests pass. Single failure: /api/tours returns 7 tours instead of 5 due to legacy tour IDs (snorkel-reef, atlantis-transfer) not being purged on reseed. Chat SSE streaming works, booking pricing (base + luggage $6 + passenger $5 = $46) correct, 422 on missing passengers correct, rentals=5 correct.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/tours", "issue": "Returns 7 tours instead of 5 — legacy IDs 'snorkel-reef' and 'atlantis-transfer' (from previous seed) remain in DB. seed_db() upserts new IDs but only deletes stale IDs for rentals (via $nin), not for tours. Apply the same delete_many({'id': {'$nin': ...}}) pattern to tours collection."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Hero", "issues": ["Two harmless console 401s from initial /api/auth/me call for unauthenticated visitors — consider suppressing this fetch or handling 401 silently in api client to keep console clean."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_home_backend.py", "/app/test_reports/pytest/home_backend.xml"],
+  "action_items": [
+    "Fix /api/tours seed cleanup: add `await db.tours.delete_many({'id': {'$nin': list({t['id'] for t in TOURS_SEED})}})` after tour upserts in seed_db(), mirroring the rentals pattern.",
+    "OPTIONAL: The review request mentioned selectors named bahamas-slider-prev/next/dot; actual NassauCarousel testids are slider-prev, slider-next, slider-dot-N, slider-thumbs, slider-thumb-N. Either rename to bahamas-slider-* for namespacing consistency or update spec — functionality itself works.",
+    "OPTIONAL: Silence /api/auth/me 401 console errors for guest visitors."
+  ],
+  "critical_code_review_comments": [
+    "server.py (794 lines) is nearing the 700-line threshold — consider splitting seed data, auth, bookings, payments into separate modules.",
+    "seed_db logic for tours doesn't clean up legacy IDs like it does for rentals — inconsistent seed strategy that caused the /api/tours test failure.",
+    "Home.jsx and Layout.jsx look clean; no truncation reoccurrence found."
+  ],
+  "updated_files": ["/app/backend/tests/test_home_backend.py"],
+  "success_rate": {"backend": "87.5% (7/8)", "frontend": "100% for tested selectors"},
+  "test_credentials": "admin@roxtaxi.com / admin123 (not exercised this round)",
+  "seed_data_creation": "One TEST_ booking created via /api/bookings; safe to leave (idempotent, prefixed TEST_).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend seed for /api/tours needs $nin cleanup (identical pattern already exists for rentals at line ~370 of server.py). Once fixed, rerun /app/backend/tests/test_home_backend.py -n 0 — all 8 should pass. NassauCarousel testids are slider-prev / slider-next / slider-dot-N / slider-thumbs / slider-thumb-N (not bahamas-slider-* as review request stated). Home page hero headline is 'Nassau, on your terms.' as expected. Chat SSE streams reliably.",
+  "rca of the issue": "Root cause of /api/tours=7: The startup seed function only calls delete_many({'id': {'$nin': ...}}) for rentals; tours upserts new IDs but leaves previously-seeded documents (legacy IDs 'snorkel-reef', 'atlantis-transfer') orphaned in Mongo. Fix: mirror the rentals block for tours. Reproduction: GET /api/tours returns 7 items with mixed old + new IDs. Mitigation: apply same $nin delete or manually drop stale docs from db.tours."
+}

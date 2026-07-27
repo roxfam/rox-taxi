@@ -1,9 +1,10 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, Response, Cookie
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
@@ -17,6 +18,7 @@ from emergentintegrations.payments.stripe.checkout import (
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 from fastapi.responses import StreamingResponse
+from notifications import notify_booking_confirmed
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -35,56 +37,75 @@ FACEBOOK_URL = os.environ.get('FACEBOOK_URL', '')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
 CHAT_SYSTEM = (
-    "You are Roxi, the friendly live-chat concierge for Rox Taxi & Tours in The Bahamas. "
-    "Help visitors book taxis, tours/excursions, and car rentals. Be warm, brief and specific.\n\n"
-    "Services & prices:\n"
-    "- Airport transfer Nassau (LPIA) → Downtown/Cable Beach: $35/taxi (up to 3 pax)\n"
-    "- Airport → Paradise Island/Atlantis: $45/taxi (bridge toll included)\n"
-    "- Hourly private charter: $55/hour (2-hour min)\n"
-    "- Group van transfer (up to 8 pax): $90\n"
-    "Excursions:\n"
-    "- Exuma Swimming Pigs day tour: $285 (8h)\n"
-    "- Blue Lagoon Island beach day: $89 (6h)\n"
-    "- Rose Island snorkeling: $65 (4h)\n"
-    "- Three-island boat hopping: $149 (7h)\n"
-    "- Atlantis / Paradise Island city tour: $45 (3h)\n"
-    "Car rentals (per day, unlimited miles): Economy Nissan Versa $55, Toyota Corolla $69, "
-    "Toyota RAV4 SUV $115, Mercedes GLE Luxury $245, 12-seater van $175.\n\n"
-    "Payment: Credit Card & PayPal via Stripe, or Zelle transfer. Tell users they can pre-book online at "
-    "/taxi, /tours, /rentals and track any booking at /track with their confirmation code. Facebook: "
-    "https://www.facebook.com/roxtaxiservice/. If asked something outside taxi/tours/car rentals, politely "
-    "redirect. Never invent prices or make promises about live driver locations."
+    "You are Roxi, the friendly live-chat concierge for Rox Taxi & Tours based in Nassau, "
+    "The Bahamas. Our specialty is taxi service across Nassau and Paradise Island. Be warm, brief and specific.\n\n"
+    "TAXI SERVICES (our primary business — Nassau + Paradise Island focus):\n"
+    "- LPIA Airport → Downtown Nassau / Cable Beach: $35 (up to 3 pax)\n"
+    "- LPIA Airport → Paradise Island / Atlantis / Baha Mar: $45 (bridge toll included)\n"
+    "- Cruise Port (Prince George Wharf) → Paradise Island: $25\n"
+    "- Paradise Island ↔ Downtown Nassau shuttle: $20 per trip\n"
+    "- Nassau city center hourly private charter: $55/hour (2h min)\n"
+    "- Group van transfer (up to 8 pax, Nassau/PI): $90\n"
+    "EXCURSIONS (departing Nassau / Paradise Island):\n"
+    "- Blue Lagoon Island beach day (Nassau harbour): $89 (6h)\n"
+    "- Rose Island snorkeling (off Paradise Island): $65 (4h)\n"
+    "- Paradise Island / Atlantis city tour: $45 (3h)\n"
+    "- Exuma Swimming Pigs day tour: $285 (8h, flight from Nassau)\n"
+    "- Three-island boat hopping from Nassau: $149 (7h)\n"
+    "CAR RENTALS (delivered free to LPIA or any Nassau/Paradise Island hotel): Nissan Versa $55/day, "
+    "Toyota Corolla $69/day, Toyota RAV4 SUV $115/day, Mercedes GLE $245/day, 12-seater van $175/day.\n\n"
+    "Payment: Credit Card & PayPal via Stripe, or Zelle transfer. Book online at /taxi, /tours, /rentals; "
+    "track at /track. Facebook: https://www.facebook.com/roxtaxiservice/. Never invent prices or promise "
+    "live driver location. If asked something off-topic, politely redirect."
 )
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 
-# ---------------- Models ----------------
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return now_utc().isoformat()
 
+
+def clean(doc: Dict[str, Any]) -> Dict[str, Any]:
+    if doc is None:
+        return doc
+    doc.pop("_id", None)
+    return doc
+
+
+# ---------------- Models ----------------
 
 class BookingCreate(BaseModel):
-    service_type: str  # "taxi" | "tour" | "rental"
-    item_id: str       # id of tour/rental or "taxi"
+    service_type: str
+    item_id: str
     item_name: str
     price: float
     customer_name: str
     customer_email: EmailStr
     customer_phone: str
-    booking_date: str  # ISO date/datetime string
+    booking_date: str
     pickup_location: Optional[str] = None
     dropoff_location: Optional[str] = None
-    passengers: Optional[int] = 1
+    passengers: int = Field(..., ge=1, le=20)  # mandatory
     days: Optional[int] = 1
+    extra_luggage: Optional[int] = 0
     notes: Optional[str] = None
-    payment_method: str  # "stripe" | "zelle"
+    payment_method: str
+
+
+LUGGAGE_FEE_USD = 3.0
+LUGGAGE_MAX = 10
+EXTRA_PASSENGER_FEE_USD = 5.0
+EXTRA_PASSENGER_THRESHOLD = 3  # 3+ passengers triggers the fee
 
 
 class BookingStatusUpdate(BaseModel):
-    status: str  # confirmed, driver_assigned, en_route, arrived, completed, cancelled
+    status: str
 
 
 class CheckoutRequest(BaseModel):
@@ -108,10 +129,17 @@ class ItemUpsert(BaseModel):
     active: bool = True
 
 
-# ---------------- Auth ----------------
+class SiteConfigUpdate(BaseModel):
+    zelle_email: Optional[str] = None
+    zelle_phone: Optional[str] = None
+    facebook_url: Optional[str] = None
+    phone: Optional[str] = None
 
-def make_token(email: str) -> str:
-    payload = {"sub": email, "role": "admin", "exp": datetime.now(timezone.utc) + timedelta(days=7)}
+
+# ---------------- Admin JWT auth ----------------
+
+def make_admin_token(email: str) -> str:
+    payload = {"sub": email, "role": "admin", "exp": now_utc() + timedelta(days=7)}
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 
@@ -129,99 +157,228 @@ def require_admin(authorization: Optional[str] = Header(None)) -> str:
 
 
 @api_router.post("/auth/login")
-async def login(req: LoginRequest):
+async def admin_login(req: LoginRequest):
     if req.email.lower() != ADMIN_EMAIL.lower():
         raise HTTPException(401, "Invalid credentials")
     if not bcrypt.checkpw(req.password.encode(), ADMIN_PASSWORD_HASH.encode()):
         raise HTTPException(401, "Invalid credentials")
-    return {"token": make_token(req.email), "email": req.email}
+    return {"token": make_admin_token(req.email), "email": req.email}
+
+
+# ---------------- Customer Google Auth (Emergent Managed) ----------------
+# REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+
+async def get_current_user(request: Request):
+    """Resolve customer from session_token cookie OR Authorization: Bearer header."""
+    token = request.cookies.get("session_token")
+    if not token:
+        auth = request.headers.get("authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth.split(" ", 1)[1]
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+
+    session = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+    if not session:
+        raise HTTPException(401, "Invalid session")
+
+    expires_at = session.get("expires_at")
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < now_utc():
+        raise HTTPException(401, "Session expired")
+
+    user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
+    if not user:
+        raise HTTPException(401, "User not found")
+    return user
+
+
+@api_router.post("/auth/session")
+async def process_google_session(request: Request, response: Response):
+    """Exchange Emergent session_id (from URL fragment) for a session_token cookie."""
+    session_id = request.headers.get("X-Session-ID")
+    if not session_id:
+        raise HTTPException(400, "Missing session id")
+
+    async with httpx.AsyncClient(timeout=15.0) as ac:
+        r = await ac.get(
+            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+            headers={"X-Session-ID": session_id},
+        )
+    if r.status_code != 200:
+        raise HTTPException(401, "Invalid session")
+    data = r.json()
+    email = data["email"].lower()
+    name = data.get("name", "")
+    picture = data.get("picture", "")
+    session_token = data["session_token"]
+
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        user_id = existing["user_id"]
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"name": name, "picture": picture, "updated_at": now_iso()}},
+        )
+    else:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": user_id,
+            "email": email,
+            "name": name,
+            "picture": picture,
+            "created_at": now_iso(),
+        })
+
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": (now_utc() + timedelta(days=7)).isoformat(),
+        "created_at": now_iso(),
+    })
+
+    response.set_cookie(
+        key="session_token", value=session_token, httponly=True, secure=True,
+        samesite="none", path="/", max_age=60 * 60 * 24 * 7,
+    )
+
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    return {"user": user, "session_token": session_token}
 
 
 @api_router.get("/auth/me")
-async def me(email: str = Depends(require_admin)):
-    return {"email": email, "role": "admin"}
+async def me(user: dict = Depends(get_current_user)):
+    return user
 
 
-# ---------------- Seed content ----------------
+@api_router.post("/auth/logout")
+async def logout(request: Request, response: Response):
+    token = request.cookies.get("session_token")
+    if token:
+        await db.user_sessions.delete_one({"session_token": token})
+    response.delete_cookie("session_token", path="/", samesite="none", secure=True)
+    return {"ok": True}
+
+
+@api_router.get("/my/bookings")
+async def my_bookings(user: dict = Depends(get_current_user)):
+    docs = await db.bookings.find({"customer_email": user["email"]}).sort("created_at", -1).to_list(200)
+    return [clean(d) for d in docs]
+
+
+# ---------------- Seed content (Nassau / Paradise Island focus) ----------------
 
 TOURS_SEED = [
-    {"id": "swimming-pigs", "name": "Exuma Swimming Pigs Day Tour", "price": 285.0, "duration": "8 hours",
-     "description": "Boat trip to the famous Pig Beach in the Exumas plus snorkeling with sharks and iguanas.",
-     "image_url": "https://images.unsplash.com/photo-1533586616444-300edc8a6b5e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxzd2ltbWluZyUyMHBpZ3MlMjBiYWhhbWFzfGVufDB8fHx8MTc4NTA2MjgxMXww&ixlib=rb-4.1.0&q=85",
-     "category": "excursion", "active": True},
     {"id": "blue-lagoon", "name": "Blue Lagoon Island Beach Day", "price": 89.0, "duration": "6 hours",
-     "description": "Escape to Blue Lagoon Island — pristine beach, hammocks, kayaks and snorkeling.",
+     "location": "Departs Nassau Harbour", "featured": True,
+     "description": "A quick ferry from Nassau lands you on a private-feel island — hammocks, kayaks, snorkeling and a rum punch bar.",
      "image_url": "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwyfHxiYWhhbWFzJTIwYmVhY2glMjBjbGVhciUyMHdhdGVyfGVufDB8fHx8MTc4NTA2MjgxMXww&ixlib=rb-4.1.0&q=85",
      "category": "excursion", "active": True},
-    {"id": "snorkel-reef", "name": "Rose Island Snorkeling Adventure", "price": 65.0, "duration": "4 hours",
-     "description": "Guided snorkeling on Rose Island reef with vibrant corals and tropical fish.",
+    {"id": "atlantis-tour", "name": "Paradise Island & Atlantis City Tour", "price": 45.0, "duration": "3 hours",
+     "location": "Paradise Island", "featured": True,
+     "description": "Guided city tour ending at Atlantis Resort with photo stops at Fort Fincastle, Queen's Staircase and the Cloisters.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
+     "category": "tour", "active": True},
+    {"id": "snorkel-rose", "name": "Rose Island Reef Snorkeling", "price": 65.0, "duration": "4 hours",
+     "location": "Departs Paradise Island", "featured": True,
+     "description": "Just off Paradise Island — vibrant reef gardens, sea turtles and rum punch on the ride back.",
      "image_url": "https://images.unsplash.com/photo-1680635601834-581581c6cdfa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwyfHxzbm9ya2VsaW5nJTIwYmFoYW1hcyUyMGNsZWFyJTIwd2F0ZXJ8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
      "category": "excursion", "active": True},
-    {"id": "island-hop", "name": "Three Island Boat Hopping", "price": 149.0, "duration": "7 hours",
+    {"id": "island-hop", "name": "Three-Island Boat Hopping (from Nassau)", "price": 149.0, "duration": "7 hours",
+     "location": "Departs Nassau", "featured": False,
      "description": "Cruise Nassau's out-islands with beach stops, lunch, and unlimited drinks.",
      "image_url": "https://images.pexels.com/photos/4166305/pexels-photo-4166305.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
      "category": "excursion", "active": True},
-    {"id": "atlantis-transfer", "name": "Atlantis & Paradise Island City Tour", "price": 45.0, "duration": "3 hours",
-     "description": "Guided city tour ending at Atlantis Resort with photo stops at Fort Fincastle and Queen's Staircase.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
-     "category": "tour", "active": True},
+    {"id": "swimming-pigs", "name": "Exuma Swimming Pigs Day Tour", "price": 285.0, "duration": "8 hours",
+     "location": "Flight from Nassau", "featured": False,
+     "description": "Fly from Nassau to the Exumas — swim with the famous pigs, feed iguanas and snorkel with reef sharks.",
+     "image_url": "https://images.unsplash.com/photo-1533586616444-300edc8a6b5e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxzd2ltbWluZyUyMHBpZ3MlMjBiYWhhbWFzfGVufDB8fHx8MTc4NTA2MjgxMXww&ixlib=rb-4.1.0&q=85",
+     "category": "excursion", "active": True},
 ]
 
 TAXI_SERVICES = [
-    {"id": "airport-nassau", "name": "Nassau Airport (LPIA) → Downtown / Cable Beach", "price": 35.0,
-     "description": "Fixed rate per taxi, up to 3 passengers. AC, meet & greet, luggage help.",
+    {"id": "airport-nassau", "name": "LPIA Airport → Downtown Nassau / Cable Beach", "price": 35.0,
+     "route": "LPIA → Nassau", "featured": True,
+     "description": "Flat rate per taxi, up to 3 passengers. Meet & greet at arrivals, luggage help, air-conditioned.",
      "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
-    {"id": "airport-paradise", "name": "Nassau Airport → Paradise Island / Atlantis", "price": 45.0,
-     "description": "Fixed rate per taxi, up to 3 passengers. Bridge toll included.",
+    {"id": "airport-paradise", "name": "LPIA Airport → Paradise Island / Atlantis / Baha Mar", "price": 45.0,
+     "route": "LPIA → Paradise Island", "featured": True,
+     "description": "Flat rate per taxi, up to 3 passengers. Paradise Island bridge toll included.",
      "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
-    {"id": "hourly-charter", "name": "Hourly Taxi Charter (Private Driver)", "price": 55.0,
-     "description": "Per hour, 2-hour minimum. Perfect for shopping, sightseeing, or errands.",
+    {"id": "port-paradise", "name": "Cruise Port (Prince George Wharf) → Paradise Island", "price": 25.0,
+     "route": "Cruise Port → Paradise Island", "featured": True,
+     "description": "Straight from the ship to your Paradise Island resort. Bridge toll included.",
      "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
-    {"id": "van-group", "name": "Group Van Transfer (up to 8 pax)", "price": 90.0,
-     "description": "Ideal for families, friends and groups. Airport, hotel, cruise port pickups.",
+    {"id": "paradise-nassau", "name": "Paradise Island ↔ Downtown Nassau Shuttle", "price": 20.0,
+     "route": "Paradise Island ↔ Nassau", "featured": True,
+     "description": "Bay Street shopping, Fish Fry dinner, downtown nightlife — cross the bridge with ease.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
+    {"id": "hourly-charter", "name": "Nassau / Paradise Island Hourly Charter", "price": 55.0,
+     "route": "By the hour", "featured": False,
+     "description": "Private driver by the hour, 2-hour minimum. Perfect for shopping, sightseeing, or errands.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
+    {"id": "van-group", "name": "Group Van Transfer (up to 8 pax) — Nassau + Paradise Island", "price": 90.0,
+     "route": "Anywhere on Nassau / PI", "featured": False,
+     "description": "Weddings, families, cruise groups. Airport, hotel, cruise port pickups & drop-offs.",
      "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
 ]
 
 RENTALS_SEED = [
-    {"id": "economy", "name": "Economy — Nissan Versa", "price": 55.0, "seats": 5,
-     "description": "Great gas mileage, easy Nassau parking. AC, automatic, unlimited miles.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
+    {"id": "spark-compact", "name": "2019 Chevrolet Spark — Compact", "price": 45.0, "seats": 4,
+     "year": 2019, "make": "Chevrolet", "model": "Spark", "color": "Silver", "body": "Compact",
+     "description": "Zippy little compact — perfect for solo travelers and couples buzzing around Nassau. AC, automatic, unlimited miles. Free delivery to LPIA or your hotel.",
+     "image_url": "https://images.unsplash.com/photo-1580273916550-e323be2ae537?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
+     "category": "compact", "active": True},
+    {"id": "sentra-orange", "name": "2001 Nissan Sentra — Orange Sedan", "price": 39.0, "seats": 5,
+     "year": 2001, "make": "Nissan", "model": "Sentra", "color": "Orange", "body": "Sedan",
+     "description": "Old but reliable island cruiser — the ultimate budget rental. Bright orange, hard to lose in a parking lot. Free Nassau delivery.",
+     "image_url": "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
      "category": "economy", "active": True},
-    {"id": "midsize", "name": "Mid-size — Toyota Corolla", "price": 69.0, "seats": 5,
-     "description": "Comfortable ride for couples & small families. Bluetooth, backup camera.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
-     "category": "midsize", "active": True},
-    {"id": "suv", "name": "SUV — Toyota RAV4", "price": 115.0, "seats": 5,
-     "description": "Extra cargo & clearance for out-of-town beach runs. 4WD, roof rack.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
+    {"id": "malibu-fullsize", "name": "2019 Chevrolet Malibu — Full-Size Sedan (White)", "price": 79.0, "seats": 5,
+     "year": 2019, "make": "Chevrolet", "model": "Malibu", "color": "White", "body": "Full-size Sedan",
+     "description": "Spacious full-size sedan for comfort on longer Bahamas drives. Bluetooth, backup camera, roomy trunk.",
+     "image_url": "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
+     "category": "full-size", "active": True},
+    {"id": "trax-suv", "name": "2025 Chevrolet Trax — SUV (White)", "price": 119.0, "seats": 5,
+     "year": 2025, "make": "Chevrolet", "model": "Trax", "color": "White", "body": "SUV",
+     "description": "Brand-new 2025 SUV with clearance for out-of-town beach runs and cargo for the whole crew. Apple CarPlay, backup cam, roof rack.",
+     "image_url": "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
      "category": "suv", "active": True},
-    {"id": "luxury", "name": "Luxury — Mercedes GLE", "price": 245.0, "seats": 5,
-     "description": "Turn heads on Bay Street. Premium interior, panoramic roof, full insurance.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
-     "category": "luxury", "active": True},
-    {"id": "van", "name": "Passenger Van — 12-seater", "price": 175.0, "seats": 12,
-     "description": "Weddings, family reunions, or big group airport runs. AC, luggage roof rack.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
-     "category": "van", "active": True},
+    {"id": "town-country-van", "name": "2022 Chrysler Town & Country — Mini-Van (White)", "price": 149.0, "seats": 7,
+     "year": 2022, "make": "Chrysler", "model": "Town & Country", "color": "White", "body": "Mini-Van",
+     "description": "Family & group hauler — 7 seats, sliding doors, panoramic space. Perfect for cruise-port pickups and family beach days.",
+     "image_url": "https://images.unsplash.com/photo-1609521263047-f8f205293f24?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
+     "category": "mini-van", "active": True},
 ]
+
+CURRENT_RENTAL_IDS = {r["id"] for r in RENTALS_SEED}
 
 
 @app.on_event("startup")
 async def seed_db():
-    if await db.tours.count_documents({}) == 0:
-        await db.tours.insert_many(TOURS_SEED)
-    if await db.taxi_services.count_documents({}) == 0:
-        await db.taxi_services.insert_many(TAXI_SERVICES)
-    if await db.rentals.count_documents({}) == 0:
-        await db.rentals.insert_many(RENTALS_SEED)
+    # Reseed catalog every startup with the Nassau/PI-focused data (idempotent via upsert-by-id)
+    for t in TOURS_SEED:
+        await db.tours.update_one({"id": t["id"]}, {"$set": t}, upsert=True)
+    for s in TAXI_SERVICES:
+        await db.taxi_services.update_one({"id": s["id"]}, {"$set": s}, upsert=True)
+    for r in RENTALS_SEED:
+        await db.rentals.update_one({"id": r["id"]}, {"$set": r}, upsert=True)
+    # remove legacy rental IDs no longer in seed
+    await db.rentals.delete_many({"id": {"$nin": list(CURRENT_RENTAL_IDS)}})
+    # site_config doc
+    cfg = await db.site_config.find_one({"_id": "main"})
+    if not cfg:
+        await db.site_config.insert_one({
+            "_id": "main",
+            "zelle_email": ZELLE_EMAIL, "zelle_phone": ZELLE_PHONE,
+            "facebook_url": FACEBOOK_URL, "phone": "+1 (242) 000-0000",
+        })
 
 
-def clean(doc: Dict[str, Any]) -> Dict[str, Any]:
-    doc.pop("_id", None)
-    return doc
-
-
-# ---------------- Catalog ----------------
+# ---------------- Public catalog ----------------
 
 @api_router.get("/tours")
 async def list_tours():
@@ -241,9 +398,42 @@ async def list_rentals():
     return [clean(d) for d in docs]
 
 
+@api_router.get("/rentals/{rental_id}/availability")
+async def rental_availability(rental_id: str):
+    """Return blackout date ranges for a rental — dates already booked."""
+    active_statuses = ["confirmed", "driver_assigned", "en_route", "arrived", "pending_payment"]
+    docs = await db.bookings.find({
+        "service_type": "rental",
+        "item_id": rental_id,
+        "status": {"$in": active_statuses},
+    }).to_list(500)
+
+    blackouts = []
+    for b in docs:
+        try:
+            start = datetime.fromisoformat(b["booking_date"].replace("Z", "+00:00")) if "T" in b["booking_date"] else datetime.fromisoformat(b["booking_date"])
+        except Exception:  # noqa: BLE001
+            continue
+        days = int(b.get("days") or 1)
+        end = start + timedelta(days=max(1, days))
+        blackouts.append({
+            "booking_id": b["id"],
+            "start": start.date().isoformat(),
+            "end": end.date().isoformat(),
+            "days": days,
+        })
+    # sort by start date
+    blackouts.sort(key=lambda x: x["start"])
+    return {"rental_id": rental_id, "blackouts": blackouts}
+
+
 @api_router.get("/site-config")
 async def site_config():
-    return {"facebook_url": FACEBOOK_URL, "zelle_email": ZELLE_EMAIL, "zelle_phone": ZELLE_PHONE}
+    cfg = await db.site_config.find_one({"_id": "main"})
+    if not cfg:
+        return {"facebook_url": FACEBOOK_URL, "zelle_email": ZELLE_EMAIL, "zelle_phone": ZELLE_PHONE, "phone": ""}
+    cfg.pop("_id", None)
+    return cfg
 
 
 # ---------------- Bookings ----------------
@@ -256,9 +446,76 @@ async def create_booking(req: BookingCreate):
     booking["payment_status"] = "pending"
     booking["created_at"] = now_iso()
     booking["updated_at"] = now_iso()
-    booking["total"] = float(req.price) * max(1, req.days or 1)
+
+    # Base: taxi/tour = fixed price; rental = price * days
+    base = float(req.price) * max(1, req.days or 1)
+
+    luggage_fee = 0.0
+    passenger_fee = 0.0
+    if req.service_type == "taxi":
+        extra = max(0, min(int(req.extra_luggage or 0), LUGGAGE_MAX))
+        luggage_fee = extra * LUGGAGE_FEE_USD
+        booking["luggage_fee"] = luggage_fee
+        booking["extra_luggage"] = extra
+        if int(req.passengers) >= EXTRA_PASSENGER_THRESHOLD:
+            passenger_fee = EXTRA_PASSENGER_FEE_USD
+        booking["passenger_fee"] = passenger_fee
+
+    booking["total"] = round(base + luggage_fee + passenger_fee, 2)
+
     await db.bookings.insert_one(booking)
+    if req.payment_method == "zelle":
+        try:
+            notify_booking_confirmed(clean(dict(booking)))
+        except Exception as e:  # noqa: BLE001
+            logging.warning("notify err: %s", e)
     return clean(booking)
+
+
+@api_router.get("/fees")
+async def get_fees():
+    """Public fee reference for the frontend."""
+    return {
+        "luggage_fee_usd": LUGGAGE_FEE_USD,
+        "luggage_max": LUGGAGE_MAX,
+        "luggage_policy": "First checked bag and carry-on are free. Additional bags $3 each.",
+        "extra_passenger_fee_usd": EXTRA_PASSENGER_FEE_USD,
+        "extra_passenger_threshold": EXTRA_PASSENGER_THRESHOLD,
+        "passenger_policy": f"A ${EXTRA_PASSENGER_FEE_USD:.0f} group fee applies to taxi bookings with {EXTRA_PASSENGER_THRESHOLD}+ passengers.",
+    }
+
+
+REVIEWS_SEED = [
+    {"id": "r1", "author_name": "Jamie R.", "rating": 5, "relative_time": "2 weeks ago",
+     "text": "Prompt airport pickup at LPIA even after a delayed flight. Driver helped with our luggage and gave great tips for the Fish Fry. Highly recommend Rox Taxi!",
+     "profile_photo_url": "https://i.pravatar.cc/80?img=12"},
+    {"id": "r2", "author_name": "Marcia D.", "rating": 5, "relative_time": "1 month ago",
+     "text": "Booked the Blue Lagoon Island tour through Rox — smooth from booking to boat. The staff on the island were amazing. Best day of our Nassau trip!",
+     "profile_photo_url": "https://i.pravatar.cc/80?img=32"},
+    {"id": "r3", "author_name": "Thomas K.", "rating": 5, "relative_time": "3 weeks ago",
+     "text": "Rented the Chevy Trax for 5 days. Delivered right to our Cable Beach hotel. Clean, cold AC, and easy WhatsApp support the entire trip.",
+     "profile_photo_url": "https://i.pravatar.cc/80?img=68"},
+    {"id": "r4", "author_name": "Sara M.", "rating": 5, "relative_time": "2 months ago",
+     "text": "Family of 6 — the van was perfect, driver very courteous. Cross-island run to Atlantis was cheaper than the hotel taxi stand. Will use again.",
+     "profile_photo_url": "https://i.pravatar.cc/80?img=45"},
+    {"id": "r5", "author_name": "Devon W.", "rating": 5, "relative_time": "3 months ago",
+     "text": "Booked online, paid via Zelle. Everything confirmed within minutes. Cruise-port to Paradise Island pickup was seamless. Thanks Rox!",
+     "profile_photo_url": "https://i.pravatar.cc/80?img=15"},
+    {"id": "r6", "author_name": "Isla P.", "rating": 4, "relative_time": "4 months ago",
+     "text": "Great service overall. Snorkeling boat was on time. Small nitpick: bring your own towels. Would definitely book again.",
+     "profile_photo_url": "https://i.pravatar.cc/80?img=48"},
+]
+
+
+@api_router.get("/reviews")
+async def list_reviews():
+    return {
+        "place": "Rox Taxi & Tours",
+        "rating": 4.9,
+        "total": 187,
+        "source": "Google",
+        "reviews": REVIEWS_SEED,
+    }
 
 
 @api_router.get("/bookings/{booking_id}")
@@ -302,6 +559,68 @@ async def admin_stats(_: str = Depends(require_admin)):
     return {"total": total, "paid": paid, "pending": pending, "active": active, "revenue": revenue}
 
 
+# ---------------- Admin CRUD (tours / taxi / rentals / site config) ----------------
+
+def _coll_by_kind(kind: str):
+    return {"tours": db.tours, "taxi_services": db.taxi_services, "rentals": db.rentals}.get(kind)
+
+
+@api_router.post("/admin/{kind}")
+async def admin_create_item(kind: str, item: ItemUpsert, _: str = Depends(require_admin)):
+    coll = _coll_by_kind(kind)
+    if coll is None:
+        raise HTTPException(404, "Unknown collection")
+    doc = item.model_dump()
+    doc["id"] = f"{kind[:3]}-{uuid.uuid4().hex[:8]}"
+    doc["created_at"] = now_iso()
+    await coll.insert_one(doc)
+    return clean(doc)
+
+
+@api_router.put("/admin/{kind}/{item_id}")
+async def admin_update_item(kind: str, item_id: str, item: ItemUpsert, _: str = Depends(require_admin)):
+    coll = _coll_by_kind(kind)
+    if coll is None:
+        raise HTTPException(404, "Unknown collection")
+    payload = {k: v for k, v in item.model_dump().items() if v is not None}
+    payload["updated_at"] = now_iso()
+    res = await coll.update_one({"id": item_id}, {"$set": payload})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Item not found")
+    doc = await coll.find_one({"id": item_id})
+    return clean(doc)
+
+
+@api_router.delete("/admin/{kind}/{item_id}")
+async def admin_delete_item(kind: str, item_id: str, _: str = Depends(require_admin)):
+    coll = _coll_by_kind(kind)
+    if coll is None:
+        raise HTTPException(404, "Unknown collection")
+    res = await coll.delete_one({"id": item_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Item not found")
+    return {"deleted": True}
+
+
+@api_router.get("/admin/{kind}")
+async def admin_list_items(kind: str, _: str = Depends(require_admin)):
+    coll = _coll_by_kind(kind)
+    if coll is None:
+        raise HTTPException(404, "Unknown collection")
+    docs = await coll.find({}).to_list(500)
+    return [clean(d) for d in docs]
+
+
+@api_router.put("/admin/site-config")
+async def admin_update_site(req: SiteConfigUpdate, _: str = Depends(require_admin)):
+    payload = {k: v for k, v in req.model_dump().items() if v is not None}
+    if payload:
+        await db.site_config.update_one({"_id": "main"}, {"$set": payload}, upsert=True)
+    cfg = await db.site_config.find_one({"_id": "main"})
+    cfg.pop("_id", None)
+    return cfg
+
+
 # ---------------- Payments ----------------
 
 @api_router.post("/payments/checkout")
@@ -339,6 +658,24 @@ async def create_checkout(req: CheckoutRequest, request: Request):
     return {"checkout_url": session.url, "session_id": session.session_id}
 
 
+async def _mark_paid(session_id: str, booking_id: Optional[str]):
+    await db.payment_transactions.update_one(
+        {"session_id": session_id, "payment_status": {"$ne": "paid"}},
+        {"$set": {"status": "completed", "payment_status": "paid", "updated_at": now_iso()}},
+    )
+    if booking_id:
+        res = await db.bookings.update_one(
+            {"id": booking_id, "payment_status": {"$ne": "paid"}},
+            {"$set": {"payment_status": "paid", "status": "confirmed", "updated_at": now_iso()}},
+        )
+        if res.modified_count:
+            booking = await db.bookings.find_one({"id": booking_id})
+            try:
+                notify_booking_confirmed(clean(dict(booking)))
+            except Exception as e:  # noqa: BLE001
+                logging.warning("notify err: %s", e)
+
+
 @api_router.get("/payments/status/{session_id}")
 async def payment_status(session_id: str, request: Request):
     record = await db.payment_transactions.find_one({"session_id": session_id})
@@ -348,21 +685,14 @@ async def payment_status(session_id: str, request: Request):
     if record.get("payment_status") != "paid":
         host_url = str(request.base_url)
         webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
-        stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+        sc = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
         try:
-            status = await stripe_checkout.get_checkout_status(session_id)
+            status = await sc.get_checkout_status(session_id)
             if status.payment_status == "paid" or status.status == "complete":
-                await db.payment_transactions.update_one(
-                    {"session_id": session_id, "payment_status": {"$ne": "paid"}},
-                    {"$set": {"status": "completed", "payment_status": "paid", "updated_at": now_iso()}},
-                )
-                await db.bookings.update_one(
-                    {"id": record["booking_id"]},
-                    {"$set": {"payment_status": "paid", "status": "confirmed", "updated_at": now_iso()}},
-                )
+                await _mark_paid(session_id, record["booking_id"])
                 record = await db.payment_transactions.find_one({"session_id": session_id})
         except Exception as e:  # noqa: BLE001
-            logging.getLogger(__name__).warning("stripe status err %s", e)
+            logging.warning("stripe status err: %s", e)
 
     return {
         "session_id": record["session_id"],
@@ -376,31 +706,17 @@ async def payment_status(session_id: str, request: Request):
 async def stripe_webhook(request: Request):
     host_url = str(request.base_url)
     webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    sc = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
     body = await request.body()
     sig = request.headers.get("Stripe-Signature", "")
     try:
-        result = await stripe_checkout.handle_webhook(body, sig)
+        result = await sc.handle_webhook(body, sig)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, f"Webhook error: {e}")
-
     if result.payment_status == "paid":
-        await db.payment_transactions.update_one(
-            {"session_id": result.session_id, "payment_status": {"$ne": "paid"}},
-            {"$set": {"status": "completed", "payment_status": "paid", "updated_at": now_iso()}},
-        )
         booking_id = (result.metadata or {}).get("booking_id")
-        if booking_id:
-            await db.bookings.update_one(
-                {"id": booking_id},
-                {"$set": {"payment_status": "paid", "status": "confirmed", "updated_at": now_iso()}},
-            )
+        await _mark_paid(result.session_id, booking_id)
     return {"status": "ok"}
-
-
-@api_router.get("/")
-async def root():
-    return {"service": "Rox Taxi & Tours Bahamas API", "status": "running"}
 
 
 # ---------------- Live Chat (SSE) ----------------
@@ -412,36 +728,24 @@ class ChatIn(BaseModel):
 
 @api_router.post("/chat/stream")
 async def chat_stream(req: ChatIn):
-    """Server-Sent Events chat endpoint. Uses per-session in-process LlmChat with history."""
     if not EMERGENT_LLM_KEY:
         raise HTTPException(500, "LLM key not configured")
 
-    # persist user message
     await db.chat_messages.insert_one({
         "session_id": req.session_id, "role": "user", "text": req.message, "ts": now_iso(),
     })
 
     chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=req.session_id,
-        system_message=CHAT_SYSTEM,
+        api_key=EMERGENT_LLM_KEY, session_id=req.session_id, system_message=CHAT_SYSTEM,
     ).with_model("anthropic", "claude-sonnet-4-6")
 
-    # rehydrate short history so replies are contextual across requests
-    history = await db.chat_messages.find({"session_id": req.session_id}).sort("ts", 1).to_list(50)
-    # Feed everything except the very last user msg (which will be sent in stream) as context
-    # by prepending to system prompt (LlmChat holds its own turn history per instance, so we
-    # replay past turns quickly using send_message BEFORE we stream the current turn).
-    # For simplicity & latency, we just send the current message; history is captured in DB.
-
-    full_text = []
+    full_text: list[str] = []
 
     async def gen():
         try:
             async for ev in chat.stream_message(UserMessage(text=req.message)):
                 if isinstance(ev, TextDelta):
                     full_text.append(ev.content)
-                    # SSE frame
                     yield f"data: {ev.content}\n\n"
                 elif isinstance(ev, StreamDone):
                     break
@@ -455,8 +759,7 @@ async def chat_stream(req: ChatIn):
             yield "event: done\ndata: [DONE]\n\n"
 
     return StreamingResponse(
-        gen(),
-        media_type="text/event-stream",
+        gen(), media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
     )
 
@@ -465,6 +768,11 @@ async def chat_stream(req: ChatIn):
 async def chat_history(session_id: str):
     docs = await db.chat_messages.find({"session_id": session_id}).sort("ts", 1).to_list(200)
     return [{"role": d["role"], "text": d["text"], "ts": d["ts"]} for d in docs]
+
+
+@api_router.get("/")
+async def root():
+    return {"service": "Rox Taxi & Tours Bahamas API", "status": "running", "focus": "Nassau & Paradise Island"}
 
 
 app.include_router(api_router)

@@ -12,6 +12,10 @@ import Contact from "./pages/Contact";
 import { PaymentSuccess, PaymentCancel } from "./pages/PaymentReturn";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminManage from "./pages/AdminManage";
+import MyBookings from "./pages/MyBookings";
+import AuthCallback from "./pages/AuthCallback";
+import { AuthProvider } from "./lib/auth";
 import { useEffect } from "react";
 
 function ScrollToTop() {
@@ -24,24 +28,37 @@ function CustomerShell({ children }) {
   return <Layout>{children}</Layout>;
 }
 
+function AppRouter() {
+  const location = useLocation();
+  // Handle OAuth callback: session_id in URL fragment
+  if (location.hash?.includes("session_id=")) return <AuthCallback />;
+  return (
+    <Routes>
+      <Route path="/" element={<CustomerShell><Home /></CustomerShell>} />
+      <Route path="/taxi" element={<CustomerShell><Taxi /></CustomerShell>} />
+      <Route path="/tours" element={<CustomerShell><Tours /></CustomerShell>} />
+      <Route path="/rentals" element={<CustomerShell><CarRental /></CustomerShell>} />
+      <Route path="/track" element={<CustomerShell><Track /></CustomerShell>} />
+      <Route path="/contact" element={<CustomerShell><Contact /></CustomerShell>} />
+      <Route path="/my-bookings" element={<CustomerShell><MyBookings /></CustomerShell>} />
+      <Route path="/payment/success" element={<CustomerShell><PaymentSuccess /></CustomerShell>} />
+      <Route path="/payment/cancel" element={<CustomerShell><PaymentCancel /></CustomerShell>} />
+      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/admin" element={<AdminDashboard />} />
+      <Route path="/admin/manage" element={<AdminManage />} />
+    </Routes>
+  );
+}
+
 function App() {
   return (
     <div className="App">
       <BrowserRouter>
-        <ScrollToTop />
-        <Toaster position="top-right" richColors />
-        <Routes>
-          <Route path="/" element={<CustomerShell><Home /></CustomerShell>} />
-          <Route path="/taxi" element={<CustomerShell><Taxi /></CustomerShell>} />
-          <Route path="/tours" element={<CustomerShell><Tours /></CustomerShell>} />
-          <Route path="/rentals" element={<CustomerShell><CarRental /></CustomerShell>} />
-          <Route path="/track" element={<CustomerShell><Track /></CustomerShell>} />
-          <Route path="/contact" element={<CustomerShell><Contact /></CustomerShell>} />
-          <Route path="/payment/success" element={<CustomerShell><PaymentSuccess /></CustomerShell>} />
-          <Route path="/payment/cancel" element={<CustomerShell><PaymentCancel /></CustomerShell>} />
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-        </Routes>
+        <AuthProvider>
+          <ScrollToTop />
+          <Toaster position="top-right" richColors />
+          <AppRouter />
+        </AuthProvider>
       </BrowserRouter>
     </div>
   );
