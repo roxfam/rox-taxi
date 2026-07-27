@@ -83,13 +83,17 @@ export default function Layout({ children }) {
                 <img
                   src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
                   alt="Rox Taxi Service and Tours"
-                  className="h-16 w-auto max-w-[96px] object-contain group-hover:scale-110 transition-transform duration-300 drop-shadow-[0_6px_16px_rgba(212,169,74,0.6)] contrast-125 saturate-150"
-                  style={{ filter: "drop-shadow(0 3px 6px rgba(11,25,44,0.35)) drop-shadow(0 8px 20px rgba(212,169,74,0.55))" }}
+                  className="h-16 w-auto max-w-[96px] object-contain group-hover:scale-110 transition-transform duration-300 contrast-125 saturate-150"
                   data-testid="brand-logo-img"
                 />
-                <div className="hidden sm:flex flex-col leading-none" data-testid="brand-name">
-                  <span className="serif text-xl tracking-tight font-bold text-[#0B3B5C] drop-shadow-[0_2px_8px_rgba(255,255,255,0.65)]">Rox Taxi Service</span>
-                  <span className="text-[10px] tracking-[0.28em] uppercase mt-1 font-bold text-[#D4A94A] drop-shadow-[0_1px_4px_rgba(255,255,255,0.5)]">and Tours</span>
+                <div className="hidden sm:flex flex-col leading-[0.95] gap-1" data-testid="brand-name">
+                  <span className="serif text-2xl font-extrabold tracking-tight text-[#0B3B5C] drop-shadow-[0_2px_10px_rgba(255,255,255,0.75)]">
+                    Rox Taxi <em className="italic font-black text-[#D4A94A]">Service</em>
+                  </span>
+                  <span className="inline-flex items-center gap-2 mt-0.5">
+                    <span className="w-6 h-[1.5px] bg-gradient-to-r from-[#D4A94A] to-transparent" />
+                    <span className="text-[9px] tracking-[0.4em] uppercase font-black text-[#D4A94A]">and Tours</span>
+                  </span>
                 </div>
               </>
             ) : (
@@ -324,18 +328,20 @@ export default function Layout({ children }) {
                       src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
                       alt="Rox Taxi Service and Tours"
                       className="h-14 w-auto max-w-[64px] object-contain contrast-125 saturate-150"
-                      style={{ filter: "drop-shadow(0 3px 6px rgba(11,25,44,0.35)) drop-shadow(0 6px 16px rgba(212,169,74,0.6))" }}
                     />
                   ) : (
                     <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center text-white shadow-[0_6px_16px_rgba(212,169,74,0.4)]">
                       <Waves className="w-4 h-4" />
                     </div>
                   )}
-                  <div className="leading-none">
-                    <div className="serif text-lg text-[#0B3B5C] font-bold tracking-tight" data-testid="mobile-drawer-brand">
-                      ROX TAXI <span className="text-[#D4A94A]">SERVICE</span>
+                  <div className="leading-[0.95]">
+                    <div className="serif text-xl font-extrabold tracking-tight text-[#0B3B5C]" data-testid="mobile-drawer-brand">
+                      Rox Taxi <em className="italic font-black text-[#D4A94A]">Service</em>
                     </div>
-                    <div className="text-[10px] tracking-[0.32em] uppercase text-[#D4A94A] font-bold mt-1">&amp; TOURS</div>
+                    <div className="inline-flex items-center gap-2 mt-1.5">
+                      <span className="w-5 h-[1.5px] bg-gradient-to-r from-[#D4A94A] to-transparent" />
+                      <span className="text-[9px] tracking-[0.4em] uppercase font-black text-[#D4A94A]">and Tours</span>
+                    </div>
                   </div>
                 </div>
                 <button
@@ -513,14 +519,15 @@ export default function Layout({ children }) {
                   src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
                   alt="Rox Taxi Service and Tours"
                   className="h-32 w-auto max-w-[280px] object-contain contrast-125 saturate-150"
-                  style={{ filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4)) drop-shadow(0 12px 30px rgba(212,169,74,0.65))" }}
                   data-testid="footer-logo-img"
                 />
               ) : (
-                <div className="serif text-4xl sm:text-5xl text-white leading-[0.95] tracking-tight">
-                  Rox Taxi <em className="italic text-[#D4A94A]">Service</em>
-                  <br />
-                  <span className="text-white/70">&amp; Tours.</span>
+                <div className="serif text-4xl sm:text-5xl text-white leading-[0.9] tracking-tight font-extrabold">
+                  Rox Taxi <em className="italic font-black text-[#D4A94A]">Service</em>
+                  <span className="inline-flex items-center gap-3 mt-3">
+                    <span className="w-8 h-[2px] bg-gradient-to-r from-[#D4A94A] to-transparent" />
+                    <span className="text-[11px] tracking-[0.4em] uppercase font-black text-[#D4A94A]">and Tours</span>
+                  </span>
                 </div>
               )}
               <p className="serif italic text-white/55 mt-6 text-base leading-relaxed max-w-md">
