@@ -67,7 +67,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     ? (Number(form.passengers) - PASSENGER_INCLUDED) * PASSENGER_FEE
     : 0;
   const rentalDeposit = serviceType === "rental" ? RENTAL_DEPOSIT : 0;
-  const total = base + luggageFee + passengerFee + rentalDeposit;
+  const additionalDriverFee = serviceType === "rental" ? Number(form.additional_drivers || 0) * ADDITIONAL_DRIVER_FEE : 0;
+  const total = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee;
 
   const submit = async () => {
     if (!form.customer_name || !form.customer_email || !form.customer_phone || !form.booking_date) {
