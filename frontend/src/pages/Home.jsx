@@ -31,7 +31,7 @@ export default function Home() {
               Nassau · Paradise Island
             </span>
             <h1 className="serif text-6xl sm:text-7xl lg:text-8xl leading-[0.9] tracking-tight">
-              Visit Nassau in The Bahamas on your <em className="italic text-[#F5E1A4]">terms</em>.
+              Unlock <em className="italic text-[#F5E1A4]">Nassau</em>. On your terms.
             </h1>
             <p className="mt-8 max-w-xl text-lg text-white/85 leading-relaxed">
               Book a taxi, tour or car rental in under a minute. Nassau &amp; Paradise Island specialists — pay with card, PayPal or Zelle, then watch your ride move from confirmed to arrived, live.

@@ -593,11 +593,13 @@ async def create_booking(req: BookingCreate):
         try:
             prefs = await db.site_config.find_one({"_id": "main"}) or {}
             report = notify_booking_confirmed(clean(dict(booking)), prefs)
+            notified_at = now_iso()
             await db.bookings.update_one(
                 {"id": booking["id"]},
-                {"$set": {"notification_status": report, "notified_at": now_iso()}},
+                {"$set": {"notification_status": report, "notified_at": notified_at}},
             )
             booking["notification_status"] = report
+            booking["notified_at"] = notified_at
         except Exception as e:  # noqa: BLE001
             logging.warning("notify err: %s", e)
     return clean(booking)

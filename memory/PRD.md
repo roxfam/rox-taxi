@@ -45,6 +45,11 @@ quotes, Claude AI live chat widget, luggage fees, extra-passenger fees, 15% canc
 - **[Feb 2026]** Elegant footer redesign — large serif wordmark with italic gold accent, animated hairline underlines on nav links, gold-bordered contact icons, framed payment method chips, refined bottom bar with "Made with care in Nassau" tagline. Footer now shows the site logo image with gold drop-shadow.
 - **[Feb 2026]** Final logo swap to gold color mark (`/api/uploads/logo-00276520.webp`) — displays in header (with brand tagline) and footer (with drop-shadow glow).
 - **[Feb 2026]** `PremiumIcon` component added (`/app/frontend/src/components/PremiumIcon.jsx`) — reusable premium icon coin with gradient face, glow ring, inner highlight, subtle noise; six tone variants (gold/orange/navy/teal/sand/slate) × four sizes. Available for future icon upgrades sitewide.
+- **[Feb 2026]** **Additional Driver** option for car rentals ($25 flat per extra driver, max 4) — Booking modal adds a stepper; total + booking record now include `additional_drivers` and `additional_driver_fee`.
+- **[Feb 2026]** Car catalog refresh — Compact = White 2019 Chevrolet Spark LT; Sedan = White 2021 Nissan Versa.
+- **[Feb 2026]** **Admin Notifications Dashboard** — New "Notify" column in `/admin` bookings table shows per-booking `Email ✓/✗` and `SMS ✓/✗` badges with provider + error tooltips; paid rows expose a "Re-send" button that calls `POST /api/admin/bookings/{id}/resend-notification`. Site Config panel (`/admin/manage → Site Config`) exposes two toggles: **notify_email_enabled** and **notify_sms_enabled** — both persisted on the site_config doc, respected in `notify_booking_confirmed`, and default to `true`. Every notification attempt writes `notification_status` + `notified_at` onto the booking so delivery is auditable at a glance.
+- **[Feb 2026]** **Taxi pickup/dropoff dropdowns** — Free-text pickup & dropoff inputs replaced with preset dropdown selects (LPIA, Cruise Port, Atlantis, Baha Mar, Downtown, Cable Beach, etc.) + an "Other — type a custom address…" escape hatch. Pre-fill from the destination cards continues to work.
+- **[Feb 2026]** Home hero H1 refreshed: **"Unlock Nassau. On your terms."** — italic gold "Nassau" accent, unchanged animation.
 
 ## Key API Endpoints
 - `POST /api/bookings` — creates booking, applies deposit for rentals
@@ -63,13 +68,13 @@ quotes, Claude AI live chat widget, luggage fees, extra-passenger fees, 15% canc
 - (none open)
 
 ### P1
-- Wire Twilio SMS + SendGrid email notifications (backend logic exists as no-op fallback; add keys when ready)
 - Stripe live-mode key when user is ready to accept real payments
+- Consider a `force: true` param on `POST /admin/bookings/{id}/resend-notification` so admins can override the notify_email_enabled/notify_sms_enabled flags for a single manual send.
 
 ### P2
-- Refactor `server.py` (~1360 lines) into `routes/`, `models/`, `services/`
-- Regression pytest coverage under `/app/backend/tests` for pricing (deposit + luggage + pax combinations)
-- Admin: deposit release/capture workflow UI (mark deposit refunded/forfeited per booking)
+- Refactor `server.py` (~1680 lines) into `routes/`, `models/`, `services/`
+- Regression pytest coverage under `/app/backend/tests` for pricing (deposit + luggage + pax + additional driver combinations)
+- Replace `<input type="datetime-local">` in the taxi booking modal with a shadcn Calendar + time picker for a consistent design language.
 
 ## Files of Reference
 - Backend: `/app/backend/server.py`, `/app/backend/notifications.py`
