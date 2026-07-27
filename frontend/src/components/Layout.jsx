@@ -52,14 +52,24 @@ export default function Layout({ children }) {
         <div className="max-w-7xl mx-auto px-5 lg:px-10 flex items-center justify-between h-20">
           {/* Brand */}
           <Link to="/" className="flex items-center gap-3 group" data-testid="brand-logo">
-            <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center text-white shadow-[0_8px_20px_rgba(212,169,74,0.4)] group-hover:rotate-6 transition-transform duration-300">
-              <Waves className="w-5 h-5" />
-              <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-[#E86A3C] ring-2 ring-white" />
-            </div>
-            <div className="flex flex-col leading-none">
-              <span className="serif text-xl text-[#0B3B5C] tracking-tight">Rox Taxi</span>
-              <span className="text-[10px] tracking-[0.25em] uppercase text-[#64748B]">Service &amp; Tours</span>
-            </div>
+            {config.logo_url ? (
+              <img
+                src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
+                alt="Rox Taxi Service and Tours"
+                className="h-12 w-auto max-w-[180px] object-contain group-hover:scale-105 transition-transform"
+              />
+            ) : (
+              <>
+                <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center text-white shadow-[0_8px_20px_rgba(212,169,74,0.4)] group-hover:rotate-6 transition-transform duration-300">
+                  <Waves className="w-5 h-5" />
+                  <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-[#E86A3C] ring-2 ring-white" />
+                </div>
+                <div className="flex flex-col leading-none">
+                  <span className="serif text-xl text-[#0B3B5C] tracking-tight">Rox Taxi</span>
+                  <span className="text-[10px] tracking-[0.25em] uppercase text-[#64748B]">Service &amp; Tours</span>
+                </div>
+              </>
+            )}
           </Link>
 
           {/* Desktop nav — pill with sliding indicator */}

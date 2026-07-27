@@ -42,7 +42,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   });
   const LUGGAGE_FEE = 3;
   const PASSENGER_FEE = 5;
-  const PASSENGER_THRESHOLD = 3;
+  const PASSENGER_INCLUDED = 2;
   const [payMethod, setPayMethod] = useState("stripe");
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
   const [loading, setLoading] = useState(false);
@@ -53,7 +53,9 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
 
   const base = (item?.price || 0) * (serviceType === "rental" ? Number(form.days || 1) : 1);
   const luggageFee = serviceType === "taxi" ? Number(form.extra_luggage || 0) * LUGGAGE_FEE : 0;
-  const passengerFee = serviceType === "taxi" && Number(form.passengers || 0) >= PASSENGER_THRESHOLD ? PASSENGER_FEE : 0;
+  const passengerFee = serviceType === "taxi" && Number(form.passengers || 0) > PASSENGER_INCLUDED
+    ? (Number(form.passengers) - PASSENGER_INCLUDED) * PASSENGER_FEE
+    : 0;
   const total = base + luggageFee + passengerFee;
 
   const submit = async () => {
@@ -137,12 +139,12 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 <Field label={serviceType === "rental" ? "Pickup date *" : "Date & time *"} type={serviceType === "rental" ? "date" : "datetime-local"} val={form.booking_date} on={setF("booking_date")} testid="booking-date" />
                 <div className="sm:col-span-2">
                   <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">Passengers *</label>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <button type="button" onClick={() => setForm({ ...form, passengers: Math.max(1, Number(form.passengers) - 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95" data-testid="pax-minus">−</button>
                     <input type="number" min={1} max={20} required value={form.passengers} onChange={(e) => setForm({ ...form, passengers: Math.max(1, Math.min(20, parseInt(e.target.value || "1"))) })} className="w-20 text-center rounded-xl border border-[#E2E8F0] py-2.5 text-sm mono" data-testid="booking-passengers" />
                     <button type="button" onClick={() => setForm({ ...form, passengers: Math.min(20, Number(form.passengers) + 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95" data-testid="pax-plus">+</button>
-                    {serviceType === "taxi" && Number(form.passengers) >= PASSENGER_THRESHOLD && (
-                      <span className="text-xs text-[#E86A3C] font-semibold" data-testid="pax-fee-note">+ ${PASSENGER_FEE} group fee ({PASSENGER_THRESHOLD}+ pax)</span>
+                    {serviceType === "taxi" && Number(form.passengers) > PASSENGER_INCLUDED && (
+                      <span className="text-xs text-[#E86A3C] font-semibold" data-testid="pax-fee-note">+ ${(Number(form.passengers) - PASSENGER_INCLUDED) * PASSENGER_FEE} · {Number(form.passengers) - PASSENGER_INCLUDED} extra passenger(s) × ${PASSENGER_FEE}</span>
                     )}
                   </div>
                 </div>

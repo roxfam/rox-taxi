@@ -65,6 +65,14 @@ export function PaymentSuccess() {
           >
             Track your booking →
           </Link>
+          <a
+            href={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/receipt.pdf`}
+            target="_blank" rel="noreferrer"
+            data-testid="payment-success-receipt-btn"
+            className="mt-4 ml-2 inline-flex rounded-full bg-[#D4A94A] text-[#0B192C] px-6 py-3 text-sm font-semibold hover:bg-[#e0b856] shadow-[0_10px_25px_rgba(212,169,74,0.4)]"
+          >
+            Download receipt PDF
+          </a>
         </div>
       )}
     </div>

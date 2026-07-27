@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 3 verification of compile-error fix + passenger-fee & PDF features. Backend: 10/10 pytest tests pass (14 Nassau routes with all new destinations, tours=4 no Exuma, passenger_fee 0/5/15 at pax=2/3/5, fees.passenger_policy contains 'flat rate covers up to 2 passengers', /api/admin/upload-logo returns 401 not 404 so route is registered & not shadowed, wedding PDF %PDF, booking receipt PDF %PDF, chat SSE stream works). Frontend: initial load at /taxi showed a runtime ReferenceError 'PASSENGER_INCLUDED is not defined' that crashed BookingModal — root cause was BookingFlow.jsx line 45 declaring `PASSENGER_THRESHOLD = 3` while code referenced `PASSENGER_INCLUDED`. Testing agent fixed the one-line typo (renamed to PASSENGER_INCLUDED = 2 per the review spec) so testing could proceed. After fix, modal opens, passenger stepper works, pax-fee-note shows correct values at pax=3 (+$5, 1 extra) and pax=5 (+$15, 3 extra) and is hidden at pax=2. Cable Beach ↔ Downtown route confirmed at $18.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BookingFlow.jsx / BookingModal", "issue": "Referenced undefined const PASSENGER_INCLUDED (only PASSENGER_THRESHOLD=3 was declared). Caused ReferenceError crashing the booking modal on every open. Fixed by testing agent by renaming const to PASSENGER_INCLUDED = 2 to match backend EXTRA_PASSENGER_INCLUDED=2. Main agent should confirm the constant name choice.", "selector": "/app/frontend/src/pages/BookingFlow.jsx:45", "priority": "CRITICAL (fixed)"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global (guest pages)", "issues": ["Persistent /api/auth/me 401 console errors on guest page load (carried over from previous iterations — not silenced)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration3.py", "/app/test_reports/pytest/iteration3.xml"],
+  "action_items": [
+    "Confirm PASSENGER_INCLUDED = 2 constant name/value (testing agent applied this fix in BookingFlow.jsx line 45). If the intent was `PASSENGER_THRESHOLD` semantics, please rename usages accordingly.",
+    "OPTIONAL: silence /api/auth/me 401 for guest visitors (return 200 with null user or skip call when no token)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1347 lines — should be split into modules (auth, bookings, admin, seed, pdf, payments, notifications).",
+    "BookingFlow.jsx has an undefined-symbol regression that the original 'compile fix' truncation did not catch — ESLint no-undef would have prevented this. Consider enabling eslint-plugin-react-hooks + no-undef in CI.",
+    "Passenger fee constants are duplicated between frontend (BookingFlow.jsx) and backend (server.py). Consider exposing them via GET /api/fees so client stays in sync automatically."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3.py",
+    "/app/test_reports/pytest/iteration3.xml",
+    "/app/frontend/src/pages/BookingFlow.jsx (PASSENGER_THRESHOLD → PASSENGER_INCLUDED = 2)",
+    "/app/test_reports/iteration_3.json"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% of tested flows after 1-line fix (modal opens, passenger stepper, pax-fee-note hidden@2 / +$5@3 / +$15@5, 14 taxi routes render including Cable Beach ↔ Downtown $18)"},
+  "test_credentials": "admin@roxtaxi.com / admin123 — verified via POST /api/auth/login",
+  "seed_data_creation": "3 TEST_ bookings (TEST_PaxFee_2, _3, _5), 1 TEST_ wedding inquiry (via POST /api/group-inquiries with package), 1 TEST_ chat session (TEST_it3). All prefixed TEST_ for cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iteration_3 fix: /app/frontend/src/pages/BookingFlow.jsx line 45 was `const PASSENGER_THRESHOLD = 3;` but code referenced PASSENGER_INCLUDED — renamed to `const PASSENGER_INCLUDED = 2;` to match backend and review spec. Backend passenger fee formula: (passengers - 2) * $5 for passengers > 2. 14 taxi routes: airport-nassau, airport-paradise, hourly-charter, van-group, port-paradise, paradise-nassau, airport-bahamar, cablebeach-downtown ($18), downtown-paradise ($12), cablebeach-atlantis ($30), fish-fry-shuttle ($15), compass-point ($25), adelaide-southwest ($50), blue-hole-roundtrip ($80). Tours=4 (no Exuma). Wedding data lives in db.group_inquiries with optional `package` object; PDF endpoint GET /api/wedding-package/{id}/quote.pdf reads that collection.",
+  "rca of the issue": "Root cause of frontend runtime crash: refactor renamed constant `PASSENGER_INCLUDED` (used in 3 places in BookingFlow.jsx: lines 56, 57, 146, 147) but the declaration on line 45 was left as the old name `PASSENGER_THRESHOLD = 3`. Webpack compile succeeded (no static analysis flagging undefined refs), so the file's clean truncation still shipped a runtime ReferenceError. Reproduction: navigate to /taxi → click any [data-testid='taxi-book-btn-*'] → red error overlay 'PASSENGER_INCLUDED is not defined' in BookingModal. Fix applied: declare const PASSENGER_INCLUDED = 2 (matching backend EXTRA_PASSENGER_INCLUDED=2 and the review spec)."
+}

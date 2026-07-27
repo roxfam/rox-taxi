@@ -182,8 +182,9 @@ function F({ l, v, on, type = "text", textarea, testid }) {
 }
 
 function SiteConfigPanel() {
-  const [cfg, setCfg] = useState({ facebook_url: "", zelle_email: "", zelle_phone: "", phone: "" });
+  const [cfg, setCfg] = useState({ facebook_url: "", zelle_email: "", zelle_phone: "", phone: "", logo_url: "" });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => { api.get("/site-config").then((r) => setCfg({ ...cfg, ...r.data })); /* eslint-disable-next-line */ }, []);
 
@@ -196,9 +197,57 @@ function SiteConfigPanel() {
     finally { setSaving(false); }
   };
 
+  const uploadLogo = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post("/admin/upload-logo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setCfg((c) => ({ ...c, logo_url: data.logo_url }));
+      toast.success("Logo uploaded");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Upload failed");
+    } finally { setUploading(false); }
+  };
+
+  const logoPreview = cfg.logo_url ? (cfg.logo_url.startsWith("http") ? cfg.logo_url : `${process.env.REACT_APP_BACKEND_URL}${cfg.logo_url}`) : "";
+
   return (
     <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 max-w-xl">
       <div className="flex items-center gap-2 mb-4"><Settings className="w-4 h-4 text-[#0B3B5C]" /><h3 className="font-semibold text-[#0B3B5C]">Site content</h3></div>
+
+      <div className="mb-6">
+        <label className="block text-xs uppercase tracking-widest text-[#64748B] mb-2">Brand logo</label>
+        <div className="flex items-center gap-4">
+          <div className="w-24 h-24 rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC] flex items-center justify-center overflow-hidden" data-testid="logo-preview">
+            {logoPreview ? (
+              <img src={logoPreview} alt="Logo" className="max-w-full max-h-full object-contain" />
+            ) : (
+              <span className="text-xs text-[#94a3b8]">No logo</span>
+            )}
+          </div>
+          <div className="flex-1">
+            <label className={`inline-block rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm cursor-pointer hover:bg-[#0a2f4a] ${uploading ? "opacity-60" : ""}`}>
+              {uploading ? "Uploading…" : "Upload logo"}
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={uploadLogo} className="hidden" data-testid="logo-upload-input" disabled={uploading} />
+            </label>
+            <div className="text-xs text-[#94a3b8] mt-2">PNG, JPG, WEBP or SVG · ≤ 5MB. Recommended: transparent PNG, ~200×80px.</div>
+            {cfg.logo_url && (
+              <button
+                type="button"
+                onClick={() => { setCfg((c) => ({ ...c, logo_url: "" })); toast.info("Cleared — click Save to apply"); }}
+                className="mt-2 text-xs text-red-500 hover:underline"
+                data-testid="logo-clear-btn"
+              >
+                Remove logo
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-3">
         <F l="Facebook page URL" v={cfg.facebook_url || ""} on={(v) => setCfg({ ...cfg, facebook_url: v })} testid="site-fb" />
         <F l="Zelle email" v={cfg.zelle_email || ""} on={(v) => setCfg({ ...cfg, zelle_email: v })} testid="site-zelle-email" />

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Heart, Car, ShipWheel, MapPinned, ChevronLeft, ChevronRight, Check, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { api, money } from "../lib/api";
+import ReferralWidget from "../components/ReferralWidget";
 
 const STEPS = [
   { key: "basics", label: "Basics" },
@@ -138,6 +139,10 @@ export default function WeddingBuilder() {
           </a>
           <button onClick={() => nav("/")} className="rounded-full bg-[#0B3B5C] text-white px-6 py-3 text-sm font-semibold">Back to home</button>
           <a href={`https://wa.me/12420000000?text=Following%20up%20on%20wedding%20package%20${submitted.id}`} target="_blank" rel="noreferrer" className="rounded-full bg-[#25D366] text-white px-6 py-3 text-sm font-semibold">WhatsApp us</a>
+        </div>
+
+        <div className="mt-10 max-w-xl mx-auto">
+          <ReferralWidget inquiryId={submitted.id} />
         </div>
       </div>
     );

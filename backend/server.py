@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, Response, Cookie
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, Response, Cookie, UploadFile, File
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -104,7 +104,7 @@ class BookingCreate(BaseModel):
 LUGGAGE_FEE_USD = 3.0
 LUGGAGE_MAX = 10
 EXTRA_PASSENGER_FEE_USD = 5.0
-EXTRA_PASSENGER_THRESHOLD = 3  # 3+ passengers triggers the fee
+EXTRA_PASSENGER_INCLUDED = 2  # first 2 passengers included in the flat fare; each additional adds the fee
 
 # Days closed (weekly). Python weekday: Monday=0..Sunday=6. Saturday=5.
 CANCELLATION_FEE_PCT = 0.15  # 15% cancellation fee
@@ -171,6 +171,7 @@ class SiteConfigUpdate(BaseModel):
     whatsapp_number: Optional[str] = None
     paypal_me_url: Optional[str] = None
     tripadvisor_url: Optional[str] = None
+    logo_url: Optional[str] = None
 
 
 class GroupInquiryCreate(BaseModel):
@@ -374,6 +375,38 @@ TAXI_SERVICES = [
      "route": "Anywhere on Nassau / PI", "featured": False,
      "description": "Weddings, families, cruise groups. Airport, hotel, cruise port pickups & drop-offs.",
      "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
+    {"id": "airport-bahamar", "name": "LPIA Airport → Baha Mar / SLS / Grand Hyatt", "price": 35.0,
+     "route": "LPIA → Baha Mar", "featured": True,
+     "description": "Fixed rate to the Baha Mar resort complex on Cable Beach. Up to 3 passengers.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
+    {"id": "cablebeach-downtown", "name": "Cable Beach ↔ Downtown Nassau (Bay Street)", "price": 18.0,
+     "route": "Cable Beach ↔ Downtown", "featured": False,
+     "description": "Quick hop between Cable Beach hotels and Bay Street shopping / straw market. Nassau tariff.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
+    {"id": "downtown-paradise", "name": "Downtown Nassau → Paradise Island (via bridge)", "price": 12.0,
+     "route": "Downtown → Paradise Island", "featured": False,
+     "description": "Includes $1 Paradise Island bridge toll. Standard Nassau tariff for up to 2 passengers.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
+    {"id": "cablebeach-atlantis", "name": "Cable Beach ↔ Atlantis / Paradise Island", "price": 30.0,
+     "route": "Cable Beach ↔ Atlantis", "featured": False,
+     "description": "Cross-island transfer including bridge toll. Popular for dinner + casino runs.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
+    {"id": "fish-fry-shuttle", "name": "Hotel → Arawak Cay Fish Fry (evening)", "price": 15.0,
+     "route": "Any Nassau hotel → Fish Fry", "featured": False,
+     "description": "One-way evening ride to Nassau's iconic Fish Fry food strip. Return quote on request.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
+    {"id": "compass-point", "name": "Nassau → Compass Point / West Bay Street", "price": 25.0,
+     "route": "Nassau → West Bay", "featured": False,
+     "description": "West-side beach clubs and restaurants beyond Cable Beach. Fixed one-way rate.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
+    {"id": "adelaide-southwest", "name": "Nassau → Adelaide Village / South West", "price": 50.0,
+     "route": "Nassau → Adelaide", "featured": False,
+     "description": "Long-distance transfer to Adelaide Village and the south-west coast. Per Nassau tariff.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
+    {"id": "blue-hole-roundtrip", "name": "Nassau → Blue Hole / Lyford Cay (round trip)", "price": 80.0,
+     "route": "Nassau ↔ Lyford Cay", "featured": False,
+     "description": "Round-trip driver waits up to 90 min. Great for beach picnics or Lyford visits.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
 ]
 
 RENTALS_SEED = [
@@ -522,8 +555,8 @@ async def create_booking(req: BookingCreate):
         luggage_fee = extra * LUGGAGE_FEE_USD
         booking["luggage_fee"] = luggage_fee
         booking["extra_luggage"] = extra
-        if int(req.passengers) >= EXTRA_PASSENGER_THRESHOLD:
-            passenger_fee = EXTRA_PASSENGER_FEE_USD
+        if int(req.passengers) > EXTRA_PASSENGER_INCLUDED:
+            passenger_fee = (int(req.passengers) - EXTRA_PASSENGER_INCLUDED) * EXTRA_PASSENGER_FEE_USD
         booking["passenger_fee"] = passenger_fee
 
     booking["total"] = round(base + luggage_fee + passenger_fee, 2)
@@ -545,8 +578,8 @@ async def get_fees():
         "luggage_max": LUGGAGE_MAX,
         "luggage_policy": "First checked bag and carry-on are free. Additional bags $3 each.",
         "extra_passenger_fee_usd": EXTRA_PASSENGER_FEE_USD,
-        "extra_passenger_threshold": EXTRA_PASSENGER_THRESHOLD,
-        "passenger_policy": f"A ${EXTRA_PASSENGER_FEE_USD:.0f} group fee applies to taxi bookings with {EXTRA_PASSENGER_THRESHOLD}+ passengers.",
+        "extra_passenger_included": EXTRA_PASSENGER_INCLUDED,
+        "passenger_policy": f"Taxi flat rate covers up to {EXTRA_PASSENGER_INCLUDED} passengers. Each additional passenger is +${EXTRA_PASSENGER_FEE_USD:.0f}.",
         "closed_weekdays": sorted(CLOSED_WEEKDAYS),
         "closed_weekdays_labels": ["Saturday"],
         "closed_policy": "Taxi service and car rentals are closed on Saturdays.",
@@ -876,9 +909,7 @@ async def wedding_quote_pdf(inquiry_id: str):
     from fastapi.responses import Response
     doc = await db.group_inquiries.find_one({"id": inquiry_id.upper()})
     if not doc:
-        raise HTTPException(404, "Inquiry not found")
-
-    # Compute line labels + subtotal server-side using catalog
+        raise HTTPException(404, "Inquiry not found")    # Compute line labels + subtotal server-side using catalog
     pkg = doc.get("package") or {}
     rows = []
     subtotal = 0.0
@@ -924,6 +955,159 @@ async def wedding_quote_pdf(inquiry_id: str):
         content=pdf_bytes, media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+def _build_receipt_pdf(booking: dict) -> bytes:
+    from io import BytesIO
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+    NAVY = colors.HexColor("#0B3B5C"); GOLD = colors.HexColor("#D4A94A")
+    CORAL = colors.HexColor("#E86A3C"); GREY = colors.HexColor("#64748B")
+    SAND = colors.HexColor("#FBF7EF")
+
+    buf = BytesIO()
+    doc_pdf = SimpleDocTemplate(buf, pagesize=letter, leftMargin=0.75*inch, rightMargin=0.75*inch, topMargin=0.75*inch, bottomMargin=0.75*inch)
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("t", parent=styles["Title"], fontName="Times-Italic", fontSize=30, textColor=NAVY, spaceAfter=6, leading=32)
+    sub = ParagraphStyle("s", parent=styles["Normal"], fontName="Helvetica", fontSize=9, textColor=GREY, spaceAfter=18)
+    h2 = ParagraphStyle("h", parent=styles["Heading2"], fontName="Times-Italic", fontSize=16, textColor=NAVY, spaceBefore=8, spaceAfter=6)
+    p = ParagraphStyle("p", parent=styles["Normal"], fontName="Helvetica", fontSize=10, textColor=colors.HexColor("#0B192C"), leading=14, spaceAfter=6)
+    small = ParagraphStyle("sm", parent=styles["Normal"], fontName="Helvetica", fontSize=8, textColor=GREY, leading=11)
+
+    story = []
+    story.append(Paragraph("ROX TAXI SERVICE AND TOURS", sub))
+    story.append(Paragraph(f"Booking receipt for <font color='#D4A94A'><i>{booking.get('customer_name','')}</i></font>", title))
+    paid = booking.get("payment_status") == "paid"
+    status_label = "PAID" if paid else "PENDING PAYMENT"
+    story.append(Paragraph(f"REFERENCE {booking['id']} · {status_label} · ISSUED {now_iso()[:10]}", sub))
+
+    # Details table
+    rows = [["Service", booking.get("item_name", "-")]]
+    rows.append(["Date", str(booking.get("booking_date", ""))])
+    if booking.get("pickup_location"):
+        rows.append(["Pickup", booking["pickup_location"]])
+    if booking.get("dropoff_location"):
+        rows.append(["Dropoff", booking["dropoff_location"]])
+    rows.append(["Passengers", str(booking.get("passengers", 1))])
+    if booking.get("service_type") == "rental":
+        rows.append(["Days", str(booking.get("days", 1))])
+    rows.append(["Payment method", str(booking.get("payment_method", "-")).title()])
+
+    story.append(Paragraph("Details", h2))
+    dtl = Table(rows, colWidths=[1.7*inch, 4.3*inch], hAlign="LEFT")
+    dtl.setStyle(TableStyle([
+        ("FONTSIZE", (0,0), (-1,-1), 9),
+        ("FONTNAME", (0,0), (0,-1), "Helvetica-Bold"),
+        ("TEXTCOLOR", (0,0), (0,-1), GREY),
+        ("ROWBACKGROUNDS", (0,0), (-1,-1), [colors.white, SAND]),
+        ("LEFTPADDING", (0,0), (-1,-1), 10),
+        ("RIGHTPADDING", (0,0), (-1,-1), 10),
+        ("TOPPADDING", (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+    ]))
+    story.append(dtl)
+    story.append(Spacer(1, 14))
+
+    # Amount breakdown
+    base = float(booking.get("price", 0)) * max(1, int(booking.get("days", 1)))
+    lug = float(booking.get("luggage_fee", 0))
+    pax = float(booking.get("passenger_fee", 0))
+    total = float(booking.get("total", base + lug + pax))
+    amt_rows = [["Base fare" if booking.get("service_type") != "rental" else f"Rental × {booking.get('days',1)} day(s)", f"${base:,.2f}"]]
+    if lug: amt_rows.append([f"Extra luggage ({booking.get('extra_luggage',0)} × $3)", f"${lug:,.2f}"])
+    if pax: amt_rows.append(["Group fee (3+ passengers)", f"${pax:,.2f}"])
+    amt_rows.append(["Total", f"${total:,.2f}"])
+
+    tot = Table(amt_rows, colWidths=[4.5*inch, 1.5*inch], hAlign="LEFT")
+    tot.setStyle(TableStyle([
+        ("FONTSIZE", (0,0), (-1,-1), 10),
+        ("FONTNAME", (0,-1), (-1,-1), "Times-Bold"),
+        ("FONTSIZE", (0,-1), (-1,-1), 14),
+        ("TEXTCOLOR", (0,-1), (-1,-1), CORAL if paid else NAVY),
+        ("ALIGN", (1,0), (1,-1), "RIGHT"),
+        ("FONTNAME", (1,0), (1,-2), "Courier"),
+        ("LINEABOVE", (0,-1), (-1,-1), 0.5, NAVY),
+        ("TOPPADDING", (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+    ]))
+    story.append(tot)
+
+    if paid:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("<font color='#D4A94A'><b>PAID IN FULL</b></font> — thank you for choosing Rox.", p))
+    else:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("<b>Payment pending.</b> Complete payment via the link in your confirmation email or contact us on WhatsApp.", p))
+
+    story.append(Spacer(1, 18))
+    story.append(Paragraph("Cancellation policy", h2))
+    story.append(Paragraph(
+        "Cancel 48+ hours before service to receive a refund minus a 15% cancellation fee. Cancellations within 48 hours are non-refundable.",
+        p,
+    ))
+
+    story.append(Spacer(1, 24))
+    story.append(Paragraph(
+        "Rox Taxi Service and Tours · Nassau, New Providence · The Bahamas<br/>"
+        "hello@roxtaxi.com · facebook.com/roxtaxiservice · Keep this receipt for your records.",
+        small,
+    ))
+
+    doc_pdf.build(story)
+    return buf.getvalue()
+
+
+@api_router.get("/bookings/{booking_id}/receipt.pdf")
+async def booking_receipt_pdf(booking_id: str):
+    from fastapi.responses import Response
+    booking = await db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    pdf_bytes = _build_receipt_pdf(booking)
+    filename = f"Rox-Receipt-{booking['id']}.pdf"
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------- Logo upload ----------------
+# NOTE: literal /admin route MUST be declared before /admin/{kind} to avoid shadowing.
+
+UPLOAD_DIR = ROOT_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+
+@api_router.post("/admin/upload-logo")
+async def upload_logo(file: UploadFile = File(...), _: str = Depends(require_admin)):
+    allowed = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in allowed:
+        raise HTTPException(400, f"Unsupported file type. Use {', '.join(sorted(allowed))}")
+
+    name = f"logo-{uuid.uuid4().hex[:8]}{ext}"
+    dest = UPLOAD_DIR / name
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Logo must be ≤ 5MB")
+    dest.write_bytes(content)
+
+    url = f"/api/uploads/{name}"
+    await db.site_config.update_one({"_id": "main"}, {"$set": {"logo_url": url}}, upsert=True)
+    return {"logo_url": url}
+
+
+@api_router.get("/uploads/{name}")
+async def get_upload(name: str):
+    from fastapi.responses import FileResponse
+    path = (UPLOAD_DIR / name).resolve()
+    if not str(path).startswith(str(UPLOAD_DIR.resolve())) or not path.exists():
+        raise HTTPException(404, "Not found")
+    return FileResponse(path)
 
 
 # ---------------- Admin CRUD (tours / taxi / rentals / site config) ----------------
@@ -1140,6 +1324,8 @@ async def chat_history(session_id: str):
 @api_router.get("/")
 async def root():
     return {"service": "Rox Taxi Service and Tours Bahamas API", "status": "running", "focus": "Nassau & Paradise Island"}
+
+
 
 
 app.include_router(api_router)

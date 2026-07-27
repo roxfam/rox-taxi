@@ -101,6 +101,14 @@ export default function Track() {
                 <div className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Total</div>
                 <div className="mono text-2xl text-[#E86A3C] font-semibold">{money(booking.total)}</div>
                 <div className="text-xs text-[#64748B] mt-1">Payment: <span className={booking.payment_status === "paid" ? "text-[#D4A94A] font-semibold" : "text-[#E86A3C]"}>{booking.payment_status}</span></div>
+                <a
+                  href={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/receipt.pdf`}
+                  target="_blank" rel="noreferrer"
+                  data-testid="track-receipt-btn"
+                  className="mt-3 inline-flex items-center gap-1 text-xs text-[#D4A94A] font-semibold hover:underline"
+                >
+                  Download receipt PDF →
+                </a>
               </div>
             </div>
 
