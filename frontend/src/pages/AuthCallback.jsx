@@ -39,12 +39,12 @@ export default function AuthCallback() {
   }, [loc.hash, nav, refresh]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#FAF9F6]">
+    <div className="min-h-screen flex items-center justify-center bg-[#FBF7EF]">
       <div className="text-center">
-        <div className="mx-auto w-14 h-14 rounded-full bg-[#00B4D8] flex items-center justify-center mb-4 animate-pulse">
+        <div className="mx-auto w-14 h-14 rounded-full bg-[#D4A94A] flex items-center justify-center mb-4 animate-pulse">
           <Waves className="w-6 h-6 text-white" />
         </div>
-        <p className="text-[#1A365D]">Signing you in…</p>
+        <p className="text-[#0B3B5C]">Signing you in…</p>
       </div>
     </div>
   );

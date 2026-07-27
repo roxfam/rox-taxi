@@ -22,7 +22,7 @@ export default function Tours() {
 
   return (
     <div data-testid="tours-page">
-      <section className="bg-gradient-to-br from-[#00B4D8] to-[#0077B6] text-white py-24 relative overflow-hidden">
+      <section className="bg-gradient-to-br from-[#D4A94A] to-[#A88235] text-white py-24 relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 relative z-10">
           <span className="text-xs tracking-[0.3em] uppercase text-white/80">Bahamas Excursions</span>
           <h1 className="serif text-6xl sm:text-7xl mt-3 leading-[0.9] max-w-4xl">Tours that feel like a <em className="italic">movie scene</em>.</h1>
@@ -35,22 +35,22 @@ export default function Tours() {
 
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24 grid md:grid-cols-2 lg:grid-cols-3 gap-8">
         {tours.map((t) => (
-          <div key={t.id} className="group rounded-2xl overflow-hidden bg-white border border-[#E2E8F0] hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(0,180,216,0.15)] transition-transform" data-testid={`tour-card-${t.id}`}>
+          <div key={t.id} className="group rounded-2xl overflow-hidden bg-white border border-[#E2E8F0] hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(212,169,74,0.15)] transition-transform" data-testid={`tour-card-${t.id}`}>
             <div className="aspect-[4/3] overflow-hidden relative">
               <img src={t.image_url} alt={t.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              <div className="absolute bottom-3 left-3 glass rounded-full px-3 py-1 text-xs text-[#1A365D] font-semibold flex items-center gap-1">
+              <div className="absolute bottom-3 left-3 glass rounded-full px-3 py-1 text-xs text-[#0B3B5C] font-semibold flex items-center gap-1">
                 <Clock className="w-3 h-3" /> {t.duration}
               </div>
             </div>
             <div className="p-6">
-              <h3 className="serif text-2xl text-[#1A365D] leading-tight">{t.name}</h3>
+              <h3 className="serif text-2xl text-[#0B3B5C] leading-tight">{t.name}</h3>
               <p className="text-sm text-[#64748B] mt-2 leading-relaxed">{t.description}</p>
               <div className="mt-6 flex items-center justify-between">
-                <span className="mono text-lg text-[#FF7F50] font-semibold">{money(t.price)}</span>
+                <span className="mono text-lg text-[#E86A3C] font-semibold">{money(t.price)}</span>
                 <button
                   onClick={() => setSelected(t)}
                   data-testid={`tour-book-btn-${t.id}`}
-                  className="btn-shine inline-flex items-center gap-1 rounded-full bg-[#1A365D] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#132a4a] active:scale-95"
+                  className="btn-shine inline-flex items-center gap-1 rounded-full bg-[#0B3B5C] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#132a4a] active:scale-95"
                 >
                   Book <ArrowRight className="w-4 h-4" />
                 </button>

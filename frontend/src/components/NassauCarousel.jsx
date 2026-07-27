@@ -67,7 +67,7 @@ export default function BahamasSlider() {
     >
       <div className="max-w-7xl mx-auto px-6 lg:px-10 pt-24 pb-8 flex items-end justify-between gap-6 flex-wrap">
         <div>
-          <span className="text-xs tracking-[0.3em] uppercase text-[#00B4D8]">Postcards from</span>
+          <span className="text-xs tracking-[0.3em] uppercase text-[#D4A94A]">Postcards from</span>
           <h2 className="serif text-5xl sm:text-6xl mt-3 leading-none">The <em className="italic">Bahamas</em>.</h2>
         </div>
         <p className="text-white/60 max-w-md leading-relaxed">
@@ -95,7 +95,7 @@ export default function BahamasSlider() {
                 transition={{ duration: 0.7, delay: 0.15 }}
                 className="max-w-2xl"
               >
-                <div className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-[#00B4D8]">
+                <div className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-[#D4A94A]">
                   <MapPin className="w-3 h-3" /> {cur.tag}
                 </div>
                 <h3 className="serif text-4xl sm:text-6xl mt-3 leading-none">{cur.name}</h3>
@@ -128,7 +128,7 @@ export default function BahamasSlider() {
               key={idx}
               onClick={() => go(idx)}
               data-testid={`slider-dot-${idx}`}
-              className={`h-1.5 rounded-full transition-all ${idx === i ? "w-8 bg-[#00B4D8]" : "w-1.5 bg-white/40 hover:bg-white/70"}`}
+              className={`h-1.5 rounded-full transition-all ${idx === i ? "w-8 bg-[#D4A94A]" : "w-1.5 bg-white/40 hover:bg-white/70"}`}
               aria-label={`Go to slide ${idx + 1}`}
             />
           ))}
@@ -143,12 +143,12 @@ export default function BahamasSlider() {
               key={s.name}
               onClick={() => go(idx)}
               data-testid={`slider-thumb-${idx}`}
-              className={`shrink-0 w-40 sm:w-48 h-24 rounded-xl overflow-hidden relative group transition-transform ${idx === i ? "ring-2 ring-[#00B4D8]" : "opacity-70 hover:opacity-100"}`}
+              className={`shrink-0 w-40 sm:w-48 h-24 rounded-xl overflow-hidden relative group transition-transform ${idx === i ? "ring-2 ring-[#D4A94A]" : "opacity-70 hover:opacity-100"}`}
             >
               <img src={s.img} alt={s.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
               <div className="absolute bottom-2 left-2 right-2 text-left">
-                <div className="text-[10px] tracking-widest uppercase text-[#00B4D8] leading-none">{s.tag}</div>
+                <div className="text-[10px] tracking-widest uppercase text-[#D4A94A] leading-none">{s.tag}</div>
                 <div className="text-xs font-semibold leading-tight mt-1 line-clamp-1">{s.name}</div>
               </div>
             </button>

@@ -13,11 +13,11 @@ export default function Taxi() {
 
   return (
     <div data-testid="taxi-page">
-      <section className="bg-[#1A365D] text-white py-24">
+      <section className="bg-[#0B3B5C] text-white py-24">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 grid md:grid-cols-2 gap-10 items-end">
           <div>
-            <span className="text-xs tracking-[0.3em] uppercase text-[#00B4D8]">Airport & City Rides</span>
-            <h1 className="serif text-6xl sm:text-7xl mt-3 leading-[0.9]">Bahamas <em className="italic text-[#FFD8B1]">taxi</em>, done right.</h1>
+            <span className="text-xs tracking-[0.3em] uppercase text-[#D4A94A]">Airport & City Rides</span>
+            <h1 className="serif text-6xl sm:text-7xl mt-3 leading-[0.9]">Bahamas <em className="italic text-[#F5E1A4]">taxi</em>, done right.</h1>
           </div>
           <p className="text-white/80 leading-relaxed max-w-md md:justify-self-end">
             Fixed, transparent pricing for airport transfers, hotel pickups, and hourly charters — driven by
@@ -28,18 +28,18 @@ export default function Taxi() {
 
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {services.map((s) => (
-          <div key={s.id} className="rounded-2xl border border-[#E2E8F0] bg-white p-6 hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(0,180,216,0.12)] transition-transform" data-testid={`taxi-service-${s.id}`}>
-            <div className="w-12 h-12 rounded-xl bg-[#00B4D8]/10 flex items-center justify-center text-[#00B4D8]">
+          <div key={s.id} className="rounded-2xl border border-[#E2E8F0] bg-white p-6 hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(212,169,74,0.12)] transition-transform" data-testid={`taxi-service-${s.id}`}>
+            <div className="w-12 h-12 rounded-xl bg-[#D4A94A]/10 flex items-center justify-center text-[#D4A94A]">
               <Car className="w-5 h-5" />
             </div>
-            <h3 className="serif text-2xl text-[#1A365D] mt-4 leading-tight">{s.name}</h3>
+            <h3 className="serif text-2xl text-[#0B3B5C] mt-4 leading-tight">{s.name}</h3>
             <p className="text-sm text-[#64748B] mt-2 leading-relaxed">{s.description}</p>
             <div className="mt-5 flex items-center justify-between">
-              <span className="mono text-lg text-[#FF7F50] font-semibold">{money(s.price)}</span>
+              <span className="mono text-lg text-[#E86A3C] font-semibold">{money(s.price)}</span>
               <button
                 onClick={() => setSelected(s)}
                 data-testid={`taxi-book-btn-${s.id}`}
-                className="btn-shine inline-flex items-center gap-1 rounded-full bg-[#FF7F50] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#ff6a34] active:scale-95"
+                className="btn-shine inline-flex items-center gap-1 rounded-full bg-[#E86A3C] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#d55a30] active:scale-95"
               >
                 Book <ArrowRight className="w-4 h-4" />
               </button>

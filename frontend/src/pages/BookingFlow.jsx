@@ -1,8 +1,21 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CreditCard, Wallet, CheckCircle2, Copy, X } from "lucide-react";
+import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle } from "lucide-react";
 import { api, money } from "../lib/api";
+
+function isClosedDate(dateStr, days = 1) {
+  if (!dateStr) return false;
+  try {
+    const d = new Date(dateStr);
+    for (let i = 0; i < Math.max(1, days); i++) {
+      const day = new Date(d);
+      day.setDate(d.getDate() + i);
+      if (day.getDay() === 6) return true; // Saturday
+    }
+  } catch { /* ignore */ }
+  return false;
+}
 
 /**
  * BookingModal — used by Taxi, Tours and Rentals pages.
@@ -52,6 +65,11 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
       toast.error("Please enter the number of passengers.");
       return;
     }
+    // Block Saturdays for taxi + rental
+    if (["taxi", "rental"].includes(serviceType) && isClosedDate(form.booking_date, Number(form.days) || 1)) {
+      toast.error("We are closed on Saturdays. Please choose a different date.");
+      return;
+    }
     setLoading(true);
     try {
       const cfg = await api.get("/site-config").then((r) => r.data).catch(() => siteCfg);
@@ -98,11 +116,11 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         <div className="relative p-6 sm:p-8 border-b border-[#E2E8F0]">
           <button onClick={onClose} className="absolute top-5 right-5 w-9 h-9 rounded-full hover:bg-[#F1F5F9] flex items-center justify-center" data-testid="booking-modal-close">
-            <X className="w-5 h-5 text-[#1A365D]" />
+            <X className="w-5 h-5 text-[#0B3B5C]" />
           </button>
           <div className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Booking</div>
-          <h2 className="serif text-2xl sm:text-3xl text-[#1A365D] mt-1">{item.name}</h2>
-          <div className="mt-2 mono text-[#FF7F50] font-semibold">{money(item.price)}{serviceType === "rental" ? " / day" : ""}</div>
+          <h2 className="serif text-2xl sm:text-3xl text-[#0B3B5C] mt-1">{item.name}</h2>
+          <div className="mt-2 mono text-[#E86A3C] font-semibold">{money(item.price)}{serviceType === "rental" ? " / day" : ""}</div>
         </div>
 
         <div className="overflow-y-auto p-6 sm:p-8 space-y-5">
@@ -116,29 +134,39 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 <div className="sm:col-span-2">
                   <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">Passengers *</label>
                   <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => setForm({ ...form, passengers: Math.max(1, Number(form.passengers) - 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#1A365D] active:scale-95" data-testid="pax-minus">−</button>
+                    <button type="button" onClick={() => setForm({ ...form, passengers: Math.max(1, Number(form.passengers) - 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95" data-testid="pax-minus">−</button>
                     <input type="number" min={1} max={20} required value={form.passengers} onChange={(e) => setForm({ ...form, passengers: Math.max(1, Math.min(20, parseInt(e.target.value || "1"))) })} className="w-20 text-center rounded-xl border border-[#E2E8F0] py-2.5 text-sm mono" data-testid="booking-passengers" />
-                    <button type="button" onClick={() => setForm({ ...form, passengers: Math.min(20, Number(form.passengers) + 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#1A365D] active:scale-95" data-testid="pax-plus">+</button>
+                    <button type="button" onClick={() => setForm({ ...form, passengers: Math.min(20, Number(form.passengers) + 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95" data-testid="pax-plus">+</button>
                     {serviceType === "taxi" && Number(form.passengers) >= PASSENGER_THRESHOLD && (
-                      <span className="text-xs text-[#FF7F50] font-semibold" data-testid="pax-fee-note">+ ${PASSENGER_FEE} group fee ({PASSENGER_THRESHOLD}+ pax)</span>
+                      <span className="text-xs text-[#E86A3C] font-semibold" data-testid="pax-fee-note">+ ${PASSENGER_FEE} group fee ({PASSENGER_THRESHOLD}+ pax)</span>
                     )}
                   </div>
                 </div>
               </div>
               {extraFields && extraFields(form, setForm)}
 
+              {["taxi", "rental"].includes(serviceType) && isClosedDate(form.booking_date, Number(form.days) || 1) && (
+                <div className="rounded-xl border border-[#E86A3C]/30 bg-[#E86A3C]/10 text-[#7a2d10] px-4 py-3 flex items-start gap-2 text-sm" data-testid="closed-saturday-warning">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-[#E86A3C]" />
+                  <div>
+                    <div className="font-semibold">We're closed on Saturdays.</div>
+                    <div>Please pick a different date — this booking cannot be completed on a Saturday.</div>
+                  </div>
+                </div>
+              )}
+
               {serviceType === "taxi" && (
                 <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4" data-testid="luggage-section">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-semibold text-[#1A365D]">Extra luggage</div>
-                      <div className="text-xs text-[#64748B] mt-0.5">First checked bag + 1 carry-on <span className="text-[#00B4D8] font-semibold">free</span>. Additional bags <span className="mono font-semibold text-[#FF7F50]">${LUGGAGE_FEE}</span> each.</div>
+                      <div className="text-sm font-semibold text-[#0B3B5C]">Extra luggage</div>
+                      <div className="text-xs text-[#64748B] mt-0.5">First checked bag + 1 carry-on <span className="text-[#D4A94A] font-semibold">free</span>. Additional bags <span className="mono font-semibold text-[#E86A3C]">${LUGGAGE_FEE}</span> each.</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setForm({ ...form, extra_luggage: Math.max(0, Number(form.extra_luggage) - 1) })}
-                        className="w-9 h-9 rounded-full border border-[#E2E8F0] text-lg hover:border-[#1A365D] active:scale-95"
+                        className="w-9 h-9 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95"
                         data-testid="luggage-minus"
                       >−</button>
                       <input
@@ -153,7 +181,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                       <button
                         type="button"
                         onClick={() => setForm({ ...form, extra_luggage: Math.min(10, Number(form.extra_luggage) + 1) })}
-                        className="w-9 h-9 rounded-full border border-[#E2E8F0] text-lg hover:border-[#1A365D] active:scale-95"
+                        className="w-9 h-9 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95"
                         data-testid="luggage-plus"
                       >+</button>
                     </div>
@@ -161,13 +189,13 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   {Number(form.extra_luggage) > 0 && (
                     <div className="mt-3 text-xs text-[#64748B] flex justify-between border-t border-[#E2E8F0] pt-2">
                       <span>{form.extra_luggage} extra bag(s) × ${LUGGAGE_FEE}</span>
-                      <span className="mono font-semibold text-[#FF7F50]">+${(Number(form.extra_luggage) * LUGGAGE_FEE).toFixed(2)}</span>
+                      <span className="mono font-semibold text-[#E86A3C]">+${(Number(form.extra_luggage) * LUGGAGE_FEE).toFixed(2)}</span>
                     </div>
                   )}
                   {passengerFee > 0 && (
                     <div className="mt-2 text-xs text-[#64748B] flex justify-between">
                       <span>Group fee ({form.passengers} passengers)</span>
-                      <span className="mono font-semibold text-[#FF7F50]">+${passengerFee.toFixed(2)}</span>
+                      <span className="mono font-semibold text-[#E86A3C]">+${passengerFee.toFixed(2)}</span>
                     </div>
                   )}
                 </div>
@@ -178,7 +206,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   value={form.notes}
                   onChange={setF("notes")}
                   rows={2}
-                  className="w-full rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm focus:border-[#00B4D8] focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/20"
+                  className="w-full rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm focus:border-[#D4A94A] focus:outline-none focus:ring-2 focus:ring-[#D4A94A]/20"
                   placeholder="Flight number, hotel, special requests…"
                   data-testid="booking-notes"
                 />
@@ -187,11 +215,11 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
               <div className="pt-4 border-t border-[#E2E8F0] flex items-center justify-between">
                 <div>
                   <div className="text-xs text-[#64748B]">Total</div>
-                  <div className="serif text-2xl text-[#1A365D]">{money(total)}</div>
+                  <div className="serif text-2xl text-[#0B3B5C]">{money(total)}</div>
                 </div>
                 <button
                   onClick={() => setStep(2)}
-                  className="btn-shine rounded-full bg-[#1A365D] text-white px-6 py-3 text-sm font-semibold hover:bg-[#132a4a] active:scale-95"
+                  className="btn-shine rounded-full bg-[#0B3B5C] text-white px-6 py-3 text-sm font-semibold hover:bg-[#132a4a] active:scale-95"
                   data-testid="booking-continue-payment-btn"
                 >
                   Continue to Payment
@@ -202,7 +230,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
 
           {step === 2 && (
             <>
-              <h3 className="serif text-xl text-[#1A365D]">Choose a payment method</h3>
+              <h3 className="serif text-xl text-[#0B3B5C]">Choose a payment method</h3>
               <div className="grid gap-3">
                 <PayCard
                   active={payMethod === "stripe"}
@@ -223,18 +251,18 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
               </div>
 
               <div className="pt-4 border-t border-[#E2E8F0] flex items-center justify-between">
-                <button onClick={() => setStep(1)} className="text-sm text-[#64748B] hover:text-[#1A365D]" data-testid="booking-back-btn">
+                <button onClick={() => setStep(1)} className="text-sm text-[#64748B] hover:text-[#0B3B5C]" data-testid="booking-back-btn">
                   ← Back
                 </button>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
                     <div className="text-xs text-[#64748B]">Total</div>
-                    <div className="serif text-2xl text-[#1A365D]">{money(total)}</div>
+                    <div className="serif text-2xl text-[#0B3B5C]">{money(total)}</div>
                   </div>
                   <button
                     onClick={submit}
                     disabled={loading}
-                    className="btn-shine rounded-full bg-[#FF7F50] text-white px-6 py-3 text-sm font-semibold hover:bg-[#ff6a34] active:scale-95 disabled:opacity-60"
+                    className="btn-shine rounded-full bg-[#E86A3C] text-white px-6 py-3 text-sm font-semibold hover:bg-[#d55a30] active:scale-95 disabled:opacity-60"
                     data-testid="booking-submit-payment-btn"
                   >
                     {loading ? "Processing..." : payMethod === "stripe" ? "Pay with Stripe" : "Reserve & See Zelle Info"}
@@ -246,13 +274,13 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
 
           {step === 3 && booking && (
             <div data-testid="zelle-instructions">
-              <div className="flex items-center gap-2 text-[#00B4D8]">
+              <div className="flex items-center gap-2 text-[#D4A94A]">
                 <CheckCircle2 className="w-6 h-6" />
                 <span className="font-semibold">Booking reserved!</span>
               </div>
               <p className="text-sm text-[#64748B] mt-2">Your confirmation code:</p>
               <div className="mt-2 flex items-center gap-2">
-                <code className="mono text-2xl bg-[#F1F5F9] px-4 py-2 rounded-lg text-[#1A365D]" data-testid="zelle-booking-code">{booking.id}</code>
+                <code className="mono text-2xl bg-[#F1F5F9] px-4 py-2 rounded-lg text-[#0B3B5C]" data-testid="zelle-booking-code">{booking.id}</code>
                 <button
                   onClick={() => { navigator.clipboard.writeText(booking.id); toast.success("Copied"); }}
                   className="p-2 rounded-lg hover:bg-[#F1F5F9]"
@@ -263,12 +291,12 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
               </div>
 
               <div className="mt-6 rounded-2xl border border-[#E2E8F0] p-5">
-                <h4 className="serif text-lg text-[#1A365D]">Send Zelle payment to:</h4>
+                <h4 className="serif text-lg text-[#0B3B5C]">Send Zelle payment to:</h4>
                 <ul className="mt-3 space-y-2 text-sm">
-                  <li><span className="text-[#64748B]">Email:</span> <span className="mono text-[#1A365D]" data-testid="zelle-email">{siteCfg.zelle_email}</span></li>
-                  <li><span className="text-[#64748B]">Phone:</span> <span className="mono text-[#1A365D]" data-testid="zelle-phone">{siteCfg.zelle_phone}</span></li>
-                  <li><span className="text-[#64748B]">Amount:</span> <span className="mono text-[#FF7F50] font-semibold">{money(total)}</span></li>
-                  <li><span className="text-[#64748B]">Memo:</span> <span className="mono text-[#1A365D]">Booking {booking.id}</span></li>
+                  <li><span className="text-[#64748B]">Email:</span> <span className="mono text-[#0B3B5C]" data-testid="zelle-email">{siteCfg.zelle_email}</span></li>
+                  <li><span className="text-[#64748B]">Phone:</span> <span className="mono text-[#0B3B5C]" data-testid="zelle-phone">{siteCfg.zelle_phone}</span></li>
+                  <li><span className="text-[#64748B]">Amount:</span> <span className="mono text-[#E86A3C] font-semibold">{money(total)}</span></li>
+                  <li><span className="text-[#64748B]">Memo:</span> <span className="mono text-[#0B3B5C]">Booking {booking.id}</span></li>
                 </ul>
                 <p className="text-xs text-[#64748B] mt-4 leading-relaxed">
                   Include your booking code in the Zelle memo so we can match your payment. Once received, we'll
@@ -280,7 +308,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 <button onClick={onClose} className="rounded-full border border-[#E2E8F0] px-5 py-2.5 text-sm" data-testid="zelle-close-btn">Close</button>
                 <button
                   onClick={() => nav(`/track?id=${booking.id}`)}
-                  className="btn-shine rounded-full bg-[#1A365D] text-white px-6 py-2.5 text-sm font-semibold"
+                  className="btn-shine rounded-full bg-[#0B3B5C] text-white px-6 py-2.5 text-sm font-semibold"
                   data-testid="zelle-track-btn"
                 >
                   Track Booking
@@ -303,7 +331,7 @@ function Field({ label, val, on, type = "text", testid }) {
         value={val}
         onChange={on}
         data-testid={testid}
-        className="w-full rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm focus:border-[#00B4D8] focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/20"
+        className="w-full rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm focus:border-[#D4A94A] focus:outline-none focus:ring-2 focus:ring-[#D4A94A]/20"
       />
     </div>
   );
@@ -316,14 +344,14 @@ function PayCard({ active, onClick, icon, title, desc, testid }) {
       onClick={onClick}
       data-testid={testid}
       className={`text-left rounded-2xl border p-5 flex gap-4 items-start transition-colors ${
-        active ? "border-[#00B4D8] bg-[#00B4D8]/5" : "border-[#E2E8F0] bg-white hover:border-[#1A365D]/40"
+        active ? "border-[#D4A94A] bg-[#D4A94A]/5" : "border-[#E2E8F0] bg-white hover:border-[#0B3B5C]/40"
       }`}
     >
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${active ? "bg-[#00B4D8] text-white" : "bg-[#F1F5F9] text-[#1A365D]"}`}>
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${active ? "bg-[#D4A94A] text-white" : "bg-[#F1F5F9] text-[#0B3B5C]"}`}>
         {icon}
       </div>
       <div>
-        <div className="font-semibold text-[#1A365D]">{title}</div>
+        <div className="font-semibold text-[#0B3B5C]">{title}</div>
         <p className="text-sm text-[#64748B] mt-0.5 leading-snug">{desc}</p>
       </div>
     </button>

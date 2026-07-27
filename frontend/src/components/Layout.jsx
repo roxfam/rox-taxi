@@ -39,7 +39,7 @@ export default function Layout({ children }) {
   }, [open]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAF9F6]">
+    <div className="min-h-screen flex flex-col bg-[#FBF7EF]">
       <header
         className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? "glass shadow-[0_4px_20px_rgba(11,25,44,0.06)]" : "bg-transparent"}`}
         data-testid="site-header"
@@ -47,12 +47,12 @@ export default function Layout({ children }) {
         <div className="max-w-7xl mx-auto px-5 lg:px-10 flex items-center justify-between h-20">
           {/* Brand */}
           <Link to="/" className="flex items-center gap-3 group" data-testid="brand-logo">
-            <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-[#00B4D8] to-[#0077B6] flex items-center justify-center text-white shadow-[0_8px_20px_rgba(0,180,216,0.4)] group-hover:rotate-6 transition-transform duration-300">
+            <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center text-white shadow-[0_8px_20px_rgba(212,169,74,0.4)] group-hover:rotate-6 transition-transform duration-300">
               <Waves className="w-5 h-5" />
-              <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-[#FF7F50] ring-2 ring-white" />
+              <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-[#E86A3C] ring-2 ring-white" />
             </div>
             <div className="flex flex-col leading-none">
-              <span className="serif text-xl text-[#1A365D] tracking-tight">Rox Taxi</span>
+              <span className="serif text-xl text-[#0B3B5C] tracking-tight">Rox Taxi</span>
               <span className="text-[10px] tracking-[0.3em] uppercase text-[#64748B]">Nassau · Paradise Is.</span>
             </div>
           </Link>
@@ -67,7 +67,7 @@ export default function Layout({ children }) {
                 data-testid={`nav-${n.label.toLowerCase()}`}
                 className={({ isActive }) =>
                   `relative px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                    isActive ? "text-white" : "text-[#1A365D] hover:text-[#00B4D8]"
+                    isActive ? "text-white" : "text-[#0B3B5C] hover:text-[#D4A94A]"
                   }`
                 }
               >
@@ -76,7 +76,7 @@ export default function Layout({ children }) {
                     {isActive && (
                       <motion.span
                         layoutId="nav-active-pill"
-                        className="absolute inset-0 rounded-full bg-gradient-to-br from-[#1A365D] to-[#0B192C] shadow-[0_6px_16px_rgba(11,25,44,0.25)]"
+                        className="absolute inset-0 rounded-full bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] shadow-[0_6px_16px_rgba(11,25,44,0.25)]"
                         transition={{ type: "spring", stiffness: 400, damping: 32 }}
                       />
                     )}
@@ -93,7 +93,7 @@ export default function Layout({ children }) {
               href={config.facebook_url || "https://www.facebook.com/roxtaxiservice/"}
               target="_blank"
               rel="noreferrer"
-              className="hidden sm:flex w-10 h-10 rounded-full bg-white/60 border border-white/70 items-center justify-center hover:bg-[#1A365D] hover:text-white text-[#1A365D] transition-colors"
+              className="hidden sm:flex w-10 h-10 rounded-full bg-white/60 border border-white/70 items-center justify-center hover:bg-[#0B3B5C] hover:text-white text-[#0B3B5C] transition-colors"
               data-testid="header-facebook-link"
               title="Facebook"
             >
@@ -102,7 +102,7 @@ export default function Layout({ children }) {
             <Link
               to="/taxi"
               data-testid="header-book-now-btn"
-              className="hidden md:inline-flex btn-shine rounded-full bg-[#FF7F50] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#ff6a34] active:scale-95 items-center gap-1.5 shadow-[0_10px_25px_rgba(255,127,80,0.35)]"
+              className="hidden md:inline-flex btn-shine rounded-full bg-[#E86A3C] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#d55a30] active:scale-95 items-center gap-1.5 shadow-[0_10px_25px_rgba(232,106,60,0.35)]"
             >
               Book Now
             </Link>
@@ -118,17 +118,17 @@ export default function Layout({ children }) {
               <span className="sr-only">Toggle menu</span>
               <span className="relative w-5 h-5">
                 <span
-                  className={`absolute left-0 top-1/2 h-[2px] w-5 bg-[#1A365D] rounded-full transition-all duration-300 ${
+                  className={`absolute left-0 top-1/2 h-[2px] w-5 bg-[#0B3B5C] rounded-full transition-all duration-300 ${
                     open ? "rotate-45" : "-translate-y-1.5"
                   }`}
                 />
                 <span
-                  className={`absolute left-0 top-1/2 h-[2px] w-5 bg-[#1A365D] rounded-full transition-all duration-300 ${
+                  className={`absolute left-0 top-1/2 h-[2px] w-5 bg-[#0B3B5C] rounded-full transition-all duration-300 ${
                     open ? "opacity-0 scale-x-0" : "opacity-100"
                   }`}
                 />
                 <span
-                  className={`absolute left-0 top-1/2 h-[2px] w-5 bg-[#1A365D] rounded-full transition-all duration-300 ${
+                  className={`absolute left-0 top-1/2 h-[2px] w-5 bg-[#0B3B5C] rounded-full transition-all duration-300 ${
                     open ? "-rotate-45" : "translate-y-1.5"
                   }`}
                 />
@@ -163,11 +163,11 @@ export default function Layout({ children }) {
             >
               <div className="p-6 flex items-center justify-between border-b border-[#F1F5F9]">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#00B4D8] to-[#0077B6] flex items-center justify-center text-white">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center text-white">
                     <Waves className="w-4 h-4" />
                   </div>
                   <div className="leading-none">
-                    <div className="serif text-lg text-[#1A365D]">Rox Taxi</div>
+                    <div className="serif text-lg text-[#0B3B5C]">Rox Taxi</div>
                     <div className="text-[10px] tracking-[0.3em] uppercase text-[#64748B]">Nassau · PI</div>
                   </div>
                 </div>
@@ -176,7 +176,7 @@ export default function Layout({ children }) {
                   className="w-9 h-9 rounded-full bg-[#F1F5F9] hover:bg-[#E2E8F0] flex items-center justify-center"
                   data-testid="mobile-menu-close"
                 >
-                  <X className="w-4 h-4 text-[#1A365D]" />
+                  <X className="w-4 h-4 text-[#0B3B5C]" />
                 </button>
               </div>
 
@@ -196,8 +196,8 @@ export default function Layout({ children }) {
                         className={({ isActive }) =>
                           `flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-colors ${
                             isActive
-                              ? "bg-gradient-to-br from-[#1A365D] to-[#0B192C] text-white shadow-[0_10px_25px_rgba(11,25,44,0.15)]"
-                              : "text-[#1A365D] hover:bg-[#F1F5F9]"
+                              ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] text-white shadow-[0_10px_25px_rgba(11,25,44,0.15)]"
+                              : "text-[#0B3B5C] hover:bg-[#F1F5F9]"
                           }`
                         }
                       >
@@ -224,7 +224,7 @@ export default function Layout({ children }) {
                   <Link
                     to="/my-bookings"
                     data-testid="mobile-my-bookings"
-                    className="flex items-center gap-3 rounded-2xl bg-[#00B4D8]/10 border border-[#00B4D8]/20 text-[#00B4D8] px-4 py-3"
+                    className="flex items-center gap-3 rounded-2xl bg-[#D4A94A]/10 border border-[#D4A94A]/20 text-[#D4A94A] px-4 py-3"
                   >
                     <Ticket className="w-4 h-4" /> <span className="font-semibold text-sm">My Bookings</span>
                   </Link>
@@ -235,7 +235,7 @@ export default function Layout({ children }) {
                 <Link
                   to="/taxi"
                   data-testid="mobile-book-now-btn"
-                  className="btn-shine block text-center rounded-full bg-[#FF7F50] text-white px-5 py-3.5 text-sm font-semibold hover:bg-[#ff6a34] shadow-[0_10px_25px_rgba(255,127,80,0.35)]"
+                  className="btn-shine block text-center rounded-full bg-[#E86A3C] text-white px-5 py-3.5 text-sm font-semibold hover:bg-[#d55a30] shadow-[0_10px_25px_rgba(232,106,60,0.35)]"
                 >
                   Book Now
                 </Link>
@@ -243,7 +243,7 @@ export default function Layout({ children }) {
                   <a href={config.facebook_url || "https://www.facebook.com/roxtaxiservice/"} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-2 rounded-full border border-[#E2E8F0] py-2.5 text-sm hover:border-[#1877F2] hover:text-[#1877F2]">
                     <Facebook className="w-4 h-4" /> Facebook
                   </a>
-                  <a href="tel:+12420000000" className="flex-1 flex items-center justify-center gap-2 rounded-full border border-[#E2E8F0] py-2.5 text-sm hover:border-[#00B4D8] hover:text-[#00B4D8]">
+                  <a href="tel:+12420000000" className="flex-1 flex items-center justify-center gap-2 rounded-full border border-[#E2E8F0] py-2.5 text-sm hover:border-[#D4A94A] hover:text-[#D4A94A]">
                     <Phone className="w-4 h-4" /> Call
                   </a>
                 </div>
@@ -259,7 +259,7 @@ export default function Layout({ children }) {
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-16 grid md:grid-cols-4 gap-10">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-[#00B4D8] to-[#0077B6] flex items-center justify-center">
+              <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center">
                 <Waves className="w-4 h-4 text-white" />
               </div>
               <span className="serif text-xl text-white">Rox Taxi & Tours</span>
@@ -271,19 +271,19 @@ export default function Layout({ children }) {
           <div>
             <h4 className="text-xs tracking-[0.3em] uppercase text-white/50 mb-4">Services</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link to="/taxi" className="hover:text-[#00B4D8]">Airport & City Taxi</Link></li>
-              <li><Link to="/tours" className="hover:text-[#00B4D8]">Tours & Excursions</Link></li>
-              <li><Link to="/rentals" className="hover:text-[#00B4D8]">Car Rentals</Link></li>
-              <li><Link to="/track" className="hover:text-[#00B4D8]">Track a Booking</Link></li>
+              <li><Link to="/taxi" className="hover:text-[#D4A94A]">Airport & City Taxi</Link></li>
+              <li><Link to="/tours" className="hover:text-[#D4A94A]">Tours & Excursions</Link></li>
+              <li><Link to="/rentals" className="hover:text-[#D4A94A]">Car Rentals</Link></li>
+              <li><Link to="/track" className="hover:text-[#D4A94A]">Track a Booking</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="text-xs tracking-[0.3em] uppercase text-white/50 mb-4">Contact</h4>
             <ul className="space-y-3 text-sm">
-              <li className="flex items-start gap-2"><Phone className="w-4 h-4 mt-0.5 text-[#00B4D8]" /> +1 (242) 000-0000</li>
-              <li className="flex items-start gap-2"><MapPin className="w-4 h-4 mt-0.5 text-[#00B4D8]" /> Nassau, New Providence, Bahamas</li>
+              <li className="flex items-start gap-2"><Phone className="w-4 h-4 mt-0.5 text-[#D4A94A]" /> +1 (242) 000-0000</li>
+              <li className="flex items-start gap-2"><MapPin className="w-4 h-4 mt-0.5 text-[#D4A94A]" /> Nassau, New Providence, Bahamas</li>
               <li>
-                <a href={config.facebook_url || "https://www.facebook.com/roxtaxiservice/"} target="_blank" rel="noreferrer" data-testid="footer-facebook-link" className="inline-flex items-center gap-2 hover:text-[#00B4D8]">
+                <a href={config.facebook_url || "https://www.facebook.com/roxtaxiservice/"} target="_blank" rel="noreferrer" data-testid="footer-facebook-link" className="inline-flex items-center gap-2 hover:text-[#D4A94A]">
                   <Facebook className="w-4 h-4" /> facebook.com/roxtaxiservice
                 </a>
               </li>
@@ -294,7 +294,7 @@ export default function Layout({ children }) {
             <p className="text-sm text-white/60 leading-relaxed">
               Credit Card, PayPal via Stripe, and Zelle accepted. All online payments are secured.
             </p>
-            <Link to="/admin/login" className="text-xs text-white/40 hover:text-[#00B4D8] mt-4 inline-block" data-testid="footer-admin-link">
+            <Link to="/admin/login" className="text-xs text-white/40 hover:text-[#D4A94A] mt-4 inline-block" data-testid="footer-admin-link">
               Admin
             </Link>
           </div>

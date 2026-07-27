@@ -103,6 +103,34 @@ LUGGAGE_MAX = 10
 EXTRA_PASSENGER_FEE_USD = 5.0
 EXTRA_PASSENGER_THRESHOLD = 3  # 3+ passengers triggers the fee
 
+# Days closed (weekly). Python weekday: Monday=0..Sunday=6. Saturday=5.
+CLOSED_WEEKDAYS = {5}
+CLOSED_APPLIES_TO = {"taxi", "rental"}
+
+
+def _parse_booking_date(s: str) -> datetime:
+    """Best-effort ISO parse of 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:MM' etc."""
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except Exception:
+        return datetime.fromisoformat(s)
+
+
+def _validate_open_day(service_type: str, booking_date: str, days: int = 1):
+    if service_type not in CLOSED_APPLIES_TO:
+        return
+    try:
+        start = _parse_booking_date(booking_date)
+    except Exception:
+        return
+    for offset in range(max(1, int(days or 1))):
+        d = (start + timedelta(days=offset)).date()
+        if d.weekday() in CLOSED_WEEKDAYS:
+            raise HTTPException(
+                400,
+                f"We are closed on Saturdays. Please choose a different date (issue on {d.isoformat()}).",
+            )
+
 
 class BookingStatusUpdate(BaseModel):
     status: str
@@ -362,8 +390,11 @@ async def seed_db():
     # Reseed catalog every startup with the Nassau/PI-focused data (idempotent via upsert-by-id)
     for t in TOURS_SEED:
         await db.tours.update_one({"id": t["id"]}, {"$set": t}, upsert=True)
+    # remove legacy tour ids no longer in seed
+    await db.tours.delete_many({"id": {"$nin": [t["id"] for t in TOURS_SEED]}})
     for s in TAXI_SERVICES:
         await db.taxi_services.update_one({"id": s["id"]}, {"$set": s}, upsert=True)
+    await db.taxi_services.delete_many({"id": {"$nin": [s["id"] for s in TAXI_SERVICES]}})
     for r in RENTALS_SEED:
         await db.rentals.update_one({"id": r["id"]}, {"$set": r}, upsert=True)
     # remove legacy rental IDs no longer in seed
@@ -440,6 +471,7 @@ async def site_config():
 
 @api_router.post("/bookings")
 async def create_booking(req: BookingCreate):
+    _validate_open_day(req.service_type, req.booking_date, req.days or 1)
     booking = req.model_dump()
     booking["id"] = str(uuid.uuid4())[:8].upper()
     booking["status"] = "pending_payment" if req.payment_method == "stripe" else "confirmed"
@@ -482,6 +514,10 @@ async def get_fees():
         "extra_passenger_fee_usd": EXTRA_PASSENGER_FEE_USD,
         "extra_passenger_threshold": EXTRA_PASSENGER_THRESHOLD,
         "passenger_policy": f"A ${EXTRA_PASSENGER_FEE_USD:.0f} group fee applies to taxi bookings with {EXTRA_PASSENGER_THRESHOLD}+ passengers.",
+        "closed_weekdays": sorted(CLOSED_WEEKDAYS),
+        "closed_weekdays_labels": ["Saturday"],
+        "closed_policy": "Taxi service and car rentals are closed on Saturdays.",
+        "closed_applies_to": sorted(CLOSED_APPLIES_TO),
     }
 
 

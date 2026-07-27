@@ -7,8 +7,8 @@ body {
     font-family: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background: #FAF9F6;
-    color: #0B192C;
+    background: #FBF7EF;
+    color: #0B3B5C;
     letter-spacing: -0.01em;
 }
 
@@ -65,7 +65,7 @@ h1, h2, h3, h4 {
         @apply bg-background text-foreground;
     }
     ::selection {
-        background: #00B4D8;
+        background: #D4A94A;
         color: #fff;
     }
 }

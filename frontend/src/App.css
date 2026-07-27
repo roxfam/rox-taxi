@@ -27,6 +27,6 @@
 
 .stepper-line-active {
     height: 100%;
-    background: #00B4D8;
+    background: #D4A94A;
     transition: width 0.5s ease;
 }

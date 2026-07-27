@@ -31,7 +31,7 @@ export default function Home() {
               Nassau · Paradise Island · Exuma
             </span>
             <h1 className="serif text-6xl sm:text-7xl lg:text-8xl leading-[0.9] tracking-tight">
-              Nassau, on your <em className="italic text-[#FFD8B1]">terms</em>.
+              Nassau, on your <em className="italic text-[#F5E1A4]">terms</em>.
             </h1>
             <p className="mt-8 max-w-xl text-lg text-white/85 leading-relaxed">
               Book a taxi, tour or car rental in under a minute. Pay with card, PayPal or Zelle — then watch your ride move from confirmed to arrived, live.
@@ -40,7 +40,7 @@ export default function Home() {
               <Link
                 to="/taxi"
                 data-testid="hero-book-taxi-btn"
-                className="btn-shine rounded-full bg-[#FF7F50] text-white px-7 py-4 text-sm font-semibold hover:bg-[#ff6a34] active:scale-95 flex items-center gap-2"
+                className="btn-shine rounded-full bg-[#E86A3C] text-white px-7 py-4 text-sm font-semibold hover:bg-[#d55a30] active:scale-95 flex items-center gap-2"
               >
                 Book a Taxi <ArrowRight className="w-4 h-4" />
               </Link>
@@ -54,9 +54,9 @@ export default function Home() {
             </div>
 
             <div className="mt-14 flex flex-wrap gap-8 text-sm text-white/80">
-              <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-[#00B4D8]" /> Licensed local drivers</div>
-              <div className="flex items-center gap-2"><Star className="w-4 h-4 text-[#FFD8B1]" /> 4.9 avg guest rating</div>
-              <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-[#00B4D8]" /> 24/7 dispatch</div>
+              <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-[#D4A94A]" /> Licensed local drivers</div>
+              <div className="flex items-center gap-2"><Star className="w-4 h-4 text-[#F5E1A4]" /> 4.9 avg guest rating</div>
+              <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-[#D4A94A]" /> 24/7 dispatch</div>
             </div>
           </motion.div>
 
@@ -68,38 +68,38 @@ export default function Home() {
             className="lg:col-span-5 lg:pt-10"
           >
             <div className="glass rounded-3xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
-              <h3 className="serif text-2xl text-[#1A365D] mb-2">Quick book</h3>
+              <h3 className="serif text-2xl text-[#0B3B5C] mb-2">Quick book</h3>
               <p className="text-sm text-[#64748B] mb-6">Pick a service and get pricing in seconds.</p>
               <div className="grid grid-cols-1 gap-3">
-                <Link to="/taxi" data-testid="quickbook-taxi" className="flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#00B4D8] hover:-translate-y-0.5 transition-transform">
+                <Link to="/taxi" data-testid="quickbook-taxi" className="flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#D4A94A] hover:-translate-y-0.5 transition-transform">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-[#00B4D8]/10 flex items-center justify-center text-[#00B4D8]"><Car className="w-5 h-5" /></div>
+                    <div className="w-11 h-11 rounded-xl bg-[#D4A94A]/10 flex items-center justify-center text-[#D4A94A]"><Car className="w-5 h-5" /></div>
                     <div>
-                      <div className="font-semibold text-[#1A365D]">Taxi & Airport Transfers</div>
+                      <div className="font-semibold text-[#0B3B5C]">Taxi & Airport Transfers</div>
                       <div className="text-xs text-[#64748B]">from $20 · Nassau + Paradise Island</div>
                     </div>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-[#1A365D]" />
+                  <ArrowRight className="w-5 h-5 text-[#0B3B5C]" />
                 </Link>
-                <Link to="/tours" data-testid="quickbook-tours" className="flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#00B4D8] hover:-translate-y-0.5 transition-transform">
+                <Link to="/tours" data-testid="quickbook-tours" className="flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#D4A94A] hover:-translate-y-0.5 transition-transform">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-[#FF7F50]/10 flex items-center justify-center text-[#FF7F50]"><ShipWheel className="w-5 h-5" /></div>
+                    <div className="w-11 h-11 rounded-xl bg-[#E86A3C]/10 flex items-center justify-center text-[#E86A3C]"><ShipWheel className="w-5 h-5" /></div>
                     <div>
-                      <div className="font-semibold text-[#1A365D]">Tours & Excursions</div>
+                      <div className="font-semibold text-[#0B3B5C]">Tours & Excursions</div>
                       <div className="text-xs text-[#64748B]">Swimming Pigs, Blue Lagoon, more</div>
                     </div>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-[#1A365D]" />
+                  <ArrowRight className="w-5 h-5 text-[#0B3B5C]" />
                 </Link>
-                <Link to="/rentals" data-testid="quickbook-rentals" className="flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#00B4D8] hover:-translate-y-0.5 transition-transform">
+                <Link to="/rentals" data-testid="quickbook-rentals" className="flex items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white p-4 hover:border-[#D4A94A] hover:-translate-y-0.5 transition-transform">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-[#1A365D]/10 flex items-center justify-center text-[#1A365D]"><MapPinned className="w-5 h-5" /></div>
+                    <div className="w-11 h-11 rounded-xl bg-[#0B3B5C]/10 flex items-center justify-center text-[#0B3B5C]"><MapPinned className="w-5 h-5" /></div>
                     <div>
-                      <div className="font-semibold text-[#1A365D]">Car Rentals</div>
+                      <div className="font-semibold text-[#0B3B5C]">Car Rentals</div>
                       <div className="text-xs text-[#64748B]">Compact to Mini-Van · from $39/day</div>
                     </div>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-[#1A365D]" />
+                  <ArrowRight className="w-5 h-5 text-[#0B3B5C]" />
                 </Link>
               </div>
             </div>
@@ -115,9 +115,9 @@ export default function Home() {
         <div className="flex items-end justify-between mb-12">
           <div>
             <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Handpicked</span>
-            <h2 className="serif text-5xl sm:text-6xl tracking-tight text-[#1A365D] mt-2">Signature <em className="italic text-[#00B4D8]">excursions</em>.</h2>
+            <h2 className="serif text-5xl sm:text-6xl tracking-tight text-[#0B3B5C] mt-2">Signature <em className="italic text-[#D4A94A]">excursions</em>.</h2>
           </div>
-          <Link to="/tours" className="hidden md:inline text-sm font-semibold text-[#00B4D8] hover:underline">See all tours →</Link>
+          <Link to="/tours" className="hidden md:inline text-sm font-semibold text-[#D4A94A] hover:underline">See all tours →</Link>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {tours.map((t, i) => (
@@ -127,21 +127,21 @@ export default function Home() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: i * 0.08 }}
-              className="group relative overflow-hidden rounded-2xl bg-white border border-[#E2E8F0] hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(0,180,216,0.15)] transition-transform"
+              className="group relative overflow-hidden rounded-2xl bg-white border border-[#E2E8F0] hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(212,169,74,0.15)] transition-transform"
               data-testid={`featured-tour-${t.id}`}
             >
               <div className="aspect-[4/5] overflow-hidden">
                 <img src={t.image_url} alt={t.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
               </div>
               <div className="p-5">
-                <h3 className="serif text-xl text-[#1A365D] leading-snug">{t.name}</h3>
+                <h3 className="serif text-xl text-[#0B3B5C] leading-snug">{t.name}</h3>
                 <div className="mt-2 flex items-center justify-between text-sm">
                   <span className="text-[#64748B] flex items-center gap-1"><Clock className="w-3 h-3" /> {t.duration}</span>
-                  <span className="mono font-semibold text-[#FF7F50]">{money(t.price)}<span className="text-[10px] text-[#64748B]"> /pp</span></span>
+                  <span className="mono font-semibold text-[#E86A3C]">{money(t.price)}<span className="text-[10px] text-[#64748B]"> /pp</span></span>
                 </div>
                 <Link
                   to={`/tours?book=${t.id}`}
-                  className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#1A365D] hover:text-[#00B4D8]"
+                  className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#0B3B5C] hover:text-[#D4A94A]"
                   data-testid={`featured-tour-book-${t.id}`}
                 >
                   Book <ArrowRight className="w-4 h-4" />
@@ -156,8 +156,8 @@ export default function Home() {
       <section className="bg-[#0B192C] text-white py-24" data-testid="how-it-works">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 grid md:grid-cols-2 gap-14 items-center">
           <div>
-            <span className="text-xs tracking-[0.3em] uppercase text-[#00B4D8]">How it works</span>
-            <h2 className="serif text-5xl sm:text-6xl mt-3">Book. Pay. Track. <em className="italic text-[#FF7F50]">Ride.</em></h2>
+            <span className="text-xs tracking-[0.3em] uppercase text-[#D4A94A]">How it works</span>
+            <h2 className="serif text-5xl sm:text-6xl mt-3">Book. Pay. Track. <em className="italic text-[#E86A3C]">Ride.</em></h2>
             <p className="mt-6 text-white/70 max-w-lg leading-relaxed">
               No app to download. Reserve in your browser, get an instant confirmation code, then watch your booking move through every step in real time.
             </p>
@@ -169,7 +169,7 @@ export default function Home() {
               { n: "03", t: "Track your booking", d: "Confirmed → Driver Assigned → En Route → Arrived → Completed." },
             ].map((s) => (
               <div key={s.n} className="glass-dark rounded-2xl p-6 flex gap-5">
-                <div className="serif text-4xl text-[#FF7F50] leading-none">{s.n}</div>
+                <div className="serif text-4xl text-[#E86A3C] leading-none">{s.n}</div>
                 <div>
                   <div className="font-semibold text-lg">{s.t}</div>
                   <p className="text-sm text-white/70 mt-1">{s.d}</p>

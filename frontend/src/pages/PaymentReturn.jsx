@@ -36,10 +36,10 @@ export function PaymentSuccess() {
 
   return (
     <div data-testid="payment-success-page" className="max-w-2xl mx-auto px-6 lg:px-10 py-24 text-center">
-      <div className="mx-auto w-20 h-20 rounded-full bg-[#00B4D8]/10 flex items-center justify-center mb-8">
-        {paid ? <CheckCircle2 className="w-10 h-10 text-[#00B4D8]" /> : <Loader2 className="w-10 h-10 text-[#00B4D8] animate-spin" />}
+      <div className="mx-auto w-20 h-20 rounded-full bg-[#D4A94A]/10 flex items-center justify-center mb-8">
+        {paid ? <CheckCircle2 className="w-10 h-10 text-[#D4A94A]" /> : <Loader2 className="w-10 h-10 text-[#D4A94A] animate-spin" />}
       </div>
-      <h1 className="serif text-5xl text-[#1A365D]">{paid ? "You're all set!" : "Confirming payment…"}</h1>
+      <h1 className="serif text-5xl text-[#0B3B5C]">{paid ? "You're all set!" : "Confirming payment…"}</h1>
       <p className="mt-4 text-[#64748B] leading-relaxed">
         {paid ? "Your booking is confirmed. We've saved your details and your driver will be assigned shortly." : "Hang tight — we're confirming your payment with Stripe."}
       </p>
@@ -48,20 +48,20 @@ export function PaymentSuccess() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Booking code</div>
-              <div className="mono text-3xl text-[#1A365D] mt-1">{booking.id}</div>
+              <div className="mono text-3xl text-[#0B3B5C] mt-1">{booking.id}</div>
             </div>
             <div className="text-right">
               <div className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Total paid</div>
-              <div className="mono text-2xl text-[#FF7F50] font-semibold">{money(booking.total)}</div>
+              <div className="mono text-2xl text-[#E86A3C] font-semibold">{money(booking.total)}</div>
             </div>
           </div>
           <div className="mt-6 text-sm text-[#64748B]">
-            <span className="text-[#1A365D] font-semibold">{booking.item_name}</span> · {new Date(booking.booking_date).toLocaleString()}
+            <span className="text-[#0B3B5C] font-semibold">{booking.item_name}</span> · {new Date(booking.booking_date).toLocaleString()}
           </div>
           <Link
             to={`/track?id=${booking.id}`}
             data-testid="payment-success-track-btn"
-            className="mt-8 inline-flex btn-shine rounded-full bg-[#1A365D] text-white px-6 py-3 text-sm font-semibold"
+            className="mt-8 inline-flex btn-shine rounded-full bg-[#0B3B5C] text-white px-6 py-3 text-sm font-semibold"
           >
             Track your booking →
           </Link>
@@ -76,17 +76,17 @@ export function PaymentCancel() {
   const bookingId = params.get("booking_id");
   return (
     <div data-testid="payment-cancel-page" className="max-w-2xl mx-auto px-6 lg:px-10 py-24 text-center">
-      <div className="mx-auto w-20 h-20 rounded-full bg-[#FF7F50]/10 flex items-center justify-center mb-8">
-        <XCircle className="w-10 h-10 text-[#FF7F50]" />
+      <div className="mx-auto w-20 h-20 rounded-full bg-[#E86A3C]/10 flex items-center justify-center mb-8">
+        <XCircle className="w-10 h-10 text-[#E86A3C]" />
       </div>
-      <h1 className="serif text-5xl text-[#1A365D]">Payment cancelled</h1>
+      <h1 className="serif text-5xl text-[#0B3B5C]">Payment cancelled</h1>
       <p className="mt-4 text-[#64748B]">Your booking wasn't charged. Feel free to try again or switch to Zelle.</p>
       {bookingId && (
-        <p className="mt-4 text-sm text-[#64748B]">Booking reference: <span className="mono text-[#1A365D]">{bookingId}</span></p>
+        <p className="mt-4 text-sm text-[#64748B]">Booking reference: <span className="mono text-[#0B3B5C]">{bookingId}</span></p>
       )}
       <div className="mt-8 flex justify-center gap-3">
         <Link to="/taxi" className="rounded-full border border-[#E2E8F0] px-5 py-2.5 text-sm">Back to services</Link>
-        {bookingId && <Link to={`/track?id=${bookingId}`} className="rounded-full bg-[#1A365D] text-white px-5 py-2.5 text-sm">Track booking</Link>}
+        {bookingId && <Link to={`/track?id=${bookingId}`} className="rounded-full bg-[#0B3B5C] text-white px-5 py-2.5 text-sm">Track booking</Link>}
       </div>
     </div>
   );

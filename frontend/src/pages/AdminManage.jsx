@@ -23,11 +23,17 @@ export default function AdminManage() {
     <div className="min-h-screen bg-[#F1F5F9]" data-testid="admin-manage">
       <header className="bg-white border-b border-[#E2E8F0] sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-md bg-[#1A365D] text-white flex items-center justify-center text-xs font-bold">RX</div>
-            <span className="font-semibold text-[#1A365D]">Manage catalog</span>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-md bg-[#0B3B5C] text-white flex items-center justify-center text-xs font-bold">RX</div>
+              <span className="font-semibold text-[#0B3B5C]">Manage catalog</span>
+            </div>
+            <nav className="hidden sm:flex items-center gap-1 text-sm">
+              <button onClick={() => nav("/admin")} className="px-3 py-1.5 rounded-md hover:bg-[#F1F5F9] text-[#64748B]" data-testid="admin-nav-bookings">Bookings</button>
+              <button onClick={() => nav("/admin/manage")} className="px-3 py-1.5 rounded-md bg-[#0B3B5C] text-white" data-testid="admin-nav-manage">Manage catalog</button>
+            </nav>
           </div>
-          <button onClick={() => nav("/admin")} className="text-sm text-[#64748B] hover:text-[#1A365D]" data-testid="admin-manage-back">← Bookings</button>
+          <button onClick={() => nav("/admin")} className="text-sm text-[#64748B] hover:text-[#0B3B5C]" data-testid="admin-manage-back">← Dashboard</button>
         </div>
       </header>
 
@@ -38,7 +44,7 @@ export default function AdminManage() {
               key={t.key}
               onClick={() => setTab(t.key)}
               data-testid={`admin-tab-${t.key}`}
-              className={`px-4 py-2 rounded-md text-sm ${tab === t.key ? "bg-[#1A365D] text-white" : "bg-white border border-[#E2E8F0] hover:border-[#1A365D]"}`}
+              className={`px-4 py-2 rounded-md text-sm ${tab === t.key ? "bg-[#0B3B5C] text-white" : "bg-white border border-[#E2E8F0] hover:border-[#0B3B5C]"}`}
             >
               {t.label}
             </button>
@@ -78,7 +84,7 @@ function CatalogPanel({ kind }) {
         <button
           onClick={() => setEditing({ new: true, name: "", description: "", price: 0, image_url: "", active: true })}
           data-testid="admin-add-item-btn"
-          className="inline-flex items-center gap-2 rounded-md bg-[#1A365D] text-white px-3 py-2 text-sm hover:bg-[#132a4a]"
+          className="inline-flex items-center gap-2 rounded-md bg-[#0B3B5C] text-white px-3 py-2 text-sm hover:bg-[#132a4a]"
         >
           <Plus className="w-4 h-4" /> Add
         </button>
@@ -88,10 +94,10 @@ function CatalogPanel({ kind }) {
           <div key={it.id} className="p-4 flex items-center gap-4" data-testid={`admin-item-${it.id}`}>
             {it.image_url && <img src={it.image_url} className="w-16 h-16 rounded-lg object-cover" alt="" />}
             <div className="flex-1">
-              <div className="font-semibold text-[#1A365D]">{it.name}</div>
+              <div className="font-semibold text-[#0B3B5C]">{it.name}</div>
               <div className="text-xs text-[#64748B] mt-0.5 line-clamp-1">{it.description}</div>
               <div className="mt-1 flex gap-3 text-xs text-[#64748B]">
-                <span className="mono text-[#FF7F50] font-semibold">{money(it.price)}</span>
+                <span className="mono text-[#E86A3C] font-semibold">{money(it.price)}</span>
                 {it.duration && <span>· {it.duration}</span>}
                 {it.seats && <span>· {it.seats} seats</span>}
                 {it.active === false && <span className="text-red-500">· inactive</span>}
@@ -139,7 +145,7 @@ function EditModal({ kind, initial, onClose, onSaved }) {
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl w-full max-w-lg p-6 space-y-3">
         <div className="flex justify-between items-center">
-          <h3 className="font-semibold text-[#1A365D]">{initial.new ? "Add item" : "Edit item"}</h3>
+          <h3 className="font-semibold text-[#0B3B5C]">{initial.new ? "Add item" : "Edit item"}</h3>
           <button onClick={onClose} className="p-2 rounded-md hover:bg-[#F1F5F9]"><X className="w-4 h-4" /></button>
         </div>
         <F l="Name" v={form.name} on={(v) => setForm({ ...form, name: v })} testid="edit-name" />
@@ -156,7 +162,7 @@ function EditModal({ kind, initial, onClose, onSaved }) {
         </label>
         <div className="flex justify-end gap-2 pt-3">
           <button onClick={onClose} className="rounded-md border border-[#E2E8F0] px-4 py-2 text-sm">Cancel</button>
-          <button onClick={save} disabled={saving} data-testid="edit-save" className="rounded-md bg-[#1A365D] text-white px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
+          <button onClick={save} disabled={saving} data-testid="edit-save" className="rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
             <Save className="w-4 h-4" /> Save
           </button>
         </div>
@@ -166,7 +172,7 @@ function EditModal({ kind, initial, onClose, onSaved }) {
 }
 
 function F({ l, v, on, type = "text", textarea, testid }) {
-  const props = { value: v, onChange: (e) => on(e.target.value), "data-testid": testid, className: "w-full rounded-md border border-[#E2E8F0] px-3 py-2 text-sm focus:border-[#00B4D8] focus:outline-none" };
+  const props = { value: v, onChange: (e) => on(e.target.value), "data-testid": testid, className: "w-full rounded-md border border-[#E2E8F0] px-3 py-2 text-sm focus:border-[#D4A94A] focus:outline-none" };
   return (
     <div>
       <label className="block text-xs uppercase tracking-widest text-[#64748B] mb-1">{l}</label>
@@ -192,13 +198,13 @@ function SiteConfigPanel() {
 
   return (
     <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 max-w-xl">
-      <div className="flex items-center gap-2 mb-4"><Settings className="w-4 h-4 text-[#1A365D]" /><h3 className="font-semibold text-[#1A365D]">Site content</h3></div>
+      <div className="flex items-center gap-2 mb-4"><Settings className="w-4 h-4 text-[#0B3B5C]" /><h3 className="font-semibold text-[#0B3B5C]">Site content</h3></div>
       <div className="space-y-3">
         <F l="Facebook page URL" v={cfg.facebook_url || ""} on={(v) => setCfg({ ...cfg, facebook_url: v })} testid="site-fb" />
         <F l="Zelle email" v={cfg.zelle_email || ""} on={(v) => setCfg({ ...cfg, zelle_email: v })} testid="site-zelle-email" />
         <F l="Zelle phone" v={cfg.zelle_phone || ""} on={(v) => setCfg({ ...cfg, zelle_phone: v })} testid="site-zelle-phone" />
         <F l="Contact phone" v={cfg.phone || ""} on={(v) => setCfg({ ...cfg, phone: v })} testid="site-phone" />
-        <button onClick={save} disabled={saving} data-testid="site-save" className="mt-2 rounded-md bg-[#1A365D] text-white px-4 py-2 text-sm">Save</button>
+        <button onClick={save} disabled={saving} data-testid="site-save" className="mt-2 rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm">Save</button>
       </div>
     </div>
   );

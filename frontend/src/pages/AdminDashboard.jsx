@@ -61,9 +61,15 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-[#F1F5F9]" data-testid="admin-dashboard">
       <header className="bg-white border-b border-[#E2E8F0] sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-md bg-[#1A365D] text-white flex items-center justify-center text-xs font-bold">RX</div>
-            <span className="font-semibold text-[#1A365D]">Admin Console</span>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-md bg-[#0B3B5C] text-white flex items-center justify-center text-xs font-bold">RX</div>
+              <span className="font-semibold text-[#0B3B5C]">Admin Console</span>
+            </div>
+            <nav className="hidden sm:flex items-center gap-1 text-sm">
+              <button onClick={() => nav("/admin")} className="px-3 py-1.5 rounded-md bg-[#0B3B5C] text-white" data-testid="admin-nav-bookings">Bookings</button>
+              <button onClick={() => nav("/admin/manage")} className="px-3 py-1.5 rounded-md hover:bg-[#F1F5F9] text-[#64748B]" data-testid="admin-nav-manage">Manage catalog</button>
+            </nav>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={load} className="p-2 rounded-md hover:bg-[#F1F5F9]" data-testid="admin-refresh"><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></button>
@@ -74,17 +80,17 @@ export default function AdminDashboard() {
 
       <div className="max-w-7xl mx-auto px-6 lg:px-10 py-10">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4" data-testid="admin-stats">
-          <Stat icon={<ClipboardList />} label="Total bookings" value={stats.total} tint="#1A365D" />
-          <Stat icon={<DollarSign />} label="Paid revenue" value={money(stats.revenue)} tint="#00B4D8" />
-          <Stat icon={<Timer />} label="Pending / Confirmed" value={stats.pending} tint="#FF7F50" />
+          <Stat icon={<ClipboardList />} label="Total bookings" value={stats.total} tint="#0B3B5C" />
+          <Stat icon={<DollarSign />} label="Paid revenue" value={money(stats.revenue)} tint="#D4A94A" />
+          <Stat icon={<Timer />} label="Pending / Confirmed" value={stats.pending} tint="#E86A3C" />
           <Stat icon={<PlayCircle />} label="En route" value={stats.active} tint="#059669" />
         </div>
 
         <div className="mt-10 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">
-            <button onClick={() => setFilter("all")} className={`text-xs px-3 py-1.5 rounded-md ${filter === "all" ? "bg-[#1A365D] text-white" : "hover:bg-[#F1F5F9]"}`} data-testid="filter-all">All</button>
+            <button onClick={() => setFilter("all")} className={`text-xs px-3 py-1.5 rounded-md ${filter === "all" ? "bg-[#0B3B5C] text-white" : "hover:bg-[#F1F5F9]"}`} data-testid="filter-all">All</button>
             {STATUSES.map((s) => (
-              <button key={s} onClick={() => setFilter(s)} className={`text-xs px-3 py-1.5 rounded-md ${filter === s ? "bg-[#1A365D] text-white" : "hover:bg-[#F1F5F9]"}`} data-testid={`filter-${s}`}>
+              <button key={s} onClick={() => setFilter(s)} className={`text-xs px-3 py-1.5 rounded-md ${filter === s ? "bg-[#0B3B5C] text-white" : "hover:bg-[#F1F5F9]"}`} data-testid={`filter-${s}`}>
                 {s.replace("_", " ")}
               </button>
             ))}
@@ -105,19 +111,19 @@ export default function AdminDashboard() {
               <tbody>
                 {filtered.map((b) => (
                   <tr key={b.id} className="border-t border-[#E2E8F0] hover:bg-[#F8FAFC]" data-testid={`admin-row-${b.id}`}>
-                    <td className="px-4 py-3 mono text-[#1A365D] font-semibold">{b.id}</td>
+                    <td className="px-4 py-3 mono text-[#0B3B5C] font-semibold">{b.id}</td>
                     <td className="px-4 py-3">
-                      <div className="text-[#1A365D] font-medium">{b.customer_name}</div>
+                      <div className="text-[#0B3B5C] font-medium">{b.customer_name}</div>
                       <div className="text-xs text-[#64748B]">{b.customer_email}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-[#1A365D]">{b.item_name}</div>
+                      <div className="text-[#0B3B5C]">{b.item_name}</div>
                       <div className="text-xs text-[#64748B]">{b.service_type}</div>
                     </td>
                     <td className="px-4 py-3 text-[#64748B]">{new Date(b.booking_date).toLocaleString()}</td>
-                    <td className="px-4 py-3 mono text-[#FF7F50] font-semibold">{money(b.total)}</td>
+                    <td className="px-4 py-3 mono text-[#E86A3C] font-semibold">{money(b.total)}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded ${b.payment_status === "paid" ? "bg-[#00B4D8]/10 text-[#00B4D8]" : "bg-[#FF7F50]/10 text-[#FF7F50]"}`}>{b.payment_method} · {b.payment_status}</span>
+                      <span className={`text-xs px-2 py-1 rounded ${b.payment_status === "paid" ? "bg-[#D4A94A]/10 text-[#D4A94A]" : "bg-[#E86A3C]/10 text-[#E86A3C]"}`}>{b.payment_method} · {b.payment_status}</span>
                     </td>
                     <td className="px-4 py-3">
                       <select
@@ -151,7 +157,7 @@ function Stat({ icon, label, value, tint }) {
       </div>
       <div>
         <div className="text-xs uppercase tracking-widest text-[#64748B]">{label}</div>
-        <div className="serif text-2xl text-[#1A365D] mt-0.5">{value}</div>
+        <div className="serif text-2xl text-[#0B3B5C] mt-0.5">{value}</div>
       </div>
     </div>
   );
