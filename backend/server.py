@@ -144,6 +144,11 @@ class BookingStatusUpdate(BaseModel):
     status: str
 
 
+class DepositUpdate(BaseModel):
+    status: str  # 'released' | 'forfeited' | 'held'
+    reason: Optional[str] = None
+
+
 class CheckoutRequest(BaseModel):
     booking_id: str
     origin_url: str
@@ -725,6 +730,37 @@ async def admin_update_status(booking_id: str, req: BookingStatusUpdate, _: str 
     return clean(doc)
 
 
+@api_router.patch("/admin/bookings/{booking_id}/deposit")
+async def admin_update_deposit(booking_id: str, req: DepositUpdate, admin_email: str = Depends(require_admin)):
+    """Release the deposit back to the customer, or forfeit it (damage/late/etc.)."""
+    valid = {"held", "released", "forfeited"}
+    if req.status not in valid:
+        raise HTTPException(422, f"status must be one of {sorted(valid)}")
+    doc = await db.bookings.find_one({"id": booking_id.upper()})
+    if not doc:
+        raise HTTPException(404, "Booking not found")
+    if not doc.get("deposit_amount"):
+        raise HTTPException(400, "This booking has no security deposit")
+
+    now = now_iso()
+    update: Dict[str, Any] = {
+        "deposit_status": req.status,
+        "deposit_updated_at": now,
+        "deposit_updated_by": admin_email,
+        "updated_at": now,
+    }
+    if req.reason:
+        update["deposit_reason"] = req.reason
+    if req.status == "released":
+        update["deposit_released_at"] = now
+    elif req.status == "forfeited":
+        update["deposit_forfeited_at"] = now
+
+    await db.bookings.update_one({"id": booking_id.upper()}, {"$set": update})
+    doc = await db.bookings.find_one({"id": booking_id.upper()})
+    return clean(doc)
+
+
 @api_router.get("/admin/stats")
 async def admin_stats(_: str = Depends(require_admin)):
     total = await db.bookings.count_documents({})
@@ -737,7 +773,29 @@ async def admin_stats(_: str = Depends(require_admin)):
     ])
     revenue_docs = await revenue_cursor.to_list(1)
     revenue = revenue_docs[0]["sum"] if revenue_docs else 0
-    return {"total": total, "paid": paid, "pending": pending, "active": active, "revenue": revenue}
+
+    # Deposit stats — rentals only
+    deposits_held = await db.bookings.count_documents({"deposit_status": "held", "deposit_amount": {"$gt": 0}})
+    deposits_released = await db.bookings.count_documents({"deposit_status": "released"})
+    deposits_forfeited = await db.bookings.count_documents({"deposit_status": "forfeited"})
+    held_cursor = db.bookings.aggregate([
+        {"$match": {"deposit_status": "held", "deposit_amount": {"$gt": 0}}},
+        {"$group": {"_id": None, "sum": {"$sum": "$deposit_amount"}}},
+    ])
+    held_docs = await held_cursor.to_list(1)
+    deposits_held_amount = held_docs[0]["sum"] if held_docs else 0
+
+    return {
+        "total": total,
+        "paid": paid,
+        "pending": pending,
+        "active": active,
+        "revenue": revenue,
+        "deposits_held": deposits_held,
+        "deposits_released": deposits_released,
+        "deposits_forfeited": deposits_forfeited,
+        "deposits_held_amount": deposits_held_amount,
+    }
 
 
 # ---------------- Group & Wedding inquiries ----------------
