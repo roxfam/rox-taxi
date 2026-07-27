@@ -282,7 +282,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     active={payMethod === "paypal_checkout"}
                     onClick={() => setPayMethod("paypal_checkout")}
                     icon={<PayPalGlyph />}
-                    title={`PayPal Checkout${paypalCfg.mode === "sandbox" ? " (sandbox)" : ""}`}
+                    title={paypalCfg.mode === "live" ? "PayPal Checkout" : `PayPal Checkout (${paypalCfg.mode})`}
                     desc="Pay in seconds with PayPal Smart Buttons — no redirect. Log in, approve and you're back on this page."
                     testid="pay-method-paypal-checkout"
                   />
