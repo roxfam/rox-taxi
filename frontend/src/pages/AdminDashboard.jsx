@@ -197,10 +197,13 @@ export default function AdminDashboard() {
                             {dstatus !== "held" && (b.deposit_reason || b.deposit_updated_at) && (
                               <div className="mt-1 text-[10px] text-[#64748B] max-w-[220px]">
                                 {b.deposit_updated_at && <div>{new Date(b.deposit_updated_at).toLocaleDateString()}</div>}
-                                {b.deposit_reason && <div className="italic truncate" title={b.deposit_reason}>"{b.deposit_reason}"</div>}
-                                {dstatus === "held" && (
-                                  <button onClick={() => setDepositModal({ booking: b, action: "held" })} className="text-[10px] text-[#0B3B5C] underline mt-1" data-testid={`admin-reset-deposit-${b.id}`}>Reset to held</button>
+                                {b.deposit_refund_provider && (
+                                  <div className={b.deposit_refund_status === "succeeded" ? "text-[#059669] font-semibold" : "text-[#DC2626]"} data-testid={`admin-deposit-refund-${b.id}`}>
+                                    Refund via {b.deposit_refund_provider}: {b.deposit_refund_status}
+                                    {b.deposit_refund_id && <span className="block mono text-[9px] text-[#94a3b8]">{b.deposit_refund_id}</span>}
+                                  </div>
                                 )}
+                                {b.deposit_reason && <div className="italic truncate" title={b.deposit_reason}>"{b.deposit_reason}"</div>}
                               </div>
                             )}
                           </div>
@@ -248,8 +251,12 @@ export default function AdminDashboard() {
 function DepositActionModal({ booking, action, onClose, onDone }) {
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const [autoRefund, setAutoRefund] = useState(true);
   const isRelease = action === "released";
   const meta = DEPOSIT_META[action] || DEPOSIT_META.held;
+  const canAutoRefund = booking.payment_status === "paid" && (
+    booking.paypal_capture_id || ["stripe", "card"].includes((booking.payment_method || "").toLowerCase())
+  );
 
   const submit = async () => {
     if (!isRelease && !reason.trim()) {
@@ -258,8 +265,23 @@ function DepositActionModal({ booking, action, onClose, onDone }) {
     }
     setSaving(true);
     try {
-      await api.patch(`/admin/bookings/${booking.id}/deposit`, { status: action, reason: reason.trim() || null });
-      toast.success(isRelease ? `Deposit released — refund $${booking.deposit_amount} to ${booking.customer_name}` : `Deposit forfeited — $${booking.deposit_amount} retained`);
+      const { data } = await api.patch(`/admin/bookings/${booking.id}/deposit`, {
+        status: action,
+        reason: reason.trim() || null,
+        auto_refund: isRelease ? autoRefund : false,
+      });
+      if (isRelease && autoRefund) {
+        const info = data?.refund_info || {};
+        if (info.refunded) {
+          toast.success(`Deposit released — $${booking.deposit_amount} refunded via ${info.provider} (${info.refund_id || info.status})`);
+        } else if (info.error) {
+          toast.warning(`Deposit marked released — but auto-refund failed: ${info.error}. Refund manually.`);
+        } else {
+          toast.success(`Deposit released — $${booking.deposit_amount} recorded (manual refund needed for ${booking.payment_method}).`);
+        }
+      } else {
+        toast.success(isRelease ? `Deposit released — refund $${booking.deposit_amount} to ${booking.customer_name}` : `Deposit forfeited — $${booking.deposit_amount} retained`);
+      }
       onDone();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to update deposit");
@@ -288,12 +310,35 @@ function DepositActionModal({ booking, action, onClose, onDone }) {
           <Info className="w-4 h-4 text-[#0B3B5C] mt-0.5 shrink-0" />
           <div className="text-xs text-[#64748B] leading-relaxed">
             {isRelease ? (
-              <>Mark the <span className="mono font-semibold text-[#059669]">${booking.deposit_amount}</span> deposit as refunded to <strong>{booking.customer_name}</strong>. This records the action — you must still issue the refund manually via Stripe / PayPal / Zelle.</>
+              <>Mark the <span className="mono font-semibold text-[#059669]">${booking.deposit_amount}</span> deposit as refunded to <strong>{booking.customer_name}</strong>. {canAutoRefund ? "Auto-refund will attempt to move the money back to their original payment method." : "This is a manual payment method — record only; issue the refund by hand."}</>
             ) : (
               <>Retain the <span className="mono font-semibold text-[#DC2626]">${booking.deposit_amount}</span> deposit for <strong>{booking.customer_name}</strong> due to damage, late return, or an unpaid balance. A reason is required and stored on the booking.</>
             )}
           </div>
         </div>
+
+        {isRelease && (
+          <label className={`mt-4 flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${autoRefund ? "border-[#059669]/40 bg-[#059669]/6" : "border-[#E2E8F0] bg-white hover:bg-[#F8FAFC]"} ${!canAutoRefund ? "opacity-60 cursor-not-allowed" : ""}`} data-testid="auto-refund-toggle">
+            <input
+              type="checkbox"
+              checked={autoRefund && canAutoRefund}
+              disabled={!canAutoRefund}
+              onChange={(e) => setAutoRefund(e.target.checked)}
+              className="mt-1 accent-[#059669]"
+              data-testid="auto-refund-checkbox"
+            />
+            <span className="flex-1">
+              <span className="block text-sm font-semibold text-[#0B3B5C]">Auto-refund ${booking.deposit_amount} to customer</span>
+              <span className="block text-[11px] text-[#64748B] mt-0.5">
+                {canAutoRefund
+                  ? booking.paypal_capture_id
+                    ? "Refund will be issued via PayPal REST API using the original capture."
+                    : "Refund will be issued via Stripe using the original payment intent."
+                  : `Not available for ${booking.payment_method} — refund manually.`}
+              </span>
+            </span>
+          </label>
+        )}
 
         <label className="block mt-4">
           <span className="text-xs uppercase tracking-widest text-[#64748B] font-semibold">
@@ -317,7 +362,7 @@ function DepositActionModal({ booking, action, onClose, onDone }) {
             className={`btn-shine rounded-full px-5 py-2 text-sm font-semibold text-white active:scale-95 disabled:opacity-60 ${isRelease ? "bg-[#059669] hover:bg-[#047857]" : "bg-[#DC2626] hover:bg-[#B91C1C]"}`}
             data-testid="deposit-confirm-btn"
           >
-            {saving ? "Saving..." : isRelease ? "Release $" + booking.deposit_amount : "Forfeit $" + booking.deposit_amount}
+            {saving ? "Processing..." : isRelease ? (autoRefund && canAutoRefund ? "Release & Refund $" + booking.deposit_amount : "Release $" + booking.deposit_amount) : "Forfeit $" + booking.deposit_amount}
           </button>
         </div>
       </div>

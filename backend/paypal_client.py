@@ -136,6 +136,38 @@ async def get_order(order_id: str) -> Dict[str, Any]:
     return r.json()
 
 
+async def refund_capture(capture_id: str, amount: float, currency: str = "USD", note: str = "") -> Dict[str, Any]:
+    """Refund a completed capture (partial or full). Returns PayPal refund object with `id`, `status`."""
+    token = await _access_token()
+    body: Dict[str, Any] = {
+        "amount": {"value": f"{float(amount):.2f}", "currency_code": currency},
+    }
+    if note:
+        body["note_to_payer"] = note[:255]
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.post(
+            f"{_base_url()}/v2/payments/captures/{capture_id}/refund",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json=body,
+        )
+    if r.status_code >= 400:
+        logger.error("PayPal refund failed: %s %s", r.status_code, r.text)
+        r.raise_for_status()
+    return r.json()
+
+
+def extract_capture_id(capture_response: Dict[str, Any]) -> Optional[str]:
+    """Given the response from capture_order(), extract the first capture id."""
+    try:
+        return capture_response["purchase_units"][0]["payments"]["captures"][0]["id"]
+    except (KeyError, IndexError, TypeError):
+        return None
+
+
 def public_config() -> Dict[str, Any]:
     """Safe subset for the frontend (client_id + mode). Never expose the secret."""
     mode = (os.environ.get("PAYPAL_MODE") or "sandbox").lower()

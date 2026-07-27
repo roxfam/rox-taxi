@@ -147,6 +147,7 @@ class BookingStatusUpdate(BaseModel):
 class DepositUpdate(BaseModel):
     status: str  # 'released' | 'forfeited' | 'held'
     reason: Optional[str] = None
+    auto_refund: bool = True  # attempt automatic refund via Stripe/PayPal on release
 
 
 class CheckoutRequest(BaseModel):
@@ -732,7 +733,13 @@ async def admin_update_status(booking_id: str, req: BookingStatusUpdate, _: str 
 
 @api_router.patch("/admin/bookings/{booking_id}/deposit")
 async def admin_update_deposit(booking_id: str, req: DepositUpdate, admin_email: str = Depends(require_admin)):
-    """Release the deposit back to the customer, or forfeit it (damage/late/etc.)."""
+    """Release the deposit back to the customer, or forfeit it (damage/late/etc.).
+
+    If ``auto_refund=True`` and the deposit is being released, we try to refund
+    the deposit amount via the same payment provider used for the original booking
+    (Stripe for card payments, PayPal for PayPal Checkout). Zelle / PayPal.me
+    stay manual. The refund result is stored on the booking regardless of outcome.
+    """
     valid = {"held", "released", "forfeited"}
     if req.status not in valid:
         raise HTTPException(422, f"status must be one of {sorted(valid)}")
@@ -756,9 +763,26 @@ async def admin_update_deposit(booking_id: str, req: DepositUpdate, admin_email:
     elif req.status == "forfeited":
         update["deposit_forfeited_at"] = now
 
+    refund_info: Dict[str, Any] = {}
+    if req.status == "released" and req.auto_refund:
+        refund_info = await _attempt_deposit_refund(
+            booking=doc,
+            amount=float(doc["deposit_amount"]),
+            reason=req.reason or "Deposit released — vehicle returned in good condition",
+        )
+        update["deposit_refund_provider"] = refund_info.get("provider")
+        update["deposit_refund_status"] = "succeeded" if refund_info.get("refunded") else "failed"
+        if refund_info.get("refund_id"):
+            update["deposit_refund_id"] = refund_info["refund_id"]
+        if refund_info.get("error"):
+            update["deposit_refund_error"] = refund_info["error"]
+
     await db.bookings.update_one({"id": booking_id.upper()}, {"$set": update})
     doc = await db.bookings.find_one({"id": booking_id.upper()})
-    return clean(doc)
+    result = clean(doc)
+    if refund_info:
+        result["refund_info"] = refund_info
+    return result
 
 
 @api_router.get("/admin/stats")
@@ -1411,7 +1435,17 @@ async def paypal_capture_order(order_id: str):
         )
         raise HTTPException(402, f"PayPal capture not completed (status={status})")
 
-    # Payment succeeded — mark booking paid + notify
+    # Payment succeeded — save capture_id (needed for refunds), mark booking paid + notify
+    capture_id = paypal_client.extract_capture_id(result)
+    await db.payment_transactions.update_one(
+        {"session_id": order_id},
+        {"$set": {"paypal_capture_id": capture_id, "updated_at": now_iso()}},
+    )
+    if capture_id:
+        await db.bookings.update_one(
+            {"id": tx["booking_id"]},
+            {"$set": {"paypal_capture_id": capture_id, "payment_provider": "paypal"}},
+        )
     await _mark_paid(order_id, tx["booking_id"])
     booking = await db.bookings.find_one({"id": tx["booking_id"]}, {"_id": 0})
     return {
@@ -1421,6 +1455,96 @@ async def paypal_capture_order(order_id: str):
         "payment_status": "paid",
         "booking": clean(dict(booking)) if booking else None,
     }
+
+
+# ---------------- Refund helpers (Stripe REST + PayPal REST) ----------------
+
+
+async def _stripe_refund(payment_intent: str, amount_cents: int, reason: str) -> Dict[str, Any]:
+    """Issue a Stripe refund via REST API (works with test + live keys)."""
+    async with httpx.AsyncClient(timeout=30.0) as _client:
+        r = await _client.post(
+            "https://api.stripe.com/v1/refunds",
+            auth=(STRIPE_API_KEY, ""),
+            data={
+                "payment_intent": payment_intent,
+                "amount": str(amount_cents),
+                "reason": "requested_by_customer",
+                "metadata[deposit_reason]": (reason or "Deposit released")[:500],
+            },
+        )
+    if r.status_code >= 400:
+        raise RuntimeError(f"Stripe refund failed ({r.status_code}): {r.text}")
+    return r.json()
+
+
+async def _resolve_stripe_payment_intent(booking_id: str) -> Optional[str]:
+    """Look up the payment_intent from payment_transactions; retrieve from Stripe if not cached."""
+    tx = await db.payment_transactions.find_one({"booking_id": booking_id, "provider": {"$ne": "paypal"}})
+    if not tx:
+        tx = await db.payment_transactions.find_one({"booking_id": booking_id})
+    if not tx:
+        return None
+    if tx.get("stripe_payment_intent"):
+        return tx["stripe_payment_intent"]
+
+    session_id = tx.get("session_id")
+    if not session_id or tx.get("provider") == "paypal":
+        return None
+
+    async with httpx.AsyncClient(timeout=20.0) as _client:
+        r = await _client.get(
+            f"https://api.stripe.com/v1/checkout/sessions/{session_id}",
+            auth=(STRIPE_API_KEY, ""),
+        )
+    if r.status_code >= 400:
+        logging.warning("Stripe session lookup failed: %s %s", r.status_code, r.text)
+        return None
+    pi = r.json().get("payment_intent")
+    if pi:
+        await db.payment_transactions.update_one(
+            {"_id": tx["_id"]}, {"$set": {"stripe_payment_intent": pi}},
+        )
+    return pi
+
+
+async def _attempt_deposit_refund(booking: Dict[str, Any], amount: float, reason: str) -> Dict[str, Any]:
+    """Refund `amount` USD via the same payment provider used for the original booking."""
+    if booking.get("payment_status") != "paid":
+        return {"refunded": False, "provider": None, "error": "Booking not paid — no funds to refund"}
+
+    if booking.get("paypal_capture_id"):
+        try:
+            refund = await paypal_client.refund_capture(
+                capture_id=booking["paypal_capture_id"],
+                amount=amount,
+                note=f"Deposit released: {reason[:200]}",
+            )
+            return {
+                "refunded": (refund.get("status", "").upper() == "COMPLETED"),
+                "refund_id": refund.get("id"),
+                "provider": "paypal",
+                "status": refund.get("status"),
+            }
+        except Exception as e:  # noqa: BLE001
+            logging.exception("PayPal deposit refund failed")
+            return {"refunded": False, "provider": "paypal", "error": str(e)}
+
+    pi = await _resolve_stripe_payment_intent(booking["id"])
+    if pi:
+        try:
+            refund = await _stripe_refund(pi, int(round(amount * 100)), reason)
+            return {
+                "refunded": (refund.get("status") == "succeeded"),
+                "refund_id": refund.get("id"),
+                "provider": "stripe",
+                "status": refund.get("status"),
+            }
+        except Exception as e:  # noqa: BLE001
+            logging.exception("Stripe deposit refund failed")
+            return {"refunded": False, "provider": "stripe", "error": str(e)}
+
+    return {"refunded": False, "provider": booking.get("payment_method", "manual"), "error": "Manual payment method — issue refund by hand"}
 
 
 # ---------------- Live Chat (SSE) ----------------
