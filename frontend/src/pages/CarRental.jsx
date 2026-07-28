@@ -1,13 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
-import { Users, ArrowRight, CalendarX, Info } from "lucide-react";
+import { Users, ArrowRight, CalendarX, Info, ArrowUpDown } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
+
+// Sort options mirror the /tours page so the shopper's mental model carries
+// across catalog pages. Price ↑ is the newly-requested default entry point
+// for budget-conscious renters comparing cars.
+const SORTS = [
+  { key: "default",    label: "Default",    cmp: null },
+  { key: "price-asc",  label: "Price ↑",    cmp: (a, b) => a.price - b.price },
+  { key: "price-desc", label: "Price ↓",    cmp: (a, b) => b.price - a.price },
+  { key: "seats",      label: "Most seats", cmp: (a, b) => (b.seats || 0) - (a.seats || 0) },
+];
 
 export default function CarRental() {
   const [rentals, setRentals] = useState([]);
   const [selected, setSelected] = useState(null);
   const [availability, setAvailability] = useState({});
+  const [sortKey, setSortKey] = useState("default");
 
   useEffect(() => {
     (async () => {
@@ -20,6 +31,12 @@ export default function CarRental() {
       setAvailability(Object.fromEntries(results));
     })();
   }, []);
+
+  // Client-side sort keeps the network trip to a single /rentals call.
+  const sortedRentals = useMemo(() => {
+    const cmp = SORTS.find((s) => s.key === sortKey)?.cmp;
+    return cmp ? [...rentals].sort(cmp) : rentals;
+  }, [rentals, sortKey]);
 
   return (
     <div data-testid="rentals-page">
@@ -42,11 +59,39 @@ export default function CarRental() {
         </div>
       </section>
 
+      <section className="max-w-7xl mx-auto px-6 lg:px-10 pt-4 pb-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="text-sm text-[#64748B]" data-testid="rentals-count">
+            <span className="font-semibold text-[#0B3B5C]">{sortedRentals.length}</span> vehicle{sortedRentals.length === 1 ? "" : "s"}
+          </div>
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-white p-1 text-xs" data-testid="rentals-sort">
+            <ArrowUpDown className="w-3.5 h-3.5 text-[#64748B] ml-2" />
+            {SORTS.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setSortKey(s.key)}
+                data-testid={`rentals-sort-${s.key}`}
+                className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${sortKey === s.key ? "bg-[#0B3B5C] text-white" : "text-[#0B3B5C] hover:bg-[#F1F5F9]"}`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-24 grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {rentals.map((r) => (
+        {sortedRentals.map((r) => (
           <div key={r.id} className="group rounded-2xl overflow-hidden bg-white border border-[#E2E8F0] hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(212,169,74,0.15)] transition-transform flex flex-col" data-testid={`rental-card-${r.id}`}>
-            <div className="aspect-[16/10] overflow-hidden relative bg-[#0B192C]">
-              <img src={r.image_url} alt={r.name} className="w-full h-full object-cover opacity-95 group-hover:scale-105 transition-transform duration-500" />
+            <div className={`aspect-[16/10] overflow-hidden relative ${r.category === "mini-van" ? "bg-white" : "bg-[#0B192C]"}`}>
+              <img
+                src={r.image_url}
+                alt={r.name}
+                className={`w-full h-full opacity-95 group-hover:scale-105 transition-transform duration-500 ${
+                  r.category === "mini-van" ? "object-contain p-3" : "object-cover"
+                }`}
+              />
               <div className="absolute top-3 left-3 glass rounded-full px-3 py-1 text-xs text-[#0B3B5C] font-semibold uppercase tracking-widest">
                 {r.body || r.category}
               </div>

@@ -75,7 +75,7 @@ export default function Layout({ children }) {
         className={`sticky top-0 z-[80] transition-all duration-300 ${scrolled ? "glass shadow-[0_4px_20px_rgba(11,25,44,0.06)]" : "bg-transparent"}`}
         data-testid="site-header"
       >
-        <div className="max-w-7xl mx-auto px-5 lg:px-10 flex items-center justify-between h-20">
+        <div className="max-w-7xl mx-auto px-5 lg:px-10 flex items-center justify-between h-24">
           {/* Brand */}
           <Link to="/" className="flex items-center gap-3 group shrink-0" data-testid="brand-logo">
             {config.logo_url ? (
@@ -83,7 +83,7 @@ export default function Layout({ children }) {
                 <img
                   src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
                   alt="Rox Taxi Service and Tours"
-                  className="h-14 lg:h-16 w-auto max-w-[64px] lg:max-w-[80px] object-contain group-hover:scale-110 transition-transform duration-300 contrast-125 saturate-150 shrink-0"
+                  className="h-20 lg:h-[92px] w-auto max-w-[100px] lg:max-w-[120px] object-contain group-hover:scale-110 transition-transform duration-300 contrast-150 saturate-200 drop-shadow-[0_4px_10px_rgba(11,25,44,0.35)] shrink-0"
                   data-testid="brand-logo-img"
                 />
                 <div className="hidden sm:flex flex-col leading-[0.95] gap-1 whitespace-nowrap" data-testid="brand-name">
