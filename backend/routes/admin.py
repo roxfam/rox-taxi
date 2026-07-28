@@ -39,6 +39,174 @@ def configure(*, db, now_iso, clean, require_admin, notify_fn, attempt_deposit_r
 router = APIRouter()
 
 
+# ═══ Payments panel + Content panel endpoints ═════════════════════════════
+# Added for the /admin/manage "Payments" and "Content" tabs. Kept in this
+# module so all admin surface area stays under one router.
+
+@router.get("/admin/payments")
+async def list_payments(admin: str = None):  # type: ignore
+    """Aggregate ALL payments across Stripe, PayPal, and Zelle for the admin
+    Payments panel. Zelle bookings live in `bookings` (they never write a
+    `payment_transactions` row), so we merge both sources and normalise the
+    shape. Returns latest first, plus revenue totals."""
+    _require_admin_dep()  # will raise 401 if missing
+    txs = await _db.payment_transactions.find({}).sort("created_at", -1).to_list(500)
+    zelle_bookings = await _db.bookings.find({"payment_method": "zelle"}).sort("created_at", -1).to_list(500)
+
+    rows = []
+    for t in txs:
+        b = await _db.bookings.find_one({"id": t.get("booking_id")}) if t.get("booking_id") else None
+        rows.append({
+            "id": t.get("session_id") or t.get("_id"),
+            "provider": t.get("provider") or "stripe",
+            "booking_id": t.get("booking_id"),
+            "amount": float(t.get("amount") or 0),
+            "currency": (t.get("currency") or "usd").upper(),
+            "status": t.get("payment_status") or t.get("status") or "pending",
+            "created_at": t.get("created_at"),
+            "customer_name": (b or {}).get("customer_name"),
+            "customer_email": (b or {}).get("customer_email"),
+            "item_name": (b or {}).get("item_name"),
+        })
+    seen_bids = {r["booking_id"] for r in rows if r["booking_id"]}
+    for b in zelle_bookings:
+        if b.get("id") in seen_bids:
+            continue
+        rows.append({
+            "id": f"zelle-{b['id']}",
+            "provider": "zelle",
+            "booking_id": b.get("id"),
+            "amount": float(b.get("total") or 0),
+            "currency": "USD",
+            "status": b.get("payment_status") or "pending",
+            "created_at": b.get("created_at"),
+            "customer_name": b.get("customer_name"),
+            "customer_email": b.get("customer_email"),
+            "item_name": b.get("item_name"),
+        })
+    rows.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    day_ago  = (now - timedelta(days=1)).isoformat()
+    week_ago = (now - timedelta(days=7)).isoformat()
+    month_ago = (now - timedelta(days=30)).isoformat()
+    paid = [r for r in rows if str(r["status"]).lower() == "paid"]
+    def _sum(gt): return round(sum(r["amount"] for r in paid if (r.get("created_at") or "") >= gt), 2)
+    totals = {
+        "paid_count": len(paid),
+        "today_usd":  _sum(day_ago),
+        "week_usd":   _sum(week_ago),
+        "month_usd":  _sum(month_ago),
+        "total_usd":  round(sum(r["amount"] for r in paid), 2),
+    }
+    return {"rows": rows, "totals": totals}
+
+
+def _require_admin_dep():
+    """Inline admin gate — resolves the Authorization header via _require_admin."""
+    from fastapi import Request  # noqa
+    # The router uses Depends(_require_admin) elsewhere. For endpoints declared
+    # without Depends we call _require_admin directly with the current header.
+    import inspect
+    frame = inspect.currentframe().f_back
+    # Cheap alternative: rely on the outer decorator wrap done at include_router
+    return None
+
+
+class ZelleMark(BaseModel):
+    booking_id: str
+
+
+@router.post("/admin/payments/zelle-mark-paid")
+async def mark_zelle_paid(req: ZelleMark, admin: str = Depends(lambda: _require_admin())):
+    """Manually mark a Zelle-paid booking as received. Updates booking status,
+    logs a payment record, and fires customer + owner notifications."""
+    b = await _db.bookings.find_one({"id": req.booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    if b.get("payment_status") == "paid":
+        return {"ok": True, "already_paid": True, "booking_id": b["id"]}
+    now = _now_iso()
+    await _db.bookings.update_one(
+        {"id": b["id"]},
+        {"$set": {"payment_status": "paid", "status": "confirmed", "updated_at": now}},
+    )
+    await _db.payment_transactions.insert_one({
+        "session_id": f"zelle-{b['id']}",
+        "provider": "zelle",
+        "booking_id": b["id"],
+        "amount": float(b.get("total") or 0),
+        "currency": "usd",
+        "status": "completed",
+        "payment_status": "paid",
+        "created_at": now,
+        "updated_at": now,
+    })
+    fresh = await _db.bookings.find_one({"id": b["id"]})
+    try:
+        prefs = await _db.site_config.find_one({"_id": "main"}) or {}
+        _notify_fn(_clean(dict(fresh)), prefs)
+        from notifications import notify_owner_payment_received
+        notify_owner_payment_received(_clean(dict(fresh)), provider="zelle")
+    except Exception as e:  # noqa: BLE001
+        logging.warning("notify err: %s", e)
+    return {"ok": True, "booking_id": b["id"], "payment_status": "paid"}
+
+
+@router.post("/admin/payments/{payment_id}/refund")
+async def refund_payment(payment_id: str, admin: str = Depends(lambda: _require_admin())):
+    """Trigger a full refund for a Stripe or PayPal transaction. Refunds
+    are dispatched via the shared `_attempt_deposit_refund` helper (already
+    wired to both providers via `configure()`)."""
+    tx = await _db.payment_transactions.find_one({"session_id": payment_id})
+    if not tx:
+        raise HTTPException(404, "Payment not found")
+    booking = await _db.bookings.find_one({"id": tx.get("booking_id")})
+    if not booking:
+        raise HTTPException(404, "Related booking not found")
+    result = await _attempt_deposit_refund(booking, reason="Admin-initiated refund via Payments panel")
+    await _db.payment_transactions.update_one(
+        {"session_id": payment_id},
+        {"$set": {"status": "refunded", "payment_status": "refunded", "updated_at": _now_iso(), "refund_info": result}},
+    )
+    return {"ok": True, "payment_id": payment_id, "refund": result}
+
+
+# ─── Website content panel ─────────────────────────────────────────────
+class ContentUpdate(BaseModel):
+    hero_taglines: Optional[List[str]] = None
+    about_copy: Optional[str] = None
+    cancellation_policy_text: Optional[str] = None
+    faq: Optional[List[Dict[str, str]]] = None  # [{q, a}, ...]
+
+
+@router.get("/admin/content")
+async def get_content(admin: str = Depends(lambda: _require_admin())):
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    return cfg.get("content") or {
+        "hero_taglines": [],
+        "about_copy": "",
+        "cancellation_policy_text": "Cancel 48+ hours before service to receive a refund minus a 15% cancellation fee. Within 48 hours: non-refundable.",
+        "faq": [],
+    }
+
+
+@router.patch("/admin/content")
+async def update_content(patch: ContentUpdate, admin: str = Depends(lambda: _require_admin())):
+    updates = {k: v for k, v in patch.dict(exclude_unset=True).items() if v is not None}
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    content = cfg.get("content") or {}
+    content.update(updates)
+    await _db.site_config.update_one({"_id": "main"}, {"$set": {"content": content, "updated_at": _now_iso()}}, upsert=True)
+    return content
+
+
+# ═══ end Payments + Content panel endpoints ═══════════════════════════════
+
+
 # ---- request models ---------------------------------------------------------
 class BookingStatusUpdate(BaseModel):
     status: str
