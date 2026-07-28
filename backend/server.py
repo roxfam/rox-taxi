@@ -137,6 +137,8 @@ class BookingCreate(BaseModel):
     additional_drivers: Optional[int] = Field(0, ge=0, le=4)
     notes: Optional[str] = None
     payment_method: str
+    round_trip: Optional[bool] = False  # taxi: same-day return, 10% off both legs
+    tip_amount: Optional[float] = Field(0, ge=0, le=1000)
 
 
 LUGGAGE_FEE_USD = 3.0
@@ -148,6 +150,16 @@ ADDITIONAL_DRIVER_FEE_USD = 25.0  # flat fee per extra registered driver on a ca
 ADDITIONAL_DRIVER_MAX = 4
 RENTAL_MIN_DAYS = 2  # 2-day minimum booking policy for car rentals
 PARADISE_BRIDGE_TOLL_USD = 2.0  # $2 bridge toll auto-added to any taxi fare crossing to Paradise Island / Atlantis
+ROUND_TRIP_DISCOUNT_PCT = 0.10  # 10% off when a taxi is booked as a same-day round trip
+# Multi-day rental discount tiers — applied to price*days base (not deposit / add-ons).
+RENTAL_DISCOUNT_TIERS = [(14, 0.12), (7, 0.07), (5, 0.03)]
+
+
+def _rental_discount_pct(days: int) -> float:
+    for threshold, pct in RENTAL_DISCOUNT_TIERS:
+        if days >= threshold:
+            return pct
+    return 0.0
 
 # Days closed (weekly). Python weekday: Monday=0..Sunday=6. Saturday=5.
 CANCELLATION_FEE_PCT = 0.15  # 15% cancellation fee
@@ -818,6 +830,11 @@ async def get_fees():
         "paradise_bridge_toll_policy": (
             f"A ${PARADISE_BRIDGE_TOLL_USD:.0f} bridge toll pass fee is automatically added to any taxi fare going to Paradise Island or Atlantis."
         ),
+        "round_trip_discount_pct": ROUND_TRIP_DISCOUNT_PCT,
+        "round_trip_policy": f"Book taxi pickup + return on the same day for {int(ROUND_TRIP_DISCOUNT_PCT*100)}% off both legs.",
+        "rental_discount_tiers": [
+            {"min_days": d, "pct": p, "label": f"{int(p*100)}% off {d}+ days"} for d, p in RENTAL_DISCOUNT_TIERS
+        ],
         "closed_weekdays": sorted(CLOSED_WEEKDAYS),
         "closed_weekdays_labels": ["Saturday"],
         "closed_policy": "Taxi service and car rentals are closed on Saturdays.",

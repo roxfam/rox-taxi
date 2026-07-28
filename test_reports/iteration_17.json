@@ -1,0 +1,34 @@
+{
+  "summary": "First test cycle for customer auth (email/password + Google) feature. Backend: 13/13 pytest cases pass covering register, login-email, /me, heartbeat, logout, idle timeout enforcement (60min), login_events audit trail, booking auto-link by email, Google-only user adds password, and validation (422). Frontend: End-to-end Playwright flow through /signup -> /my-bookings -> logout -> /login with wrong+correct password all pass. All required data-testids are present. Header account link toggles correctly. Idle notice + last-login timestamps render. Overall implementation of the customer auth layer looks solid.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MyBookings cancel flow", "issues": ["Cancel uses native window.confirm() instead of a shadcn AlertDialog. Review request says 'opens confirm dialog' — functional, but inconsistent with the rest of the app which uses shadcn dialogs; consider migrating for a11y + look-and-feel."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_customer_auth.py",
+    "/app/test_reports/pytest/customer_auth.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: replace window.confirm in MyBookings.handleCancel with an in-app AlertDialog so the confirm UI matches the rest of the app.",
+    "OPTIONAL: consider adding a rate-limit / brute-force lockout on /api/auth/login-email (currently unlimited wrong-password attempts).",
+    "OPTIONAL: Google-only users get password added on POST /auth/register but `provider` is only flipped to 'both' when an existing provider field is present — for legacy rows lacking provider, provider becomes 'email' (loses google). Consider using $setOnInsert / conditional to keep both."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1267 lines — approaching the 700-line guideline threshold; consider extracting auth endpoints into routes/auth.py similar to routes/admin.py and routes/payments.py.",
+    "get_current_user swallows generic Exception on last_activity parse (line ~361) — could hide bad data; log at debug level instead of pass.",
+    "logout endpoint sets samesite='none', secure=True on delete_cookie — good; but the endpoint does not require auth so a random attacker with a stolen cookie value could delete arbitrary sessions (mitigated by httpOnly + Secure, but low-risk to note).",
+    "No explicit test for concurrent register race — unique index on email exists (created in seed_db startup), so DB layer will reject dupes; good."
+  ],
+  "updated_files": ["/app/backend/tests/test_customer_auth.py"],
+  "success_rate": { "backend": "100% (13/13)", "frontend": "100% (all assertions in single scripted E2E flow passed)" },
+  "test_credentials": "New random customer accounts created via /api/auth/register during tests (test.customer.<ts>@example.com / Test1234!). Admin credentials in /app/memory/test_credentials.md unchanged.",
+  "seed_data_creation": "Test writes ephemeral users + one booking directly into MongoDB (customer_email + generated id 'bk_...') for the pre-signup auto-link test. Safe to leave; can be pruned by prefix TEST_ next cycle.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Customer auth email/password flow verified end-to-end. Google auth path (/api/auth/session with X-Session-ID) not exercised because it requires the real Emergent OAuth flow — verify manually if changes are made. Idle timeout is verified by backdating last_activity_at in Mongo. Session cookies are Secure+SameSite=None so requests over http://localhost won't resend them — the pytest suite uses a BearerSession helper that promotes the cookie to Authorization: Bearer for /me & /heartbeat while still passing cookies explicitly for /logout.",
+  "rca of the issue": "N/A — no defects found."
+}
