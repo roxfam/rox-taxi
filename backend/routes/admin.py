@@ -39,6 +39,15 @@ def configure(*, db, now_iso, clean, require_admin, notify_fn, attempt_deposit_r
 router = APIRouter()
 
 
+# Placeholder Depends target — swapped for the real `_require_admin` at
+# runtime by `configure()` in this same module. Using a real function
+# (rather than a lambda) so FastAPI can introspect the Authorization
+# header dependency correctly.
+def _require_admin_placeholder(authorization: Optional[str] = Header(None)):
+    return _require_admin(authorization) if callable(_require_admin) else None
+
+
+
 # ═══ Payments panel + Content panel endpoints ═════════════════════════════
 # Added for the /admin/manage "Payments" and "Content" tabs. Kept in this
 # module so all admin surface area stays under one router.
@@ -119,7 +128,7 @@ class ZelleMark(BaseModel):
 
 
 @router.post("/admin/payments/zelle-mark-paid")
-async def mark_zelle_paid(req: ZelleMark, admin: str = Depends(lambda: _require_admin())):
+async def mark_zelle_paid(req: ZelleMark, admin: str = Depends(_require_admin_placeholder)):
     """Manually mark a Zelle-paid booking as received. Updates booking status,
     logs a payment record, and fires customer + owner notifications."""
     b = await _db.bookings.find_one({"id": req.booking_id.upper()})
@@ -155,7 +164,7 @@ async def mark_zelle_paid(req: ZelleMark, admin: str = Depends(lambda: _require_
 
 
 @router.post("/admin/payments/{payment_id}/refund")
-async def refund_payment(payment_id: str, admin: str = Depends(lambda: _require_admin())):
+async def refund_payment(payment_id: str, admin: str = Depends(_require_admin_placeholder)):
     """Trigger a full refund for a Stripe or PayPal transaction. Refunds
     are dispatched via the shared `_attempt_deposit_refund` helper (already
     wired to both providers via `configure()`)."""
@@ -182,7 +191,7 @@ class ContentUpdate(BaseModel):
 
 
 @router.get("/admin/content")
-async def get_content(admin: str = Depends(lambda: _require_admin())):
+async def get_content(admin: str = Depends(_require_admin_placeholder)):
     cfg = await _db.site_config.find_one({"_id": "main"}) or {}
     return cfg.get("content") or {
         "hero_taglines": [],
@@ -193,7 +202,7 @@ async def get_content(admin: str = Depends(lambda: _require_admin())):
 
 
 @router.patch("/admin/content")
-async def update_content(patch: ContentUpdate, admin: str = Depends(lambda: _require_admin())):
+async def update_content(patch: ContentUpdate, admin: str = Depends(_require_admin_placeholder)):
     updates = {k: v for k, v in patch.dict(exclude_unset=True).items() if v is not None}
     if not updates:
         raise HTTPException(400, "No fields to update")

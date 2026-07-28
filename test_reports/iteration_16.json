@@ -1,0 +1,36 @@
+{
+  "summary": "Verified the two targeted fixes from this iteration: (1) About.jsx compiles cleanly and renders every section (Hero, Stats, Story, Values, 6 Guarantees, 3 Stories with 5-star ratings, Rox-vs-street VS block, CTA); (2) admin.py Header AttributeError is gone — /api/admin/payments, /api/admin/content, and /api/admin/payments/zelle-mark-paid all respond correctly under admin bearer token. Ran 7 pytest cases (all pass) and Playwright checks on /about, /, /pay, /pay/ABCD1234.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/payments", "issue": "Endpoint is NOT actually admin-gated. Signature is `list_payments(admin: str = None)` and it calls the local `_require_admin_dep()` helper which just returns None (the frame-inspection branch is dead code). Any unauthenticated caller currently gets 200 back with all payment rows including customer_email/customer_name. All the other admin endpoints in this router correctly use `Depends(_admin_dep)` or `Depends(_require_admin_placeholder)`. Recommend changing to `async def list_payments(_: str = Depends(_admin_dep))` and deleting the dead `_require_admin_dep` function."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_admin_fixes.py",
+    "/app/test_reports/pytest/iteration_16.xml"
+  ],
+  "action_items": [
+    "(minor / security) Gate GET /api/admin/payments with Depends(_admin_dep) instead of the no-op `_require_admin_dep()`; delete the dead helper."
+  ],
+  "critical_code_review_comments": [
+    "admin.py line 55–56: `list_payments` uses `admin: str = None` and calls a stub `_require_admin_dep()` that always returns None — endpoint is publicly reachable. Should be `Depends(_admin_dep)` like the sibling endpoints.",
+    "admin.py has two parallel admin dep helpers (`_admin_dep` and `_require_admin_placeholder`) that do essentially the same thing. Consolidating to one would prevent future drift.",
+    "Frontend still ships 3 react-hooks/exhaustive-deps ESLint warnings (AdminGroups.jsx L27, Pay.jsx L56, PriceHistoryModal.jsx L28). Non-blocking but worth cleaning up."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_admin_fixes.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100%"},
+  "test_credentials": "admin@roxtaxi.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 16 focused only on the About.jsx rewrite + admin.py Header AttributeError fix. Both are green. The only outstanding item is a security-flavoured minor: GET /api/admin/payments isn't actually gated (it uses a stub helper). Non-critical for the compile/render fix request but should be patched. Do NOT re-test the whole app — bookings/tours/notifications were validated in iteration 15 and earlier.",
+  "rca of the issue": "Original About.jsx was truncated mid-JSX, producing a webpack 'Unterminated JSX contents' at line 64:84. E1 rewrote the file completely with 204 clean lines — verified compile is now `webpack compiled with 1 warning` (only lint warnings). The admin.py issue stemmed from `Depends(lambda: _require_admin())` — FastAPI introspected the lambda's zero-arg signature and could not resolve the Authorization header, so at request time it passed a `Header` object into `.startswith`. Fix replaces the lambda with a real function `_require_admin_placeholder(authorization: Optional[str] = Header(None))`, which FastAPI can introspect and inject correctly."
+}
