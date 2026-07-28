@@ -152,7 +152,7 @@ export default function Layout({ children }) {
               title="WhatsApp us"
             >
               <WhatsAppIcon className="w-[18px] h-[18px]" />
-              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] tracking-widest uppercase text-[#25D366] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-semibold">WhatsApp</span>
+              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs tracking-widest uppercase text-[#25D366] opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap font-black scale-90 group-hover:scale-100">WhatsApp</span>
             </a>
             <a
               href={`tel:${(config.phone || "+12420000000").replace(/[^+\d]/g, "")}`}
@@ -161,7 +161,7 @@ export default function Layout({ children }) {
               title="Call us"
             >
               <Phone className="w-[18px] h-[18px]" />
-              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] tracking-widest uppercase text-[#0B3B5C] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-semibold">Call</span>
+              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs tracking-widest uppercase text-[#0B3B5C] opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap font-black scale-90 group-hover:scale-100">Call</span>
             </a>
             <a
               href={config.facebook_url || "https://www.facebook.com/roxtaxiservice/"}
@@ -171,7 +171,7 @@ export default function Layout({ children }) {
               title="Facebook"
             >
               <Facebook className="w-[18px] h-[18px]" />
-              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] tracking-widest uppercase text-[#1877F2] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-semibold">Facebook</span>
+              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs tracking-widest uppercase text-[#1877F2] opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap font-black scale-90 group-hover:scale-100">Facebook</span>
             </a>
             <a
               href={config.tripadvisor_url || "https://www.tripadvisor.com/Search?q=Rox+Taxi+Bahamas"}
@@ -181,7 +181,7 @@ export default function Layout({ children }) {
               title="TripAdvisor"
             >
               <TripAdvisorIcon className="w-[22px] h-[22px]" />
-              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] tracking-widest uppercase text-[#00AF87] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-semibold">TripAdvisor</span>
+              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs tracking-widest uppercase text-[#00AF87] opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap font-black scale-90 group-hover:scale-100">TripAdvisor</span>
             </a>
             {user ? (
               <Link
@@ -598,11 +598,19 @@ export default function Layout({ children }) {
             <div className="md:col-span-1">
               <h4 className="serif text-lg text-white font-bold mb-1">Payments</h4>
               <div className="w-8 h-[2px] bg-[#D4A94A] mb-5" />
-              <div className="flex flex-wrap gap-2 mb-4">
-                <span className="rounded-lg bg-white/[0.05] border border-white/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70">Card</span>
-                <span className="rounded-lg bg-white/[0.05] border border-white/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70">PayPal</span>
-                <span className="rounded-lg bg-white/[0.05] border border-white/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70">Stripe</span>
-                <span className="rounded-lg bg-white/[0.05] border border-white/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70">Zelle</span>
+              <Link
+                to="/pay"
+                data-testid="footer-make-payment-btn"
+                className="group inline-flex items-center gap-2 rounded-full bg-[#D4A94A] text-[#0B192C] px-5 py-2.5 text-sm font-black shadow-[0_10px_25px_rgba(212,169,74,0.35)] hover:bg-[#F5E1A4] hover:shadow-[0_14px_35px_rgba(245,225,164,0.5)] hover:scale-[1.03] active:scale-95 transition-all duration-200"
+              >
+                Make a Payment
+                <span className="inline-block group-hover:translate-x-0.5 transition-transform">→</span>
+              </Link>
+              <div className="flex flex-wrap gap-2 mt-5 mb-4" data-testid="footer-payment-chips">
+                <Link to="/pay" title="Pay with card via Stripe" className="rounded-lg bg-white/[0.05] border border-white/10 hover:border-[#635BFF] hover:bg-[#635BFF]/15 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70 hover:text-white transition-all">Card</Link>
+                <Link to="/pay" title="Pay with PayPal" className="rounded-lg bg-white/[0.05] border border-white/10 hover:border-[#003087] hover:bg-[#003087]/25 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70 hover:text-white transition-all">PayPal</Link>
+                <Link to="/pay" title="Pay with Stripe" className="rounded-lg bg-white/[0.05] border border-white/10 hover:border-[#635BFF] hover:bg-[#635BFF]/15 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70 hover:text-white transition-all">Stripe</Link>
+                <Link to="/pay" title="Pay with Zelle" className="rounded-lg bg-white/[0.05] border border-white/10 hover:border-[#6D1ED4] hover:bg-[#6D1ED4]/25 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70 hover:text-white transition-all">Zelle</Link>
               </div>
               <p className="serif italic text-xs text-white/45 leading-relaxed">
                 All payments secured &amp; encrypted end-to-end. Refunds honored per our cancellation policy.

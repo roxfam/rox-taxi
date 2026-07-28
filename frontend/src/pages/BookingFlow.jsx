@@ -85,6 +85,11 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
       toast.error("We are closed on Saturdays. Please choose a different date.");
       return;
     }
+    // Enforce rental 2-day minimum
+    if (serviceType === "rental" && Number(form.days || 0) < RENTAL_MIN_DAYS) {
+      toast.error(`Car rentals have a ${RENTAL_MIN_DAYS}-day minimum. Please increase the number of days.`);
+      return;
+    }
     setLoading(true);
     try {
       const cfg = await api.get("/site-config").then((r) => r.data).catch(() => siteCfg);

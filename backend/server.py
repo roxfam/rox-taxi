@@ -146,6 +146,7 @@ EXTRA_PASSENGER_INCLUDED = 2  # first 2 passengers included in the flat fare; ea
 RENTAL_DEPOSIT_USD = 150.0  # refundable security deposit applied automatically to every car rental booking
 ADDITIONAL_DRIVER_FEE_USD = 25.0  # flat fee per extra registered driver on a car rental
 ADDITIONAL_DRIVER_MAX = 4
+RENTAL_MIN_DAYS = 2  # 2-day minimum booking policy for car rentals
 
 # Days closed (weekly). Python weekday: Monday=0..Sunday=6. Saturday=5.
 CANCELLATION_FEE_PCT = 0.15  # 15% cancellation fee
@@ -557,6 +558,11 @@ async def site_config():
 @api_router.post("/bookings")
 async def create_booking(req: BookingCreate):
     _validate_open_day(req.service_type, req.booking_date, req.days or 1)
+    if req.service_type == "rental" and (req.days or 0) < RENTAL_MIN_DAYS:
+        raise HTTPException(
+            400,
+            f"Car rentals have a {RENTAL_MIN_DAYS}-day minimum. Please increase the number of days.",
+        )
     booking = req.model_dump()
     booking["id"] = str(uuid.uuid4())[:8].upper()
     booking["status"] = "pending_payment" if req.payment_method == "stripe" else "confirmed"
@@ -628,6 +634,10 @@ async def get_fees():
         "additional_driver_policy": (
             f"Each additional registered driver on a car rental is ${ADDITIONAL_DRIVER_FEE_USD:.0f} (max "
             f"{ADDITIONAL_DRIVER_MAX} additional drivers). The primary driver is always included."
+        ),
+        "rental_min_days": RENTAL_MIN_DAYS,
+        "rental_min_days_policy": (
+            f"Car rentals have a {RENTAL_MIN_DAYS}-day minimum booking period."
         ),
         "closed_weekdays": sorted(CLOSED_WEEKDAYS),
         "closed_weekdays_labels": ["Saturday"],

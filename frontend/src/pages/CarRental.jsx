@@ -135,12 +135,29 @@ export default function CarRental() {
         <BookingModal
           item={selected}
           serviceType="rental"
-          defaultDays={3}
+          defaultDays={2}
           onClose={() => setSelected(null)}
           extraFields={(form, setForm) => (
-            <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Delivery location" val={form.pickup_location} on={(e) => setForm({ ...form, pickup_location: e.target.value })} testid="rental-pickup" />
-              <Field label="Number of days" type="number" val={form.days} on={(e) => setForm({ ...form, days: e.target.value })} testid="rental-days" />
+            <div className="space-y-3">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Delivery location" val={form.pickup_location} on={(e) => setForm({ ...form, pickup_location: e.target.value })} testid="rental-pickup" />
+                <div>
+                  <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">Number of days *</label>
+                  <input
+                    type="number"
+                    min={2}
+                    step={1}
+                    value={form.days}
+                    onChange={(e) => setForm({ ...form, days: Math.max(2, parseInt(e.target.value || "2")) })}
+                    className="w-full rounded-full border border-[#E2E8F0] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A94A]"
+                    data-testid="rental-days"
+                  />
+                </div>
+              </div>
+              <div className="text-xs text-[#64748B] flex items-center gap-1.5" data-testid="rental-min-days-note">
+                <Info className="w-3.5 h-3.5 text-[#D4A94A]" />
+                <span><strong className="text-[#0B3B5C]">2-day minimum</strong> on all car rentals.</span>
+              </div>
             </div>
           )}
         />

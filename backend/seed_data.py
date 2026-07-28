@@ -144,7 +144,7 @@ RENTALS_SEED: List[Dict] = [
      "description": "Zippy little compact — perfect for solo travelers and couples buzzing around Nassau. AC, automatic, unlimited miles. Free delivery to LPIA or your hotel.",
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/iyv8ywh8_spark.webp",
      "category": "compact", "active": True},
-    {"id": "sentra-orange", "name": "2021 Nissan Versa — Orange Sedan", "price": 39.0, "seats": 5,
+    {"id": "sentra-orange", "name": "2021 Nissan Versa — Orange Sedan", "price": 65.0, "seats": 5,
      "year": 2021, "make": "Nissan", "model": "Versa", "color": "Orange", "body": "Sedan",
      "description": "Sharp, modern orange sedan — great fuel economy and easy to spot in a Nassau parking lot. AC, automatic, backup camera. Free delivery to LPIA or your hotel.",
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/5ky5n279_Nissan%20Versa.webp",
