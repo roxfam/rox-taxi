@@ -77,35 +77,68 @@ export default function Layout({ children }) {
         data-testid="site-header"
       >
         <div className="max-w-7xl mx-auto px-5 lg:px-10 flex items-center justify-between h-24">
-          {/* Brand */}
-          <Link to="/" className="flex items-center gap-3 group shrink-0" data-testid="brand-logo">
+          {/* Brand — refined jewel-tone wordmark */}
+          <Link to="/" className="flex items-center gap-3 sm:gap-4 group shrink-0" data-testid="brand-logo">
             {config.logo_url ? (
               <>
-                <img
-                  src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
-                  alt="Rox Taxi Service and Tours"
-                  className="h-20 lg:h-[92px] w-auto max-w-[100px] lg:max-w-[120px] object-contain group-hover:scale-110 transition-transform duration-300 contrast-150 saturate-200 drop-shadow-[0_4px_10px_rgba(11,25,44,0.35)] shrink-0"
-                  data-testid="brand-logo-img"
-                />
-                <div className="hidden sm:flex flex-col leading-[0.95] gap-1 whitespace-nowrap" data-testid="brand-name">
-                  <span className="serif text-lg xl:text-xl font-extrabold tracking-tight text-[#0B3B5C] drop-shadow-[0_2px_10px_rgba(255,255,255,0.75)]">
-                    Rox Taxi <em className="italic font-black text-[#D4A94A]">Service</em>
+                <span className="relative shrink-0">
+                  <span className="absolute -inset-1 rounded-full bg-gradient-to-br from-[#D4A94A]/40 via-transparent to-[#E86A3C]/25 blur-xl opacity-70 group-hover:opacity-100 transition-opacity duration-500" />
+                  <img
+                    src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
+                    alt="Rox Taxi Service and Tours"
+                    className="relative h-20 lg:h-[92px] w-auto max-w-[100px] lg:max-w-[120px] object-contain group-hover:scale-[1.06] transition-transform duration-500 contrast-150 saturate-200 drop-shadow-[0_6px_14px_rgba(11,25,44,0.45)]"
+                    data-testid="brand-logo-img"
+                  />
+                </span>
+                <div className="hidden sm:flex flex-col leading-[0.95] whitespace-nowrap" data-testid="brand-name">
+                  <span className="inline-flex items-center gap-2 mb-1">
+                    <span className="w-6 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-transparent" />
+                    <span className="text-[9px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90" style={{ fontFeatureSettings: '"smcp"' }}>Est. Nassau</span>
+                    <span className="w-6 h-[1px] bg-gradient-to-r from-[#D4A94A] via-[#D4A94A] to-transparent" />
                   </span>
-                  <span className="inline-flex items-center gap-2 mt-0.5">
-                    <span className="w-5 h-[1.5px] bg-gradient-to-r from-[#D4A94A] to-transparent" />
-                    <span className="text-[9px] tracking-[0.35em] uppercase font-black text-[#D4A94A]">and Tours</span>
+                  <span
+                    className="serif text-[22px] xl:text-[26px] font-black tracking-tight leading-[0.9] bg-clip-text text-transparent drop-shadow-[0_2px_10px_rgba(255,255,255,0.65)]"
+                    style={{ backgroundImage: "linear-gradient(135deg, #0B3B5C 0%, #123f66 40%, #A88235 82%, #D4A94A 100%)" }}
+                  >
+                    Rox Taxi <em className="italic font-bold" style={{ color: "#D4A94A" }}>Service</em>
+                  </span>
+                  <span className="inline-flex items-center gap-2 mt-1.5">
+                    <svg width="14" height="6" viewBox="0 0 14 6" aria-hidden="true">
+                      <path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" />
+                    </svg>
+                    <span className="text-[10px] tracking-[0.5em] uppercase font-black text-[#D4A94A]">and Tours</span>
+                    <svg width="14" height="6" viewBox="0 0 14 6" aria-hidden="true">
+                      <path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" />
+                    </svg>
                   </span>
                 </div>
               </>
             ) : (
               <>
-                <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center text-white shadow-[0_8px_20px_rgba(212,169,74,0.4)] group-hover:rotate-6 transition-transform duration-300">
-                  <Waves className="w-5 h-5" />
-                  <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-[#E86A3C] ring-2 ring-white" />
-                </div>
-                <div className="flex flex-col leading-none whitespace-nowrap">
-                  <span className="serif text-xl text-[#0B3B5C] tracking-tight">Rox Taxi Service</span>
-                  <span className="text-[10px] tracking-[0.28em] uppercase text-[#64748B] mt-0.5">and Tours</span>
+                <span className="relative shrink-0">
+                  <span className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-[#D4A94A]/40 via-transparent to-[#E86A3C]/25 blur-xl opacity-70 group-hover:opacity-100 transition-opacity duration-500" />
+                  <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-[#D4A94A] via-[#c69938] to-[#A88235] flex items-center justify-center text-white shadow-[0_10px_25px_rgba(212,169,74,0.45),inset_0_1px_0_rgba(255,255,255,0.35)] group-hover:rotate-6 transition-transform duration-500">
+                    <Waves className="w-5 h-5" />
+                    <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-[#E86A3C] ring-2 ring-white" />
+                  </div>
+                </span>
+                <div className="hidden sm:flex flex-col leading-[0.95] whitespace-nowrap">
+                  <span className="inline-flex items-center gap-2 mb-1">
+                    <span className="w-6 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-transparent" />
+                    <span className="text-[9px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90">Est. Nassau</span>
+                    <span className="w-6 h-[1px] bg-gradient-to-r from-[#D4A94A] via-[#D4A94A] to-transparent" />
+                  </span>
+                  <span
+                    className="serif text-[22px] xl:text-[26px] font-black tracking-tight leading-[0.9] bg-clip-text text-transparent"
+                    style={{ backgroundImage: "linear-gradient(135deg, #0B3B5C 0%, #123f66 40%, #A88235 82%, #D4A94A 100%)" }}
+                  >
+                    Rox Taxi <em className="italic font-bold" style={{ color: "#D4A94A" }}>Service</em>
+                  </span>
+                  <span className="inline-flex items-center gap-2 mt-1.5">
+                    <svg width="14" height="6" viewBox="0 0 14 6" aria-hidden="true"><path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" /></svg>
+                    <span className="text-[10px] tracking-[0.5em] uppercase font-black text-[#D4A94A]">and Tours</span>
+                    <svg width="14" height="6" viewBox="0 0 14 6" aria-hidden="true"><path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" /></svg>
+                  </span>
                 </div>
               </>
             )}
@@ -325,23 +358,35 @@ export default function Layout({ children }) {
               <div className="p-6 flex items-center justify-between border-b border-[#F1F5F9]">
                 <div className="flex items-center gap-3">
                   {config.logo_url ? (
-                    <img
-                      src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
-                      alt="Rox Taxi Service and Tours"
-                      className="h-14 w-auto max-w-[64px] object-contain contrast-125 saturate-150"
-                    />
+                    <span className="relative">
+                      <span className="absolute -inset-1 rounded-full bg-gradient-to-br from-[#D4A94A]/40 via-transparent to-[#E86A3C]/25 blur-xl" />
+                      <img
+                        src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
+                        alt="Rox Taxi Service and Tours"
+                        className="relative h-14 w-auto max-w-[64px] object-contain contrast-125 saturate-150 drop-shadow-[0_4px_10px_rgba(11,25,44,0.35)]"
+                      />
+                    </span>
                   ) : (
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] flex items-center justify-center text-white shadow-[0_6px_16px_rgba(212,169,74,0.4)]">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#D4A94A] via-[#c69938] to-[#A88235] flex items-center justify-center text-white shadow-[0_8px_18px_rgba(212,169,74,0.45),inset_0_1px_0_rgba(255,255,255,0.35)]">
                       <Waves className="w-4 h-4" />
                     </div>
                   )}
                   <div className="leading-[0.95]">
-                    <div className="serif text-xl font-extrabold tracking-tight text-[#0B3B5C]" data-testid="mobile-drawer-brand">
-                      Rox Taxi <em className="italic font-black text-[#D4A94A]">Service</em>
+                    <span className="inline-flex items-center gap-1.5 mb-1">
+                      <span className="w-4 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-transparent" />
+                      <span className="text-[8px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90">Est. Nassau</span>
+                    </span>
+                    <div
+                      className="serif text-[19px] font-black tracking-tight leading-[0.9] bg-clip-text text-transparent"
+                      style={{ backgroundImage: "linear-gradient(135deg, #0B3B5C 0%, #123f66 40%, #A88235 82%, #D4A94A 100%)" }}
+                      data-testid="mobile-drawer-brand"
+                    >
+                      Rox Taxi <em className="italic font-bold" style={{ color: "#D4A94A" }}>Service</em>
                     </div>
-                    <div className="inline-flex items-center gap-2 mt-1.5">
-                      <span className="w-5 h-[1.5px] bg-gradient-to-r from-[#D4A94A] to-transparent" />
-                      <span className="text-[9px] tracking-[0.4em] uppercase font-black text-[#D4A94A]">and Tours</span>
+                    <div className="inline-flex items-center gap-1.5 mt-1.5">
+                      <svg width="12" height="5" viewBox="0 0 14 6" aria-hidden="true"><path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" /></svg>
+                      <span className="text-[9px] tracking-[0.5em] uppercase font-black text-[#D4A94A]">and Tours</span>
+                      <svg width="12" height="5" viewBox="0 0 14 6" aria-hidden="true"><path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" /></svg>
                     </div>
                   </div>
                 </div>
