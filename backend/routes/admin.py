@@ -266,6 +266,69 @@ async def upload_logo(file: UploadFile = File(...), _: str = Depends(_admin_dep)
     return {"logo_url": url}
 
 
+# ---- Catalog image manager -------------------------------------------------
+# General-purpose image upload/list/delete so admins can manage the photo
+# library used by tours / taxi / rentals / carousel via the /admin/manage UI.
+
+@router.post("/admin/images")
+async def upload_catalog_image(file: UploadFile = File(...), _: str = Depends(_admin_dep)):
+    """Upload a catalog image (any tour / taxi / rental / carousel photo)."""
+    allowed = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in allowed:
+        raise HTTPException(400, f"Unsupported file type. Use {', '.join(sorted(allowed))}")
+
+    content = await file.read()
+    max_bytes = 8 * 1024 * 1024
+    if len(content) > max_bytes:
+        raise HTTPException(400, "Image must be ≤ 8MB")
+
+    # Sanitize original stem into a slug so admins can find images by name later.
+    import re as _re
+    stem = Path(file.filename or "image").stem
+    slug = _re.sub(r"[^a-zA-Z0-9._-]+", "-", stem).strip("-")[:40] or "image"
+    name = f"cat-{slug}-{uuid.uuid4().hex[:6]}{ext}"
+
+    dest = _upload_dir / name
+    dest.write_bytes(content)
+    return {
+        "name": name,
+        "url": f"/api/uploads/{name}",
+        "size": len(content),
+        "content_type": file.content_type,
+    }
+
+
+@router.get("/admin/images")
+async def list_catalog_images(_: str = Depends(_admin_dep)):
+    """List every uploaded image in the upload dir, newest first."""
+    if not _upload_dir.exists():
+        return []
+    exts = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
+    items = []
+    for p in _upload_dir.iterdir():
+        if p.is_file() and p.suffix.lower() in exts:
+            stat = p.stat()
+            items.append({
+                "name": p.name,
+                "url": f"/api/uploads/{p.name}",
+                "size": stat.st_size,
+                "modified_at": stat.st_mtime,
+            })
+    items.sort(key=lambda x: x["modified_at"], reverse=True)
+    return items
+
+
+@router.delete("/admin/images/{name}")
+async def delete_catalog_image(name: str, _: str = Depends(_admin_dep)):
+    """Delete an uploaded image. Traversal-guarded via resolve() compare."""
+    path = (_upload_dir / name).resolve()
+    if not str(path).startswith(str(_upload_dir.resolve())) or not path.exists():
+        raise HTTPException(404, "Image not found")
+    path.unlink()
+    return {"deleted": True, "name": name}
+
+
 @router.put("/admin/site-config")
 async def admin_update_site(req: SiteConfigUpdate, _: str = Depends(_admin_dep)):
     payload = {k: v for k, v in req.model_dump().items() if v is not None}

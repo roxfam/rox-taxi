@@ -34,9 +34,9 @@ const SLIDES = [
     img: "https://images.pexels.com/photos/2422915/pexels-photo-2422915.jpeg?auto=compress&cs=tinysrgb&w=1920",
   },
   {
-    name: "Rose Island Reef",
-    tag: "Off Paradise Island",
-    img: "https://images.pexels.com/photos/3601456/pexels-photo-3601456.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    name: "Swimming Pigs",
+    tag: "Bahamas boat day-trip",
+    img: "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/j5kcbi17_R.jpg",
   },
 ];
 
