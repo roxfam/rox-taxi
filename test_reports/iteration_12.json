@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 12 — Backend + Frontend E2E for rentals price_history / PATCH price / admin CRUD + persistence across backend restart. All 10 pytest tests pass. Frontend admin flow verified end-to-end: Rentals tab → click price on row opens PriceHistoryModal → enters new price + reason → Save PATCHes /api/admin/rentals/{id}/price → toast 'Price updated to $269.23' → row price updates → history table shows the new entry (old $65 → new $269.23 with reason & admin@roxtaxi.com). EditModal Add flow shows year/make/model/color/body/seats. /rentals blackout dates use font-bold. /taxi and /tours pages load (200).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AdminManage EditModal (Rentals)", "issues": ["'Featured on home' checkbox (data-testid='edit-featured') is intentionally hidden when kind==='rentals' (see AdminManage.jsx line 260 `{!isRental && …}`). The review request lists 'featured checkbox' as expected for the rental EditModal, so if featured rentals should surface on home, remove the `!isRental` guard. Otherwise this is by-design and just needs a note in the spec."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration12_price_history.py",
+    "/app/test_reports/pytest/iteration12.xml"
+  ],
+  "action_items": [
+    "Decide whether the 'Featured on home' checkbox should also be available for rentals in the EditModal (currently hidden for kind==='rentals').",
+    "Note: seed-item prices are admin-mutable and persist across restarts by design ($setOnInsert). During E2E, spark-compact's price was bumped to $269.23 then reverted to $65 for cleanup. Consider a UI affordance to 'reset to seed default' if that matters."
+  ],
+  "critical_code_review_comments": [
+    "admin.py PATCH /admin/{kind}/{item_id}/price correctly guards zero/negative (422) and identical (400).",
+    "admin_create_item / admin_update_item both push to price_history with admin_email + timestamp — good audit trail.",
+    "PriceHistoryModal.load() uses api client (baseURL={REACT_APP_BACKEND_URL}/api) so URL routing via ingress is correct.",
+    "AdminManage.jsx is ~1026 lines — consider splitting PriceHistoryModal, EditModal, ImagePickerModal into separate files (>700-line threshold)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration12_price_history.py"],
+  "success_rate": {"backend": "100% (10/10 pytest)", "frontend": "100% for tested flow"},
+  "test_credentials": "admin@roxtaxi.com / admin123 (matches /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created + cleaned up several TEST_ prefixed rentals/tours/taxi_services during backend tests. Also mutated spark-compact price during E2E ($65 → $269.23 → reverted to $65).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend restart-persistence test PASSES — admin-added rentals survive `supervisorctl restart backend` (delete_many removed from seed_db, prices seeded via $setOnInsert). PriceHistoryModal + PATCH /price endpoint fully working across all three kinds (rentals, tours, taxi_services). Seed rental prices are now user-mutable and persistent — do NOT expect a fresh $65 spark-compact after restart.",
+  "rca of the issue": "First E2E run failed an assertion because the PriceHistoryModal auto-closes after Save (via onSaved()), so 'rows_after' was 0 (component unmounted). Test logic issue only — actual functionality worked (toast + row price updated visible in screenshot). Second E2E confirmed the history table contains the new entry after re-opening the modal."
+}

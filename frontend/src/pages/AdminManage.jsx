@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { api, money } from "../lib/api";
-import { Plus, Edit2, Trash2, Save, X, Settings, ImageIcon, Upload, Copy, Check, FolderOpen, Mail, ExternalLink, Archive, MessageSquare } from "lucide-react";
+import { Plus, Edit2, Trash2, Save, X, Settings, ImageIcon, Upload, Copy, Check, FolderOpen, Mail, ExternalLink, Archive, MessageSquare, DollarSign, History, TrendingUp, TrendingDown } from "lucide-react";
 
 const TABS = [
   { key: "tours", label: "Tours" },
@@ -61,6 +61,7 @@ export default function AdminManage() {
 function CatalogPanel({ kind }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
+  const [pricing, setPricing] = useState(null);
 
   const load = async () => {
     try {
@@ -79,16 +80,23 @@ function CatalogPanel({ kind }) {
     catch { toast.error("Delete failed"); }
   };
 
+  const emptyForm = () => {
+    const base = { new: true, name: "", description: "", price: 0, image_url: "", active: true };
+    if (kind === "rentals") return { ...base, year: "", make: "", model: "", color: "", body: "", seats: 4, category: "" };
+    if (kind === "taxi_services") return { ...base, route: "", featured: false };
+    return { ...base, duration: "", location: "", featured: false, category: "" };
+  };
+
   return (
     <div className="bg-white rounded-xl border border-[#E2E8F0]">
       <div className="p-4 border-b border-[#E2E8F0] flex justify-between items-center">
         <div className="text-sm text-[#64748B]">{items.length} item(s)</div>
         <button
-          onClick={() => setEditing({ new: true, name: "", description: "", price: 0, image_url: "", active: true })}
+          onClick={() => setEditing(emptyForm())}
           data-testid="admin-add-item-btn"
           className="inline-flex items-center gap-2 rounded-md bg-[#0B3B5C] text-white px-3 py-2 text-sm hover:bg-[#132a4a]"
         >
-          <Plus className="w-4 h-4" /> Add
+          <Plus className="w-4 h-4" /> Add {kind === "rentals" ? "vehicle" : "item"}
         </button>
       </div>
       <div className="divide-y divide-[#E2E8F0]">
@@ -98,13 +106,28 @@ function CatalogPanel({ kind }) {
             <div className="flex-1">
               <div className="font-semibold text-[#0B3B5C]">{it.name}</div>
               <div className="text-xs text-[#64748B] mt-0.5 line-clamp-1">{it.description}</div>
-              <div className="mt-1 flex gap-3 text-xs text-[#64748B]">
-                <span className="mono text-[#E86A3C] font-semibold">{money(it.price)}</span>
+              <div className="mt-1 flex flex-wrap gap-3 text-xs text-[#64748B] items-center">
+                <button
+                  type="button"
+                  onClick={() => setPricing(it)}
+                  data-testid={`admin-price-edit-${it.id}`}
+                  className="inline-flex items-center gap-1 mono text-[#E86A3C] font-semibold hover:text-[#0B3B5C] hover:underline decoration-dotted"
+                  title="Change price / view history"
+                >
+                  {money(it.price)} <DollarSign className="w-3 h-3 opacity-60" />
+                </button>
+                {(it.price_history?.length || 0) > 1 && (
+                  <span className="text-[10px] text-[#94a3b8]">· {(it.price_history?.length || 0) - 1} price change{(it.price_history?.length || 0) - 1 === 1 ? "" : "s"}</span>
+                )}
                 {it.duration && <span>· {it.duration}</span>}
                 {it.seats && <span>· {it.seats} seats</span>}
+                {it.year && <span>· {it.year}</span>}
+                {it.body && <span>· {it.body}</span>}
+                {it.route && <span>· {it.route}</span>}
                 {it.active === false && <span className="text-red-500">· inactive</span>}
               </div>
             </div>
+            <button onClick={() => setPricing(it)} className="p-2 rounded-md hover:bg-[#F1F5F9] text-[#0B3B5C]" data-testid={`admin-history-${it.id}`} title="Price history"><History className="w-4 h-4" /></button>
             <button onClick={() => setEditing(it)} className="p-2 rounded-md hover:bg-[#F1F5F9]" data-testid={`admin-edit-${it.id}`}><Edit2 className="w-4 h-4" /></button>
             <button onClick={() => remove(it.id)} className="p-2 rounded-md hover:bg-red-50 text-red-500" data-testid={`admin-delete-${it.id}`}><Trash2 className="w-4 h-4" /></button>
           </div>
@@ -113,6 +136,7 @@ function CatalogPanel({ kind }) {
       </div>
 
       {editing && <EditModal kind={kind} initial={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+      {pricing && <PriceHistoryModal kind={kind} item={pricing} onClose={() => setPricing(null)} onSaved={() => { setPricing(null); load(); }} />}
     </div>
   );
 }
@@ -121,20 +145,58 @@ function EditModal({ kind, initial, onClose, onSaved }) {
   const [form, setForm] = useState({
     name: initial.name || "",
     description: initial.description || "",
-    price: initial.price || 0,
+    price: initial.price ?? 0,
     duration: initial.duration || "",
     image_url: initial.image_url || "",
     category: initial.category || "",
     seats: initial.seats || 0,
     active: initial.active !== false,
+    // Rental-specific
+    year: initial.year || "",
+    make: initial.make || "",
+    model: initial.model || "",
+    color: initial.color || "",
+    body: initial.body || "",
+    // Taxi-specific
+    route: initial.route || "",
+    // Tour-specific
+    location: initial.location || "",
+    featured: !!initial.featured,
   });
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
 
   const save = async () => {
+    if (!form.name.trim()) return toast.error("Name is required");
+    if (!form.description.trim()) return toast.error("Description is required");
     setSaving(true);
     try {
-      const payload = { ...form, price: parseFloat(form.price) || 0, seats: form.seats ? parseInt(form.seats) : null };
+      const payload = {
+        name: form.name,
+        description: form.description,
+        price: parseFloat(form.price) || 0,
+        image_url: form.image_url,
+        category: form.category || null,
+        active: form.active,
+      };
+      if (kind === "rentals") {
+        Object.assign(payload, {
+          seats: form.seats ? parseInt(form.seats) : null,
+          year: form.year ? parseInt(form.year) : null,
+          make: form.make || null,
+          model: form.model || null,
+          color: form.color || null,
+          body: form.body || null,
+        });
+      } else if (kind === "taxi_services") {
+        Object.assign(payload, { route: form.route || null, featured: !!form.featured });
+      } else {
+        Object.assign(payload, {
+          duration: form.duration || null,
+          location: form.location || null,
+          featured: !!form.featured,
+        });
+      }
       if (initial.new) await api.post(`/admin/${kind}`, payload);
       else await api.put(`/admin/${kind}/${initial.id}`, payload);
       toast.success("Saved");
@@ -144,21 +206,39 @@ function EditModal({ kind, initial, onClose, onSaved }) {
     } finally { setSaving(false); }
   };
 
+  const isRental = kind === "rentals";
+  const isTaxi = kind === "taxi_services";
+  const modalTitle = initial.new ? (isRental ? "Add vehicle" : "Add item") : (isRental ? "Edit vehicle" : "Edit item");
+
   return (
     <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl w-full max-w-lg p-6 space-y-3">
+      <div className="bg-white rounded-xl w-full max-w-2xl p-6 space-y-3 max-h-[92vh] overflow-y-auto">
         <div className="flex justify-between items-center">
-          <h3 className="font-semibold text-[#0B3B5C]">{initial.new ? "Add item" : "Edit item"}</h3>
+          <h3 className="font-semibold text-[#0B3B5C]">{modalTitle}</h3>
           <button onClick={onClose} className="p-2 rounded-md hover:bg-[#F1F5F9]"><X className="w-4 h-4" /></button>
         </div>
         <F l="Name" v={form.name} on={(v) => setForm({ ...form, name: v })} testid="edit-name" />
         <F l="Description" v={form.description} on={(v) => setForm({ ...form, description: v })} textarea testid="edit-desc" />
+
+        {isRental && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
+            <F l="Year" type="number" v={form.year} on={(v) => setForm({ ...form, year: v })} testid="edit-year" />
+            <F l="Make" v={form.make} on={(v) => setForm({ ...form, make: v })} testid="edit-make" />
+            <F l="Model" v={form.model} on={(v) => setForm({ ...form, model: v })} testid="edit-model" />
+            <F l="Color" v={form.color} on={(v) => setForm({ ...form, color: v })} testid="edit-color" />
+            <F l="Body (Sedan, SUV…)" v={form.body} on={(v) => setForm({ ...form, body: v })} testid="edit-body" />
+            <F l="Seats" type="number" v={form.seats} on={(v) => setForm({ ...form, seats: v })} testid="edit-seats" />
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
-          <F l="Price (USD)" type="number" v={form.price} on={(v) => setForm({ ...form, price: v })} testid="edit-price" />
-          <F l="Category" v={form.category} on={(v) => setForm({ ...form, category: v })} testid="edit-cat" />
-          {kind !== "rentals" && <F l="Duration" v={form.duration} on={(v) => setForm({ ...form, duration: v })} testid="edit-duration" />}
-          {kind === "rentals" && <F l="Seats" type="number" v={form.seats} on={(v) => setForm({ ...form, seats: v })} testid="edit-seats" />}
+          <F l="Price / day (USD)" type="number" v={form.price} on={(v) => setForm({ ...form, price: v })} testid="edit-price" />
+          <F l="Category slug" v={form.category} on={(v) => setForm({ ...form, category: v })} testid="edit-cat" />
+          {!isRental && !isTaxi && <F l="Duration" v={form.duration} on={(v) => setForm({ ...form, duration: v })} testid="edit-duration" />}
+          {!isRental && !isTaxi && <F l="Location / departure" v={form.location} on={(v) => setForm({ ...form, location: v })} testid="edit-location" />}
+          {isTaxi && <F l="Route" v={form.route} on={(v) => setForm({ ...form, route: v })} testid="edit-route" />}
         </div>
+
         <F l="Image URL" v={form.image_url} on={(v) => setForm({ ...form, image_url: v })} testid="edit-image" />
         <div className="flex items-center gap-3">
           <button
@@ -173,9 +253,16 @@ function EditModal({ kind, initial, onClose, onSaved }) {
             <img src={resolveUrl(form.image_url)} alt="preview" className="w-12 h-12 rounded-md object-cover border border-[#E2E8F0]" />
           )}
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} data-testid="edit-active" /> Active
-        </label>
+        <div className="flex items-center gap-6">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} data-testid="edit-active" /> Active
+          </label>
+          {!isRental && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })} data-testid="edit-featured" /> Featured on home
+            </label>
+          )}
+        </div>
         <div className="flex justify-end gap-2 pt-3">
           <button onClick={onClose} className="rounded-md border border-[#E2E8F0] px-4 py-2 text-sm">Cancel</button>
           <button onClick={save} disabled={saving} data-testid="edit-save" className="rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
@@ -189,6 +276,149 @@ function EditModal({ kind, initial, onClose, onSaved }) {
           onPick={(url) => { setForm((f) => ({ ...f, image_url: url })); setPicking(false); toast.success("Image linked"); }}
         />
       )}
+    </div>
+  );
+}
+
+// ---- Price History + change modal ----------------------------------------
+function PriceHistoryModal({ kind, item, onClose, onSaved }) {
+  const [history, setHistory] = useState(null);
+  const [current, setCurrent] = useState(item.price);
+  const [newPrice, setNewPrice] = useState("");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    try {
+      const { data } = await api.get(`/admin/${kind}/${item.id}/price-history`);
+      setHistory(data.history || []);
+      setCurrent(data.current_price);
+    } catch { toast.error("Failed to load history"); setHistory([]); }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [item.id]);
+
+  const save = async () => {
+    const val = parseFloat(newPrice);
+    if (!val || val <= 0) return toast.error("Enter a valid new price");
+    if (Math.abs(val - parseFloat(current)) < 0.001) return toast.error("New price is the same as current");
+    setSaving(true);
+    try {
+      await api.patch(`/admin/${kind}/${item.id}/price`, { price: val, reason });
+      toast.success(`Price updated to ${money(val)}`);
+      onSaved();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Save failed");
+    } finally { setSaving(false); }
+  };
+
+  const delta = newPrice && !isNaN(parseFloat(newPrice)) ? parseFloat(newPrice) - parseFloat(current) : 0;
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4" data-testid="price-history-modal">
+      <div className="bg-white rounded-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div className="p-6 border-b border-[#E2E8F0] flex justify-between items-start gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-[#E86A3C]" />
+              <h3 className="font-semibold text-[#0B3B5C]">Change price · {item.name}</h3>
+            </div>
+            <div className="mt-1 text-xs text-[#64748B]">Current price <span className="mono text-[#0B3B5C] font-semibold">{money(current)}</span></div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-md hover:bg-[#F1F5F9]" data-testid="price-history-close"><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="p-6 space-y-4 bg-[#FBF7EF]">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-[#64748B] mb-1">New price (USD)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={newPrice}
+                onChange={(e) => setNewPrice(e.target.value)}
+                data-testid="price-history-new-price"
+                placeholder={String(current)}
+                className="w-full rounded-md border border-[#E2E8F0] bg-white px-3 py-2 text-sm mono focus:border-[#D4A94A] focus:outline-none"
+              />
+            </div>
+            <div className="flex items-end">
+              {newPrice && !isNaN(parseFloat(newPrice)) && (
+                <div className={`inline-flex items-center gap-1 text-sm font-semibold px-3 py-2 rounded-md ${delta > 0 ? "text-[#059669] bg-[#059669]/10" : delta < 0 ? "text-[#E86A3C] bg-[#E86A3C]/10" : "text-[#64748B] bg-[#F1F5F9]"}`}>
+                  {delta > 0 ? <TrendingUp className="w-4 h-4" /> : delta < 0 ? <TrendingDown className="w-4 h-4" /> : null}
+                  {delta > 0 ? "+" : ""}{money(delta)} ({((delta / current) * 100).toFixed(1)}%)
+                </div>
+              )}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs uppercase tracking-widest text-[#64748B] mb-1">Reason (recommended)</label>
+            <textarea
+              rows={2}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              data-testid="price-history-reason"
+              placeholder="e.g. Peak-season adjustment, promo, price correction…"
+              className="w-full rounded-md border border-[#E2E8F0] bg-white px-3 py-2 text-sm focus:border-[#D4A94A] focus:outline-none"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="rounded-md border border-[#E2E8F0] bg-white px-4 py-2 text-sm">Cancel</button>
+            <button
+              onClick={save}
+              disabled={saving || !newPrice}
+              data-testid="price-history-save"
+              className="rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60"
+            >
+              <Save className="w-4 h-4" /> Save new price
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-[#E2E8F0]">
+          <div className="flex items-center gap-2 mb-3">
+            <History className="w-4 h-4 text-[#0B3B5C]" />
+            <h4 className="font-semibold text-[#0B3B5C] text-sm">Price history</h4>
+            <span className="text-xs text-[#64748B]">{history?.length ? `${history.length} entr${history.length === 1 ? "y" : "ies"}` : ""}</span>
+          </div>
+          {history === null ? (
+            <div className="text-center py-6 text-sm text-[#64748B]">Loading…</div>
+          ) : history.length === 0 ? (
+            <div className="text-center py-6 text-sm text-[#64748B]">No changes logged yet — the next price change will start the audit trail.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs" data-testid="price-history-table">
+                <thead className="text-left text-[10px] uppercase tracking-widest text-[#64748B]">
+                  <tr>
+                    <th className="py-2 pr-3">When</th>
+                    <th className="py-2 pr-3">Old</th>
+                    <th className="py-2 pr-3">New</th>
+                    <th className="py-2 pr-3">Δ</th>
+                    <th className="py-2 pr-3">Reason</th>
+                    <th className="py-2 pr-3">By</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E8F0]">
+                  {history.map((h, i) => {
+                    const d = h.old_price != null ? (h.new_price - h.old_price) : null;
+                    return (
+                      <tr key={i} data-testid={`price-history-row-${i}`}>
+                        <td className="py-2 pr-3 mono text-[#64748B]">{h.changed_at ? new Date(h.changed_at).toLocaleString() : "—"}</td>
+                        <td className="py-2 pr-3 mono">{h.old_price != null ? money(h.old_price) : <span className="text-[#94a3b8]">—</span>}</td>
+                        <td className="py-2 pr-3 mono text-[#0B3B5C] font-semibold">{money(h.new_price)}</td>
+                        <td className={`py-2 pr-3 mono font-semibold ${d == null ? "text-[#94a3b8]" : d > 0 ? "text-[#059669]" : d < 0 ? "text-[#E86A3C]" : "text-[#64748B]"}`}>
+                          {d == null ? "—" : `${d > 0 ? "+" : ""}${money(d)}`}
+                        </td>
+                        <td className="py-2 pr-3 text-[#0B192C]">{h.reason || <span className="text-[#94a3b8]">—</span>}</td>
+                        <td className="py-2 pr-3 text-[#64748B]">{h.changed_by || "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
