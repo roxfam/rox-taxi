@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { api, money } from "../lib/api";
 
 export function PaymentSuccess() {
@@ -33,6 +34,11 @@ export function PaymentSuccess() {
   }, [sessionId]);
 
   const paid = status.payment_status === "paid";
+  const shareUrl = booking ? `${window.location.origin}/pay/${booking.id}` : "";
+  const copyShare = async () => {
+    try { await navigator.clipboard.writeText(shareUrl); toast.success("Payment link copied"); }
+    catch { toast.error("Copy failed"); }
+  };
 
   return (
     <div data-testid="payment-success-page" className="max-w-2xl mx-auto px-6 lg:px-10 py-24 text-center">
@@ -41,7 +47,7 @@ export function PaymentSuccess() {
       </div>
       <h1 className="serif text-5xl text-[#0B3B5C]">{paid ? "You're all set!" : "Confirming payment…"}</h1>
       <p className="mt-4 text-[#64748B] leading-relaxed">
-        {paid ? "Your booking is confirmed. We've saved your details and your driver will be assigned shortly." : "Hang tight — we're confirming your payment with Stripe."}
+        {paid ? "Your booking is confirmed. We've emailed your receipt and your driver will be assigned shortly." : "Hang tight — we're confirming your payment with Stripe."}
       </p>
       {booking && (
         <div className="mt-10 rounded-3xl border border-[#E2E8F0] bg-white p-8 text-left" data-testid="payment-success-summary">
@@ -52,27 +58,36 @@ export function PaymentSuccess() {
             </div>
             <div className="text-right">
               <div className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Total paid</div>
-              <div className="mono text-2xl text-[#E86A3C] font-semibold">{money(booking.total)}</div>
+              <div className="mono text-2xl text-[#E86A3C] font-black tracking-tight">{money(booking.total)}</div>
             </div>
           </div>
           <div className="mt-6 text-sm text-[#64748B]">
             <span className="text-[#0B3B5C] font-semibold">{booking.item_name}</span> · {new Date(booking.booking_date).toLocaleString()}
           </div>
-          <Link
-            to={`/track?id=${booking.id}`}
-            data-testid="payment-success-track-btn"
-            className="mt-8 inline-flex btn-shine rounded-full bg-[#0B3B5C] text-white px-6 py-3 text-sm font-semibold"
-          >
-            Track your booking →
-          </Link>
-          <a
-            href={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/receipt.pdf`}
-            target="_blank" rel="noreferrer"
-            data-testid="payment-success-receipt-btn"
-            className="mt-4 ml-2 inline-flex rounded-full bg-[#D4A94A] text-[#0B192C] px-6 py-3 text-sm font-semibold hover:bg-[#e0b856] shadow-[0_10px_25px_rgba(212,169,74,0.4)]"
-          >
-            Download receipt PDF
-          </a>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              to={`/track?id=${booking.id}`}
+              data-testid="payment-success-track-btn"
+              className="inline-flex btn-shine rounded-full bg-[#0B3B5C] hover:bg-[#132a4a] text-white px-6 py-3 text-sm font-semibold"
+            >
+              Track your booking →
+            </Link>
+            <a
+              href={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/receipt.pdf`}
+              target="_blank" rel="noreferrer"
+              data-testid="payment-success-receipt-btn"
+              className="inline-flex rounded-full bg-[#D4A94A] text-[#0B192C] px-6 py-3 text-sm font-semibold hover:bg-[#e0b856] shadow-[0_10px_25px_rgba(212,169,74,0.4)]"
+            >
+              Download receipt PDF
+            </a>
+            <button
+              onClick={copyShare}
+              data-testid="payment-success-share-btn"
+              className="inline-flex rounded-full border border-[#E2E8F0] text-[#0B3B5C] px-6 py-3 text-sm font-semibold hover:border-[#0B3B5C]"
+            >
+              Copy payment link
+            </button>
+          </div>
         </div>
       )}
     </div>

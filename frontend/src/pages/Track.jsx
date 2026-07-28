@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, money, STATUS_STEPS, STATUS_INDEX } from "../lib/api";
-import { Check, Search, MapPin, User, Calendar as CalIcon, Loader2, XCircle, AlertTriangle, Signal } from "lucide-react";
+import { Check, Search, MapPin, User, Calendar as CalIcon, Loader2, XCircle, AlertTriangle, Signal, CreditCard } from "lucide-react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 function DriverLiveBanner({ bookingId, status }) {
@@ -202,8 +203,29 @@ export default function Track() {
             </div>
 
             {booking.status === "pending_payment" && (
-              <div className="mt-8 rounded-xl bg-[#E86A3C]/10 border border-[#E86A3C]/20 p-4 text-sm text-[#7c3a20]">
-                Payment is still pending. Complete payment to activate your booking.
+              <div className="mt-8 rounded-xl bg-[#E86A3C]/10 border border-[#E86A3C]/20 p-4 flex flex-wrap items-center justify-between gap-3" data-testid="pending-payment-banner">
+                <div className="text-sm text-[#7c3a20]">
+                  Payment is still pending. Complete payment to activate your booking.
+                </div>
+                <Link
+                  to={`/pay/${booking.id}`}
+                  data-testid="pending-payment-cta"
+                  className="btn-shine rounded-full bg-[#E86A3C] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#d55a30] inline-flex items-center gap-2"
+                >
+                  <CreditCard className="w-4 h-4" /> Complete payment →
+                </Link>
+              </div>
+            )}
+
+            {booking.payment_status !== "paid" && !["cancelled","pending_payment","completed"].includes(booking.status) && (
+              <div className="mt-6" data-testid="unpaid-banner">
+                <Link
+                  to={`/pay/${booking.id}`}
+                  data-testid="unpaid-cta"
+                  className="inline-flex items-center gap-2 rounded-full bg-[#0B3B5C] hover:bg-[#132a4a] text-white px-5 py-2.5 text-sm font-semibold"
+                >
+                  <CreditCard className="w-4 h-4" /> Pay {money(booking.total)} now
+                </Link>
               </div>
             )}
 
