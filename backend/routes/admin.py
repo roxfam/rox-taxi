@@ -76,8 +76,13 @@ class SiteConfigUpdate(BaseModel):
     notify_sms_enabled: Optional[bool] = None
 
 
+class ContactMessageStatusUpdate(BaseModel):
+    status: str  # 'new' | 'replied' | 'archived'
+
+
 class GroupInquiryStatusUpdate(BaseModel):
     status: str
+
 
 
 # ---- Dependency shim so this router can reuse server.py's require_admin ----
@@ -242,6 +247,36 @@ async def admin_update_group_status(inquiry_id: str, req: GroupInquiryStatusUpda
         raise HTTPException(404, "Inquiry not found")
     doc = await _db.group_inquiries.find_one({"id": inquiry_id.upper()})
     return _clean(doc)
+
+
+# ---- Admin: contact-form messages ------------------------------------------
+
+@router.get("/admin/contact-messages")
+async def admin_list_contact_messages(_: str = Depends(_admin_dep)):
+    docs = await _db.contact_messages.find({}).sort("created_at", -1).to_list(500)
+    return [_clean(d) for d in docs]
+
+
+@router.patch("/admin/contact-messages/{msg_id}/status")
+async def admin_update_contact_status(msg_id: str, req: ContactMessageStatusUpdate, _: str = Depends(_admin_dep)):
+    if req.status not in {"new", "replied", "archived"}:
+        raise HTTPException(422, "status must be new | replied | archived")
+    res = await _db.contact_messages.update_one(
+        {"id": msg_id.upper()},
+        {"$set": {"status": req.status, "updated_at": _now_iso()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Message not found")
+    doc = await _db.contact_messages.find_one({"id": msg_id.upper()})
+    return _clean(doc)
+
+
+@router.delete("/admin/contact-messages/{msg_id}")
+async def admin_delete_contact_message(msg_id: str, _: str = Depends(_admin_dep)):
+    res = await _db.contact_messages.delete_one({"id": msg_id.upper()})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Message not found")
+    return {"deleted": True, "id": msg_id.upper()}
 
 
 # ============================================================================
