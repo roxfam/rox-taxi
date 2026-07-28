@@ -116,7 +116,7 @@ TAXI_SERVICES: List[Dict] = [
      "route": "Anywhere on Nassau / PI", "featured": False,
      "description": "Weddings, families, cruise groups. Airport, hotel, cruise port pickups & drop-offs.",
      "image_url": _TAXI_IMG},
-    {"id": "fish-fry-shuttle", "name": "Any Nassau Hotel → Arawak Cay Fish Fry (evening)", "price": 15.0,
+    {"id": "fish-fry-shuttle", "name": "Any Nassau Hotel → Arawak Cay Fish Fry (evening)", "price": 20.0,
      "route": "Hotel → Fish Fry", "featured": False,
      "description": f"{_TARIFF_NOTE} One-way evening ride to Nassau's iconic Fish Fry food strip.",
      "image_url": _TAXI_IMG},
