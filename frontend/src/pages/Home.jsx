@@ -6,7 +6,7 @@ import { api, money } from "../lib/api";
 import NassauCarousel from "../components/NassauCarousel";
 import GoogleReviews from "../components/GoogleReviews";
 
-const HERO_IMG = "https://images.pexels.com/photos/1450353/pexels-photo-1450353.jpeg?auto=compress&cs=tinysrgb&w=1920";
+const HERO_IMG = "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=2400";
 
 export default function Home() {
   const [tours, setTours] = useState([]);
