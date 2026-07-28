@@ -17,7 +17,7 @@ const FALLBACK = [
 // same photo first), auto-advances every 6s, and exposes prev/next + dot
 // controls. Children compose inside the tinted overlay so the existing hero
 // headline/CTA layout stays untouched.
-export default function HomeHeroCarousel({ children, className = "", intervalMs = 6000 }) {
+export default function HomeHeroCarousel({ children, className = "", intervalMs = 10000 }) {
   const [slides, setSlides] = useState(FALLBACK);
   const [i, setI] = useState(0);
   const timerRef = useRef(null);
