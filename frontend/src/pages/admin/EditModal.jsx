@@ -60,7 +60,10 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
           duration: form.duration || null,
           location: form.location || null,
           featured: !!form.featured,
-          external_booking_url: form.external_booking_url || null,
+          // Send empty string (not null) when cleared — backend model_dump filters
+          // None-valued keys, so null wouldn't wipe an existing URL. Empty string
+          // is falsy on the frontend so the public "official site" link hides.
+          external_booking_url: (form.external_booking_url ?? "").trim(),
         });
       }
       if (initial.new) await api.post(`/admin/${kind}`, payload);
@@ -104,6 +107,15 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
           {!isRental && !isTaxi && <F l="Location / departure" v={form.location} on={(v) => setForm({ ...form, location: v })} testid="edit-location" />}
           {isTaxi && <F l="Route" v={form.route} on={(v) => setForm({ ...form, route: v })} testid="edit-route" />}
         </div>
+
+        {!isRental && !isTaxi && (
+          <F
+            l="Official booking URL (link out — leave blank to hide)"
+            v={form.external_booking_url}
+            on={(v) => setForm({ ...form, external_booking_url: v })}
+            testid="edit-external-url"
+          />
+        )}
 
         <F l="Image URL" v={form.image_url} on={(v) => setForm({ ...form, image_url: v })} testid="edit-image" />
         <div className="flex items-center gap-3">
