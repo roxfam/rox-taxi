@@ -13,14 +13,25 @@ export default function CatalogPanel({ kind }) {
   const [editing, setEditing] = useState(null);
   const [pricing, setPricing] = useState(null);
 
+  // Guarded fetch: cancel late-arriving responses when `kind` changes so a
+  // stale /admin/tours result can't overwrite the freshly loaded /admin/rentals
+  // list. Also clear items eagerly so the operator doesn't see stale rows
+  // during the fetch. (Fixes iteration_13 HIGH: catalog-tab race.)
+  useEffect(() => {
+    let alive = true;
+    setItems([]);
+    api.get(`/admin/${kind}`)
+      .then(({ data }) => { if (alive) setItems(data); })
+      .catch(() => { if (alive) toast.error("Failed to load"); });
+    return () => { alive = false; };
+  }, [kind]);
+
   const load = async () => {
     try {
       const { data } = await api.get(`/admin/${kind}`);
       setItems(data);
     } catch { toast.error("Failed to load"); }
   };
-
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [kind]);
 
   const remove = async (id) => {
     if (!window.confirm("Delete this item?")) return;
