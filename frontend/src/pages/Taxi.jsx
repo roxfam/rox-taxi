@@ -206,26 +206,55 @@ export default function Taxi() {
           initialPickup={prefill.pickup}
           onClose={() => { setSelected(null); setPrefill({ dropoff: "", pickup: "" }); }}
           extraFields={(form, setForm) => (
-            <div className="grid sm:grid-cols-2 gap-4" data-testid="taxi-route-selector">
-              <LocationSelect
-                label="Pickup location"
-                icon={<MapPin className="w-4 h-4 text-[#0B3B5C]" />}
-                value={form.pickup_location}
-                onChange={(v) => setForm({ ...form, pickup_location: v })}
-                options={LOCATION_OPTIONS}
-                placeholder="Select pickup…"
-                testid="taxi-pickup"
-              />
-              <LocationSelect
-                label="Dropoff location"
-                icon={<ArrowRight className="w-4 h-4 text-[#E86A3C]" />}
-                value={form.dropoff_location}
-                onChange={(v) => setForm({ ...form, dropoff_location: v })}
-                options={LOCATION_OPTIONS}
-                placeholder="Select dropoff…"
-                testid="taxi-dropoff"
-              />
-            </div>
+            <>
+              <div className="grid sm:grid-cols-2 gap-4" data-testid="taxi-route-selector">
+                <LocationSelect
+                  label="Pickup location"
+                  icon={<MapPin className="w-4 h-4 text-[#0B3B5C]" />}
+                  value={form.pickup_location}
+                  onChange={(v) => setForm({ ...form, pickup_location: v })}
+                  options={LOCATION_OPTIONS}
+                  placeholder="Select pickup…"
+                  testid="taxi-pickup"
+                />
+                <LocationSelect
+                  label="Dropoff location"
+                  icon={<ArrowRight className="w-4 h-4 text-[#E86A3C]" />}
+                  value={form.dropoff_location}
+                  onChange={(v) => setForm({ ...form, dropoff_location: v })}
+                  options={LOCATION_OPTIONS}
+                  placeholder="Select dropoff…"
+                  testid="taxi-dropoff"
+                />
+              </div>
+
+              <label
+                className={`flex items-center gap-3 rounded-xl border p-4 cursor-pointer transition-colors ${
+                  form.round_trip
+                    ? "border-[#D4A94A] bg-[#D4A94A]/8"
+                    : "border-[#E2E8F0] bg-white hover:border-[#D4A94A]/60"
+                }`}
+                style={form.round_trip ? { backgroundColor: "rgba(212,169,74,0.08)" } : undefined}
+                data-testid="taxi-round-trip-toggle"
+              >
+                <input
+                  type="checkbox"
+                  checked={!!form.round_trip}
+                  onChange={(e) => setForm({ ...form, round_trip: e.target.checked })}
+                  className="w-5 h-5 accent-[#D4A94A] shrink-0"
+                  data-testid="taxi-round-trip-checkbox"
+                />
+                <span className="flex-1">
+                  <span className="block text-sm font-semibold text-[#0B3B5C]">Round trip (same-day return)</span>
+                  <span className="block text-xs text-[#64748B] mt-0.5">
+                    Book pickup + return together and save 10% on both legs. Perfect for cruise days, dinner runs, or airport with wait.
+                  </span>
+                </span>
+                <span className="rounded-full bg-[#D4A94A] text-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest shrink-0" data-testid="taxi-round-trip-badge">
+                  Save 10%
+                </span>
+              </label>
+            </>
           )}
         />
       )}

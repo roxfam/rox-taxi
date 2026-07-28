@@ -45,6 +45,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     days: defaultDays,
     extra_luggage: 0,
     additional_drivers: 0,
+    round_trip: false,
     notes: "",
   });
   const LUGGAGE_FEE = 3;
@@ -66,7 +67,16 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
 
   const setF = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
-  const base = (item?.price || 0) * (serviceType === "rental" ? Number(form.days || 1) : 1);
+  const ROUND_TRIP_DISCOUNT_PCT = 0.10;
+  const isRoundTrip = serviceType === "taxi" && !!form.round_trip;
+  const singleFare = Number(item?.price || 0);
+  const rawBase = serviceType === "rental"
+    ? singleFare * Math.max(1, Number(form.days || 1))
+    : isRoundTrip
+      ? singleFare * 2
+      : singleFare;
+  const roundTripDiscount = isRoundTrip ? rawBase * ROUND_TRIP_DISCOUNT_PCT : 0;
+  const base = rawBase - roundTripDiscount;
   const luggageFee = serviceType === "taxi" ? Number(form.extra_luggage || 0) * LUGGAGE_FEE : 0;
   const passengerFee = serviceType === "taxi" && Number(form.passengers || 0) > PASSENGER_INCLUDED
     ? (Number(form.passengers) - PASSENGER_INCLUDED) * PASSENGER_FEE
@@ -115,6 +125,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         extra_luggage: Number(form.extra_luggage) || 0,
         notes: form.notes || null,
         payment_method: payMethod,
+        round_trip: !!form.round_trip,
       };
       const { data: b } = await api.post("/bookings", payload);
       setBooking(b);
@@ -300,6 +311,12 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     <div className="mt-2 text-xs text-[#64748B] flex justify-between">
                       <span>Group fee ({form.passengers} passengers)</span>
                       <span className="mono font-semibold text-[#E86A3C]">+${passengerFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {isRoundTrip && (
+                    <div className="mt-2 text-xs flex justify-between border-t border-[#E2E8F0] pt-2" data-testid="round-trip-summary-line">
+                      <span className="text-[#64748B]">Round trip — 2 legs (10% off)</span>
+                      <span className="mono font-semibold text-[#D4A94A]">−${roundTripDiscount.toFixed(2)}</span>
                     </div>
                   )}
                 </div>
