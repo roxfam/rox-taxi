@@ -48,6 +48,10 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - Weekly Monday revenue email to owner.
 - Driver dispatch SMS on "driver_assigned" status change.
 - CSV / Excel export from admin panel.
+- **Admin push notifications** via Web Push API (VAPID keys, service worker) — replace SMS-only alerts, free forever, works when Twilio is over budget.
+- **Driver mobile app view** `/driver/manifest` — driver logs in, sees all today's assigned bookings on one screen with pickup/dropoff, phone tap-to-call, one-tap "en route → arrived → completed" status buttons.
+- **Auto-refund on cancellation** — when a customer cancels ≥48h out and payment was Stripe/PayPal, automatically fire the refund API call (currently only records the intent). Cancellation endpoint already computes `refund_estimate` — hook to `stripe.Refund.create` + PayPal `/v2/payments/captures/{id}/refund`.
+- **Blackout calendar in admin** — admin marks unavailable dates (holidays, family events, sick days) via calendar UI in Site Config panel; `POST /api/admin/blackout-dates`. Frontend booking modal reads them and disables those dates in `DateTimePicker` (same mechanism as existing Saturday closure). Extend `_validate_open_day()` server-side.
 
 ### 🎨 Backlog — Wave 4 (polish)
 - Tip chips on Pay page (backend `tip_amount` already accepted).
