@@ -198,6 +198,23 @@ function resolveUrl(u) {
   return `${process.env.REACT_APP_BACKEND_URL}${u}`;
 }
 
+// Clipboard fallback for browsers/contexts where navigator.clipboard is blocked
+// (iframes, non-secure origins, permission-denied). Uses a temp textarea +
+// document.execCommand("copy") so the Copy URL button always succeeds.
+function fallbackCopy(text, onSuccess) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (ok) onSuccess?.();
+  } catch { /* silent — best effort */ }
+}
+
 // ---- Image Picker modal — shared between EditModal + ImagesPanel ----------
 function ImagePickerModal({ onClose, onPick }) {
   const [images, setImages] = useState([]);
@@ -356,10 +373,18 @@ function ImagesPanel() {
 
   const copy = (img) => {
     const url = resolveUrl(img.url);
-    navigator.clipboard?.writeText(url);
-    setCopiedName(img.name);
-    setTimeout(() => setCopiedName(""), 1600);
-    toast.success("URL copied");
+    const done = () => {
+      setCopiedName(img.name);
+      setTimeout(() => setCopiedName(""), 1600);
+      toast.success("URL copied");
+    };
+    try {
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(url).then(done).catch(() => fallbackCopy(url, done));
+      } else {
+        fallbackCopy(url, done);
+      }
+    } catch { fallbackCopy(url, done); }
   };
 
   return (
@@ -482,8 +507,9 @@ function SiteConfigPanel() {
   const [cfg, setCfg] = useState({ facebook_url: "", zelle_email: "", zelle_phone: "", phone: "", logo_url: "" });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [pickingLogo, setPickingLogo] = useState(false);
 
-  useEffect(() => { api.get("/site-config").then((r) => setCfg({ ...cfg, ...r.data })); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { api.get("/site-config").then((r) => setCfg((c) => ({ ...c, ...r.data }))); /* eslint-disable-next-line */ }, []);
 
   const save = async () => {
     setSaving(true);
@@ -501,12 +527,26 @@ function SiteConfigPanel() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const { data } = await api.post("/admin/upload-logo", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      setCfg((c) => ({ ...c, logo_url: data.logo_url }));
-      toast.success("Logo uploaded");
+      // Use the general /admin/images endpoint so the logo lands in the shared
+      // photo library (visible in the Images tab + pickers). We still persist the
+      // URL onto site_config via PUT below.
+      const { data } = await api.post("/admin/images", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const url = data.url;
+      setCfg((c) => ({ ...c, logo_url: url }));
+      await api.put("/admin/site-config", { logo_url: url });
+      toast.success("Logo uploaded + saved");
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Upload failed");
     } finally { setUploading(false); }
+  };
+
+  const pickLogoFromLibrary = async (url) => {
+    setCfg((c) => ({ ...c, logo_url: url }));
+    setPickingLogo(false);
+    try {
+      await api.put("/admin/site-config", { logo_url: url });
+      toast.success("Logo linked from library");
+    } catch { toast.error("Save failed — click Save to retry"); }
   };
 
   const logoPreview = cfg.logo_url ? (cfg.logo_url.startsWith("http") ? cfg.logo_url : `${process.env.REACT_APP_BACKEND_URL}${cfg.logo_url}`) : "";
@@ -526,11 +566,21 @@ function SiteConfigPanel() {
             )}
           </div>
           <div className="flex-1">
-            <label className={`inline-block rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm cursor-pointer hover:bg-[#0a2f4a] ${uploading ? "opacity-60" : ""}`}>
-              {uploading ? "Uploading…" : "Upload logo"}
-              <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={uploadLogo} className="hidden" data-testid="logo-upload-input" disabled={uploading} />
-            </label>
-            <div className="text-xs text-[#94a3b8] mt-2">PNG, JPG, WEBP or SVG · ≤ 5MB. Recommended: transparent PNG, ~200×80px.</div>
+            <div className="flex flex-wrap gap-2">
+              <label className={`inline-flex items-center gap-1.5 rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm cursor-pointer hover:bg-[#0a2f4a] ${uploading ? "opacity-60" : ""}`}>
+                <Upload className="w-3.5 h-3.5" /> {uploading ? "Uploading…" : "Upload new"}
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={uploadLogo} className="hidden" data-testid="logo-upload-input" disabled={uploading} />
+              </label>
+              <button
+                type="button"
+                onClick={() => setPickingLogo(true)}
+                data-testid="logo-pick-btn"
+                className="inline-flex items-center gap-1.5 rounded-md border border-[#0B3B5C] text-[#0B3B5C] hover:bg-[#0B3B5C] hover:text-white px-4 py-2 text-sm transition-colors"
+              >
+                <FolderOpen className="w-3.5 h-3.5" /> Pick from library
+              </button>
+            </div>
+            <div className="text-xs text-[#94a3b8] mt-2">PNG, JPG, WEBP or SVG · ≤ 8MB. Uploads land in your shared photo library.</div>
             {cfg.logo_url && (
               <button
                 type="button"
@@ -544,6 +594,13 @@ function SiteConfigPanel() {
           </div>
         </div>
       </div>
+
+      {pickingLogo && (
+        <ImagePickerModal
+          onClose={() => setPickingLogo(false)}
+          onPick={pickLogoFromLibrary}
+        />
+      )}
 
       <div className="space-y-3">
         <F l="Facebook page URL" v={cfg.facebook_url || ""} on={(v) => setCfg({ ...cfg, facebook_url: v })} testid="site-fb" />

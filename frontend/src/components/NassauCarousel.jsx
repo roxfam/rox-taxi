@@ -30,8 +30,8 @@ const SLIDES = [
   },
   {
     name: "Queen's Staircase",
-    tag: "Nassau historic",
-    img: "https://images.pexels.com/photos/2422915/pexels-photo-2422915.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    tag: "66 hand-cut steps · Nassau",
+    img: "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/0irsdzqm_queens-staircase-nassau-66-steps.webp",
   },
   {
     name: "Swimming Pigs",

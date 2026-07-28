@@ -70,6 +70,7 @@ class SiteConfigUpdate(BaseModel):
     whatsapp_number: Optional[str] = None
     paypal_me_url: Optional[str] = None
     tripadvisor_url: Optional[str] = None
+    google_reviews_url: Optional[str] = None
     logo_url: Optional[str] = None
     notify_email_enabled: Optional[bool] = None
     notify_sms_enabled: Optional[bool] = None

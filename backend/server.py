@@ -152,6 +152,14 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ContactMessage(BaseModel):
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    subject: Optional[str] = "General inquiry"
+    message: str
+
+
 class GroupInquiryCreate(BaseModel):
     event_type: str  # wedding | corporate | family_reunion | cruise_group | bachelor | other
     event_date: str  # ISO date
@@ -603,6 +611,49 @@ async def get_booking(booking_id: str):
     doc = await db.bookings.find_one({"id": booking_id.upper()})
     if not doc:
         raise HTTPException(404, "Booking not found")
+    return clean(doc)
+
+
+@api_router.post("/contact")
+async def create_contact_message(req: ContactMessage):
+    """Public contact-form endpoint.
+
+    Persists to `db.contact_messages` and fires a plaintext email + SMS to the
+    admin so we get an inbox ping even if the user never books. Also sends the
+    submitter a friendly acknowledgement email. Failures notify but never break
+    the user's submit.
+    """
+    doc = req.model_dump()
+    doc["id"] = "CT-" + uuid.uuid4().hex[:8].upper()
+    doc["status"] = "new"
+    doc["created_at"] = now_iso()
+    await db.contact_messages.insert_one(doc)
+
+    try:
+        from notifications import send_email, send_sms
+        summary = (
+            f"New contact form message ({doc['id']})\n"
+            f"From: {req.name} <{req.email}>\n"
+            f"Phone: {req.phone or '—'}\n"
+            f"Topic: {req.subject}\n\n"
+            f"{req.message}"
+        )
+        if ADMIN_EMAIL:
+            send_email(ADMIN_EMAIL, f"Contact form: {req.subject} — {doc['id']}", f"<pre>{summary}</pre>", summary)
+        # Ack to the submitter
+        send_email(
+            req.email,
+            "We received your message — Rox Taxi Service and Tours",
+            f"<p>Hi {req.name},</p><p>Thanks for reaching out — we'll reply within the hour.</p><p><b>Your message ({doc['id']}):</b></p><pre>{req.message}</pre>",
+            f"Hi {req.name},\n\nThanks for reaching out — we'll reply within the hour.\n\nYour message ({doc['id']}):\n{req.message}",
+        )
+        # Admin SMS ping (best-effort, no phone from ADMIN_EMAIL context)
+        admin_sms_number = os.environ.get("ADMIN_SMS_NUMBER", "").strip()
+        if admin_sms_number:
+            send_sms(admin_sms_number, f"Rox contact form ({doc['id']}) from {req.name}: {req.message[:120]}")
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("contact notify err: %s", e)
+
     return clean(doc)
 
 
