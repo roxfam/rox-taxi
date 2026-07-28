@@ -3,6 +3,8 @@
 Kept in a dedicated module to keep server.py lean. Callers supply a plain
 dict; these functions return raw PDF bytes (no I/O).
 """
+import os
+import urllib.request
 from io import BytesIO
 from datetime import datetime, timezone
 
@@ -10,7 +12,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 
 
 NAVY = colors.HexColor("#0B3B5C")
@@ -19,6 +21,28 @@ CORAL = colors.HexColor("#E86A3C")
 GREY = colors.HexColor("#64748B")
 SAND = colors.HexColor("#FBF7EF")
 INK = colors.HexColor("#0B192C")
+
+# Cached Rox Taxi logo — fetched once, converted to PNG for reportlab
+# (which handles webp poorly on some builds), and reused on every PDF.
+_LOGO_CACHE = "/tmp/rox_logo.png"
+_LOGO_URL = "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/slneek3g_Color%20logo%20-%20no%20background.webp"
+
+
+def _load_logo():
+    """Return a reportlab Image flowable for the header, or None on failure.
+    We prefer a hard failure to render *without* a logo over a broken PDF."""
+    try:
+        if not os.path.exists(_LOGO_CACHE):
+            raw = urllib.request.urlopen(_LOGO_URL, timeout=8).read()
+            # Convert webp → PNG via PIL for maximum reportlab compat.
+            from PIL import Image as PILImage
+            im = PILImage.open(BytesIO(raw)).convert("RGBA")
+            im.save(_LOGO_CACHE, "PNG")
+        img = Image(_LOGO_CACHE, width=1.1 * inch, height=1.1 * inch)
+        img.hAlign = "LEFT"
+        return img
+    except Exception:
+        return None
 
 
 def build_wedding_pdf(inquiry: dict) -> bytes:
@@ -38,6 +62,10 @@ def build_wedding_pdf(inquiry: dict) -> bytes:
     small = ParagraphStyle("small", parent=styles["Normal"], fontName="Helvetica", fontSize=8, textColor=GREY, leading=11)
 
     story = []
+    logo = _load_logo()
+    if logo:
+        story.append(logo)
+        story.append(Spacer(1, 6))
     story.append(Paragraph("ROX TAXI SERVICE AND TOURS", sub))
     story.append(Paragraph(f"Wedding Package for <font color='#D4A94A'><i>{inquiry.get('customer_name','the happy couple')}</i></font>", title))
     story.append(Paragraph(f"REFERENCE {inquiry['id']} · EVENT DATE {inquiry.get('event_date','')} · {inquiry.get('guest_count',0)} GUESTS", sub))
@@ -130,6 +158,10 @@ def build_receipt_pdf(booking: dict) -> bytes:
     status_label = "PAID" if paid else "PENDING PAYMENT"
 
     story = []
+    logo = _load_logo()
+    if logo:
+        story.append(logo)
+        story.append(Spacer(1, 6))
     story.append(Paragraph("ROX TAXI SERVICE AND TOURS", sub))
     story.append(Paragraph(f"Booking receipt for <font color='#D4A94A'><i>{booking.get('customer_name','')}</i></font>", title))
     story.append(Paragraph(f"REFERENCE {booking['id']} · {status_label} · ISSUED {now_iso[:10]}", sub))

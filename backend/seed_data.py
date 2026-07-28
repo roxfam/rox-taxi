@@ -80,7 +80,7 @@ TAXI_SERVICES: List[Dict] = [
      "route": "LPIA → Cruise Port", "featured": True,
      "description": f"{_TARIFF_NOTE} Direct to Prince George Wharf for embarkation.",
      "image_url": _TAXI_IMG},
-    {"id": "port-paradise", "name": "Nassau Cruise Port → Paradise Island / Atlantis", "price": 18.0,
+    {"id": "port-paradise", "name": "Nassau Cruise Port → Paradise Island / Atlantis", "price": 20.0,
      "route": "Cruise Port → Paradise Island", "featured": True,
      "description": f"{_TARIFF_NOTE} Bridge toll included.",
      "image_url": _TAXI_IMG},
