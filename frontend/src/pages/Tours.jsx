@@ -1,14 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
-import { Clock, ArrowRight, ExternalLink, Car } from "lucide-react";
+import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
+
+const SORTS = [
+  { key: "featured", label: "Featured", cmp: (a, b) => (b.featured === true) - (a.featured === true) },
+  { key: "price-asc", label: "Price ↑", cmp: (a, b) => a.price - b.price },
+  { key: "price-desc", label: "Price ↓", cmp: (a, b) => b.price - a.price },
+  { key: "duration", label: "Shortest first", cmp: (a, b) => (parseFloat(a.duration) || 99) - (parseFloat(b.duration) || 99) },
+];
 
 export default function Tours() {
   const [tours, setTours] = useState([]);
   const [selected, setSelected] = useState(null);
   const [params] = useSearchParams();
+  const [sortKey, setSortKey] = useState("featured");
 
   useEffect(() => {
     api.get("/tours").then((r) => {
@@ -20,6 +28,13 @@ export default function Tours() {
       }
     }).catch(() => {});
   }, [params]);
+
+  // Sort client-side so the network trip stays a single /tours call. Featured
+  // is the default because it lifts the highest-margin curated excursions.
+  const sortedTours = useMemo(() => {
+    const cmp = SORTS.find((s) => s.key === sortKey)?.cmp;
+    return cmp ? [...tours].sort(cmp) : tours;
+  }, [tours, sortKey]);
 
   return (
     <div data-testid="tours-page">
@@ -56,8 +71,30 @@ export default function Tours() {
         </div>
       </div>
 
-      <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24 grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {tours.map((t) => (
+      <section className="max-w-7xl mx-auto px-6 lg:px-10 pt-14 pb-8">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="text-sm text-[#64748B]" data-testid="tours-count">
+            <span className="font-semibold text-[#0B3B5C]">{sortedTours.length}</span> excursion{sortedTours.length === 1 ? "" : "s"}
+          </div>
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-white p-1 text-xs" data-testid="tours-sort">
+            <ArrowUpDown className="w-3.5 h-3.5 text-[#64748B] ml-2" />
+            {SORTS.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setSortKey(s.key)}
+                data-testid={`tours-sort-${s.key}`}
+                className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${sortKey === s.key ? "bg-[#0B3B5C] text-white" : "text-[#0B3B5C] hover:bg-[#F1F5F9]"}`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-24 grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {sortedTours.map((t) => (
           <div key={t.id} className="group rounded-2xl overflow-hidden bg-white border border-[#E2E8F0] hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(212,169,74,0.15)] transition-transform" data-testid={`tour-card-${t.id}`}>
             <div className="aspect-[4/3] overflow-hidden relative">
               <img src={t.image_url} alt={t.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
