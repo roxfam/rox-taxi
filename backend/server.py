@@ -147,6 +147,7 @@ RENTAL_DEPOSIT_USD = 150.0  # refundable security deposit applied automatically 
 ADDITIONAL_DRIVER_FEE_USD = 25.0  # flat fee per extra registered driver on a car rental
 ADDITIONAL_DRIVER_MAX = 4
 RENTAL_MIN_DAYS = 2  # 2-day minimum booking policy for car rentals
+PARADISE_BRIDGE_TOLL_USD = 2.0  # $2 bridge toll auto-added to any taxi fare crossing to Paradise Island / Atlantis
 
 # Days closed (weekly). Python weekday: Monday=0..Sunday=6. Saturday=5.
 CANCELLATION_FEE_PCT = 0.15  # 15% cancellation fee
@@ -577,6 +578,7 @@ async def create_booking(req: BookingCreate):
     passenger_fee = 0.0
     deposit_amount = 0.0
     additional_driver_fee = 0.0
+    bridge_toll_fee = 0.0
     if req.service_type == "taxi":
         extra = max(0, min(int(req.extra_luggage or 0), LUGGAGE_MAX))
         luggage_fee = extra * LUGGAGE_FEE_USD
@@ -585,6 +587,17 @@ async def create_booking(req: BookingCreate):
         if int(req.passengers) > EXTRA_PASSENGER_INCLUDED:
             passenger_fee = (int(req.passengers) - EXTRA_PASSENGER_INCLUDED) * EXTRA_PASSENGER_FEE_USD
         booking["passenger_fee"] = passenger_fee
+        # Auto-add $2 Paradise Island bridge toll for any taxi trip crossing the
+        # bridge to Paradise Island / Atlantis. Detected by keyword match on
+        # the service name OR dropoff location so it works for both packaged
+        # and free-form routes.
+        _combined = f"{req.item_name} {req.dropoff_location or ''} {req.pickup_location or ''}".lower()
+        if any(k in _combined for k in ("paradise island", "atlantis", "→ paradise", "-> paradise")):
+            bridge_toll_fee = PARADISE_BRIDGE_TOLL_USD
+            booking["bridge_toll_fee"] = bridge_toll_fee
+            _existing = str(req.notes or "").strip()
+            _toll_note = f"⚠ Includes ${PARADISE_BRIDGE_TOLL_USD:.0f} Paradise Island bridge toll pass (round-trip). Toll billed to driver at the crossing and reimbursed on this booking."
+            booking["notes"] = (_existing + " · " + _toll_note).strip(" ·") if _existing else _toll_note
     if req.service_type == "rental":
         deposit_amount = RENTAL_DEPOSIT_USD
         booking["deposit_amount"] = deposit_amount
@@ -594,7 +607,7 @@ async def create_booking(req: BookingCreate):
         booking["additional_drivers"] = extra_drivers
         booking["additional_driver_fee"] = additional_driver_fee
 
-    booking["total"] = round(base + luggage_fee + passenger_fee + deposit_amount + additional_driver_fee, 2)
+    booking["total"] = round(base + luggage_fee + passenger_fee + deposit_amount + additional_driver_fee + bridge_toll_fee, 2)
 
     await db.bookings.insert_one(booking)
     # Fire owner SMS alert for EVERY new booking (regardless of payment method).
@@ -646,6 +659,10 @@ async def get_fees():
         "rental_min_days": RENTAL_MIN_DAYS,
         "rental_min_days_policy": (
             f"Car rentals have a {RENTAL_MIN_DAYS}-day minimum booking period."
+        ),
+        "paradise_bridge_toll": PARADISE_BRIDGE_TOLL_USD,
+        "paradise_bridge_toll_policy": (
+            f"A ${PARADISE_BRIDGE_TOLL_USD:.0f} bridge toll pass fee is automatically added to any taxi fare going to Paradise Island or Atlantis."
         ),
         "closed_weekdays": sorted(CLOSED_WEEKDAYS),
         "closed_weekdays_labels": ["Saturday"],
