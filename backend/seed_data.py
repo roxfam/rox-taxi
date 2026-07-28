@@ -64,7 +64,7 @@ TAXI_SERVICES: List[Dict] = [
      "route": "LPIA → Downtown Nassau", "featured": True,
      "description": f"{_TARIFF_NOTE} Meet & greet at arrivals, luggage help, air-conditioned.",
      "image_url": _TAXI_IMG},
-    {"id": "airport-cablebeach", "name": "LPIA Airport → Cable Beach", "price": 32.0,
+    {"id": "airport-cablebeach", "name": "LPIA Airport → Cable Beach", "price": 35.0,
      "route": "LPIA → Cable Beach", "featured": True,
      "description": f"{_TARIFF_NOTE} Includes SuperClubs Breezes, Melia, Sandals Royal Bahamian.",
      "image_url": _TAXI_IMG},
