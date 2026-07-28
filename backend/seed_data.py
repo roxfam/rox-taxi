@@ -53,10 +53,10 @@ TOURS_SEED: List[Dict] = [
 ]
 
 # Nassau / New Providence official taxi tariff (posted at LPIA taxi rank + Ministry table).
-# Prices are for the first 2 passengers. Each additional passenger: +$4.
+# Prices are for the first 2 passengers. Each additional passenger: +$5.
 # Paradise Island trips include the $2 bridge toll. Extra luggage: +$2.20 per piece.
 # Sources: nassaulpia.com/to-from/taxis, bahamas-travel.info/taxi-fares, hopbahamas.com 2026 guide.
-_TARIFF_NOTE = "Official Nassau tariff. First 2 passengers. +$4 per extra passenger. Paradise Island bridge toll ($2) included where applicable."
+_TARIFF_NOTE = "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable."
 _TAXI_IMG = "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"
 
 TAXI_SERVICES: List[Dict] = [

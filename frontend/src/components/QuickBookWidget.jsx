@@ -52,8 +52,8 @@ const TABS = [
     key: "rentals",
     label: "Rentals",
     Icon: MapPinned,
-    accent: "#0B3B5C",        // navy
-    accentSoft: "rgba(11,59,92,0.14)",
+    accent: "#0F766E",        // rich emerald teal
+    accentSoft: "rgba(15,118,110,0.14)",
     href: "/rentals",
     kicker: "Easy Drive Car Rentals",
     title: "Compact to Luxury Vehicle — delivered to you.",
@@ -154,7 +154,13 @@ export default function QuickBookWidget() {
 
             <div className="mt-7 flex items-center justify-between gap-3 pt-5 border-t border-[#E2E8F0]/60">
               <div>
-                <div className="mono text-3xl font-black tracking-tight" style={{ color: active.accent }}>{active.price}</div>
+                <div
+                  className="mono text-3xl font-black tracking-tight bg-clip-text text-transparent drop-shadow-[0_2px_10px_rgba(232,106,60,0.35)]"
+                  style={{ backgroundImage: "linear-gradient(135deg,#E86A3C 0%,#F59E0B 55%,#D4A94A 100%)" }}
+                  data-testid={`quickbook-price-${active.key}`}
+                >
+                  {active.price}
+                </div>
                 <div className="text-[10px] tracking-[0.2em] uppercase text-[#64748B] mt-1 font-semibold">{active.priceNote}</div>
               </div>
               <Link
