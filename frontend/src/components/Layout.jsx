@@ -662,12 +662,6 @@ export default function Layout({ children }) {
               <span data-testid="marketplace-tripadvisor-coming" title="Getting listed on TripAdvisor soon — help us by leaving a review!" className="inline-flex items-center gap-2.5 rounded-full bg-white/[0.03] border border-dashed border-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white/35 cursor-help">
                 <TripAdvisorIcon className="w-4 h-4" /> TripAdvisor <span className="text-[9px] opacity-70 normal-case">Coming soon</span>
               </span>
-              <span data-testid="marketplace-viator-coming" title="Getting listed on Viator soon" className="inline-flex items-center gap-2.5 rounded-full bg-white/[0.03] border border-dashed border-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white/35 cursor-help">
-                🎫 Viator <span className="text-[9px] opacity-70 normal-case">Coming soon</span>
-              </span>
-              <span data-testid="marketplace-yelp-coming" title="Getting listed on Yelp soon" className="inline-flex items-center gap-2.5 rounded-full bg-white/[0.03] border border-dashed border-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white/35 cursor-help">
-                ⭐ Yelp <span className="text-[9px] opacity-70 normal-case">Coming soon</span>
-              </span>
             </div>
           </div>
         </div>
