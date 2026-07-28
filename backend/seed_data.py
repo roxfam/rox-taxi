@@ -29,7 +29,7 @@ TOURS_SEED: List[Dict] = [
     {"id": "jet-ski-1hr", "name": "Jet Ski Rental — 1 Hour (Cabbage Beach / Paradise Island)", "price": 120.0, "duration": "1 hour",
      "location": "Cabbage Beach, Paradise Island", "featured": True,
      "description": "Rip across turquoise water on a modern jet ski — up to 2 riders per ski. Life vests, safety briefing and beach launch included. Book direct with our partner operator.",
-     "image_url": "https://images.unsplash.com/photo-1622396636133-ba43f17dc116?crop=entropy&cs=srgb&fm=jpg&q=85&w=1600",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/necxwdup_CASMJETSKIANDBEACH-2.jpg",
      "category": "watersport", "active": True,
      "external_booking_url": "https://www.viator.com/tours/Nassau/Jet-ski/d420-230576P1"},
     {"id": "jet-ski-30min", "name": "Jet Ski Rental — 30 Minutes (Nassau)", "price": 99.0, "duration": "30 minutes",
