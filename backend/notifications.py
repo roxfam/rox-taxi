@@ -112,6 +112,42 @@ def send_sms(to_number: str, body: str) -> dict:
         return {"sent": False, "provider": "twilio", "error": str(e)}
 
 
+def _booking_details_for_owner(booking: dict) -> str:
+    """Build a rich SMS body with every field the driver/owner needs to
+    dispatch the ride: route, pickup/dropoff, passengers, luggage, days,
+    additional drivers, extra fees, notes. Kept under ~4 SMS segments."""
+    lines = [
+        f"Service : {booking.get('item_name','')}",
+        f"Type    : {(booking.get('service_type') or '').upper()}",
+        f"Date    : {booking.get('booking_date','')}",
+        f"Guest   : {booking.get('customer_name','')}",
+        f"Phone   : {booking.get('customer_phone','')}",
+        f"Email   : {booking.get('customer_email','')}",
+        f"Pax     : {booking.get('passengers',1)}",
+    ]
+    if booking.get("pickup_location"):
+        lines.append(f"Pickup  : {booking['pickup_location']}")
+    if booking.get("dropoff_location"):
+        lines.append(f"Dropoff : {booking['dropoff_location']}")
+    if booking.get("service_type") == "rental":
+        lines.append(f"Days    : {booking.get('days',1)}")
+        if booking.get("additional_drivers"):
+            lines.append(f"Drivers+: {booking['additional_drivers']} (+${booking.get('additional_driver_fee',0):.0f})")
+        if booking.get("deposit_amount"):
+            lines.append(f"Deposit : ${booking['deposit_amount']:.0f} (refundable)")
+    if booking.get("service_type") == "taxi":
+        if booking.get("extra_luggage"):
+            lines.append(f"Bags+   : {booking['extra_luggage']} (+${booking.get('luggage_fee',0):.0f})")
+        if booking.get("passenger_fee"):
+            lines.append(f"Pax fee : +${booking['passenger_fee']:.0f}")
+    if booking.get("notes"):
+        note = str(booking["notes"])[:120]
+        lines.append(f"Notes   : {note}")
+    lines.append(f"Total   : {_fmt_money(booking.get('total',0))}")
+    lines.append(f"Pay via : {(booking.get('payment_method') or '?').upper()}")
+    return "\n".join(lines)
+
+
 def notify_owner_booking_created(booking: dict) -> dict:
     """Send an SMS alert to the business owner the moment a booking hits the DB.
     Uses `ADMIN_SMS_NUMBER` env — falls back to `WHATSAPP_NUMBER` so we don't
@@ -124,11 +160,8 @@ def notify_owner_booking_created(booking: dict) -> dict:
         return {"sent": False, "provider": "none", "error": "ADMIN_SMS_NUMBER not set"}
     body = (
         f"🚕 NEW BOOKING {booking['id']}\n"
-        f"{booking['item_name']}\n"
-        f"👤 {booking['customer_name']} · {booking.get('customer_phone','')}\n"
-        f"📅 {booking['booking_date']}\n"
-        f"💵 Total {_fmt_money(booking.get('total',0))} via {booking.get('payment_method','?').upper()}\n"
-        f"👉 roxtaxi.com/admin"
+        f"{_booking_details_for_owner(booking)}\n"
+        f"👉 roxtaxi.com/admin/bookings/{booking['id']}"
     )
     return send_sms(owner, body)
 
@@ -141,11 +174,10 @@ def notify_owner_payment_received(booking: dict, provider: str = "stripe") -> di
     if not owner:
         return {"sent": False, "provider": "none", "error": "ADMIN_SMS_NUMBER not set"}
     body = (
-        f"💰 PAYMENT RECEIVED for {booking['id']}\n"
-        f"{_fmt_money(booking.get('total',0))} via {provider.upper()}\n"
-        f"👤 {booking['customer_name']}\n"
-        f"🎯 {booking['item_name']}\n"
-        f"📅 {booking['booking_date']}"
+        f"💰 PAYMENT RECEIVED {_fmt_money(booking.get('total',0))} via {provider.upper()}\n"
+        f"Booking  : {booking['id']}\n"
+        f"{_booking_details_for_owner(booking)}\n"
+        f"👉 roxtaxi.com/admin/bookings/{booking['id']}"
     )
     return send_sms(owner, body)
 

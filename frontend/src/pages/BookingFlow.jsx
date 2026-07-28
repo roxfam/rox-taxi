@@ -6,6 +6,10 @@ import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { api, money } from "../lib/api";
 import { DateTimePicker } from "../components/DateTimePicker";
 
+// Rental 2-day minimum — module-scoped so linters see it inside submit()
+// without stale-scope false-positives.
+const RENTAL_MIN_DAYS = 2;
+
 function isClosedDate(dateStr, days = 1) {
   if (!dateStr) return false;
   try {

@@ -119,7 +119,7 @@ export default function ChatWidget() {
     } catch {
       setMessages((m) => {
         const c = [...m];
-        c[c.length - 1] = { role: "assistant", text: messengerUrl ? "Sorry — the AI is temporarily unavailable. Tap 'Continue on Messenger' below to reach us live." : "Sorry — chat is temporarily unavailable. Please call +1 (242) 000-0000." };
+        c[c.length - 1] = { role: "assistant", text: waUrl ? "Sorry — the AI is temporarily unavailable. Tap 'Continue on WhatsApp' below to reach us live." : "Sorry — chat is temporarily unavailable. Please call +1 (242) 432-2587." };
         return c;
       });
     } finally {
