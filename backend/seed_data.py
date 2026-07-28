@@ -76,7 +76,7 @@ TAXI_SERVICES: List[Dict] = [
      "route": "LPIA → Paradise Island", "featured": True,
      "description": f"{_TARIFF_NOTE} Paradise Island $2 bridge toll included.",
      "image_url": _TAXI_IMG},
-    {"id": "airport-cruiseport", "name": "LPIA Airport → Nassau Cruise Port (Festival Place)", "price": 38.0,
+    {"id": "airport-cruiseport", "name": "LPIA Airport → Nassau Cruise Port (Festival Place)", "price": 40.0,
      "route": "LPIA → Cruise Port", "featured": True,
      "description": f"{_TARIFF_NOTE} Direct to Prince George Wharf for embarkation.",
      "image_url": _TAXI_IMG},
