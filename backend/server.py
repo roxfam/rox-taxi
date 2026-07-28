@@ -454,26 +454,47 @@ async def list_home_slides():
 @api_router.get("/gallery")
 async def list_gallery():
     """Aggregated public photo feed: home carousel slides + every active catalog
-    item's image (tours, rentals, taxi). Deduped by URL, tagged with category
-    so the frontend can offer filter chips (Tours / Rentals / Taxi / Nassau).
-    This lets us reuse existing catalog uploads for the Gallery tab without a
-    dedicated `gallery` collection or extra admin upload flow."""
+    item's image (tours, rentals, taxi) + every admin-uploaded photo in the
+    /uploads dir (excluding site logos). Deduped by URL, tagged with category
+    so the frontend can offer filter chips (Tours / Rentals / Taxi / Nassau /
+    Studio). This lets us reuse existing catalog uploads + the admin thumbnail
+    library for the Gallery tab without a dedicated `gallery` collection."""
 
     seen: dict[str, dict] = {}
 
-    async def _add(url, category, title):
+    def _add(url, category, title):
         if not url or url in seen:
             return
         seen[url] = {"url": url, "category": category, "title": title}
 
     for d in await db.home_slides.find({"active": True}).sort("order", 1).to_list(50):
-        await _add(d.get("image_url"), "nassau", d.get("title") or "Nassau")
+        _add(d.get("image_url"), "nassau", d.get("title") or "Nassau")
     for d in await db.tours.find({"active": True}).to_list(200):
-        await _add(d.get("image_url"), "tours", d.get("name"))
+        _add(d.get("image_url"), "tours", d.get("name"))
     for d in await db.rentals.find({"active": True}).to_list(200):
-        await _add(d.get("image_url"), "rentals", d.get("name"))
+        _add(d.get("image_url"), "rentals", d.get("name"))
     for d in await db.taxi_services.find({}).to_list(200):
-        await _add(d.get("image_url"), "taxi", d.get("name"))
+        _add(d.get("image_url"), "taxi", d.get("name"))
+
+    # Admin-uploaded thumbnails (from Image Manager). We exclude `logo-*` files
+    # because those are branding assets, not gallery-worthy photos.
+    if UPLOAD_DIR.exists():
+        photo_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+        for p in sorted(UPLOAD_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+            if not p.is_file() or p.suffix.lower() not in photo_exts:
+                continue
+            if p.name.startswith("logo-"):
+                continue
+            # Pretty title from the slug (`cat-my-photo-abc123.jpg` -> "My Photo").
+            stem = p.stem
+            for prefix in ("cat-", "img-", "photo-"):
+                if stem.startswith(prefix):
+                    stem = stem[len(prefix):]
+                    break
+            if "-" in stem:
+                stem = stem.rsplit("-", 1)[0]  # trim the 6-char uuid suffix
+            title = stem.replace("-", " ").replace("_", " ").strip().title() or p.name
+            _add(f"/api/uploads/{p.name}", "studio", title)
 
     return list(seen.values())
 

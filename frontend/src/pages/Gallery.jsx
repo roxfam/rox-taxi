@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { Images, X, MapPin, Car, ShipWheel, MapPinned } from "lucide-react";
+import { Images, X, MapPin, Car, ShipWheel, MapPinned, Camera } from "lucide-react";
 
 // Filter chips mirror the site's primary IA (Nassau/Home = "the place",
 // then Tours / Rentals / Taxi = the three service pillars). Icons repeat
-// the header nav so the mental model is consistent.
+// the header nav so the mental model is consistent. "Studio" surfaces the
+// admin-uploaded thumbnail library (photos not yet wired to a catalog item).
 const FILTERS = [
   { key: "all",     label: "All",       Icon: Images },
   { key: "nassau",  label: "Nassau",    Icon: MapPin },
   { key: "tours",   label: "Tours",     Icon: ShipWheel },
   { key: "rentals", label: "Rentals",   Icon: MapPinned },
   { key: "taxi",    label: "Taxi",      Icon: Car },
+  { key: "studio",  label: "Studio",    Icon: Camera },
 ];
 
 export default function Gallery() {
@@ -60,6 +62,9 @@ export default function Gallery() {
         <div className="flex items-center gap-2 flex-wrap" data-testid="gallery-filters">
           {FILTERS.map(({ key, label, Icon }) => {
             const count = key === "all" ? photos.length : photos.filter((p) => p.category === key).length;
+            // Hide empty category chips so we don't advertise "0" tabs. "All"
+            // always renders even when photos is still loading.
+            if (key !== "all" && count === 0) return null;
             const on = filter === key;
             return (
               <button
@@ -99,7 +104,7 @@ export default function Gallery() {
               >
                 <div className="relative overflow-hidden">
                   <img
-                    src={p.url}
+                    src={p.url.startsWith("http") ? p.url : `${process.env.REACT_APP_BACKEND_URL}${p.url}`}
                     alt={p.title || "Gallery photo"}
                     loading="lazy"
                     className="w-full h-auto object-cover group-hover:scale-[1.04] transition-transform duration-700"
@@ -133,7 +138,7 @@ export default function Gallery() {
           </button>
           <figure className="max-w-6xl w-full" onClick={(e) => e.stopPropagation()}>
             <img
-              src={active.url}
+              src={active.url.startsWith("http") ? active.url : `${process.env.REACT_APP_BACKEND_URL}${active.url}`}
               alt={active.title || "Photo"}
               className="w-full max-h-[80vh] object-contain rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.5)]"
             />
