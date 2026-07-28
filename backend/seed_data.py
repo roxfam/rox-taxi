@@ -132,7 +132,7 @@ RENTALS_SEED: List[Dict] = [
      "description": "Brand-new 2025 SUV with clearance for out-of-town beach runs and cargo for the whole crew. Apple CarPlay, backup cam, roof rack.",
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/234w5zk7_image.webp",
      "category": "suv", "active": True},
-    {"id": "town-country-van", "name": "2022 Chrysler Town & Country — Mini-Van (White)", "price": 149.0, "seats": 7,
+    {"id": "town-country-van", "name": "2022 Chrysler Town & Country — Mini-Van (White)", "price": 120.0, "seats": 7,
      "year": 2022, "make": "Chrysler", "model": "Town & Country", "color": "White", "body": "Mini-Van",
      "description": "Family & group hauler — 7 seats, sliding doors, panoramic space. Perfect for cruise-port pickups and family beach days.",
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/7y8bashr_pacifica.webp",
