@@ -40,6 +40,15 @@ export default function HomeHeroCarousel({ children, className = "", intervalMs 
     return () => clearInterval(timerRef.current);
   }, [slides.length, intervalMs]);
 
+  // Preload the NEXT slide's image so the crossfade lands on a warm bitmap
+  // and there's no visible "pop" from decode/network latency on slower links.
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const nextIdx = (i + 1) % slides.length;
+    const img = new Image();
+    img.src = slides[nextIdx]?.image_url || "";
+  }, [i, slides]);
+
   const pause = () => { if (timerRef.current) clearInterval(timerRef.current); };
   const resume = () => {
     if (slides.length > 1) timerRef.current = setInterval(() => setI((v) => (v + 1) % slides.length), intervalMs);
@@ -57,14 +66,27 @@ export default function HomeHeroCarousel({ children, className = "", intervalMs 
       onMouseLeave={resume}
     >
       <AnimatePresence mode="sync">
+        {/*
+         * Ken Burns: crossfade in over ~1.2s, then continuously scale the
+         * background from 1.02 → 1.10 across the slide's dwell time. Because
+         * the animation targets each slide with a fresh key, every slide gets
+         * its own zoom curve — no snap-back on transition. `origin` alternates
+         * so consecutive slides don't push toward the same corner.
+         */}
         <motion.div
           key={slide.id}
-          initial={{ opacity: 0, scale: 1.06 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, scale: 1.02 }}
+          animate={{ opacity: 1, scale: 1.10 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 1.2, ease: "easeOut" }}
+          transition={{
+            opacity: { duration: 1.2, ease: "easeOut" },
+            scale: { duration: intervalMs / 1000 + 1.2, ease: "linear" },
+          }}
+          style={{
+            backgroundImage: `url(${slide.image_url})`,
+            transformOrigin: i % 2 === 0 ? "center 40%" : "60% 55%",
+          }}
           className="absolute inset-0 bg-cover bg-center will-change-transform"
-          style={{ backgroundImage: `url(${slide.image_url})` }}
           data-testid={`hero-slide-${slide.id}`}
         />
       </AnimatePresence>
