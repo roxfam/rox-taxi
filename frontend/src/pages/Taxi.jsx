@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, money } from "../lib/api";
 import BookingModal from "./BookingFlow";
 import { Car, ArrowRight, Plane, Anchor, ShoppingBag, Utensils, Palmtree, MapPin, Ship, Hotel, ChevronDown } from "lucide-react";
+import { PromoPrice } from "../components/PromoPrice";
 
 /**
  * Popular Nassau destinations. Each entry is mapped to the taxi service that
@@ -174,7 +175,7 @@ export default function Taxi() {
             <h3 className="serif text-2xl text-[#0B3B5C] mt-4 leading-tight">{s.name}</h3>
             <p className="text-sm text-[#64748B] mt-2 leading-relaxed">{s.description}</p>
             <div className="mt-5 flex items-center justify-between">
-              <span className="mono text-lg text-[#E86A3C] font-semibold">{money(s.price)}</span>
+              <PromoPrice price={s.price} promo={s.promo} />
               <button
                 onClick={() => bookService(s)}
                 data-testid={`taxi-book-btn-${s.id}`}

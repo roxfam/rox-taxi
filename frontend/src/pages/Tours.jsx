@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, money } from "../lib/api";
+import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
 import { Clock, ArrowRight } from "lucide-react";
+import { PromoPrice } from "../components/PromoPrice";
 
 export default function Tours() {
   const [tours, setTours] = useState([]);
@@ -46,7 +47,7 @@ export default function Tours() {
               <h3 className="serif text-2xl text-[#0B3B5C] leading-tight">{t.name}</h3>
               <p className="text-sm text-[#64748B] mt-2 leading-relaxed">{t.description}</p>
               <div className="mt-6 flex items-center justify-between">
-                <span className="mono text-lg text-[#E86A3C] font-semibold">{money(t.price)}</span>
+                <PromoPrice price={t.price} promo={t.promo} />
                 <button
                   onClick={() => setSelected(t)}
                   data-testid={`tour-book-btn-${t.id}`}

@@ -86,6 +86,38 @@ def clean(doc: Dict[str, Any]) -> Dict[str, Any]:
     return doc
 
 
+# Reasons that trigger the strike-through "sale" badge on public pages.
+_PROMO_KEYWORDS = ("promo", "sale", "discount", "special")
+
+
+def annotate_promo(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach `promo` metadata when the latest price_history entry looks like a
+    real promo: reason contains one of the keywords AND the change was a
+    decrease AND the current price still equals the entry's new_price."""
+    if doc is None:
+        return doc
+    ph = doc.get("price_history") or []
+    if not ph:
+        return doc
+    latest = max(ph, key=lambda h: h.get("changed_at") or "")
+    reason = (latest.get("reason") or "").lower()
+    if not any(w in reason for w in _PROMO_KEYWORDS):
+        return doc
+    old = latest.get("old_price")
+    new = latest.get("new_price")
+    if old is None or new is None or new >= old:
+        return doc
+    if abs(float(doc.get("price") or 0) - float(new)) > 0.001:
+        return doc
+    doc["promo"] = {
+        "is_promo": True,
+        "original_price": float(old),
+        "reason": latest.get("reason"),
+        "changed_at": latest.get("changed_at"),
+    }
+    return doc
+
+
 # ---------------- Models ----------------
 
 class BookingCreate(BaseModel):
@@ -330,8 +362,12 @@ async def seed_db():
     # tracks the seed file, so image / description tweaks propagate.
     # NOTE: `delete_many` was removed so admin-added items persist across restarts.
     def _split_seed(doc: Dict[str, Any]):
+        # `price` is admin-managed after first insert. `seed_price` gets refreshed
+        # on every startup so the "Reset to seed default" affordance in the admin
+        # UI always references the CURRENT value in seed_data.py.
         preserve_keys = {"price"}
         set_payload = {k: v for k, v in doc.items() if k not in preserve_keys}
+        set_payload["seed_price"] = doc.get("price")
         set_on_insert = {"price": doc.get("price"), "price_history": []}
         return set_payload, set_on_insert
 
@@ -386,19 +422,19 @@ async def seed_db():
 @api_router.get("/tours")
 async def list_tours():
     docs = await db.tours.find({"active": True}).to_list(200)
-    return [clean(d) for d in docs]
+    return [annotate_promo(clean(d)) for d in docs]
 
 
 @api_router.get("/taxi-services")
 async def list_taxi():
     docs = await db.taxi_services.find({}).to_list(200)
-    return [clean(d) for d in docs]
+    return [annotate_promo(clean(d)) for d in docs]
 
 
 @api_router.get("/rentals")
 async def list_rentals():
     docs = await db.rentals.find({"active": True}).to_list(200)
-    return [clean(d) for d in docs]
+    return [annotate_promo(clean(d)) for d in docs]
 
 
 @api_router.get("/rentals/{rental_id}/availability")

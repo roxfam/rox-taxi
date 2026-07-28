@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { api, money } from "../lib/api";
+import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
 import { Users, ArrowRight, CalendarX, Info } from "lucide-react";
+import { PromoPrice } from "../components/PromoPrice";
 
 export default function CarRental() {
   const [rentals, setRentals] = useState([]);
@@ -69,7 +70,7 @@ export default function CarRental() {
 
               <div className="mt-6 flex items-center justify-between">
                 <div>
-                  <span className="mono text-lg text-[#E86A3C] font-semibold">{money(r.price)}</span>
+                  <PromoPrice price={r.price} promo={r.promo} />
                   <span className="text-sm text-[#64748B]"> / day</span>
                 </div>
                 <button

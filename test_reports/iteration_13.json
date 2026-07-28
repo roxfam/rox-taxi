@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 13 — Backend + Frontend E2E for seed_price + promo annotation + reset-to-seed + refactored /admin/manage. All 8 backend pytest tests PASS: seed_price present on rentals/tours/taxi, promo annotation appears when reason contains 'promo/sale/discount' AND price decreased (original_price = old_price), promo cleared when price reset to seed, non-promo reason does NOT annotate, promo-worded price INCREASE does NOT annotate. Frontend confirmed: /admin/manage 6 tabs render (tours/taxi_services/rentals/images/messages/site), PriceHistoryModal shows five promo shortcut buttons (−10/−15/−20/−25/−30 %) that auto-fill new price and 'N% off promo' reason, clicking Save creates promo → /rentals card renders struck-through original $39.00 next to sale $31.20 + orange SALE badge (data-testid='promo-badge'), Reset-to-seed button visible when current!=seed_price and PATCHes back to seed removing promo, admin CatalogPanel row also shows struck-through original + SALE tag (admin-item-promo-<id>), EditModal for rentals exposes Year/Make/Model/Color/Body/Seats fields, /tours and /taxi render normally without errors when no promos active.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CatalogPanel (admin/manage)",
+        "issue": "Race condition: when the page first mounts on the default 'tours' tab and the user immediately clicks 'Rentals' before the initial /admin/tours fetch resolves, the late-arriving tours response overwrites the just-fetched /admin/rentals data. The Rentals tab then displays tours items (Blue Lagoon, Rose Island, etc.) until the user switches to another tab and back. Network trace confirmed: after clicking Rentals, /admin/rentals resolves first (200 → 5 rentals) then /admin/tours resolves (200 → 4 tours) and its setItems overwrites.",
+        "selector": "[data-testid='admin-tab-rentals'] then [data-testid^='admin-item-']",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration13_promo.py",
+    "/app/test_reports/pytest/iteration13.xml"
+  ],
+  "action_items": [
+    "Fix CatalogPanel race: guard useEffect with a mounted/alive flag (or an AbortController) so late responses for a previous `kind` don't overwrite the current tab's data. Suggested fix: `useEffect(() => { let alive = true; api.get(`/admin/${kind}`).then(({data}) => { if (alive) setItems(data); }); return () => { alive = false; }; }, [kind]);`. Also consider `setItems([])` when kind changes so the user doesn't see stale items during the fetch."
+  ],
+  "critical_code_review_comments": [
+    "annotate_promo() correctly requires (a) latest history reason keyword match, (b) new < old, AND (c) current price == latest new_price — this prevents a stale promo annotation after subsequent non-promo edits.",
+    "seed_db._split_seed writes `seed_price` on every startup while preserving admin-edited `price` via $setOnInsert — matches the 'Reset to seed' UX contract.",
+    "AdminManage.jsx now a clean 65-line orchestrator; refactor is well scoped. Only latent issue is the CatalogPanel race noted above.",
+    "PriceHistoryModal.applyPromo overrides the reason only if empty or matches /^\\d+% off promo$/, so users don't lose custom reasons — good UX.",
+    "PromoPrice component is pure and correctly no-ops when promo?.is_promo is falsy."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration13_promo.py"],
+  "success_rate": {"backend": "100% (8/8 pytest)", "frontend": "~92% — 1 HIGH ui race bug on tab switch"},
+  "test_credentials": "admin@roxtaxi.com / admin123 (matches /app/memory/test_credentials.md)",
+  "seed_data_creation": "Mutated sentra-orange during E2E ($39 → $31.20 via -20% promo → reset back to $39). Also touched spark-compact and trax-suv during pytest and restored to seed prices. No lingering promos.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend promo/seed_price + reset flow is solid across all three kinds. The one open item is the CatalogPanel useEffect race — reproducible by opening /admin/manage and clicking any non-default catalog tab within the first ~600ms. Workaround: click Images (or any non-catalog tab) then back to the intended catalog tab, or manually setItems([]) on kind change.",
+  "rca of the issue": "CatalogPanel's `useEffect(() => { load(); }, [kind])` does not cancel in-flight fetches when `kind` changes. Because AdminManage default tab is 'tours', on mount an /admin/tours fetch is dispatched; clicking Rentals before that promise resolves dispatches /admin/rentals, and both promises call setItems on resolve in arbitrary order. The last-writer wins, and in practice the initial tours request lands slightly later than the second rentals request, so the tab shows tours items while the Rentals button is highlighted. Fix: capture a per-kind alive flag in the effect cleanup."
+}
