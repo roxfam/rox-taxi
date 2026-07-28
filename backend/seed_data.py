@@ -88,7 +88,7 @@ TAXI_SERVICES: List[Dict] = [
      "route": "Cruise Port → Baha Mar", "featured": True,
      "description": f"{_TARIFF_NOTE} Straight from Prince George Wharf to Cable Beach resorts.",
      "image_url": _TAXI_IMG},
-    {"id": "downtown-paradise", "name": "Downtown Nassau ↔ Paradise Island", "price": 13.0,
+    {"id": "downtown-paradise", "name": "Downtown Nassau ↔ Paradise Island", "price": 20.0,
      "route": "Downtown ↔ Paradise Island", "featured": True,
      "description": f"{_TARIFF_NOTE} Bay Street shopping, Fish Fry, Atlantis casino runs. Bridge toll included.",
      "image_url": _TAXI_IMG},
