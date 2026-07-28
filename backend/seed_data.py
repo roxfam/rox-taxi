@@ -140,7 +140,7 @@ RENTALS_SEED: List[Dict] = [
     {"id": "silverado-truck", "name": "2023 Chevrolet Silverado — Pickup Truck (White)", "price": 169.0, "seats": 5,
      "year": 2023, "make": "Chevrolet", "model": "Silverado", "color": "White", "body": "Pickup Truck",
      "description": "Full-size pickup for hauling gear, jet skis, or a big family run. Crew cab, tow package, backup camera, Bluetooth, and a bed cover keep your beach kit dry.",
-     "image_url": "https://images.pexels.com/photos/2036544/pexels-photo-2036544.jpeg?auto=compress&cs=tinysrgb&w=1600",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/yk10r0dn_2022-Chevy-Silverado-1500-840-728x400.webp",
      "category": "truck", "active": True},
 ]
 
