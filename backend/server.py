@@ -451,6 +451,33 @@ async def list_home_slides():
     return [clean(d) for d in docs]
 
 
+@api_router.get("/gallery")
+async def list_gallery():
+    """Aggregated public photo feed: home carousel slides + every active catalog
+    item's image (tours, rentals, taxi). Deduped by URL, tagged with category
+    so the frontend can offer filter chips (Tours / Rentals / Taxi / Nassau).
+    This lets us reuse existing catalog uploads for the Gallery tab without a
+    dedicated `gallery` collection or extra admin upload flow."""
+
+    seen: dict[str, dict] = {}
+
+    async def _add(url, category, title):
+        if not url or url in seen:
+            return
+        seen[url] = {"url": url, "category": category, "title": title}
+
+    for d in await db.home_slides.find({"active": True}).sort("order", 1).to_list(50):
+        await _add(d.get("image_url"), "nassau", d.get("title") or "Nassau")
+    for d in await db.tours.find({"active": True}).to_list(200):
+        await _add(d.get("image_url"), "tours", d.get("name"))
+    for d in await db.rentals.find({"active": True}).to_list(200):
+        await _add(d.get("image_url"), "rentals", d.get("name"))
+    for d in await db.taxi_services.find({}).to_list(200):
+        await _add(d.get("image_url"), "taxi", d.get("name"))
+
+    return list(seen.values())
+
+
 @api_router.get("/rentals/{rental_id}/availability")
 async def rental_availability(rental_id: str):
     """Return blackout date ranges for a rental — dates already booked."""
