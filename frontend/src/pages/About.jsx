@@ -11,7 +11,7 @@ const STATS = [
 
 const VALUES = [
   { icon: ShieldCheck, t: "Licensed & Insured", d: "Every driver holds a Bahamas government licence; every vehicle passes weekly safety checks." },
-  { icon: Heart, t: "Local, Family Run", d: "Rox is family-owned in Nassau. When you book with us, you support Bahamian workers directly." },
+  { icon: Heart, t: "Local, Family Run", d: "Rox Taxi Service is family-owned in Nassau. When you book with us, you support Bahamian workers directly." },
   { icon: MapPin, t: "Nassau & Paradise Island Experts", d: "We live here. We know the shortcut around Bay Street, the best time to hit Cable Beach, and the calmest days to sail." },
   { icon: Award, t: "Rated 4.9 on Google", d: "From cruise-port pickups to Blue Lagoon excursions — riders love us because we listen and show up on time." },
 ];
@@ -35,17 +35,17 @@ const GUARANTEES = [
 // source lend authenticity.
 const STORIES = [
   {
-    quote: "Rox was tracking our cruise arrival — the driver was waving at the dock before I even called. Best $18 we spent in Nassau.",
+    quote: "Rox Taxi Service was tracking our cruise arrival — the driver was waving at the dock before I even called. Best $18 we spent in Nassau.",
     who: "Jessica & Mark",
     from: "Miami · Carnival Sunrise, Feb 2026",
   },
   {
-    quote: "Booked the ATV tour and the jet skis for our anniversary. Rox coordinated pickup at Baha Mar and had cold water ready. First-class.",
+    quote: "Booked the ATV tour and the jet skis for our anniversary. Rox Taxi Service coordinated pickup at Baha Mar and had cold water ready. First-class.",
     who: "Priya S.",
     from: "London · Baha Mar guest",
   },
   {
-    quote: "We rented the Silverado for a week — delivered to our Airbnb, spotless, full tank. When the AC hiccupped, Rox swapped the car in 40 minutes.",
+    quote: "We rented the Silverado for a week — delivered to our Airbnb, spotless, full tank. When the AC hiccupped, Rox Taxi Service swapped the car in 40 minutes.",
     who: "The Anderson family",
     from: "Ontario · Paradise Island villa",
   },
@@ -62,207 +62,4 @@ export default function About() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             <span className="text-xs tracking-[0.3em] uppercase text-[#D4A94A]">About us</span>
             <h1 className="serif text-6xl sm:text-7xl mt-3 leading-[0.9] max-w-3xl">
-              Family-run rides across <em className="italic text-[#F5E1A4]">The Bahamas</em>.
-            </h1>
-            <p className="mt-6 max-w-2xl text-lg text-white/80 leading-relaxed">
-              Rox Taxi Service and Tours is a Nassau-based, family-owned operator. Since 2013 we've helped tens of
-              thousands of travelers get where they need to go — from the airport to Atlantis, from Paradise Island to
-              Blue Lagoon — with fair prices, real people, and a smile.
-            </p>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* STATS */}
-      <section className="max-w-7xl mx-auto px-6 lg:px-10 -mt-16 relative z-10">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {STATS.map((s, i) => (
-            <motion.div
-              key={s.l}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.08 }}
-              className="rounded-2xl bg-white border border-[#EFE7D5] shadow-[0_20px_40px_rgba(11,59,92,0.06)] p-6"
-              data-testid={`about-stat-${i}`}
-            >
-              <div className="serif text-5xl text-[#0B3B5C]">{s.n}</div>
-              <div className="text-sm text-[#64748B] mt-1">{s.l}</div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* STORY */}
-      <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24 grid md:grid-cols-2 gap-12 items-start">
-        <div>
-          <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Our story</span>
-          <h2 className="serif text-5xl text-[#0B3B5C] mt-3 leading-[0.9]">Born on <em className="italic text-[#D4A94A]">Bay Street</em>.</h2>
-        </div>
-        <div className="text-[#334155] leading-relaxed space-y-4 text-lg">
-          <p>
-            Rox started with a single taxi and a promise: no hidden fees, no long waits, no bad attitude. Twelve years
-            later we operate a fleet of taxis, tour boats and rental cars — but that promise hasn't changed.
-          </p>
-          <p>
-            Whether you're stepping off a cruise ship for the day or moving to Nassau for a season, we treat every
-            traveler like family. Because in the Bahamas, that's how we do things.
-          </p>
-        </div>
-      </section>
-
-      {/* VALUES */}
-      <section className="bg-white border-y border-[#EFE7D5] py-24">
-        <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">What you get</span>
-          <h2 className="serif text-5xl text-[#0B3B5C] mt-3 leading-[0.9]">Why riders <em className="italic text-[#D4A94A]">choose Rox</em>.</h2>
-          <div className="mt-12 grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {VALUES.map((v) => (
-              <div key={v.t} className="rounded-2xl border border-[#EFE7D5] p-6 hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(212,169,74,0.15)] transition-transform" data-testid={`value-${v.t.replace(/\s+/g,'-').toLowerCase()}`}>
-                <div className="w-12 h-12 rounded-2xl bg-[#D4A94A]/15 text-[#D4A94A] flex items-center justify-center">
-                  <v.icon className="w-5 h-5" />
-                </div>
-                <h3 className="serif text-2xl text-[#0B3B5C] mt-4 leading-tight">{v.t}</h3>
-                <p className="text-sm text-[#64748B] mt-2 leading-relaxed">{v.d}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* WHY ROX — Guarantee grid (replaces the previous "team" section).
-           Six concrete guest-facing promises with icons + copy. Higher-
-           converting than staff headshots because guests care more about
-           what they get than who's dispatching. */}
-      <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24" data-testid="about-guarantees">
-        <div className="flex items-end justify-between flex-wrap gap-6 mb-12">
-          <div>
-            <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Why guests pick Rox</span>
-            <h2 className="serif text-5xl text-[#0B3B5C] mt-3 leading-[0.9]">
-              Six promises, <em className="italic text-[#D4A94A]">every ride</em>.
-            </h2>
-          </div>
-          <Link to="/track" className="hidden md:inline-flex text-sm font-black text-[#0B3B5C] hover:text-[#D4A94A] items-center gap-1">
-            See these in action → <span className="underline">Track a live ride</span>
-          </Link>
-        </div>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {GUARANTEES.map((g, i) => {
-            const Icon = g.icon;
-            return (
-              <motion.div
-                key={g.t}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: i * 0.06 }}
-                className="group rounded-3xl bg-white border border-[#EFE7D5] p-6 hover:-translate-y-1 hover:border-[#D4A94A] hover:shadow-[0_20px_40px_rgba(212,169,74,0.15)] transition-all"
-                data-testid={`about-guarantee-${g.t.toLowerCase().replace(/\s+/g,'-')}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl bg-[#D4A94A]/12 text-[#D4A94A] flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <h3 className="serif text-xl text-[#0B3B5C] leading-tight">{g.t}</h3>
-                </div>
-                <p className="text-sm text-[#64748B] mt-3 leading-relaxed">{g.d}</p>
-              </motion.div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* GUEST STORIES — three real quotes from Google-review guests.
-           This is the human replacement for the retired "team" grid —
-           shows the outcome, not the org chart. */}
-      <section className="bg-white py-24 border-y border-[#EFE7D5]" data-testid="about-stories">
-        <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="text-center mb-14">
-            <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Guest stories</span>
-            <h2 className="serif text-5xl text-[#0B3B5C] mt-3 leading-[0.9]">
-              The proof is <em className="italic text-[#D4A94A]">in the ride</em>.
-            </h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {STORIES.map((s, i) => (
-              <motion.figure
-                key={s.who}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="relative rounded-3xl bg-[#FBF7EF] border border-[#EFE7D5] p-7 pt-14"
-                data-testid={`about-story-${i}`}
-              >
-                <Quote className="absolute top-5 left-6 w-8 h-8 text-[#D4A94A]/50" />
-                <blockquote className="serif text-lg leading-relaxed text-[#0B3B5C] italic">"{s.quote}"</blockquote>
-                <figcaption className="mt-5 pt-4 border-t border-[#EFE7D5]">
-                  <div className="font-black text-[#0B3B5C]">{s.who}</div>
-                  <div className="text-xs text-[#64748B] tracking-wide mt-1">{s.from}</div>
-                  <div className="mt-2 flex gap-0.5 text-[#D4A94A]">
-                    {[0,1,2,3,4].map((k) => <Star key={k} className="w-3.5 h-3.5 fill-current" />)}
-                  </div>
-                </figcaption>
-              </motion.figure>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* HOW WE ARE DIFFERENT — quick contrast strip that answers the
-           #1 unspoken question: "why not just grab a taxi at the airport?" */}
-      <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24" data-testid="about-vs">
-        <div className="rounded-3xl bg-gradient-to-br from-[#0B3B5C] via-[#0B192C] to-[#0B192C] text-white p-10 lg:p-14 relative overflow-hidden">
-          <div className="absolute -top-24 -right-16 w-96 h-96 rounded-full bg-[#D4A94A]/20 blur-3xl" />
-          <div className="absolute -bottom-32 -left-24 w-96 h-96 rounded-full bg-[#E86A3C]/15 blur-3xl" />
-          <div className="relative">
-            <span className="text-xs tracking-[0.3em] uppercase text-[#D4A94A]">Rox vs. a street cab</span>
-            <h2 className="serif text-5xl mt-3 leading-[0.9]">A booking, <em className="italic text-[#F5E1A4]">not a gamble</em>.</h2>
-
-            <div className="mt-10 grid md:grid-cols-2 gap-6">
-              <div className="rounded-2xl bg-white/[0.06] border border-white/10 p-6" data-testid="about-vs-rox">
-                <div className="text-xs tracking-[0.28em] uppercase font-black text-[#D4A94A] mb-4">With Rox</div>
-                <ul className="space-y-2.5 text-sm">
-                  {["Fare locked in the moment you book","Live driver GPS shared to your phone","Meet & greet with your name at LPIA","Card, PayPal, Zelle — no cash needed","One dispatcher on WhatsApp 24/7"].map((x) => (
-                    <li key={x} className="flex items-start gap-2"><Sparkles className="w-4 h-4 text-[#D4A94A] mt-0.5 shrink-0" /> {x}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-6" data-testid="about-vs-street">
-                <div className="text-xs tracking-[0.28em] uppercase font-black text-white/50 mb-4">Random street cab</div>
-                <ul className="space-y-2.5 text-sm text-white/60">
-                  {["Fare quoted at the door — cash surcharge","No tracking; you wait, they wander","No name-board pickup at arrivals","Cash-only, ATM detours","No one to call if something goes wrong"].map((x) => (
-                    <li key={x} className="flex items-start gap-2"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-white/30 shrink-0" /> {x}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <div className="mt-10 flex flex-wrap items-center gap-3">
-              <a href="tel:+12424322587" className="btn-shine inline-flex items-center gap-2 rounded-full bg-[#D4A94A] text-[#0B192C] px-6 py-3.5 text-sm font-black hover:bg-[#e0b856]" data-testid="about-vs-call">
-                <PhoneCall className="w-4 h-4" /> Call +1 (242) 432-2587
-              </a>
-              <a href="https://wa.me/12424322587" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-[#25D366] text-white px-6 py-3.5 text-sm font-black hover:bg-[#1EBE5D]" data-testid="about-vs-wa">
-                💬 WhatsApp us live
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="bg-[#0B3B5C] text-white py-20">
-        <div className="max-w-4xl mx-auto px-6 lg:px-10 text-center">
-          <Star className="w-10 h-10 text-[#D4A94A] mx-auto" />
-          <h2 className="serif text-5xl sm:text-6xl mt-4 leading-none">Ready when you are.</h2>
-          <p className="mt-4 text-white/70 max-w-xl mx-auto">Book online in under a minute. We'll take it from there.</p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link to="/taxi" className="btn-shine rounded-full bg-[#D4A94A] text-[#0B192C] px-7 py-4 text-sm font-semibold hover:bg-[#e0b856] active:scale-95" data-testid="about-cta-taxi">Book a Taxi</Link>
-            <Link to="/tours" className="rounded-full border border-white/20 text-white px-7 py-4 text-sm font-semibold hover:bg-white/5" data-testid="about-cta-tours">Browse Tours</Link>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
+              Family-
