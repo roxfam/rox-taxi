@@ -133,7 +133,7 @@ HOME_SLIDES_SEED: List[Dict[str, Any]] = [
     {"id": "hero-fish-fry",   "title": "Fish Fry, Arawak Cay.",       "subtitle": "Conch salad, cracked lobster, sky-blue punch.",
      "image_url": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400", "order": 5, "active": True},
     {"id": "hero-exuma",      "title": "Exuma swimming pigs.",        "subtitle": "The famous day-trip, curated by local captains.",
-     "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/61/Pigs_on_the_beach.jpg/1920px-Pigs_on_the_beach.jpg", "order": 6, "active": True},
+     "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Vorobek_Bahamas_-_swimming_pigs.jpg/1920px-Vorobek_Bahamas_-_swimming_pigs.jpg", "order": 6, "active": True},
     {"id": "hero-straw",      "title": "Straw Market & Bay Street.",  "subtitle": "Colonial architecture, hand-woven souvenirs, hot patties.",
      "image_url": "https://images.unsplash.com/photo-1502786129293-79981df4e689?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400", "order": 7, "active": True},
 ]
