@@ -85,7 +85,7 @@ export default function Layout({ children }) {
                   <span className="absolute -inset-1 rounded-full bg-gradient-to-br from-[#D4A94A]/40 via-transparent to-[#E86A3C]/25 blur-xl opacity-70 group-hover:opacity-100 transition-opacity duration-500" />
                   <img
                     src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
-                    alt="Rox Taxi Service and Tours"
+                    alt="Rox Taxi Service & Tours"
                     className="relative h-20 lg:h-[92px] w-auto max-w-[100px] lg:max-w-[120px] object-contain group-hover:scale-[1.06] transition-transform duration-500 contrast-150 saturate-200 drop-shadow-[0_6px_14px_rgba(11,25,44,0.45)]"
                     data-testid="brand-logo-img"
                   />
@@ -98,13 +98,8 @@ export default function Layout({ children }) {
                     Rox Taxi <em className="italic font-bold" style={{ color: "#D4A94A" }}>Service</em>
                   </span>
                   <span className="inline-flex items-center gap-2 mt-1.5">
-                    <svg width="14" height="6" viewBox="0 0 14 6" aria-hidden="true">
-                      <path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" />
-                    </svg>
-                    <span className="text-[10px] tracking-[0.5em] uppercase font-black text-[#D4A94A]">and Tours</span>
-                    <svg width="14" height="6" viewBox="0 0 14 6" aria-hidden="true">
-                      <path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" />
-                    </svg>
+                    <span className="w-8 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-[#D4A94A]" />
+                    <span className="serif italic text-[13px] xl:text-sm tracking-[0.15em] font-bold text-[#D4A94A]">&amp; Tours</span>
                   </span>
                 </div>
               </>
@@ -125,9 +120,8 @@ export default function Layout({ children }) {
                     Rox Taxi <em className="italic font-bold" style={{ color: "#D4A94A" }}>Service</em>
                   </span>
                   <span className="inline-flex items-center gap-2 mt-1.5">
-                    <svg width="14" height="6" viewBox="0 0 14 6" aria-hidden="true"><path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" /></svg>
-                    <span className="text-[10px] tracking-[0.5em] uppercase font-black text-[#D4A94A]">and Tours</span>
-                    <svg width="14" height="6" viewBox="0 0 14 6" aria-hidden="true"><path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" /></svg>
+                    <span className="w-8 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-[#D4A94A]" />
+                    <span className="serif italic text-[13px] xl:text-sm tracking-[0.15em] font-bold text-[#D4A94A]">&amp; Tours</span>
                   </span>
                 </div>
               </>
@@ -352,7 +346,7 @@ export default function Layout({ children }) {
                       <span className="absolute -inset-1 rounded-full bg-gradient-to-br from-[#D4A94A]/40 via-transparent to-[#E86A3C]/25 blur-xl" />
                       <img
                         src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
-                        alt="Rox Taxi Service and Tours"
+                        alt="Rox Taxi Service & Tours"
                         className="relative h-14 w-auto max-w-[64px] object-contain contrast-125 saturate-150 drop-shadow-[0_4px_10px_rgba(11,25,44,0.35)]"
                       />
                     </span>
@@ -370,9 +364,8 @@ export default function Layout({ children }) {
                       Rox Taxi <em className="italic font-bold" style={{ color: "#D4A94A" }}>Service</em>
                     </div>
                     <div className="inline-flex items-center gap-1.5 mt-1.5">
-                      <svg width="12" height="5" viewBox="0 0 14 6" aria-hidden="true"><path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" /></svg>
-                      <span className="text-[9px] tracking-[0.5em] uppercase font-black text-[#D4A94A]">and Tours</span>
-                      <svg width="12" height="5" viewBox="0 0 14 6" aria-hidden="true"><path d="M1 3 C3 0.5 5 5.5 7 3 C9 0.5 11 5.5 13 3" stroke="#D4A94A" strokeWidth="1" fill="none" strokeLinecap="round" /></svg>
+                      <span className="w-6 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-[#D4A94A]" />
+                      <span className="serif italic text-[12px] tracking-[0.12em] font-bold text-[#D4A94A]">&amp; Tours</span>
                     </div>
                   </div>
                 </div>
@@ -549,7 +542,7 @@ export default function Layout({ children }) {
               {config.logo_url ? (
                 <img
                   src={config.logo_url.startsWith("http") ? config.logo_url : `${process.env.REACT_APP_BACKEND_URL}${config.logo_url}`}
-                  alt="Rox Taxi Service and Tours"
+                  alt="Rox Taxi Service & Tours"
                   className="h-32 w-auto max-w-[280px] object-contain contrast-125 saturate-150"
                   data-testid="footer-logo-img"
                 />
@@ -558,7 +551,7 @@ export default function Layout({ children }) {
                   Rox Taxi <em className="italic font-black text-[#D4A94A]">Service</em>
                   <span className="inline-flex items-center gap-3 mt-3">
                     <span className="w-8 h-[2px] bg-gradient-to-r from-[#D4A94A] to-transparent" />
-                    <span className="text-[11px] tracking-[0.4em] uppercase font-black text-[#D4A94A]">and Tours</span>
+                    <span className="serif italic text-sm tracking-[0.15em] font-bold text-[#D4A94A]">&amp; Tours</span>
                   </span>
                 </div>
               )}
@@ -700,7 +693,7 @@ export default function Layout({ children }) {
         <div className="relative border-t border-white/10">
           <div className="max-w-7xl mx-auto px-6 lg:px-10 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
             <div className="text-white/40 tracking-wide">
-              &copy; {new Date().getFullYear()} <span className="serif italic text-white/60">Rox Taxi Service and Tours Bahamas.</span> All rights reserved.
+              &copy; {new Date().getFullYear()} <span className="serif italic text-white/60">Rox Taxi Service &amp; Tours Bahamas.</span> All rights reserved.
             </div>
             <div className="flex items-center gap-5">
               <span className="text-white/30 tracking-[0.25em] uppercase">Made with care in Nassau</span>

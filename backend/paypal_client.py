@@ -85,7 +85,7 @@ async def create_order(amount: float, booking_id: str, currency: str = "USD", de
             }
         ],
         "application_context": {
-            "brand_name": "Rox Taxi Service and Tours",
+            "brand_name": "Rox Taxi Service & Tours",
             "shipping_preference": "NO_SHIPPING",
             "user_action": "PAY_NOW",
         },

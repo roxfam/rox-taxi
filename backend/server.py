@@ -46,7 +46,7 @@ PHONE_NUMBER = os.environ.get('PHONE_NUMBER', '')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
 CHAT_SYSTEM = (
-    "You are Roxi, the friendly live-chat concierge for Rox Taxi Service and Tours based in Nassau, "
+    "You are Roxi, the friendly live-chat concierge for Rox Taxi Service & Tours based in Nassau, "
     "The Bahamas. Our specialty is taxi service across Nassau and Paradise Island. Be warm, brief and specific.\n\n"
     "TAXI SERVICES (our primary business — Nassau + Paradise Island focus):\n"
     "- LPIA Airport → Downtown Nassau / Cable Beach: $35 (up to 3 pax)\n"
@@ -1087,7 +1087,7 @@ REVIEWS_SEED = [
 @api_router.get("/reviews")
 async def list_reviews():
     return {
-        "place": "Rox Taxi Service and Tours",
+        "place": "Rox Taxi Service & Tours",
         "rating": 4.9,
         "total": 187,
         "source": "Google",
@@ -1132,7 +1132,7 @@ async def create_contact_message(req: ContactMessage):
         # Ack to the submitter
         send_email(
             req.email,
-            "We received your message — Rox Taxi Service and Tours",
+            "We received your message — Rox Taxi Service & Tours",
             f"<p>Hi {req.name},</p><p>Thanks for reaching out — we'll reply within the hour.</p><p><b>Your message ({doc['id']}):</b></p><pre>{req.message}</pre>",
             f"Hi {req.name},\n\nThanks for reaching out — we'll reply within the hour.\n\nYour message ({doc['id']}):\n{req.message}",
         )
@@ -1376,7 +1376,7 @@ async def chat_history(session_id: str):
 
 @api_router.get("/")
 async def root():
-    return {"service": "Rox Taxi Service and Tours Bahamas API", "status": "running", "focus": "Nassau & Paradise Island"}
+    return {"service": "Rox Taxi Service & Tours Bahamas API", "status": "running", "focus": "Nassau & Paradise Island"}
 
 
 # Wire up the payments router (Stripe / PayPal / webhooks / refunds).

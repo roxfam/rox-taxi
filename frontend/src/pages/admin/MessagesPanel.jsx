@@ -121,7 +121,7 @@ function MessageRow({ msg, onStatus, onDelete }) {
         </div>
         <div className="flex flex-col gap-1 items-end shrink-0">
           <a
-            href={`mailto:${msg.email}?subject=Re: ${encodeURIComponent(msg.subject || "Your Rox message")} (${msg.id})&body=${encodeURIComponent(`Hi ${msg.name},\n\n\n\n— Rox Taxi Service and Tours\nRef: ${msg.id}`)}`}
+            href={`mailto:${msg.email}?subject=Re: ${encodeURIComponent(msg.subject || "Your Rox message")} (${msg.id})&body=${encodeURIComponent(`Hi ${msg.name},\n\n\n\n— Rox Taxi Service & Tours\nRef: ${msg.id}`)}`}
             className="inline-flex items-center gap-1 text-[11px] font-semibold bg-[#0B3B5C] text-white hover:bg-[#132a4a] px-3 py-1.5 rounded transition-colors"
             data-testid={`message-reply-${msg.id}`}
           >

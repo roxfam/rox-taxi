@@ -204,7 +204,7 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
         "sms": {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
     }
 
-    subject = f"Booking {booking['id']} confirmed — Rox Taxi Service and Tours"
+    subject = f"Booking {booking['id']} confirmed — Rox Taxi Service & Tours"
     body_text = _booking_summary_text(booking)
     html = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">

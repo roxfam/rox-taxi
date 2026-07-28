@@ -45,7 +45,7 @@ export default function About() {
               Family-run. <em className="italic text-[#F5E1A4]">Nassau-born.</em>
             </h1>
             <p className="mt-6 text-white/80 max-w-xl leading-relaxed">
-              Rox Taxi Service and Tours is a Nassau-based, family-owned operator. Since 2013 we've helped tens of thousands of guests travel Nassau, Paradise Island and Cable Beach at fixed, transparent rates — with the warm island touch that only locals can bring.
+              Rox Taxi Service &amp; Tours is a Nassau-based, family-owned operator. Since 2013 we've helped tens of thousands of guests travel Nassau, Paradise Island and Cable Beach at fixed, transparent rates — with the warm island touch that only locals can bring.
             </p>
           </motion.div>
         </div>

@@ -133,7 +133,7 @@ def build_wedding_pdf(inquiry: dict) -> bytes:
 
     story.append(Spacer(1, 30))
     story.append(Paragraph(
-        "Rox Taxi Service and Tours · Nassau, New Providence · The Bahamas<br/>"
+        "Rox Taxi Service &amp; Tours · Nassau, New Providence · The Bahamas<br/>"
         "hello@roxtaxi.com · facebook.com/roxtaxiservice · Estimate valid 30 days from date of issue.",
         small,
     ))
@@ -233,7 +233,7 @@ def build_receipt_pdf(booking: dict) -> bytes:
 
     story.append(Spacer(1, 24))
     story.append(Paragraph(
-        "Rox Taxi Service and Tours · Nassau, New Providence · The Bahamas<br/>"
+        "Rox Taxi Service &amp; Tours · Nassau, New Providence · The Bahamas<br/>"
         "hello@roxtaxi.com · facebook.com/roxtaxiservice · Keep this receipt for your records.",
         small,
     ))

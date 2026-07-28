@@ -19,7 +19,7 @@ function useToursJsonLd(tours) {
         "name": t.name,
         "description": t.description || t.name,
         "image": t.image_url,
-        "brand": { "@type": "Brand", "name": "Rox Taxi Service and Tours" },
+        "brand": { "@type": "Brand", "name": "Rox Taxi Service & Tours" },
         "offers": {
           "@type": "Offer",
           "priceCurrency": "USD",
