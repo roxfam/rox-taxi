@@ -62,6 +62,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - Admin Image Manager thumbnail-size selector.
 - PHP/MySQL Namecheap Stellar rewrite (paused scaffolding in `/app/backend-php/`).
 
+### 🚀 Backlog — Wave 5 (growth plays)
+- **Fleet page / driver bios** `/fleet` — photos of each car + driver profile card (years driving, languages, cruiser reviews). Returning cruisers rebook the same driver → massive retention.
+- **Multi-city expansion** — architecture already supports it via `location` field on catalog items. Add city switcher in header (Nassau / Freeport / Exuma / Andros), scope catalog + booking flow + admin panel by `location`. Separate SEO landing pages `/nassau`, `/freeport`, etc.
+- **Referral rewards** — every 5th successful referral = $25 credit. Add `referral_code` to user model (auto-generated at signup), `referrals` collection tracking referrer/referee/status, `POST /api/referrals/claim`, credit balance shown in MyBookings, apply at checkout as coupon.
+
 ## Testing
 - iteration_17.json — customer auth (this session, backend + frontend).
 - iteration_16.json — pre-auth baseline.
