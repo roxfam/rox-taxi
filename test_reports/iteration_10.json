@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 10 image-manager testing. Backend: 16/16 pytest passing — auth guards, POST/GET/DELETE /api/admin/images, PNG upload, .txt rejection, >8MB rejection, newest-first list, /api/uploads/{name} serving, 404 on non-existent and traversal delete, plus iter9 regression. Frontend: Images tab works — cards render, upload appends card with cat- prefix, density toggle correctly hidden at <=20 images and appears at 21, delete + confirm + toast works, cleanup verified. TWO CRITICAL SPEC-D DEVIATIONS in SiteConfigPanel: (1) uploadLogo() still POSTs to /api/admin/upload-logo instead of /api/admin/images — network trace confirmed. (2) logo-pick-btn button is entirely missing from SiteConfigPanel.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SiteConfigPanel", "issue": "logo-pick-btn is not rendered anywhere in SiteConfigPanel. Spec D requires a 'Pick from library' button next to the Upload logo button that opens ImagePickerModal and updates cfg.logo_url via PUT /admin/site-config with toast 'Logo linked from library'.", "selector": "[data-testid=\"logo-pick-btn\"]", "priority": "CRITICAL"},
+      {"component": "SiteConfigPanel.uploadLogo", "issue": "Logo upload still posts to /api/admin/upload-logo (AdminManage.jsx line 504). Spec D requires it to post to /api/admin/images (shared library) then PUT /admin/site-config with the returned url. Network trace confirmed only /api/admin/upload-logo was called.", "selector": "[data-testid=\"logo-upload-input\"]", "priority": "CRITICAL"},
+      {"component": "ImageTile.copy", "issue": "navigator.clipboard.writeText() throws NotAllowedError in some contexts (iframe/insecure) producing an uncaught promise rejection and dev-mode overlay. Wrap in try/catch and show toast + fallback (document.execCommand or ephemeral textarea).", "selector": "[data-testid^=\"image-copy-\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Logo library sharing", "issue": "Because uploadLogo posts to the old endpoint, logos uploaded from Site Config never appear in the shared /admin/images library, breaking spec-D unification.", "affected_selectors": ["[data-testid=\"logo-upload-input\"]", "[data-testid=\"admin-tab-images\"]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration10_images.py", "/app/test_reports/pytest/iter10.xml"],
+  "action_items": [
+    "AdminManage.jsx SiteConfigPanel.uploadLogo(): switch POST target from /admin/upload-logo to /admin/images; after upload, do PUT /admin/site-config with {logo_url: data.url}; toast 'Logo uploaded'.",
+    "Add a 'Pick from library' button (data-testid='logo-pick-btn') in SiteConfigPanel that opens ImagePickerModal; on tile select, setCfg + PUT /admin/site-config in background + toast 'Logo linked from library'.",
+    "Wrap navigator.clipboard.writeText in try/catch with fallback (execCommand copy or select+copy) to avoid uncaught NotAllowedError dev overlay."
+  ],
+  "critical_code_review_comments": [
+    "AdminManage.jsx is 598 lines — approaching the 700-line limit. Consider extracting ImagesPanel / ImagePickerModal / SiteConfigPanel into separate files under /components/admin/.",
+    "Backend delete_catalog_image uses resolve() and startswith check — correctly rejects traversal (verified). Good.",
+    "Backend upload validates extension only (not MIME sniff). Acceptable for admin-only endpoint but worth a note.",
+    "SiteConfigUpdate model does not include logo_url in the frontend save flow (but backend does accept it — verified in test_site_config_put)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration10_images.py"],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "70% (Images tab + EditModal picker DOM present; SiteConfig logo integration broken per spec)"},
+  "test_credentials": "admin@roxtaxi.com / admin123 (works)",
+  "seed_data_creation": "During density-toggle test, uploaded 15 synthetic PNGs to push library >20; all cat-* uploads were deleted at end of run — verified 0 remaining cat- cards.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend endpoints are solid. Focus retest on SiteConfigPanel after fixes: (a) logo-pick-btn opens picker, tile click updates preview + fires PUT /admin/site-config; (b) 'Upload new' logo POSTs to /admin/images (not /admin/upload-logo) and updates logo_url. Also re-verify EditModal 'Pick from library' end-to-end save (I confirmed the button and modal DOM exist but the full Save flow was blocked in my run by an unrelated clipboard-error dev overlay).",
+  "rca of the issue": "SiteConfigPanel.uploadLogo() at AdminManage.jsx line 504 was never migrated to the new endpoint. The component was likely updated to add ImagePickerModal wiring for EditModal but the SiteConfig side of spec-D (both the pick button AND the endpoint change) was missed. Fix is a small local change to SiteConfigPanel."
+}
