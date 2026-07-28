@@ -47,7 +47,7 @@ TOURS_SEED: List[Dict] = [
     {"id": "atv-tour-2hr", "name": "ATV Off-Road Power Tour — 2 Hours (Cruise-Port Pickup)", "price": 122.0, "duration": "2 hours",
      "location": "Nassau — cruise-port pickup", "featured": False,
      "description": "Fast-paced 2-hour ATV ride with roundtrip cruise-port transport. Great for shore-excursion timing. Book direct with Bowcar Bahamas.",
-     "image_url": "https://images.unsplash.com/photo-1601758124510-52d02ddb7cbd?crop=entropy&cs=srgb&fm=jpg&q=85&w=1600",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/w7ff6nbv_IMG-20250212-WA0083-1-scaled.webp",
      "category": "adventure", "active": True,
      "external_booking_url": "https://www.bowcarbahamas.com/tour/atv-tour/"},
 ]
