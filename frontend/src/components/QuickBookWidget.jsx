@@ -22,7 +22,8 @@ const TABS = [
     price: "from $20",
     priceNote: "per taxi · up to 2 pax",
     highlights: [
-      "LPIA → Downtown / Cable Beach / Baha Mar $32",
+      "LPIA → Cable Beach $35",
+      "Downtown → LPIA $40",
       "LPIA → Atlantis / Paradise Island $45",
       "Cruise port → Paradise Island $20",
     ],
