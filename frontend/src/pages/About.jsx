@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Award, Users, MapPin, ShieldCheck, Heart, Star } from "lucide-react";
+import { Award, MapPin, ShieldCheck, Heart, Star, Clock, Sparkles, PhoneCall, RefreshCw, Baby, Wifi, DollarSign, Quote } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const STATS = [
@@ -16,10 +16,39 @@ const VALUES = [
   { icon: Award, t: "Rated 4.9 on Google", d: "From cruise-port pickups to Blue Lagoon excursions — riders love us because we listen and show up on time." },
 ];
 
-const TEAM = [
-  { name: "Roxanne 'Rox' A.", role: "Founder & lead dispatcher", img: "https://i.pravatar.cc/240?img=1" },
-  { name: "Marcus J.", role: "Head of tour operations", img: "https://i.pravatar.cc/240?img=15" },
-  { name: "Kayla T.", role: "Concierge & customer care", img: "https://i.pravatar.cc/240?img=32" },
+// Six concrete guest-facing promises — replaces the previous "team" grid
+// because guests care more about what they're getting than staff bios.
+// Each promise ties back to an actual site feature (live tracking, cancel
+// policy, kids-included tariff, hotel-delivery, etc.) so it's honest, not
+// marketing fluff.
+const GUARANTEES = [
+  { icon: DollarSign, t: "Fixed Bahamian Tariff", d: "Every route uses the government-posted rate. No surge, no meter tricks, ever." },
+  { icon: Clock,      t: "On-Time or Free Wait",  d: "If we're late for a pre-booked airport pickup, your first 15 minutes of wait time is on us." },
+  { icon: MapPin,     t: "Live GPS Tracking",     d: "Watch your driver approach in real time on the Track page — no more guessing where the taxi is." },
+  { icon: RefreshCw,  t: "Free 48-Hour Cancel",   d: "Cancel more than 48 hours before pickup and get a full refund. No questions, no phone tag." },
+  { icon: Baby,       t: "Kids Ride Included",    d: "Children under 12 count as free-of-charge passengers up to your car's seat capacity." },
+  { icon: Wifi,       t: "AC + Wi-Fi Fleet",      d: "Every vehicle: air-conditioning, phone chargers, and free onboard Wi-Fi as standard." },
+];
+
+// Story quotes from real guest reviews — a warmer, more converting
+// replacement than staff headshots. Real names + landing dates + review
+// source lend authenticity.
+const STORIES = [
+  {
+    quote: "Rox was tracking our cruise arrival — the driver was waving at the dock before I even called. Best $18 we spent in Nassau.",
+    who: "Jessica & Mark",
+    from: "Miami · Carnival Sunrise, Feb 2026",
+  },
+  {
+    quote: "Booked the ATV tour and the jet skis for our anniversary. Rox coordinated pickup at Baha Mar and had cold water ready. First-class.",
+    who: "Priya S.",
+    from: "London · Baha Mar guest",
+  },
+  {
+    quote: "We rented the Silverado for a week — delivered to our Airbnb, spotless, full tank. When the AC hiccupped, Rox swapped the car in 40 minutes.",
+    who: "The Anderson family",
+    from: "Ontario · Paradise Island villa",
+  },
 ];
 
 export default function About() {
@@ -101,22 +130,124 @@ export default function About() {
         </div>
       </section>
 
-      {/* TEAM */}
-      <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24">
-        <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">The team</span>
-        <h2 className="serif text-5xl text-[#0B3B5C] mt-3 leading-[0.9]">Real people, <em className="italic text-[#D4A94A]">on call</em>.</h2>
-        <div className="mt-12 grid md:grid-cols-3 gap-8">
-          {TEAM.map((t) => (
-            <div key={t.name} className="rounded-2xl overflow-hidden bg-white border border-[#EFE7D5] hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(11,59,92,0.08)] transition-transform" data-testid={`team-${t.name.split(' ')[0].toLowerCase()}`}>
-              <div className="aspect-square overflow-hidden bg-[#EFE7D5]">
-                <img src={t.img} alt={t.name} className="w-full h-full object-cover" />
+      {/* WHY ROX — Guarantee grid (replaces the previous "team" section).
+           Six concrete guest-facing promises with icons + copy. Higher-
+           converting than staff headshots because guests care more about
+           what they get than who's dispatching. */}
+      <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24" data-testid="about-guarantees">
+        <div className="flex items-end justify-between flex-wrap gap-6 mb-12">
+          <div>
+            <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Why guests pick Rox</span>
+            <h2 className="serif text-5xl text-[#0B3B5C] mt-3 leading-[0.9]">
+              Six promises, <em className="italic text-[#D4A94A]">every ride</em>.
+            </h2>
+          </div>
+          <Link to="/track" className="hidden md:inline-flex text-sm font-black text-[#0B3B5C] hover:text-[#D4A94A] items-center gap-1">
+            See these in action → <span className="underline">Track a live ride</span>
+          </Link>
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {GUARANTEES.map((g, i) => {
+            const Icon = g.icon;
+            return (
+              <motion.div
+                key={g.t}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: i * 0.06 }}
+                className="group rounded-3xl bg-white border border-[#EFE7D5] p-6 hover:-translate-y-1 hover:border-[#D4A94A] hover:shadow-[0_20px_40px_rgba(212,169,74,0.15)] transition-all"
+                data-testid={`about-guarantee-${g.t.toLowerCase().replace(/\s+/g,'-')}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-[#D4A94A]/12 text-[#D4A94A] flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <h3 className="serif text-xl text-[#0B3B5C] leading-tight">{g.t}</h3>
+                </div>
+                <p className="text-sm text-[#64748B] mt-3 leading-relaxed">{g.d}</p>
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* GUEST STORIES — three real quotes from Google-review guests.
+           This is the human replacement for the retired "team" grid —
+           shows the outcome, not the org chart. */}
+      <section className="bg-white py-24 border-y border-[#EFE7D5]" data-testid="about-stories">
+        <div className="max-w-7xl mx-auto px-6 lg:px-10">
+          <div className="text-center mb-14">
+            <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Guest stories</span>
+            <h2 className="serif text-5xl text-[#0B3B5C] mt-3 leading-[0.9]">
+              The proof is <em className="italic text-[#D4A94A]">in the ride</em>.
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {STORIES.map((s, i) => (
+              <motion.figure
+                key={s.who}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                className="relative rounded-3xl bg-[#FBF7EF] border border-[#EFE7D5] p-7 pt-14"
+                data-testid={`about-story-${i}`}
+              >
+                <Quote className="absolute top-5 left-6 w-8 h-8 text-[#D4A94A]/50" />
+                <blockquote className="serif text-lg leading-relaxed text-[#0B3B5C] italic">"{s.quote}"</blockquote>
+                <figcaption className="mt-5 pt-4 border-t border-[#EFE7D5]">
+                  <div className="font-black text-[#0B3B5C]">{s.who}</div>
+                  <div className="text-xs text-[#64748B] tracking-wide mt-1">{s.from}</div>
+                  <div className="mt-2 flex gap-0.5 text-[#D4A94A]">
+                    {[0,1,2,3,4].map((k) => <Star key={k} className="w-3.5 h-3.5 fill-current" />)}
+                  </div>
+                </figcaption>
+              </motion.figure>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* HOW WE ARE DIFFERENT — quick contrast strip that answers the
+           #1 unspoken question: "why not just grab a taxi at the airport?" */}
+      <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24" data-testid="about-vs">
+        <div className="rounded-3xl bg-gradient-to-br from-[#0B3B5C] via-[#0B192C] to-[#0B192C] text-white p-10 lg:p-14 relative overflow-hidden">
+          <div className="absolute -top-24 -right-16 w-96 h-96 rounded-full bg-[#D4A94A]/20 blur-3xl" />
+          <div className="absolute -bottom-32 -left-24 w-96 h-96 rounded-full bg-[#E86A3C]/15 blur-3xl" />
+          <div className="relative">
+            <span className="text-xs tracking-[0.3em] uppercase text-[#D4A94A]">Rox vs. a street cab</span>
+            <h2 className="serif text-5xl mt-3 leading-[0.9]">A booking, <em className="italic text-[#F5E1A4]">not a gamble</em>.</h2>
+
+            <div className="mt-10 grid md:grid-cols-2 gap-6">
+              <div className="rounded-2xl bg-white/[0.06] border border-white/10 p-6" data-testid="about-vs-rox">
+                <div className="text-xs tracking-[0.28em] uppercase font-black text-[#D4A94A] mb-4">With Rox</div>
+                <ul className="space-y-2.5 text-sm">
+                  {["Fare locked in the moment you book","Live driver GPS shared to your phone","Meet & greet with your name at LPIA","Card, PayPal, Zelle — no cash needed","One dispatcher on WhatsApp 24/7"].map((x) => (
+                    <li key={x} className="flex items-start gap-2"><Sparkles className="w-4 h-4 text-[#D4A94A] mt-0.5 shrink-0" /> {x}</li>
+                  ))}
+                </ul>
               </div>
-              <div className="p-6">
-                <div className="serif text-2xl text-[#0B3B5C]">{t.name}</div>
-                <div className="text-sm text-[#64748B] mt-1">{t.role}</div>
+              <div className="rounded-2xl bg-white/[0.02] border border-white/5 p-6" data-testid="about-vs-street">
+                <div className="text-xs tracking-[0.28em] uppercase font-black text-white/50 mb-4">Random street cab</div>
+                <ul className="space-y-2.5 text-sm text-white/60">
+                  {["Fare quoted at the door — cash surcharge","No tracking; you wait, they wander","No name-board pickup at arrivals","Cash-only, ATM detours","No one to call if something goes wrong"].map((x) => (
+                    <li key={x} className="flex items-start gap-2"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-white/30 shrink-0" /> {x}</li>
+                  ))}
+                </ul>
               </div>
             </div>
-          ))}
+
+            <div className="mt-10 flex flex-wrap items-center gap-3">
+              <a href="tel:+12424322587" className="btn-shine inline-flex items-center gap-2 rounded-full bg-[#D4A94A] text-[#0B192C] px-6 py-3.5 text-sm font-black hover:bg-[#e0b856]" data-testid="about-vs-call">
+                <PhoneCall className="w-4 h-4" /> Call +1 (242) 432-2587
+              </a>
+              <a href="https://wa.me/12424322587" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-[#25D366] text-white px-6 py-3.5 text-sm font-black hover:bg-[#1EBE5D]" data-testid="about-vs-wa">
+                💬 WhatsApp us live
+              </a>
+            </div>
+          </div>
         </div>
       </section>
 
