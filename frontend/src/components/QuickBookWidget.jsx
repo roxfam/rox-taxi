@@ -55,7 +55,7 @@ const TABS = [
     accentSoft: "rgba(11,59,92,0.14)",
     href: "/rentals",
     kicker: "Bahamas Car Rentals",
-    title: "Compact to Mini-Van — delivered to you.",
+    title: "Compact to Luxury Vehicle — delivered to you.",
     pitch: "Modern fleet delivered free to LPIA airport, cruise port, Cable Beach, Baha Mar or Paradise Island. Full insurance, roadside cover and unlimited miles.",
     price: "from $65",
     priceNote: "per day · 2-day min",

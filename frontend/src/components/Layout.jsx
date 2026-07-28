@@ -7,7 +7,7 @@ import { useAuth } from "../lib/auth";
 const BOOK_OPTIONS = [
   { to: "/taxi", label: "Taxi & Transfers", sub: "Airport · City · Hourly", Icon: Car, color: "#E86A3C" },
   { to: "/tours", label: "Tours & Excursions", sub: "Blue Lagoon · Atlantis · more", Icon: ShipWheel, color: "#0B3B5C" },
-  { to: "/rentals", label: "Car Rentals", sub: "Compact to Mini-Van", Icon: MapPinned, color: "#D4A94A" },
+  { to: "/rentals", label: "Car Rentals", sub: "Compact to Luxury Vehicle", Icon: MapPinned, color: "#D4A94A" },
 ];
 import { api } from "../lib/api";
 import ChatWidget from "./ChatWidget";
