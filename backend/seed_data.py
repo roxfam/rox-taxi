@@ -136,4 +136,6 @@ HOME_SLIDES_SEED: List[Dict[str, Any]] = [
      "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Vorobek_Bahamas_-_swimming_pigs.jpg/1920px-Vorobek_Bahamas_-_swimming_pigs.jpg", "order": 6, "active": True},
     {"id": "hero-straw",      "title": "Straw Market & Bay Street.",  "subtitle": "Colonial architecture, hand-woven souvenirs, hot patties.",
      "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Straw_Market_Nassau_Bahamas_2024.jpg/1920px-Straw_Market_Nassau_Bahamas_2024.jpg", "order": 7, "active": True},
+    {"id": "hero-fort-charlotte", "title": "Fort Charlotte.",         "subtitle": "200-year-old British fortress overlooking Nassau Harbour — cannons, dungeons, panoramic views.",
+     "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Fort_Charlotte%2C_Nassau%2C_The_Bahamas.jpg/1920px-Fort_Charlotte%2C_Nassau%2C_The_Bahamas.jpg", "order": 8, "active": True},
 ]
