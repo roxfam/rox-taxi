@@ -34,7 +34,7 @@ export default function Home() {
               Unlock <em className="italic text-[#F5E1A4]">Nassau</em>. On your terms.
             </h1>
             <p className="mt-8 max-w-xl text-lg text-white/85 leading-relaxed">
-              Book a taxi, tour or car rental in under a minute. Nassau &amp; Paradise Island specialists — pay with card, PayPal or Zelle, then watch your ride move from confirmed to arrived, live.
+              Booked in <em className="italic text-[#F5E1A4] not-italic font-semibold">sixty seconds</em>. Pay with card, PayPal or Zelle — then follow your driver live, door to door across Nassau &amp; Paradise Island.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link
