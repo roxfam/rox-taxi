@@ -87,6 +87,8 @@ function SlideEditModal({ slide, onClose, onSaved }) {
     image_url: slide.image_url || "",
     order: slide.order ?? 0,
     active: slide.active !== false,
+    link_url: slide.link_url || "",
+    link_label: slide.link_label || "",
   });
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -96,7 +98,12 @@ function SlideEditModal({ slide, onClose, onSaved }) {
     if (!form.image_url.trim()) return toast.error("Image required");
     setSaving(true);
     try {
-      const payload = { ...form, order: parseInt(form.order) || 0 };
+      const payload = {
+        ...form,
+        order: parseInt(form.order) || 0,
+        link_url: (form.link_url || "").trim(),
+        link_label: (form.link_label || "").trim(),
+      };
       if (slide.new) await api.post("/admin/home-slides", payload);
       else await api.put(`/admin/home-slides/${slide.id}`, payload);
       toast.success("Saved");
@@ -130,6 +137,8 @@ function SlideEditModal({ slide, onClose, onSaved }) {
           )}
         </div>
         <F l="Order" type="number" v={form.order} on={(v) => setForm({ ...form, order: v })} testid="slide-edit-order" />
+        <F l="External link URL (optional — turns into a per-slide CTA)" v={form.link_url} on={(v) => setForm({ ...form, link_url: v })} testid="slide-edit-link-url" />
+        <F l="External link label (e.g. 'Book at Baha Mar')" v={form.link_label} on={(v) => setForm({ ...form, link_label: v })} testid="slide-edit-link-label" />
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} data-testid="slide-edit-active" /> Active on home page
         </label>

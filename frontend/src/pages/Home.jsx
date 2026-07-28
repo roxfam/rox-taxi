@@ -56,6 +56,18 @@ export default function Home() {
                 >
                   Explore Excursions
                 </Link>
+                {slide.link_url && (
+                  <a
+                    href={slide.link_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid={`hero-slide-link-${slide.id}`}
+                    className="rounded-full bg-[#D4A94A] text-[#0B192C] px-7 py-4 text-sm font-bold hover:bg-[#c99b3d] active:scale-95 flex items-center gap-2 shadow-[0_10px_30px_rgba(212,169,74,0.35)]"
+                  >
+                    {slide.link_label || `Book at ${slide.title.replace(/\.$/, "")}`}
+                    <ArrowRight className="w-4 h-4" />
+                  </a>
+                )}
               </div>
 
               <div className="mt-14 flex flex-wrap gap-8 text-sm text-white/80">

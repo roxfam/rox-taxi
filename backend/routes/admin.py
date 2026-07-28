@@ -82,6 +82,10 @@ class HomeSlideUpsert(BaseModel):
     image_url: str
     order: int = 0
     active: bool = True
+    # Optional external booking / info link surfaced as a per-slide CTA on
+    # the home hero. Empty string hides the CTA.
+    link_url: Optional[str] = None
+    link_label: Optional[str] = None
 
 
 class PriceUpdate(BaseModel):

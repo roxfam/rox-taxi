@@ -138,4 +138,7 @@ HOME_SLIDES_SEED: List[Dict[str, Any]] = [
      "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Straw_Market_Nassau_Bahamas_2024.jpg/1920px-Straw_Market_Nassau_Bahamas_2024.jpg", "order": 7, "active": True},
     {"id": "hero-fort-charlotte", "title": "Fort Charlotte.",         "subtitle": "200-year-old British fortress overlooking Nassau Harbour — cannons, dungeons, panoramic views.",
      "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Fort_Charlotte%2C_Nassau%2C_The_Bahamas.jpg/1920px-Fort_Charlotte%2C_Nassau%2C_The_Bahamas.jpg", "order": 8, "active": True},
+    {"id": "hero-baha-mar",   "title": "Baha Mar Resort.",            "subtitle": "Cable Beach — casino, Rosewood, SLS + a Jack Nicklaus golf course.",
+     "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Reflection_-_panoramio_%2857%29.jpg/1920px-Reflection_-_panoramio_%2857%29.jpg",
+     "link_url": "https://www.bahamar.com/", "link_label": "Book at Baha Mar", "order": 9, "active": True},
 ]
