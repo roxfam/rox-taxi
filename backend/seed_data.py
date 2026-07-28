@@ -88,7 +88,7 @@ TAXI_SERVICES: List[Dict] = [
 ]
 
 RENTALS_SEED: List[Dict] = [
-    {"id": "spark-compact", "name": "2019 Chevrolet Spark — Compact", "price": 45.0, "seats": 4,
+    {"id": "spark-compact", "name": "2019 Chevrolet Spark — Compact", "price": 65.0, "seats": 4,
      "year": 2019, "make": "Chevrolet", "model": "Spark", "color": "White", "body": "Compact",
      "description": "Zippy little compact — perfect for solo travelers and couples buzzing around Nassau. AC, automatic, unlimited miles. Free delivery to LPIA or your hotel.",
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/iyv8ywh8_spark.webp",
@@ -103,7 +103,7 @@ RENTALS_SEED: List[Dict] = [
      "description": "Spacious full-size sedan for comfort on longer Bahamas drives. Bluetooth, backup camera, roomy trunk.",
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/cmfv1j07_2024-chevrolet-malibu-summit-white-color.webp",
      "category": "full-size", "active": True},
-    {"id": "trax-suv", "name": "2025 Chevrolet Trax — SUV (White)", "price": 119.0, "seats": 5,
+    {"id": "trax-suv", "name": "2025 Chevrolet Trax — SUV (White)", "price": 125.0, "seats": 5,
      "year": 2025, "make": "Chevrolet", "model": "Trax", "color": "White", "body": "SUV",
      "description": "Brand-new 2025 SUV with clearance for out-of-town beach runs and cargo for the whole crew. Apple CarPlay, backup cam, roof rack.",
      "image_url": "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
