@@ -1379,6 +1379,24 @@ async def root():
     return {"service": "Rox Taxi Service & Tours Bahamas API", "status": "running", "focus": "Nassau & Paradise Island"}
 
 
+@api_router.get("/live-stats")
+async def live_stats():
+    """Public social-proof counter: bookings + contact messages in the last hour + 24h."""
+    from datetime import timedelta as _td
+    now = now_utc()
+    hour_ago = (now - _td(hours=1)).isoformat()
+    day_ago = (now - _td(hours=24)).isoformat()
+    b_hour = await db.bookings.count_documents({"created_at": {"$gte": hour_ago}})
+    b_day = await db.bookings.count_documents({"created_at": {"$gte": day_ago}})
+    c_hour = await db.contact_messages.count_documents({"created_at": {"$gte": hour_ago}})
+    return {
+        "bookings_last_hour": int(b_hour),
+        "bookings_last_24h": int(b_day),
+        "contacts_last_hour": int(c_hour),
+        "as_of": now.isoformat(),
+    }
+
+
 # Wire up the payments router (Stripe / PayPal / webhooks / refunds).
 payments_module.configure(
     db=db,

@@ -1,59 +1,85 @@
-# Rox Taxi Service and Tours — PRD
+# Rox Taxi Service & Tours — PRD
 
-## Original problem statement
-Website offering taxi and tours in The Bahamas (Nassau + Paradise Island focus): pre-booking excursions/tours, car rentals, taxi status tracking, online payments (Stripe/PayPal/Zelle), Facebook page connection, and an admin panel. Product requirements: group/wedding bookings with PDF quotes, Claude AI live chat, complex pricing (luggage fees, extra passenger fees, $150 rental deposit, $25 extra driver fee), 15% cancellation fee, custom logo uploads, Twilio SMS + SendGrid SMTP notifications, Namecheap hosting compatibility, delivery status tracking, live GPS driver tracking, editable catalog with price history, external booking links for tours, dynamic home carousels.
+## Problem statement (unchanged)
+Nassau/Paradise Island taxi + tours + car-rental booking platform. Fixed-fare
+tariffs, PayPal + Stripe + Zelle payments, Twilio SMS + SendGrid email
+notifications, admin panel, live GPS driver tracking, Claude AI live chat,
+cruise-port focus. Owner: roxfam2509@gmail.com / +1 (242) 432-2587.
 
-## Deployed target
-- Primary: Emergent preview / Namecheap Stellar (PHP + MySQL rewrite scaffolded under `/app/backend-php/` for future migration)
-- Domain: roxtaxi.com (planned)
+## Users
+1. **Guests / cruise passengers** — book from mobile, need clarity, trust, speed
+2. **Owner (roxfam2509@gmail.com)** — accepts payments, dispatches drivers
+3. **Drivers** — receive assignments, share live GPS
 
-## Current owner data
-- Phone: +1 (242) 432-2587
-- WhatsApp: +12424322587
+## Stack
+React + FastAPI + MongoDB. Frontend at 3000, backend at 8001, ingress `/api/*`.
+LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
+(Claude Sonnet 4.6 chat + Emergent Google auth), Stripe (test), Google Translate.
+
+## Feature status snapshot — Feb 2026
+
+### ✅ Shipped this session
+- **Customer auth** — email/password + Emergent Google, JWT/session cookie, 1h idle auto-logout via `IDLE_TIMEOUT_MINUTES`, heartbeat endpoint, login_events audit log, auto-links past bookings by email. Signup/Login pages, MyBookings dashboard with cancel + pay balance + download receipt actions.
+- **Round-trip taxi discount** — 10% off both legs, toggle in booking modal, computed server-side, shown on receipt.
+- **Multi-day rental discount tiers** — 3% at 5+ days, 7% at 7+ days, 12% at 14+ days. Auto-applied server-side.
+- **Tip field on booking** (`tip_amount` on model, ready for Pay-page UI).
+- **Custom route quote widget** — `/api/taxi/quote` + `/api/taxi/quote-request` + 14 canonical Nassau locations. On /taxi page: pick From + To → instant fare OR request-a-quote form with SMS + email alerts.
+- **Live driver ETA** — Track page uses Haversine distance from customer's geolocation to driver's GPS ping, shows "Driver X min away · X.X km".
+- **QR code on booking success** — cruise-passenger friendly, embeds tracking link.
+- **Print-friendly receipt** — `/receipt/:bookingId` page with @media print CSS.
+- **Live-stats social-proof badge** — `GET /api/live-stats`, shows "N booked / hr" chip in header.
+- **8-language switcher** — Google Translate widget: EN, ES, FR, HT, DE, NL, ZH-CN, TR.
+- **Elegant branding** — gradient serif "Rox Taxi Service" + italic serif "& Tours" wordmark with gold hairline accent in header, mobile drawer, footer.
+- **Taxi fare edits** — LPIA→Downtown $40, LPIA→Cable Beach $35, Baha Mar↔Downtown $25, Downtown↔Paradise $20, Cruise Port→Baha Mar $25, LPIA→Cruise Port $40, Nassau→Adelaide $60, Hotel→Fish Fry $20, +Paradise Island→Montague Beach $20 (NEW).
+
+### 🎯 Backlog — Wave 2 (revenue/trust)
+- **Airport flight tracker** — customer types flight #, auto-adjust pickup via AviationStack. Needs API key.
+- **Cross-sell "Add a tour" upsell** on booking success (LPIA→Atlantis → suggest Blue Lagoon $109 for tomorrow).
+- **Gift cards / prepaid credits** via Stripe.
+- **Package deals** — auto-generated bundles (e.g. "Airport + Tour + Airport return = $210 save $20").
+- **Verified TripAdvisor/Google badge** with real review stars.
+- **"5 bookings today" ticker** widget under hero (backend `/api/live-stats` already exposes `bookings_last_24h`).
+- **Selfie / license verification** for car rentals (deposit-dispute protection).
+
+### 🔁 Backlog — Wave 3 (retention/ops)
+- Frequent-rider punch card (10th taxi free).
+- Birthday coupons (capture at signup, email on birthday).
+- Post-trip "Leave a Google review" SMS at +6h via Twilio.
+- Weekly Monday revenue email to owner.
+- Driver dispatch SMS on "driver_assigned" status change.
+- CSV / Excel export from admin panel.
+
+### 🎨 Backlog — Wave 4 (polish)
+- Tip chips on Pay page (backend `tip_amount` already accepted).
+- Return-trip one-click upsell on booking confirmation.
+- Weather badge on tour cards (OpenWeather).
+- Sticky "Book on WhatsApp" mobile bar after 30s scroll.
+- Live Google reviews via Places API (needs key).
+- Admin Image Manager thumbnail-size selector.
+- PHP/MySQL Namecheap Stellar rewrite (paused scaffolding in `/app/backend-php/`).
+
+## Testing
+- iteration_17.json — customer auth (this session, backend + frontend).
+- iteration_16.json — pre-auth baseline.
+- Admin login: roxfam2509@gmail.com / admin123.
+- Customer auth: create via `/signup` or `POST /api/auth/register`.
+
+## Key endpoints added this session
+- `POST /api/auth/register`, `POST /api/auth/login-email`, `POST /api/auth/heartbeat`
+- `GET /api/taxi/locations`, `POST /api/taxi/quote`, `POST /api/taxi/quote-request`
+- `GET /api/live-stats`
+
+## Key models updated
+- `BookingCreate` — added `round_trip: bool`, `tip_amount: float`
+- Fees updated: `ROUND_TRIP_DISCOUNT_PCT = 0.10`, `RENTAL_DISCOUNT_TIERS`
+
+## Architecture notes
+- Customer sessions share `db.user_sessions` collection with Emergent Google Auth
+- Idle timeout enforced server-side in `get_current_user` + client-side heartbeat every 60s
+- `db.login_events` audits every login/logout/auto_logout_idle
+- Google Translate widget uses cookie-based selection; `#google_translate_element` host lives in `index.html`
+
+## Owner details
+- Email: roxfam2509@gmail.com · Phone/WhatsApp: +1 (242) 432-2587
 - Zelle: roxfam2509@gmail.com / +1 (347) 751-5251
-- Facebook: https://www.facebook.com/roxtaxiservice/
-- Google Business Profile: https://www.google.com/maps/place/ROX+TAXI+SERVICE/... (saved in site_config)
-- Admin login: admin@roxtaxi.com / admin123 (see `/app/memory/test_credentials.md`)
-
-## What's live (as of this session)
-- Full booking flows: taxi, tours, rental with dynamic pricing (luggage +$3 each, extra passenger +$5 after 2, $150 rental deposit, +$25 extra driver, 15% cancel)
-- **Rental 2-day minimum** enforced backend + frontend
-- **Payments**: Stripe checkout, PayPal REST v2, Zelle instructions — shareable `/pay/:bookingId` page with all 3 methods + real credentials
-- **Notifications**: Twilio SMS + SMTP email to customer AND owner (rich booking-details SMS on new booking + payment received)
-- **Live GPS driver tracking** (Server-Sent Events)
-- **Admin panel** (`/admin/manage`): Bookings dashboard, Catalog CRUD w/ price history, Images library, Home Slides, Site Config, Messages, Groups, **Payments panel (Stripe/PayPal/Zelle merged view + revenue totals + refund + mark-Zelle-paid)**, **Content panel (hero taglines, About copy, cancellation policy, FAQ)**
-- **Photo Gallery** (`/gallery`) — masonry, category filters, lightbox, aggregates catalog + admin uploads
-- **Home hero**: 10s dynamic carousel + Ken Burns + modern segmented Quick-Book widget (Taxi/Tours/Rentals tabs with animated pill)
-- **About page** redesigned: 6-card "Promises" grid (kids ride included, 15% cancel policy, live GPS, on-time, fixed tariff, Wi-Fi fleet), Guest Stories (3 quotes + 5 stars), "Rox Taxi Service vs a street cab" comparison
-- **Chat widget**: Claude Sonnet 4.6 with rich Rox R monogram, modern glass card, animated FAB w/ pulse ring, "Continue on WhatsApp" hand-off (deep-links wa.me with prefilled context)
-- **SEO**: Full `<head>` overhaul — LocalBusiness/TaxiService/FAQ/WebSite JSON-LD, OpenGraph, Twitter Card, canonical, hreflang, sitemap.xml, robots.txt, Product ItemList schema for every tour
-- **Marketplaces**: "Find us on" footer row — Facebook + Google Reviews (active), TripAdvisor/Viator/Yelp (dashed "coming soon"). Google Business URL wired site-wide.
-- **Contact number** in footer + everywhere: +1 (242) 432-2587
-- **Bold hover** labels on header social chips
-- **"Make a Payment" gold button** in footer → /pay
-- **Attention-grabbing price styling** globally (text-2xl / font-black / orange glow)
-
-## Namecheap Stellar port (scaffolded, not yet deployed)
-- `/app/backend-php/README-DEPLOYMENT.md` — full deployment doc
-- `/app/backend-php/schema.sql` — complete MySQL DDL (13 tables)
-- `/app/backend-php/public/.htaccess` + `api/.htaccess` — SPA fallback + API routing
-- `/app/backend-php/public/api/index.php` — PHP 8 front controller with 50+ route table
-- `/app/backend-php/public/api/lib.php` — DB, JWT, notifications (Twilio + SMTP), cURL helper
-- `/app/backend-php/.env.example` — env template
-- Missing: actual endpoint handler files (`routes/catalog.php`, `routes/bookings.php`, etc.) + migration script (`migrate_from_mongo.py`)
-
-## Roadmap / P0 backlog
-- [ ] Complete Namecheap PHP port: implement route handlers + Mongo→MySQL migration script (~2 more focused sessions)
-- [ ] Wire real Google Places API for live Google Reviews carousel on Home (blocked on user's Google Places API key)
-- [ ] Wire the Content panel outputs into public pages (currently editable but not yet consumed on Home/About/Contact)
-
-## Roadmap / P1
-- [ ] TripAdvisor, Viator, Yelp actual listings + un-dash the "coming soon" badges when live
-- [ ] Google Ads + Meta Pixel tracking placeholders (needs GA4 + Meta Business ID)
-- [ ] Ad-campaign conversion event schema (booking_created, payment_received)
-
-## Roadmap / P2
-- [ ] Client-side thumbnail-size selector in Admin Image Manager
-- [ ] Consolidate `_admin_dep` and `_require_admin_placeholder` in `routes/admin.py`
-
-## Last verified: iteration_16.json (100% backend, 100% frontend)
+- PayPal.me: paypal.com/paypalme/roxtaxiservice (live)

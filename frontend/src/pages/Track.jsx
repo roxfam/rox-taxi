@@ -157,6 +157,13 @@ export default function Track() {
                 >
                   Download receipt PDF →
                 </a>
+                <Link
+                  to={`/receipt/${booking.id}`}
+                  data-testid="track-print-receipt-btn"
+                  className="mt-1 inline-flex items-center gap-1 text-xs text-[#0B3B5C] font-semibold hover:underline ml-3"
+                >
+                  Print receipt →
+                </Link>
               </div>
             </div>
 

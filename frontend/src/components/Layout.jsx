@@ -12,6 +12,7 @@ const BOOK_OPTIONS = [
 import { api } from "../lib/api";
 import ChatWidget from "./ChatWidget";
 import LanguageSwitcher from "./LanguageSwitcher";
+import LiveStatsBadge from "./LiveStatsBadge";
 import { WhatsAppIcon, TripAdvisorIcon } from "./BrandIcons";
 
 const NAV = [
@@ -161,6 +162,7 @@ export default function Layout({ children }) {
 
           {/* Right actions */}
           <div className="flex items-center gap-1.5">
+            <LiveStatsBadge />
             {/* Elegant social/contact chips — desktop */}
             <a
               href={`https://wa.me/${(config.whatsapp_number || "+12420000000").replace(/[^\d]/g, "")}`}

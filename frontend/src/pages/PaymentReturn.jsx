@@ -51,7 +51,7 @@ export function PaymentSuccess() {
       </p>
       {booking && (
         <div className="mt-10 rounded-3xl border border-[#E2E8F0] bg-white p-8 text-left" data-testid="payment-success-summary">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <div className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Booking code</div>
               <div className="mono text-3xl text-[#0B3B5C] mt-1">{booking.id}</div>
@@ -61,6 +61,23 @@ export function PaymentSuccess() {
               <div className="mono text-2xl text-[#E86A3C] font-black tracking-tight">{money(booking.total)}</div>
             </div>
           </div>
+
+          {/* QR code — cruise passengers flash this at the driver */}
+          <div className="mt-8 flex flex-col sm:flex-row items-center gap-6 rounded-2xl bg-[#FBF7EF] border border-[#EFE7D5] p-6" data-testid="payment-success-qr-block">
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(`${window.location.origin}/track?id=${booking.id}`)}`}
+              alt={`QR code for booking ${booking.id}`}
+              width={160} height={160}
+              className="w-40 h-40 rounded-xl bg-white p-2 border border-[#E2E8F0] shrink-0"
+              data-testid="payment-success-qr-img"
+            />
+            <div className="text-center sm:text-left">
+              <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">Show at pickup</div>
+              <div className="serif text-xl text-[#0B3B5C] mt-1">Scan to confirm your ride</div>
+              <p className="text-sm text-[#64748B] mt-2 leading-relaxed">Flash this at your driver. It opens your live booking + status page.</p>
+            </div>
+          </div>
+
           <div className="mt-6 text-sm text-[#64748B]">
             <span className="text-[#0B3B5C] font-semibold">{booking.item_name}</span> · {new Date(booking.booking_date).toLocaleString()}
           </div>
@@ -72,13 +89,20 @@ export function PaymentSuccess() {
             >
               Track your booking →
             </Link>
+            <Link
+              to={`/receipt/${booking.id}`}
+              data-testid="payment-success-print-receipt"
+              className="inline-flex rounded-full bg-[#D4A94A] text-[#0B192C] px-6 py-3 text-sm font-semibold hover:bg-[#e0b856] shadow-[0_10px_25px_rgba(212,169,74,0.4)]"
+            >
+              Print receipt
+            </Link>
             <a
               href={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/receipt.pdf`}
               target="_blank" rel="noreferrer"
               data-testid="payment-success-receipt-btn"
-              className="inline-flex rounded-full bg-[#D4A94A] text-[#0B192C] px-6 py-3 text-sm font-semibold hover:bg-[#e0b856] shadow-[0_10px_25px_rgba(212,169,74,0.4)]"
+              className="inline-flex rounded-full border border-[#E2E8F0] text-[#0B3B5C] px-6 py-3 text-sm font-semibold hover:border-[#0B3B5C]"
             >
-              Download receipt PDF
+              Download PDF
             </a>
             <button
               onClick={copyShare}

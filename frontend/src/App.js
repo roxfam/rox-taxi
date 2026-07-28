@@ -24,6 +24,7 @@ import MyBookings from "./pages/MyBookings";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import AuthCallback from "./pages/AuthCallback";
+import PrintReceipt from "./pages/PrintReceipt";
 import { AuthProvider } from "./lib/auth";
 import { useEffect } from "react";
 
@@ -82,5 +83,7 @@ function App() {
     </div>
   );
 }
+
+export default App;
 
 export default App;
