@@ -22,6 +22,7 @@ from notifications import notify_booking_confirmed
 import paypal_client
 from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS
 from pdf_utils import build_wedding_pdf, build_receipt_pdf
+from routes import payments as payments_module
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -153,11 +154,6 @@ class DepositUpdate(BaseModel):
     status: str  # 'released' | 'forfeited' | 'held'
     reason: Optional[str] = None
     auto_refund: bool = True  # attempt automatic refund via Stripe/PayPal on release
-
-
-class CheckoutRequest(BaseModel):
-    booking_id: str
-    origin_url: str
 
 
 class LoginRequest(BaseModel):
@@ -700,7 +696,7 @@ async def admin_update_deposit(booking_id: str, req: DepositUpdate, admin_email:
 
     refund_info: Dict[str, Any] = {}
     if req.status == "released" and req.auto_refund:
-        refund_info = await _attempt_deposit_refund(
+        refund_info = await payments_module.attempt_deposit_refund(
             booking=doc,
             amount=float(doc["deposit_amount"]),
             reason=req.reason or "Deposit released — vehicle returned in good condition",
@@ -1015,288 +1011,11 @@ async def admin_resend_notification(booking_id: str, body: Optional[Dict[str, An
 
 
 # ---------------- Payments ----------------
-
-@api_router.post("/payments/checkout")
-async def create_checkout(req: CheckoutRequest, request: Request):
-    booking = await db.bookings.find_one({"id": req.booking_id.upper()})
-    if not booking:
-        raise HTTPException(404, "Booking not found")
-
-    host_url = str(request.base_url)
-    webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-
-    success_url = f"{req.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{req.origin_url}/payment/cancel?booking_id={booking['id']}"
-
-    checkout_req = CheckoutSessionRequest(
-        amount=float(booking["total"]),
-        currency="usd",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={"booking_id": booking["id"], "customer_email": booking["customer_email"]},
-    )
-    session = await stripe_checkout.create_checkout_session(checkout_req)
-
-    await db.payment_transactions.insert_one({
-        "session_id": session.session_id,
-        "booking_id": booking["id"],
-        "amount": float(booking["total"]),
-        "currency": "usd",
-        "status": "initiated",
-        "payment_status": "pending",
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-    })
-    return {"checkout_url": session.url, "session_id": session.session_id}
+# All Stripe Checkout, PayPal Smart Buttons, webhook, deposit-refund helpers
+# live in /app/backend/routes/payments.py — mounted via `configure()` +
+# `api_router.include_router(payments_module.router)` below at bootstrap.
 
 
-async def _mark_paid(session_id: str, booking_id: Optional[str]):
-    await db.payment_transactions.update_one(
-        {"session_id": session_id, "payment_status": {"$ne": "paid"}},
-        {"$set": {"status": "completed", "payment_status": "paid", "updated_at": now_iso()}},
-    )
-    if booking_id:
-        res = await db.bookings.update_one(
-            {"id": booking_id, "payment_status": {"$ne": "paid"}},
-            {"$set": {"payment_status": "paid", "status": "confirmed", "updated_at": now_iso()}},
-        )
-        if res.modified_count:
-            booking = await db.bookings.find_one({"id": booking_id})
-            try:
-                prefs = await db.site_config.find_one({"_id": "main"}) or {}
-                report = notify_booking_confirmed(clean(dict(booking)), prefs)
-                await db.bookings.update_one(
-                    {"id": booking_id},
-                    {"$set": {"notification_status": report, "notified_at": now_iso()}},
-                )
-            except Exception as e:  # noqa: BLE001
-                logging.warning("notify err: %s", e)
-
-
-@api_router.get("/payments/status/{session_id}")
-async def payment_status(session_id: str, request: Request):
-    record = await db.payment_transactions.find_one({"session_id": session_id})
-    if not record:
-        raise HTTPException(404, "Transaction not found")
-
-    if record.get("payment_status") != "paid":
-        host_url = str(request.base_url)
-        webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
-        sc = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-        try:
-            status = await sc.get_checkout_status(session_id)
-            if status.payment_status == "paid" or status.status == "complete":
-                await _mark_paid(session_id, record["booking_id"])
-                record = await db.payment_transactions.find_one({"session_id": session_id})
-        except Exception as e:  # noqa: BLE001
-            logging.warning("stripe status err: %s", e)
-
-    return {
-        "session_id": record["session_id"],
-        "booking_id": record["booking_id"],
-        "status": record["status"],
-        "payment_status": record["payment_status"],
-    }
-
-
-@api_router.post("/webhook/stripe")
-async def stripe_webhook(request: Request):
-    host_url = str(request.base_url)
-    webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
-    sc = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-    body = await request.body()
-    sig = request.headers.get("Stripe-Signature", "")
-    try:
-        result = await sc.handle_webhook(body, sig)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f"Webhook error: {e}")
-    if result.payment_status == "paid":
-        booking_id = (result.metadata or {}).get("booking_id")
-        await _mark_paid(result.session_id, booking_id)
-    return {"status": "ok"}
-
-
-# ---------------- PayPal Checkout (Smart Buttons) ----------------
-
-
-class PayPalCreateOrderRequest(BaseModel):
-    booking_id: str
-
-
-@api_router.get("/paypal/config")
-async def paypal_config():
-    """Public config for the frontend PayPalScriptProvider."""
-    return paypal_client.public_config()
-
-
-@api_router.post("/paypal/create-order")
-async def paypal_create_order(req: PayPalCreateOrderRequest):
-    if not paypal_client.is_configured():
-        raise HTTPException(503, "PayPal is not configured on the server")
-    booking = await db.bookings.find_one({"id": req.booking_id.upper()})
-    if not booking:
-        raise HTTPException(404, "Booking not found")
-    if booking.get("payment_status") == "paid":
-        raise HTTPException(409, "Booking already paid")
-
-    try:
-        order = await paypal_client.create_order(
-            amount=float(booking["total"]),
-            booking_id=booking["id"],
-            description=f"{booking.get('item_name','Rox Taxi booking')} — {booking['id']}",
-        )
-    except Exception as e:  # noqa: BLE001
-        logging.exception("PayPal create-order failed")
-        raise HTTPException(502, f"PayPal error: {e}") from e
-
-    await db.payment_transactions.insert_one({
-        "provider": "paypal",
-        "session_id": order["id"],
-        "booking_id": booking["id"],
-        "amount": float(booking["total"]),
-        "currency": "usd",
-        "status": order.get("status", "CREATED"),
-        "payment_status": "pending",
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-    })
-    return {"order_id": order["id"], "status": order.get("status")}
-
-
-@api_router.post("/paypal/capture-order/{order_id}")
-async def paypal_capture_order(order_id: str):
-    if not paypal_client.is_configured():
-        raise HTTPException(503, "PayPal is not configured on the server")
-
-    tx = await db.payment_transactions.find_one({"session_id": order_id, "provider": "paypal"})
-    if not tx:
-        raise HTTPException(404, "PayPal order not found")
-
-    try:
-        result = await paypal_client.capture_order(order_id)
-    except Exception as e:  # noqa: BLE001
-        logging.exception("PayPal capture failed")
-        raise HTTPException(502, f"PayPal capture error: {e}") from e
-
-    status = (result.get("status") or "").upper()
-    if status != "COMPLETED":
-        await db.payment_transactions.update_one(
-            {"session_id": order_id},
-            {"$set": {"status": status or "UNKNOWN", "updated_at": now_iso()}},
-        )
-        raise HTTPException(402, f"PayPal capture not completed (status={status})")
-
-    # Payment succeeded — save capture_id (needed for refunds), mark booking paid + notify
-    capture_id = paypal_client.extract_capture_id(result)
-    await db.payment_transactions.update_one(
-        {"session_id": order_id},
-        {"$set": {"paypal_capture_id": capture_id, "updated_at": now_iso()}},
-    )
-    if capture_id:
-        await db.bookings.update_one(
-            {"id": tx["booking_id"]},
-            {"$set": {"paypal_capture_id": capture_id, "payment_provider": "paypal"}},
-        )
-    await _mark_paid(order_id, tx["booking_id"])
-    booking = await db.bookings.find_one({"id": tx["booking_id"]}, {"_id": 0})
-    return {
-        "order_id": order_id,
-        "status": status,
-        "booking_id": tx["booking_id"],
-        "payment_status": "paid",
-        "booking": clean(dict(booking)) if booking else None,
-    }
-
-
-# ---------------- Refund helpers (Stripe REST + PayPal REST) ----------------
-
-
-async def _stripe_refund(payment_intent: str, amount_cents: int, reason: str) -> Dict[str, Any]:
-    """Issue a Stripe refund via REST API (works with test + live keys)."""
-    async with httpx.AsyncClient(timeout=30.0) as _client:
-        r = await _client.post(
-            "https://api.stripe.com/v1/refunds",
-            auth=(STRIPE_API_KEY, ""),
-            data={
-                "payment_intent": payment_intent,
-                "amount": str(amount_cents),
-                "reason": "requested_by_customer",
-                "metadata[deposit_reason]": (reason or "Deposit released")[:500],
-            },
-        )
-    if r.status_code >= 400:
-        raise RuntimeError(f"Stripe refund failed ({r.status_code}): {r.text}")
-    return r.json()
-
-
-async def _resolve_stripe_payment_intent(booking_id: str) -> Optional[str]:
-    """Look up the payment_intent from payment_transactions; retrieve from Stripe if not cached."""
-    tx = await db.payment_transactions.find_one({"booking_id": booking_id, "provider": {"$ne": "paypal"}})
-    if not tx:
-        tx = await db.payment_transactions.find_one({"booking_id": booking_id})
-    if not tx:
-        return None
-    if tx.get("stripe_payment_intent"):
-        return tx["stripe_payment_intent"]
-
-    session_id = tx.get("session_id")
-    if not session_id or tx.get("provider") == "paypal":
-        return None
-
-    async with httpx.AsyncClient(timeout=20.0) as _client:
-        r = await _client.get(
-            f"https://api.stripe.com/v1/checkout/sessions/{session_id}",
-            auth=(STRIPE_API_KEY, ""),
-        )
-    if r.status_code >= 400:
-        logging.warning("Stripe session lookup failed: %s %s", r.status_code, r.text)
-        return None
-    pi = r.json().get("payment_intent")
-    if pi:
-        await db.payment_transactions.update_one(
-            {"_id": tx["_id"]}, {"$set": {"stripe_payment_intent": pi}},
-        )
-    return pi
-
-
-async def _attempt_deposit_refund(booking: Dict[str, Any], amount: float, reason: str) -> Dict[str, Any]:
-    """Refund `amount` USD via the same payment provider used for the original booking."""
-    if booking.get("payment_status") != "paid":
-        return {"refunded": False, "provider": None, "error": "Booking not paid — no funds to refund"}
-
-    if booking.get("paypal_capture_id"):
-        try:
-            refund = await paypal_client.refund_capture(
-                capture_id=booking["paypal_capture_id"],
-                amount=amount,
-                note=f"Deposit released: {reason[:200]}",
-            )
-            return {
-                "refunded": (refund.get("status", "").upper() == "COMPLETED"),
-                "refund_id": refund.get("id"),
-                "provider": "paypal",
-                "status": refund.get("status"),
-            }
-        except Exception as e:  # noqa: BLE001
-            logging.exception("PayPal deposit refund failed")
-            return {"refunded": False, "provider": "paypal", "error": str(e)}
-
-    pi = await _resolve_stripe_payment_intent(booking["id"])
-    if pi:
-        try:
-            refund = await _stripe_refund(pi, int(round(amount * 100)), reason)
-            return {
-                "refunded": (refund.get("status") == "succeeded"),
-                "refund_id": refund.get("id"),
-                "provider": "stripe",
-                "status": refund.get("status"),
-            }
-        except Exception as e:  # noqa: BLE001
-            logging.exception("Stripe deposit refund failed")
-            return {"refunded": False, "provider": "stripe", "error": str(e)}
-
-    return {"refunded": False, "provider": booking.get("payment_method", "manual"), "error": "Manual payment method — issue refund by hand"}
 
 
 # ---------------- Live Chat (SSE) ----------------
@@ -1356,6 +1075,16 @@ async def root():
 
 
 
+
+# Wire up the payments router (Stripe / PayPal / webhooks / refunds).
+payments_module.configure(
+    db=db,
+    stripe_api_key=STRIPE_API_KEY,
+    notify_fn=notify_booking_confirmed,
+    now_iso_fn=now_iso,
+    clean_fn=clean,
+)
+api_router.include_router(payments_module.router)
 
 app.include_router(api_router)
 

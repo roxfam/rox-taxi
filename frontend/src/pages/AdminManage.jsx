@@ -21,7 +21,7 @@ export default function AdminManage() {
 
   return (
     <div className="min-h-screen bg-[#F1F5F9]" data-testid="admin-manage">
-      <header className="bg-white border-b border-[#E2E8F0] sticky top-0 z-30">
+      <header className="bg-white border-b border-[#E2E8F0] sticky top-0 z-[80]">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">
@@ -142,7 +142,7 @@ function EditModal({ kind, initial, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl w-full max-w-lg p-6 space-y-3">
         <div className="flex justify-between items-center">
           <h3 className="font-semibold text-[#0B3B5C]">{initial.new ? "Add item" : "Edit item"}</h3>

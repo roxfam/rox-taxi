@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money } from "../lib/api";
-import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw } from "lucide-react";
+import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap } from "lucide-react";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -305,16 +305,17 @@ function NotifyCell({ booking, onRefresh }) {
     );
   };
 
-  const resend = async () => {
+  const resend = async (force = false) => {
     setResending(true);
     try {
-      const { data } = await api.post(`/admin/bookings/${booking.id}/resend-notification`);
+      const { data } = await api.post(`/admin/bookings/${booking.id}/resend-notification`, force ? { force: true } : {});
       const rep = data?.notification_status || {};
       const okEmail = rep.email?.sent;
       const okSms = rep.sms?.sent;
-      if (okEmail && okSms) toast.success("Email + SMS re-sent");
-      else if (okEmail || okSms) toast.success(`Re-sent ${okEmail ? "email" : ""}${okEmail && okSms ? " + " : ""}${okSms ? "SMS" : ""}`);
-      else toast.warning("Re-send attempted — check credentials");
+      const label = force ? "Force-sent" : "Re-sent";
+      if (okEmail && okSms) toast.success(`${label} email + SMS`);
+      else if (okEmail || okSms) toast.success(`${label} ${okEmail ? "email" : ""}${okEmail && okSms ? " + " : ""}${okSms ? "SMS" : ""}`);
+      else toast.warning(`${label} — no channel delivered (check credentials or toggles)`);
       onRefresh();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Re-send failed");
@@ -335,14 +336,26 @@ function NotifyCell({ booking, onRefresh }) {
         </div>
       )}
       {paid && (
-        <button
-          onClick={resend}
-          disabled={resending}
-          className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-[#0B3B5C] hover:text-[#D4A94A] disabled:opacity-60"
-          data-testid={`notify-resend-${booking.id}`}
-        >
-          <RotateCw className={`w-3 h-3 ${resending ? "animate-spin" : ""}`} /> {resending ? "Sending…" : "Re-send"}
-        </button>
+        <div className="flex gap-2 mt-1">
+          <button
+            onClick={() => resend(false)}
+            disabled={resending}
+            className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#0B3B5C] hover:text-[#D4A94A] disabled:opacity-60"
+            data-testid={`notify-resend-${booking.id}`}
+            title="Re-send using current notification preferences"
+          >
+            <RotateCw className={`w-3 h-3 ${resending ? "animate-spin" : ""}`} /> {resending ? "…" : "Re-send"}
+          </button>
+          <button
+            onClick={() => resend(true)}
+            disabled={resending}
+            className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#D4A94A] hover:text-[#0B3B5C] disabled:opacity-60"
+            data-testid={`notify-force-resend-${booking.id}`}
+            title="Force-send email + SMS, bypassing admin notification toggles"
+          >
+            <Zap className={`w-3 h-3 ${resending ? "animate-pulse" : ""}`} /> Force
+          </button>
+        </div>
       )}
     </div>
   );
@@ -391,7 +404,7 @@ function DepositActionModal({ booking, action, onClose, onDone }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" data-testid="deposit-modal">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4" data-testid="deposit-modal">
       <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-center gap-3">

@@ -72,7 +72,7 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen flex flex-col bg-[#FBF7EF]">
       <header
-        className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? "glass shadow-[0_4px_20px_rgba(11,25,44,0.06)]" : "bg-transparent"}`}
+        className={`sticky top-0 z-[80] transition-all duration-300 ${scrolled ? "glass shadow-[0_4px_20px_rgba(11,25,44,0.06)]" : "bg-transparent"}`}
         data-testid="site-header"
       >
         <div className="max-w-7xl mx-auto px-5 lg:px-10 flex items-center justify-between h-20">
@@ -309,7 +309,7 @@ export default function Layout({ children }) {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
               onClick={() => setOpen(false)}
-              className="fixed inset-0 z-[60] bg-[#0B192C]/60 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-[95] bg-[#0B192C]/60 backdrop-blur-sm lg:hidden"
               data-testid="mobile-menu-backdrop"
             />
             <motion.aside
@@ -318,7 +318,7 @@ export default function Layout({ children }) {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 38 }}
-              className="fixed top-0 right-0 bottom-0 w-[88vw] max-w-[380px] z-[70] bg-white shadow-[-30px_0_60px_rgba(11,25,44,0.15)] lg:hidden flex flex-col"
+              className="fixed top-0 right-0 bottom-0 w-[88vw] max-w-[380px] z-[96] bg-white shadow-[-30px_0_60px_rgba(11,25,44,0.15)] lg:hidden flex flex-col"
               data-testid="mobile-menu-drawer"
             >
               <div className="p-6 flex items-center justify-between border-b border-[#F1F5F9]">
