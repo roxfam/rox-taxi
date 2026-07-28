@@ -22,6 +22,7 @@ import AdminManage from "./pages/AdminManage";
 import AdminGroups from "./pages/AdminGroups";
 import MyBookings from "./pages/MyBookings";
 import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 import AuthCallback from "./pages/AuthCallback";
 import { AuthProvider } from "./lib/auth";
 import { useEffect } from "react";
@@ -57,6 +58,7 @@ function AppRouter() {
       <Route path="/pay/:bookingId" element={<CustomerShell><Pay /></CustomerShell>} />
       <Route path="/my-bookings" element={<CustomerShell><MyBookings /></CustomerShell>} />
       <Route path="/login" element={<CustomerShell><Login /></CustomerShell>} />
+      <Route path="/signup" element={<CustomerShell><Signup /></CustomerShell>} />
       <Route path="/payment/success" element={<CustomerShell><PaymentSuccess /></CustomerShell>} />
       <Route path="/payment/cancel" element={<CustomerShell><PaymentCancel /></CustomerShell>} />
       <Route path="/admin/login" element={<AdminLogin />} />

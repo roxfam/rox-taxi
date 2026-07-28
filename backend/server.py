@@ -186,6 +186,17 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class CustomerRegisterRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=80)
+    email: EmailStr
+    password: str = Field(..., min_length=6, max_length=200)
+
+
+class CustomerLoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
 class ContactMessage(BaseModel):
     name: str
     email: EmailStr
@@ -252,8 +263,52 @@ async def admin_login(req: LoginRequest):
 # ---------------- Customer Google Auth (Emergent Managed) ----------------
 # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 
+IDLE_TIMEOUT_MINUTES = 60
+
+
+def _hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def _verify_password(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+async def _create_customer_session(user_id: str, method: str) -> str:
+    """Create a user_sessions row for either google or email auth and return the token."""
+    session_token = f"sess_{uuid.uuid4().hex}{uuid.uuid4().hex}"
+    ts = now_iso()
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "auth_method": method,
+        "expires_at": (now_utc() + timedelta(days=7)).isoformat(),
+        "last_activity_at": ts,
+        "created_at": ts,
+    })
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"last_login_at": ts, "last_login_method": method}},
+    )
+    await db.login_events.insert_one({
+        "user_id": user_id, "action": "login", "method": method, "at": ts,
+    })
+    return session_token
+
+
+def _set_session_cookie(response: Response, token: str):
+    response.set_cookie(
+        key="session_token", value=token, httponly=True, secure=True,
+        samesite="none", path="/", max_age=60 * 60 * 24 * 7,
+    )
+
+
 async def get_current_user(request: Request):
-    """Resolve customer from session_token cookie OR Authorization: Bearer header."""
+    """Resolve customer from session_token cookie OR Authorization: Bearer header.
+    Enforces 1-hour idle timeout — sessions with no activity for 60min are killed."""
     token = request.cookies.get("session_token")
     if not token:
         auth = request.headers.get("authorization", "")
@@ -272,11 +327,39 @@ async def get_current_user(request: Request):
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at < now_utc():
+        await db.user_sessions.delete_one({"session_token": token})
         raise HTTPException(401, "Session expired")
+
+    # 1-hour idle enforcement
+    last_act = session.get("last_activity_at") or session.get("created_at")
+    if last_act:
+        try:
+            last_dt = datetime.fromisoformat(last_act) if isinstance(last_act, str) else last_act
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            if (now_utc() - last_dt) > timedelta(minutes=IDLE_TIMEOUT_MINUTES):
+                await db.user_sessions.delete_one({"session_token": token})
+                await db.login_events.insert_one({
+                    "user_id": session["user_id"], "action": "auto_logout_idle",
+                    "method": session.get("auth_method"), "at": now_iso(),
+                })
+                raise HTTPException(401, "Session idle timeout")
+        except HTTPException:
+            raise
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Refresh activity timestamp
+    await db.user_sessions.update_one(
+        {"session_token": token},
+        {"$set": {"last_activity_at": now_iso()}},
+    )
 
     user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
     if not user:
         raise HTTPException(401, "User not found")
+    user.pop("password_hash", None)
+    user["idle_timeout_minutes"] = IDLE_TIMEOUT_MINUTES
     return user
 
 
@@ -299,38 +382,85 @@ async def process_google_session(request: Request, response: Response):
     name = data.get("name", "")
     picture = data.get("picture", "")
     session_token = data["session_token"]
+    ts = now_iso()
 
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if existing:
         user_id = existing["user_id"]
         await db.users.update_one(
             {"user_id": user_id},
-            {"$set": {"name": name, "picture": picture, "updated_at": now_iso()}},
+            {"$set": {"name": name, "picture": picture, "updated_at": ts, "last_login_at": ts, "last_login_method": "google"}},
         )
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         await db.users.insert_one({
-            "user_id": user_id,
-            "email": email,
-            "name": name,
-            "picture": picture,
-            "created_at": now_iso(),
+            "user_id": user_id, "email": email, "name": name, "picture": picture,
+            "provider": "google", "created_at": ts,
+            "last_login_at": ts, "last_login_method": "google",
         })
 
     await db.user_sessions.insert_one({
-        "user_id": user_id,
-        "session_token": session_token,
+        "user_id": user_id, "session_token": session_token, "auth_method": "google",
         "expires_at": (now_utc() + timedelta(days=7)).isoformat(),
-        "created_at": now_iso(),
+        "last_activity_at": ts, "created_at": ts,
+    })
+    await db.login_events.insert_one({
+        "user_id": user_id, "action": "login", "method": "google", "at": ts,
     })
 
-    response.set_cookie(
-        key="session_token", value=session_token, httponly=True, secure=True,
-        samesite="none", path="/", max_age=60 * 60 * 24 * 7,
-    )
+    _set_session_cookie(response, session_token)
 
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     return {"user": user, "session_token": session_token}
+
+
+@api_router.post("/auth/register")
+async def customer_register(req: CustomerRegisterRequest, response: Response):
+    """Customer email/password signup. Auto-links past bookings by email."""
+    email = req.email.lower()
+    existing = await db.users.find_one({"email": email})
+    if existing and existing.get("password_hash"):
+        raise HTTPException(400, "An account with this email already exists. Please sign in.")
+
+    ts = now_iso()
+    if existing:
+        user_id = existing["user_id"]
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"password_hash": _hash_password(req.password), "name": req.name,
+                      "provider": "email" if not existing.get("provider") else "both",
+                      "updated_at": ts}},
+        )
+    else:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": user_id, "email": email, "name": req.name, "picture": "",
+            "password_hash": _hash_password(req.password), "provider": "email",
+            "created_at": ts,
+        })
+
+    token = await _create_customer_session(user_id, "email")
+    _set_session_cookie(response, token)
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    user.pop("password_hash", None)
+    return {"user": user}
+
+
+@api_router.post("/auth/login-email")
+async def customer_login_email(req: CustomerLoginRequest, response: Response):
+    """Customer email/password login."""
+    email = req.email.lower()
+    user = await db.users.find_one({"email": email})
+    if not user or not user.get("password_hash"):
+        raise HTTPException(401, "Invalid email or password")
+    if not _verify_password(req.password, user["password_hash"]):
+        raise HTTPException(401, "Invalid email or password")
+
+    token = await _create_customer_session(user["user_id"], "email")
+    _set_session_cookie(response, token)
+    user.pop("_id", None)
+    user.pop("password_hash", None)
+    return {"user": user}
 
 
 @api_router.get("/auth/me")
@@ -338,10 +468,27 @@ async def me(user: dict = Depends(get_current_user)):
     return user
 
 
+@api_router.post("/auth/heartbeat")
+async def heartbeat(user: dict = Depends(get_current_user)):
+    """Called by frontend on activity to keep session alive within idle window.
+    The get_current_user dep already refreshes last_activity_at."""
+    return {"ok": True, "idle_timeout_minutes": IDLE_TIMEOUT_MINUTES}
+
+
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response):
     token = request.cookies.get("session_token")
     if token:
+        session = await db.user_sessions.find_one({"session_token": token})
+        if session:
+            await db.login_events.insert_one({
+                "user_id": session["user_id"], "action": "logout",
+                "method": session.get("auth_method"), "at": now_iso(),
+            })
+            await db.users.update_one(
+                {"user_id": session["user_id"]},
+                {"$set": {"last_logout_at": now_iso()}},
+            )
         await db.user_sessions.delete_one({"session_token": token})
     response.delete_cookie("session_token", path="/", samesite="none", secure=True)
     return {"ok": True}
@@ -359,6 +506,13 @@ async def my_bookings(user: dict = Depends(get_current_user)):
 
 @app.on_event("startup")
 async def seed_db():
+    # Ensure customer auth indexes exist
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.user_sessions.create_index("session_token", unique=True)
+        await db.user_sessions.create_index("last_activity_at")
+    except Exception as e:  # noqa: BLE001
+        logging.warning("auth index create warn: %s", e)
     # Idempotent seed. `price` + `price_history` are ONLY set on first insert so
     # admin-managed price edits survive restarts. Every other field ($set) still
     # tracks the seed file, so image / description tweaks propagate.
