@@ -68,7 +68,7 @@ TAXI_SERVICES: List[Dict] = [
      "route": "LPIA → Cable Beach", "featured": True,
      "description": f"{_TARIFF_NOTE} Includes SuperClubs Breezes, Melia, Sandals Royal Bahamian.",
      "image_url": _TAXI_IMG},
-    {"id": "airport-bahamar", "name": "LPIA Airport → Baha Mar / SLS / Grand Hyatt / Rosewood", "price": 32.0,
+    {"id": "airport-bahamar", "name": "LPIA Airport → Baha Mar / SLS / Grand Hyatt / Rosewood", "price": 35.0,
      "route": "LPIA → Baha Mar", "featured": True,
      "description": f"{_TARIFF_NOTE} Baha Mar resort complex on Cable Beach.",
      "image_url": _TAXI_IMG},
