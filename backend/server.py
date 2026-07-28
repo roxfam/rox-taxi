@@ -23,6 +23,7 @@ import paypal_client
 from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS
 from pdf_utils import build_wedding_pdf, build_receipt_pdf
 from routes import payments as payments_module
+from routes import admin as admin_module
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -146,44 +147,9 @@ def _validate_open_day(service_type: str, booking_date: str, days: int = 1):
             )
 
 
-class BookingStatusUpdate(BaseModel):
-    status: str
-
-
-class DepositUpdate(BaseModel):
-    status: str  # 'released' | 'forfeited' | 'held'
-    reason: Optional[str] = None
-    auto_refund: bool = True  # attempt automatic refund via Stripe/PayPal on release
-
-
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-
-
-class ItemUpsert(BaseModel):
-    name: str
-    description: str
-    price: float
-    duration: Optional[str] = None
-    image_url: Optional[str] = None
-    category: Optional[str] = None
-    seats: Optional[int] = None
-    active: bool = True
-
-
-class SiteConfigUpdate(BaseModel):
-    zelle_email: Optional[str] = None
-    zelle_phone: Optional[str] = None
-    facebook_url: Optional[str] = None
-    messenger_url: Optional[str] = None
-    phone: Optional[str] = None
-    whatsapp_number: Optional[str] = None
-    paypal_me_url: Optional[str] = None
-    tripadvisor_url: Optional[str] = None
-    logo_url: Optional[str] = None
-    notify_email_enabled: Optional[bool] = None
-    notify_sms_enabled: Optional[bool] = None
 
 
 class GroupInquiryCreate(BaseModel):
@@ -198,10 +164,6 @@ class GroupInquiryCreate(BaseModel):
     notes: Optional[str] = None
     package: Optional[Dict[str, Any]] = None  # wedding-builder structured selection
     estimated_total: Optional[float] = None
-
-
-class GroupInquiryStatusUpdate(BaseModel):
-    status: str  # new | contacted | quoted | won | lost
 
 
 # ---------------- Admin JWT auth ----------------
@@ -644,115 +606,6 @@ async def get_booking(booking_id: str):
     return clean(doc)
 
 
-@api_router.get("/admin/bookings")
-async def admin_list_bookings(_: str = Depends(require_admin)):
-    docs = await db.bookings.find({}).sort("created_at", -1).to_list(1000)
-    return [clean(d) for d in docs]
-
-
-@api_router.patch("/admin/bookings/{booking_id}/status")
-async def admin_update_status(booking_id: str, req: BookingStatusUpdate, _: str = Depends(require_admin)):
-    res = await db.bookings.update_one(
-        {"id": booking_id.upper()},
-        {"$set": {"status": req.status, "updated_at": now_iso()}},
-    )
-    if res.matched_count == 0:
-        raise HTTPException(404, "Booking not found")
-    doc = await db.bookings.find_one({"id": booking_id.upper()})
-    return clean(doc)
-
-
-@api_router.patch("/admin/bookings/{booking_id}/deposit")
-async def admin_update_deposit(booking_id: str, req: DepositUpdate, admin_email: str = Depends(require_admin)):
-    """Release the deposit back to the customer, or forfeit it (damage/late/etc.).
-
-    If ``auto_refund=True`` and the deposit is being released, we try to refund
-    the deposit amount via the same payment provider used for the original booking
-    (Stripe for card payments, PayPal for PayPal Checkout). Zelle / PayPal.me
-    stay manual. The refund result is stored on the booking regardless of outcome.
-    """
-    valid = {"held", "released", "forfeited"}
-    if req.status not in valid:
-        raise HTTPException(422, f"status must be one of {sorted(valid)}")
-    doc = await db.bookings.find_one({"id": booking_id.upper()})
-    if not doc:
-        raise HTTPException(404, "Booking not found")
-    if not doc.get("deposit_amount"):
-        raise HTTPException(400, "This booking has no security deposit")
-
-    now = now_iso()
-    update: Dict[str, Any] = {
-        "deposit_status": req.status,
-        "deposit_updated_at": now,
-        "deposit_updated_by": admin_email,
-        "updated_at": now,
-    }
-    if req.reason:
-        update["deposit_reason"] = req.reason
-    if req.status == "released":
-        update["deposit_released_at"] = now
-    elif req.status == "forfeited":
-        update["deposit_forfeited_at"] = now
-
-    refund_info: Dict[str, Any] = {}
-    if req.status == "released" and req.auto_refund:
-        refund_info = await payments_module.attempt_deposit_refund(
-            booking=doc,
-            amount=float(doc["deposit_amount"]),
-            reason=req.reason or "Deposit released — vehicle returned in good condition",
-        )
-        update["deposit_refund_provider"] = refund_info.get("provider")
-        update["deposit_refund_status"] = "succeeded" if refund_info.get("refunded") else "failed"
-        if refund_info.get("refund_id"):
-            update["deposit_refund_id"] = refund_info["refund_id"]
-        if refund_info.get("error"):
-            update["deposit_refund_error"] = refund_info["error"]
-
-    await db.bookings.update_one({"id": booking_id.upper()}, {"$set": update})
-    doc = await db.bookings.find_one({"id": booking_id.upper()})
-    result = clean(doc)
-    if refund_info:
-        result["refund_info"] = refund_info
-    return result
-
-
-@api_router.get("/admin/stats")
-async def admin_stats(_: str = Depends(require_admin)):
-    total = await db.bookings.count_documents({})
-    paid = await db.bookings.count_documents({"payment_status": "paid"})
-    pending = await db.bookings.count_documents({"status": {"$in": ["pending_payment", "confirmed"]}})
-    active = await db.bookings.count_documents({"status": {"$in": ["driver_assigned", "en_route"]}})
-    revenue_cursor = db.bookings.aggregate([
-        {"$match": {"payment_status": "paid"}},
-        {"$group": {"_id": None, "sum": {"$sum": "$total"}}},
-    ])
-    revenue_docs = await revenue_cursor.to_list(1)
-    revenue = revenue_docs[0]["sum"] if revenue_docs else 0
-
-    # Deposit stats — rentals only
-    deposits_held = await db.bookings.count_documents({"deposit_status": "held", "deposit_amount": {"$gt": 0}})
-    deposits_released = await db.bookings.count_documents({"deposit_status": "released"})
-    deposits_forfeited = await db.bookings.count_documents({"deposit_status": "forfeited"})
-    held_cursor = db.bookings.aggregate([
-        {"$match": {"deposit_status": "held", "deposit_amount": {"$gt": 0}}},
-        {"$group": {"_id": None, "sum": {"$sum": "$deposit_amount"}}},
-    ])
-    held_docs = await held_cursor.to_list(1)
-    deposits_held_amount = held_docs[0]["sum"] if held_docs else 0
-
-    return {
-        "total": total,
-        "paid": paid,
-        "pending": pending,
-        "active": active,
-        "revenue": revenue,
-        "deposits_held": deposits_held,
-        "deposits_released": deposits_released,
-        "deposits_forfeited": deposits_forfeited,
-        "deposits_held_amount": deposits_held_amount,
-    }
-
-
 # ---------------- Group & Wedding inquiries ----------------
 # NOTE: These literal routes MUST be declared before /admin/{kind} to avoid shadowing.
 
@@ -789,24 +642,6 @@ async def create_group_inquiry(req: GroupInquiryCreate):
         logging.getLogger(__name__).warning("group notify err: %s", e)
 
     return clean(inquiry)
-
-
-@api_router.get("/admin/group-inquiries")
-async def admin_list_group_inquiries(_: str = Depends(require_admin)):
-    docs = await db.group_inquiries.find({}).sort("created_at", -1).to_list(500)
-    return [clean(d) for d in docs]
-
-
-@api_router.patch("/admin/group-inquiries/{inquiry_id}/status")
-async def admin_update_group_status(inquiry_id: str, req: GroupInquiryStatusUpdate, _: str = Depends(require_admin)):
-    res = await db.group_inquiries.update_one(
-        {"id": inquiry_id.upper()},
-        {"$set": {"status": req.status, "updated_at": now_iso()}},
-    )
-    if res.matched_count == 0:
-        raise HTTPException(404, "Inquiry not found")
-    doc = await db.group_inquiries.find_one({"id": inquiry_id.upper()})
-    return clean(doc)
 
 
 # ---- Wedding package PDF ----
@@ -892,25 +727,6 @@ UPLOAD_DIR = ROOT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 
-@api_router.post("/admin/upload-logo")
-async def upload_logo(file: UploadFile = File(...), _: str = Depends(require_admin)):
-    allowed = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
-    ext = Path(file.filename or "").suffix.lower()
-    if ext not in allowed:
-        raise HTTPException(400, f"Unsupported file type. Use {', '.join(sorted(allowed))}")
-
-    name = f"logo-{uuid.uuid4().hex[:8]}{ext}"
-    dest = UPLOAD_DIR / name
-    content = await file.read()
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(400, "Logo must be ≤ 5MB")
-    dest.write_bytes(content)
-
-    url = f"/api/uploads/{name}"
-    await db.site_config.update_one({"_id": "main"}, {"$set": {"logo_url": url}}, upsert=True)
-    return {"logo_url": url}
-
-
 @api_router.get("/uploads/{name}")
 async def get_upload(name: str):
     from fastapi.responses import FileResponse
@@ -920,102 +736,10 @@ async def get_upload(name: str):
     return FileResponse(path)
 
 
-# ---------------- Admin CRUD (tours / taxi / rentals / site config) ----------------
-
-def _coll_by_kind(kind: str):
-    return {"tours": db.tours, "taxi_services": db.taxi_services, "rentals": db.rentals}.get(kind)
-
-
-@api_router.post("/admin/{kind}")
-async def admin_create_item(kind: str, item: ItemUpsert, _: str = Depends(require_admin)):
-    coll = _coll_by_kind(kind)
-    if coll is None:
-        raise HTTPException(404, "Unknown collection")
-    doc = item.model_dump()
-    doc["id"] = f"{kind[:3]}-{uuid.uuid4().hex[:8]}"
-    doc["created_at"] = now_iso()
-    await coll.insert_one(doc)
-    return clean(doc)
-
-
-@api_router.put("/admin/{kind}/{item_id}")
-async def admin_update_item(kind: str, item_id: str, item: ItemUpsert, _: str = Depends(require_admin)):
-    coll = _coll_by_kind(kind)
-    if coll is None:
-        raise HTTPException(404, "Unknown collection")
-    payload = {k: v for k, v in item.model_dump().items() if v is not None}
-    payload["updated_at"] = now_iso()
-    res = await coll.update_one({"id": item_id}, {"$set": payload})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Item not found")
-    doc = await coll.find_one({"id": item_id})
-    return clean(doc)
-
-
-@api_router.delete("/admin/{kind}/{item_id}")
-async def admin_delete_item(kind: str, item_id: str, _: str = Depends(require_admin)):
-    coll = _coll_by_kind(kind)
-    if coll is None:
-        raise HTTPException(404, "Unknown collection")
-    res = await coll.delete_one({"id": item_id})
-    if res.deleted_count == 0:
-        raise HTTPException(404, "Item not found")
-    return {"deleted": True}
-
-
-@api_router.get("/admin/{kind}")
-async def admin_list_items(kind: str, _: str = Depends(require_admin)):
-    coll = _coll_by_kind(kind)
-    if coll is None:
-        raise HTTPException(404, "Unknown collection")
-    docs = await coll.find({}).to_list(500)
-    return [clean(d) for d in docs]
-
-
-@api_router.put("/admin/site-config")
-async def admin_update_site(req: SiteConfigUpdate, _: str = Depends(require_admin)):
-    payload = {k: v for k, v in req.model_dump().items() if v is not None}
-    if payload:
-        await db.site_config.update_one({"_id": "main"}, {"$set": payload}, upsert=True)
-    cfg = await db.site_config.find_one({"_id": "main"})
-    cfg.pop("_id", None)
-    return cfg
-
-
-@api_router.post("/admin/bookings/{booking_id}/resend-notification")
-async def admin_resend_notification(booking_id: str, body: Optional[Dict[str, Any]] = None, _: str = Depends(require_admin)):
-    """Manually re-send the booking-confirmation email + SMS and update the stored report.
-
-    Body: `{ "force": bool }` — when true, bypasses the admin's notify_email_enabled/notify_sms_enabled
-    site-config toggles so the message goes out even if notifications are globally muted.
-    """
-    booking = await db.bookings.find_one({"id": booking_id.upper()})
-    if not booking:
-        raise HTTPException(404, "Booking not found")
-    force = bool((body or {}).get("force"))
-    if force:
-        prefs = {"notify_email_enabled": True, "notify_sms_enabled": True}
-    else:
-        prefs = await db.site_config.find_one({"_id": "main"}) or {}
-    try:
-        report = notify_booking_confirmed(clean(dict(booking)), prefs)
-    except Exception as e:  # noqa: BLE001
-        logging.warning("resend notify err: %s", e)
-        raise HTTPException(500, f"Notification error: {e}") from e
-    notified_at = now_iso()
-    await db.bookings.update_one(
-        {"id": booking["id"]},
-        {"$set": {"notification_status": report, "notified_at": notified_at}},
-    )
-    return {"booking_id": booking["id"], "notification_status": report, "notified_at": notified_at, "forced": force}
-
-
 # ---------------- Payments ----------------
 # All Stripe Checkout, PayPal Smart Buttons, webhook, deposit-refund helpers
 # live in /app/backend/routes/payments.py — mounted via `configure()` +
 # `api_router.include_router(payments_module.router)` below at bootstrap.
-
-
 
 
 # ---------------- Live Chat (SSE) ----------------
@@ -1074,8 +798,6 @@ async def root():
     return {"service": "Rox Taxi Service and Tours Bahamas API", "status": "running", "focus": "Nassau & Paradise Island"}
 
 
-
-
 # Wire up the payments router (Stripe / PayPal / webhooks / refunds).
 payments_module.configure(
     db=db,
@@ -1085,6 +807,18 @@ payments_module.configure(
     clean_fn=clean,
 )
 api_router.include_router(payments_module.router)
+
+# Wire up the admin router (booking mgmt, catalog CRUD, deposits, notifications).
+admin_module.configure(
+    db=db,
+    now_iso=now_iso,
+    clean=clean,
+    require_admin=require_admin,
+    notify_fn=notify_booking_confirmed,
+    attempt_deposit_refund=payments_module.attempt_deposit_refund,
+    upload_dir=UPLOAD_DIR,
+)
+api_router.include_router(admin_module.router)
 
 app.include_router(api_router)
 

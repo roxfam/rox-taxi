@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 9 regression after moving all /admin/* endpoints from server.py into /app/backend/routes/admin.py via configure()+include_router() pattern. Backend: 30/30 pytest cases pass — auth guards (401 on all admin routes without Bearer), full catalog CRUD for tours/taxi_services/rentals (create → list → update → delete), specific admin routes not shadowed by /admin/{kind} catch-all (bookings, stats, group-inquiries, upload-logo, site-config PUT all still resolve), booking workflow (POST /api/bookings zelle → GET /api/bookings/{id} → receipt.pdf → PATCH status → resend-notification default+force), site-config toggle roundtrip, logo upload+serve, group inquiry create/status/quote.pdf, non-admin public routes (/tours, /taxi-services, /rentals, /site-config), payments router (/paypal/config, /payments/status/{invalid}=404). Force flag on resend-notification correctly returns forced=true and both email.enabled=true, sms.enabled=true even after toggles were flipped OFF (test restored them to true after). Frontend: (1) Home hero H1 = 'Unlock Nassau. On your terms.' with italic gold 'Nassau', subhead contains 'sixty seconds', new Blue Lagoon photo renders. Nassau carousel card 3 = 'World Famous Bahamas Straw Market'. (2) AdminDashboard /admin login works with admin@roxtaxi.com/admin123, paid rows show notify-resend-<id> AND notify-force-resend-<id> buttons. Force click fires TWO separate toasts ('SMS force-sent via twilio', 'Email force-sent via smtp'), non-force click fires TWO separate toasts ('SMS sent via twilio', 'Email sent via smtp') — per-channel with provider name as required. (3) /taxi booking modal DateTimePicker popover now renders at z-[110] (verified via getComputedStyle), day click populates trigger label ('Sun, Aug 2 2026 · 10:00 AM') — the iteration 8 z-index regression is FIXED.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration9.py",
+    "/app/test_reports/pytest/iteration9.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/admin.py cleanly registers literal /admin/bookings, /admin/stats, /admin/group-inquiries, /admin/upload-logo, /admin/site-config BEFORE the /admin/{kind} catch-all — verified by direct GET on each literal path returning correct data (not 404). Route ordering in APIRouter mirrors declaration order so the current top-down layout is correct.",
+    "admin.py uses module-level globals populated by configure() (same pattern as payments.py). Works but a small dataclass or state object would be cleaner. Non-blocking.",
+    "admin_resend_notification does 'prefs = await _db.site_config.find_one({...}) or {}' — the returned Mongo doc may still contain '_id':'main'. Not a bug because _notify_fn only reads notify_email_enabled/notify_sms_enabled keys, but consider popping _id for consistency with other admin responses.",
+    "server.py went 1105 → 839 lines (per PR); previous iterations had it at 1360 after seed/pdf extraction. Router extraction pattern is now well-established and future admin endpoints should keep going into routes/admin.py."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration9.py (new)"],
+  "success_rate": {"backend": "100% (30/30)", "frontend": "100% (home copy + notify per-channel toasts + z-index fix all verified)"},
+  "test_credentials": "admin@roxtaxi.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "test_iteration9.py creates 1 zelle booking (TEST_Iter9 Regress on airport-nassau $35), 1 group inquiry (TEST_Iter9 Group, wedding, 20 guests, 2026-06-01), and ephemeral tour (TEST_Iter9 Sunset) which is deleted at end of catalog CRUD test. Toggles are restored to true=true at end of force-resend test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_iteration9.py is a good baseline regression for the admin router extraction — re-run it any time /app/backend/routes/admin.py or server.py's include_router wiring changes. Note: uses xdist parallelism (gw0/gw1). Booking payload MUST include item_id, item_name, price (not service_id). Group inquiry payload uses guest_count (not group_size). Saturday dates (weekday=5) are rejected for taxi/rental — pick Wed/Thu/Sun. Frontend: Home carousel + hero already tested this iteration; NotifyCell per-channel toasts confirmed working on paid rows with data-testid notify-force-resend-<id>.",
+  "rca of the issue": "No issues found."
+}
