@@ -136,6 +136,4 @@ HOME_SLIDES_SEED: List[Dict[str, Any]] = [
      "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Vorobek_Bahamas_-_swimming_pigs.jpg/1920px-Vorobek_Bahamas_-_swimming_pigs.jpg", "order": 6, "active": True},
     {"id": "hero-straw",      "title": "Straw Market & Bay Street.",  "subtitle": "Colonial architecture, hand-woven souvenirs, hot patties.",
      "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Straw_Market_Nassau_Bahamas_2024.jpg/1920px-Straw_Market_Nassau_Bahamas_2024.jpg", "order": 7, "active": True},
-    {"id": "hero-baha-mar",   "title": "Baha Mar Resort.",            "subtitle": "Cable Beach — casino, Rosewood, SLS + a Jack Nicklaus golf course.",
-     "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Reflection_-_panoramio_%2857%29.jpg/1920px-Reflection_-_panoramio_%2857%29.jpg", "order": 8, "active": True},
 ]
