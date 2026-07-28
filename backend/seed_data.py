@@ -96,7 +96,7 @@ TAXI_SERVICES: List[Dict] = [
      "route": "Cable Beach ↔ Downtown", "featured": True,
      "description": f"{_TARIFF_NOTE} Bay Street shopping / straw market from Cable Beach hotels.",
      "image_url": _TAXI_IMG},
-    {"id": "bahamar-downtown", "name": "Baha Mar ↔ Downtown Nassau (Bay Street)", "price": 20.0,
+    {"id": "bahamar-downtown", "name": "Baha Mar ↔ Downtown Nassau (Bay Street)", "price": 25.0,
      "route": "Baha Mar ↔ Downtown", "featured": True,
      "description": f"{_TARIFF_NOTE} Same tariff as Cable Beach ↔ Downtown.",
      "image_url": _TAXI_IMG},
