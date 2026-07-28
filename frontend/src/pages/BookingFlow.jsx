@@ -96,7 +96,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     }
     // Block Saturdays for taxi + rental
     if (["taxi", "rental"].includes(serviceType) && isClosedDate(form.booking_date, Number(form.days) || 1)) {
-      toast.error("We are closed on Saturdays. Please choose a different date.");
+      toast.error("We are closed on Saturdays for pickup. Saturday drop-off is fine — please choose a different pickup date.");
       return;
     }
     // Enforce rental 2-day minimum
@@ -202,7 +202,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 <div className="rounded-xl border border-[#E86A3C]/30 bg-[#E86A3C]/10 text-[#7a2d10] px-4 py-3 flex items-start gap-2 text-sm" data-testid="closed-saturday-warning">
                   <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-[#E86A3C]" />
                   <div>
-                    <div className="font-semibold">We're closed on Saturdays.</div>
+                    <div className="font-semibold">We're closed on Saturdays for pickup.</div>
+                    <div className="text-xs text-[#78716c] mt-0.5">Rental drop-offs on Saturday ARE allowed — feel free to keep the car through Saturday.</div>
                     <div>Please pick a different date — this booking cannot be completed on a Saturday.</div>
                   </div>
                 </div>

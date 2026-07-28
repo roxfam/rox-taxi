@@ -180,8 +180,10 @@ def _parse_booking_date(s: str) -> datetime:
 def _validate_open_day(service_type: str, booking_date: str, days: int = 1):
     """Reject bookings whose PICKUP day falls on a closed weekday.
 
-    For rentals we only check the pickup day — customers can keep the car
-    through a Saturday closure since they're not returning it that day.
+    For rentals only the pickup day is checked — drop-off / return on a
+    Saturday IS allowed. Customers may keep the car through Saturday and
+    return it that day (agreed hand-off at their hotel or airport).
+    Taxi rides always have days=1 so this is a single-day check.
     """
     if service_type not in CLOSED_APPLIES_TO:
         return
@@ -193,7 +195,7 @@ def _validate_open_day(service_type: str, booking_date: str, days: int = 1):
     if d.weekday() in CLOSED_WEEKDAYS:
         raise HTTPException(
             400,
-            f"We are closed on Saturdays. Please choose a different pickup date (requested {d.isoformat()}).",
+            f"We are closed on Saturdays for pickup. Please choose a different pickup date (requested {d.isoformat()}). Saturday drop-off is fine.",
         )
 
 
@@ -1019,7 +1021,7 @@ async def get_fees():
         ],
         "closed_weekdays": sorted(CLOSED_WEEKDAYS),
         "closed_weekdays_labels": ["Saturday"],
-        "closed_policy": "Taxi service and car rentals are closed on Saturdays.",
+        "closed_policy": "Taxi service and car-rental pickups are closed on Saturdays. Rental drop-offs on Saturdays ARE allowed.",
         "closed_applies_to": sorted(CLOSED_APPLIES_TO),
         "cancellation_fee_pct": CANCELLATION_FEE_PCT,
         "cancellation_notice_hours": CANCELLATION_NOTICE_HOURS,
