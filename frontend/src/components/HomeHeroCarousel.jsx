@@ -67,20 +67,20 @@ export default function HomeHeroCarousel({ children, className = "", intervalMs 
     >
       <AnimatePresence mode="sync">
         {/*
-         * Ken Burns: crossfade in over ~1.2s, then continuously scale the
-         * background from 1.02 → 1.10 across the slide's dwell time. Because
-         * the animation targets each slide with a fresh key, every slide gets
-         * its own zoom curve — no snap-back on transition. `origin` alternates
-         * so consecutive slides don't push toward the same corner.
+         * Ken Burns pop: 0.4s snap zoom from 1.0 → 1.06 when the slide appears,
+         * then holds. Crossfade opacity in over 1.2s in parallel. The next
+         * slide's image is preloaded (see the effect above) so this transition
+         * never waits on decode. `transformOrigin` alternates so consecutive
+         * slides don't push toward the same corner.
          */}
         <motion.div
           key={slide.id}
-          initial={{ opacity: 0, scale: 1.02 }}
-          animate={{ opacity: 1, scale: 1.10 }}
+          initial={{ opacity: 0, scale: 1.0 }}
+          animate={{ opacity: 1, scale: 1.06 }}
           exit={{ opacity: 0 }}
           transition={{
             opacity: { duration: 1.2, ease: "easeOut" },
-            scale: { duration: intervalMs / 1000 + 1.2, ease: "linear" },
+            scale: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
           }}
           style={{
             backgroundImage: `url(${slide.image_url})`,
