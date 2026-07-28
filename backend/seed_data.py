@@ -125,7 +125,7 @@ HOME_SLIDES_SEED: List[Dict[str, Any]] = [
     {"id": "hero-nassau",     "title": "Unlock Nassau.",             "subtitle": "Book a taxi, tour or rental in sixty seconds.",
      "image_url": "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400", "order": 1, "active": True},
     {"id": "hero-atlantis",   "title": "Atlantis, direct.",           "subtitle": "Paradise Island transfers in minutes.",
-     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/q4y59bxm_Atlantis%20%281%29.jpg", "order": 2, "active": True},
+     "image_url": "https://images.unsplash.com/photo-1602002418082-a4443e081dd1?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400", "order": 2, "active": True},
     {"id": "hero-rose-island","title": "Rose Island reefs.",          "subtitle": "Snorkel gardens twenty minutes off Nassau.",
      "image_url": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400", "order": 3, "active": True},
     {"id": "hero-junkanoo",   "title": "Junkanoo golden hour.",       "subtitle": "Cable Beach, Cabbage Beach, hidden coves — you pick.",
@@ -133,7 +133,7 @@ HOME_SLIDES_SEED: List[Dict[str, Any]] = [
     {"id": "hero-fish-fry",   "title": "Fish Fry, Arawak Cay.",       "subtitle": "Conch salad, cracked lobster, sky-blue punch.",
      "image_url": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400", "order": 5, "active": True},
     {"id": "hero-exuma",      "title": "Exuma swimming pigs.",        "subtitle": "The famous day-trip, curated by local captains.",
-     "image_url": "https://images.unsplash.com/photo-1533105079780-92b9be482077?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400", "order": 6, "active": True},
+     "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/61/Pigs_on_the_beach.jpg/1920px-Pigs_on_the_beach.jpg", "order": 6, "active": True},
     {"id": "hero-straw",      "title": "Straw Market & Bay Street.",  "subtitle": "Colonial architecture, hand-woven souvenirs, hot patties.",
      "image_url": "https://images.unsplash.com/photo-1502786129293-79981df4e689?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400", "order": 7, "active": True},
 ]

@@ -109,7 +109,7 @@ export default function Home() {
                     <div className="w-11 h-11 rounded-xl bg-[#0B3B5C]/10 flex items-center justify-center text-[#0B3B5C] group-hover:scale-110 transition-transform"><MapPinned className="w-5 h-5" /></div>
                     <div>
                       <div className="serif text-lg text-[#0B3B5C] font-bold leading-tight">Car Rentals</div>
-                      <div className="text-[11px] tracking-[0.15em] uppercase text-[#64748B] mt-1 font-semibold">Compact to Mini-Van · from $39 / day</div>
+                      <div className="text-[11px] tracking-[0.15em] uppercase text-[#64748B] mt-1 font-semibold">Compact to Mini-Van · from $55 / day</div>
                     </div>
                   </div>
                   <ArrowRight className="w-5 h-5 text-[#0B3B5C] group-hover:translate-x-1 transition-all" />
