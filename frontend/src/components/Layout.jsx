@@ -11,6 +11,7 @@ const BOOK_OPTIONS = [
 ];
 import { api } from "../lib/api";
 import ChatWidget from "./ChatWidget";
+import LanguageSwitcher from "./LanguageSwitcher";
 import { WhatsAppIcon, TripAdvisorIcon } from "./BrandIcons";
 
 const NAV = [
@@ -99,7 +100,7 @@ export default function Layout({ children }) {
                   </span>
                   <span className="inline-flex items-center gap-2 mt-1.5">
                     <span className="w-8 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-[#D4A94A]" />
-                    <span className="serif italic text-[13px] xl:text-sm tracking-[0.15em] font-bold text-[#D4A94A]">&amp; Tours</span>
+                    <span className="serif italic text-lg xl:text-xl tracking-[0.15em] font-bold text-[#D4A94A]">&amp; Tours</span>
                   </span>
                 </div>
               </>
@@ -121,7 +122,7 @@ export default function Layout({ children }) {
                   </span>
                   <span className="inline-flex items-center gap-2 mt-1.5">
                     <span className="w-8 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-[#D4A94A]" />
-                    <span className="serif italic text-[13px] xl:text-sm tracking-[0.15em] font-bold text-[#D4A94A]">&amp; Tours</span>
+                    <span className="serif italic text-lg xl:text-xl tracking-[0.15em] font-bold text-[#D4A94A]">&amp; Tours</span>
                   </span>
                 </div>
               </>
@@ -200,6 +201,7 @@ export default function Layout({ children }) {
               <TripAdvisorIcon className="w-[22px] h-[22px]" />
               <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs tracking-widest uppercase text-[#00AF87] opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap font-black scale-90 group-hover:scale-100">TripAdvisor</span>
             </a>
+            <LanguageSwitcher />
             {user ? (
               <Link
                 to="/my-bookings"
@@ -365,7 +367,7 @@ export default function Layout({ children }) {
                     </div>
                     <div className="inline-flex items-center gap-1.5 mt-1.5">
                       <span className="w-6 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-[#D4A94A]" />
-                      <span className="serif italic text-[12px] tracking-[0.12em] font-bold text-[#D4A94A]">&amp; Tours</span>
+                      <span className="serif italic text-base tracking-[0.12em] font-bold text-[#D4A94A]">&amp; Tours</span>
                     </div>
                   </div>
                 </div>
@@ -442,6 +444,7 @@ export default function Layout({ children }) {
               </nav>
 
               <div className="p-6 border-t border-[#F1F5F9] space-y-4">
+                <LanguageSwitcher variant="mobile" />
                 <div>
                   <div className="text-[10px] tracking-[0.3em] uppercase text-[#94a3b8] font-semibold mb-2 text-center" data-testid="mobile-book-now-label">Book Now</div>
                   <div className="grid grid-cols-1 gap-2">
@@ -551,7 +554,7 @@ export default function Layout({ children }) {
                   Rox Taxi <em className="italic font-black text-[#D4A94A]">Service</em>
                   <span className="inline-flex items-center gap-3 mt-3">
                     <span className="w-8 h-[2px] bg-gradient-to-r from-[#D4A94A] to-transparent" />
-                    <span className="serif italic text-sm tracking-[0.15em] font-bold text-[#D4A94A]">&amp; Tours</span>
+                    <span className="serif italic text-lg tracking-[0.15em] font-bold text-[#D4A94A]">&amp; Tours</span>
                   </span>
                 </div>
               )}
