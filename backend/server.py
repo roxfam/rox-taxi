@@ -160,6 +160,18 @@ class ContactMessage(BaseModel):
     message: str
 
 
+class DriverPing(BaseModel):
+    """Driver-side geolocation ping. Auth is soft — the driver receives a short-lived
+    tracking URL containing the booking_id at dispatch time. In a future iteration
+    we can rotate a signed token per shift."""
+    booking_id: str
+    lat: float
+    lng: float
+    accuracy_m: Optional[float] = None
+    heading: Optional[float] = None
+    speed_mps: Optional[float] = None
+
+
 class GroupInquiryCreate(BaseModel):
     event_type: str  # wedding | corporate | family_reunion | cruise_group | bachelor | other
     event_date: str  # ISO date
@@ -693,6 +705,47 @@ async def create_group_inquiry(req: GroupInquiryCreate):
         logging.getLogger(__name__).warning("group notify err: %s", e)
 
     return clean(inquiry)
+
+
+# ---- Live driver GPS tracking (in-memory latest-ping cache) -----------------
+# Driver hits /api/drivers/location every ~5s from their phone. Customer's
+# Track page long-polls /api/bookings/{id}/driver-location to render an ETA.
+# For MVP this uses process memory — swap to Redis if we ever run >1 worker.
+
+_driver_pings: Dict[str, Dict[str, Any]] = {}
+
+
+@api_router.post("/drivers/location")
+async def driver_location_ping(req: DriverPing):
+    booking = await db.bookings.find_one({"id": req.booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    if booking.get("status") in {"completed", "cancelled"}:
+        raise HTTPException(409, f"Booking is {booking['status']} — tracking closed")
+    _driver_pings[req.booking_id.upper()] = {
+        "lat": req.lat,
+        "lng": req.lng,
+        "accuracy_m": req.accuracy_m,
+        "heading": req.heading,
+        "speed_mps": req.speed_mps,
+        "at": now_iso(),
+    }
+    return {"ok": True, "cached_at": _driver_pings[req.booking_id.upper()]["at"]}
+
+
+@api_router.get("/bookings/{booking_id}/driver-location")
+async def get_driver_location(booking_id: str):
+    key = booking_id.upper()
+    ping = _driver_pings.get(key)
+    if not ping:
+        return {"available": False, "reason": "Driver hasn't started sharing yet"}
+    # Stale after 60s of no updates
+    from datetime import datetime, timezone
+    try:
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(ping["at"])).total_seconds()
+    except Exception:  # noqa: BLE001
+        age = 0
+    return {"available": True, "age_seconds": round(age, 1), "stale": age > 60, **ping}
 
 
 # ---- Wedding package PDF ----

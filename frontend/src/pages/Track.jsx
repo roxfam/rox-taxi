@@ -1,8 +1,55 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, money, STATUS_STEPS, STATUS_INDEX } from "../lib/api";
-import { Check, Search, MapPin, User, Calendar as CalIcon, Loader2, XCircle, AlertTriangle } from "lucide-react";
+import { Check, Search, MapPin, User, Calendar as CalIcon, Loader2, XCircle, AlertTriangle, Signal } from "lucide-react";
 import { toast } from "sonner";
+
+function DriverLiveBanner({ bookingId, status }) {
+  // Poll driver location every 6 seconds while the trip is active. Hides itself
+  // when the driver hasn't started sharing yet (`available:false`) or when the
+  // last ping is more than 60 seconds stale.
+  const [loc, setLoc] = useState(null);
+
+  useEffect(() => {
+    if (["completed", "cancelled"].includes(status)) return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const { data } = await api.get(`/bookings/${bookingId}/driver-location`);
+        if (alive) setLoc(data);
+      } catch { /* ignore */ }
+    };
+    tick();
+    const id = setInterval(tick, 6000);
+    return () => { alive = false; clearInterval(id); };
+  }, [bookingId, status]);
+
+  if (!loc?.available || loc?.stale) return null;
+
+  return (
+    <div className="mt-6 rounded-2xl border border-[#059669]/30 bg-gradient-to-r from-[#059669]/5 to-white p-4 flex items-center gap-3" data-testid="driver-live-banner">
+      <div className="w-10 h-10 rounded-xl bg-[#059669]/15 text-[#059669] flex items-center justify-center relative">
+        <Signal className="w-5 h-5" />
+        <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#22c55e] ring-2 ring-white animate-pulse" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold text-[#0B3B5C]">Your driver is sharing live location</div>
+        <div className="text-xs text-[#64748B] font-mono truncate">
+          {loc.lat.toFixed(5)}, {loc.lng.toFixed(5)} · updated {Math.round(loc.age_seconds)}s ago
+        </div>
+      </div>
+      <a
+        href={`https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lng}`}
+        target="_blank"
+        rel="noreferrer"
+        data-testid="driver-live-map-link"
+        className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#0B3B5C] hover:bg-[#132a4a] text-white text-xs font-semibold px-3 py-2 transition-colors"
+      >
+        <MapPin className="w-3 h-3" /> Open in Maps
+      </a>
+    </div>
+  );
+}
 
 export default function Track() {
   const [params, setParams] = useSearchParams();
@@ -118,6 +165,8 @@ export default function Track() {
               <InfoRow icon={<MapPin className="w-4 h-4" />} label="Service" value={booking.item_name} />
             </div>
 
+            <DriverLiveBanner bookingId={booking.id} status={booking.status} />
+
             {/* Stepper */}
             <div className="mt-10">
               <div className="hidden sm:flex items-start relative">
@@ -195,6 +244,7 @@ export default function Track() {
     </div>
   );
 }
+
 
 function InfoRow({ icon, label, value }) {
   return (
