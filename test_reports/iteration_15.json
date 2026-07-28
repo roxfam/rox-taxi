@@ -1,0 +1,19 @@
+{
+  "summary": "Retested the edit-external-url flow in EditModal.jsx (iteration_14 HIGH regression). Backend (2 curl PUTs) + Frontend Playwright covered: field renders with correct testid + initial value, save-persists via /api/tours, public /tours card href updates, empty-string clear removes public link, kind-guard hides field on Rentals & Taxi Services modals. Blue Lagoon restored to original state (external_booking_url, price=89, duration='6 hours', location='Departs Nassau Harbour').",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "EditModal save() rebuilds payload from scratch which means fields NOT included per kind (e.g. taxi payload omits external_booking_url) — that's fine because backend model_dump filters None; verified by curl empty-string test also. No action needed.",
+    "Backend PUT accepts arbitrary price mutations without validation — outside scope but noted (price_history correctly logged during test)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@roxtaxi.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None. Modified Blue Lagoon tour external_booking_url during test and fully restored to seed values.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iteration_14 HIGH bug (missing edit-external-url field + null-vs-empty clear semantics) is fully fixed. Blue Lagoon tour left in original state. Test coverage: set new URL → persist reopen → verify public href → clear (empty string) → verify public link hidden → restore → kind-guard on rentals & taxi_services (both correctly hide the field, taxi shows route, rental shows year/make/model instead).",
+  "rca of the issue": "N/A — retest confirmed E1's fix works. EditModal now renders <F testid='edit-external-url'/> when !isRental && !isTaxi, and save payload uses (form.external_booking_url ?? '').trim() so an empty string reaches backend; backend ItemUpsert.model_dump(exclude_none=True) keeps '' and $set stores it, so the frontend truthiness guard on t.external_booking_url correctly hides the public link."
+}
