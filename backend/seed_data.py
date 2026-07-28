@@ -132,6 +132,10 @@ TAXI_SERVICES: List[Dict] = [
      "route": "Nassau ↔ Lyford Cay", "featured": False,
      "description": "Round-trip driver waits up to 90 min. Great for beach picnics or Lyford visits.",
      "image_url": _TAXI_IMG},
+    {"id": "grocery-run", "name": "Grocery Pick-Up & Drop-Off (hourly)", "price": 55.0,
+     "route": "Hotel/Villa ↔ Supermarket (by the hour)", "featured": True,
+     "description": "Private driver waits while you shop and helps load groceries. Billed at the standard $55/hr hourly charter rate — 1-hour minimum, then pro-rata after. Popular stops: Solomon's, Super Value, Robin Hood, Family Value, Cost Right (Cable Beach & Baha Mar villas).",
+     "image_url": _TAXI_IMG},
 ]
 
 RENTALS_SEED: List[Dict] = [
