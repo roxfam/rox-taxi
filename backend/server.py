@@ -18,7 +18,7 @@ from emergentintegrations.payments.stripe.checkout import (
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 from fastapi.responses import StreamingResponse
-from notifications import notify_booking_confirmed
+from notifications import notify_booking_confirmed, notify_owner_booking_created
 import paypal_client
 from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS, HOME_SLIDES_SEED
 from pdf_utils import build_wedding_pdf, build_receipt_pdf
@@ -597,6 +597,14 @@ async def create_booking(req: BookingCreate):
     booking["total"] = round(base + luggage_fee + passenger_fee + deposit_amount + additional_driver_fee, 2)
 
     await db.bookings.insert_one(booking)
+    # Fire owner SMS alert for EVERY new booking (regardless of payment method).
+    # We swallow errors so a Twilio hiccup can't block a successful reservation.
+    try:
+        owner_sms = notify_owner_booking_created(clean(dict(booking)))
+        if owner_sms.get("sent"):
+            logging.info("owner alert sent for booking %s", booking["id"])
+    except Exception as e:  # noqa: BLE001
+        logging.warning("owner alert err: %s", e)
     if req.payment_method == "zelle":
         try:
             prefs = await db.site_config.find_one({"_id": "main"}) or {}

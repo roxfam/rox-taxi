@@ -97,6 +97,7 @@ async def _mark_paid(session_id: str, booking_id: Optional[str]):
         )
         if res.modified_count:
             booking = await _db.bookings.find_one({"id": booking_id})
+            provider = (await _db.payment_transactions.find_one({"session_id": session_id}) or {}).get("provider", "stripe")
             try:
                 prefs = await _db.site_config.find_one({"_id": "main"}) or {}
                 report = _notify(_clean(dict(booking)), prefs)
@@ -106,6 +107,12 @@ async def _mark_paid(session_id: str, booking_id: Optional[str]):
                 )
             except Exception as e:  # noqa: BLE001
                 logging.warning("notify err: %s", e)
+            # Owner SMS: "payment received" alert (independent of customer notify)
+            try:
+                from notifications import notify_owner_payment_received
+                notify_owner_payment_received(_clean(dict(booking)), provider=provider)
+            except Exception as e:  # noqa: BLE001
+                logging.warning("owner payment alert err: %s", e)
 
 
 @router.get("/payments/status/{session_id}")

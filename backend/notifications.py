@@ -112,6 +112,44 @@ def send_sms(to_number: str, body: str) -> dict:
         return {"sent": False, "provider": "twilio", "error": str(e)}
 
 
+def notify_owner_booking_created(booking: dict) -> dict:
+    """Send an SMS alert to the business owner the moment a booking hits the DB.
+    Uses `ADMIN_SMS_NUMBER` env — falls back to `WHATSAPP_NUMBER` so we don't
+    need duplicate configuration if the owner uses one phone for both.
+
+    Returns Twilio send-report dict.
+    """
+    owner = (os.environ.get("ADMIN_SMS_NUMBER") or os.environ.get("WHATSAPP_NUMBER") or "").strip()
+    if not owner:
+        return {"sent": False, "provider": "none", "error": "ADMIN_SMS_NUMBER not set"}
+    body = (
+        f"🚕 NEW BOOKING {booking['id']}\n"
+        f"{booking['item_name']}\n"
+        f"👤 {booking['customer_name']} · {booking.get('customer_phone','')}\n"
+        f"📅 {booking['booking_date']}\n"
+        f"💵 Total {_fmt_money(booking.get('total',0))} via {booking.get('payment_method','?').upper()}\n"
+        f"👉 roxtaxi.com/admin"
+    )
+    return send_sms(owner, body)
+
+
+def notify_owner_payment_received(booking: dict, provider: str = "stripe") -> dict:
+    """Send an SMS alert to the owner the moment a booking is marked paid.
+    Fires from every payment path (Stripe webhook, PayPal capture, Zelle mark).
+    """
+    owner = (os.environ.get("ADMIN_SMS_NUMBER") or os.environ.get("WHATSAPP_NUMBER") or "").strip()
+    if not owner:
+        return {"sent": False, "provider": "none", "error": "ADMIN_SMS_NUMBER not set"}
+    body = (
+        f"💰 PAYMENT RECEIVED for {booking['id']}\n"
+        f"{_fmt_money(booking.get('total',0))} via {provider.upper()}\n"
+        f"👤 {booking['customer_name']}\n"
+        f"🎯 {booking['item_name']}\n"
+        f"📅 {booking['booking_date']}"
+    )
+    return send_sms(owner, body)
+
+
 def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dict:
     """Send email + SMS on confirmed booking.
 
