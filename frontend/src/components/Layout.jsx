@@ -93,7 +93,7 @@ export default function Layout({ children }) {
                 <div className="hidden sm:flex flex-col leading-[0.95] whitespace-nowrap" data-testid="brand-name">
                   <span className="inline-flex items-center gap-2 mb-1">
                     <span className="w-6 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-transparent" />
-                    <span className="text-[9px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90" style={{ fontFeatureSettings: '"smcp"' }}>Est. Nassau</span>
+                    <span className="text-[9px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90" style={{ fontFeatureSettings: '"smcp"' }}>Est. Nassau Bahamas</span>
                     <span className="w-6 h-[1px] bg-gradient-to-r from-[#D4A94A] via-[#D4A94A] to-transparent" />
                   </span>
                   <span
@@ -125,7 +125,7 @@ export default function Layout({ children }) {
                 <div className="hidden sm:flex flex-col leading-[0.95] whitespace-nowrap">
                   <span className="inline-flex items-center gap-2 mb-1">
                     <span className="w-6 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-transparent" />
-                    <span className="text-[9px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90">Est. Nassau</span>
+                    <span className="text-[9px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90">Est. Nassau Bahamas</span>
                     <span className="w-6 h-[1px] bg-gradient-to-r from-[#D4A94A] via-[#D4A94A] to-transparent" />
                   </span>
                   <span
@@ -374,7 +374,7 @@ export default function Layout({ children }) {
                   <div className="leading-[0.95]">
                     <span className="inline-flex items-center gap-1.5 mb-1">
                       <span className="w-4 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-transparent" />
-                      <span className="text-[8px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90">Est. Nassau</span>
+                      <span className="text-[8px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90">Est. Nassau Bahamas</span>
                     </span>
                     <div
                       className="serif text-[19px] font-black tracking-tight leading-[0.9] bg-clip-text text-transparent"
