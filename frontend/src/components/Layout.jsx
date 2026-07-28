@@ -91,11 +91,6 @@ export default function Layout({ children }) {
                   />
                 </span>
                 <div className="hidden sm:flex flex-col leading-[0.95] whitespace-nowrap" data-testid="brand-name">
-                  <span className="inline-flex items-center gap-2 mb-1">
-                    <span className="w-6 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-transparent" />
-                    <span className="text-[9px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90" style={{ fontFeatureSettings: '"smcp"' }}>Est. Nassau Bahamas</span>
-                    <span className="w-6 h-[1px] bg-gradient-to-r from-[#D4A94A] via-[#D4A94A] to-transparent" />
-                  </span>
                   <span
                     className="serif text-[22px] xl:text-[26px] font-black tracking-tight leading-[0.9] bg-clip-text text-transparent drop-shadow-[0_2px_10px_rgba(255,255,255,0.65)]"
                     style={{ backgroundImage: "linear-gradient(135deg, #0B3B5C 0%, #123f66 40%, #A88235 82%, #D4A94A 100%)" }}
@@ -123,11 +118,6 @@ export default function Layout({ children }) {
                   </div>
                 </span>
                 <div className="hidden sm:flex flex-col leading-[0.95] whitespace-nowrap">
-                  <span className="inline-flex items-center gap-2 mb-1">
-                    <span className="w-6 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-transparent" />
-                    <span className="text-[9px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90">Est. Nassau Bahamas</span>
-                    <span className="w-6 h-[1px] bg-gradient-to-r from-[#D4A94A] via-[#D4A94A] to-transparent" />
-                  </span>
                   <span
                     className="serif text-[22px] xl:text-[26px] font-black tracking-tight leading-[0.9] bg-clip-text text-transparent"
                     style={{ backgroundImage: "linear-gradient(135deg, #0B3B5C 0%, #123f66 40%, #A88235 82%, #D4A94A 100%)" }}
@@ -372,10 +362,6 @@ export default function Layout({ children }) {
                     </div>
                   )}
                   <div className="leading-[0.95]">
-                    <span className="inline-flex items-center gap-1.5 mb-1">
-                      <span className="w-4 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-transparent" />
-                      <span className="text-[8px] tracking-[0.5em] uppercase font-black text-[#D4A94A]/90">Est. Nassau Bahamas</span>
-                    </span>
                     <div
                       className="serif text-[19px] font-black tracking-tight leading-[0.9] bg-clip-text text-transparent"
                       style={{ backgroundImage: "linear-gradient(135deg, #0B3B5C 0%, #123f66 40%, #A88235 82%, #D4A94A 100%)" }}
