@@ -127,7 +127,7 @@ RENTALS_SEED: List[Dict] = [
      "description": "Spacious full-size sedan for comfort on longer Bahamas drives. Bluetooth, backup camera, roomy trunk.",
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/cmfv1j07_2024-chevrolet-malibu-summit-white-color.webp",
      "category": "full-size", "active": True},
-    {"id": "trax-suv", "name": "2025 Chevrolet Trax — SUV (White)", "price": 125.0, "seats": 5,
+    {"id": "trax-suv", "name": "2025 Chevrolet Trax — SUV (White)", "price": 115.0, "seats": 5,
      "year": 2025, "make": "Chevrolet", "model": "Trax", "color": "White", "body": "SUV",
      "description": "Brand-new 2025 SUV with clearance for out-of-town beach runs and cargo for the whole crew. Apple CarPlay, backup cam, roof rack.",
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/234w5zk7_image.webp",
