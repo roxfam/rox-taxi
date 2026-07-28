@@ -310,12 +310,35 @@ function NotifyCell({ booking, onRefresh }) {
     try {
       const { data } = await api.post(`/admin/bookings/${booking.id}/resend-notification`, force ? { force: true } : {});
       const rep = data?.notification_status || {};
-      const okEmail = rep.email?.sent;
-      const okSms = rep.sms?.sent;
-      const label = force ? "Force-sent" : "Re-sent";
-      if (okEmail && okSms) toast.success(`${label} email + SMS`);
-      else if (okEmail || okSms) toast.success(`${label} ${okEmail ? "email" : ""}${okEmail && okSms ? " + " : ""}${okSms ? "SMS" : ""}`);
-      else toast.warning(`${label} — no channel delivered (check credentials or toggles)`);
+      const emailR = rep.email || {};
+      const smsR = rep.sms || {};
+      const label = force ? "Force-sent" : "Sent";
+
+      // Per-channel toasts so the admin can see which channel worked and which
+      // failed, with the provider + error inline for quick debugging.
+      const channels = [
+        { key: "email", label: "Email", meta: emailR },
+        { key: "sms",   label: "SMS",   meta: smsR },
+      ];
+
+      let anyDelivered = false;
+      channels.forEach(({ key, label: cLabel, meta }) => {
+        if (!meta.enabled) {
+          // In non-force mode, respect toggle state — quiet skip, but tell the user.
+          if (!force) toast.info(`${cLabel} skipped — disabled in Site Config`, { id: `notify-${key}-${booking.id}` });
+          return;
+        }
+        if (meta.sent) {
+          anyDelivered = true;
+          toast.success(`${cLabel} ${label.toLowerCase()} via ${meta.provider}`, { id: `notify-${key}-${booking.id}` });
+        } else {
+          toast.error(`${cLabel} failed${meta.error ? ` — ${meta.error}` : ""}`, { id: `notify-${key}-${booking.id}`, duration: 6000 });
+        }
+      });
+
+      if (!anyDelivered && channels.every((c) => !c.meta.enabled)) {
+        toast.warning("Both channels are disabled — turn them on in Site Config or use Force.", { duration: 5000 });
+      }
       onRefresh();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Re-send failed");

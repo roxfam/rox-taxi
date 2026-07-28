@@ -14,9 +14,9 @@ const SLIDES = [
     img: "https://images.pexels.com/photos/1287460/pexels-photo-1287460.jpeg?auto=compress&cs=tinysrgb&w=1920",
   },
   {
-    name: "Bay Street · Downtown Nassau",
-    tag: "Shopping & straw market",
-    img: "https://images.pexels.com/photos/2907578/pexels-photo-2907578.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    name: "World Famous Bahamas Straw Market",
+    tag: "Bay Street · Downtown Nassau",
+    img: "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/lxszeb49_straw-market-uai-777x582.jpg",
   },
   {
     name: "Cable Beach",
