@@ -69,7 +69,7 @@ export function DateTimePicker({ value, onChange, includeTime = true, minDate, t
             <span className="truncate">{label}</span>
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0 bg-white border border-[#E2E8F0] rounded-xl shadow-xl" align="start" data-testid={`${testid}-popover`}>
+        <PopoverContent className="w-auto p-0 z-[110] bg-white border border-[#E2E8F0] rounded-xl shadow-xl" align="start" data-testid={`${testid}-popover`}>
           <Calendar
             mode="single"
             selected={dateOnly || undefined}
