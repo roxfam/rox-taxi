@@ -21,12 +21,12 @@ function getSessionId() {
 export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: "assistant", text: "Hey! I'm Roxi 🌊 — ask me anything about taxis, tours or car rentals in the Bahamas. If you'd rather talk to a real human, just tap 'Continue on Messenger' below." },
+    { role: "assistant", text: "Hey! I'm Roxi 🌊 — ask me anything about taxis, tours or car rentals in the Bahamas. If you'd rather talk to a real human, just tap 'Continue on WhatsApp' below." },
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [unread, setUnread] = useState(false);
-  const [messengerUrl, setMessengerUrl] = useState("");
+  const [waUrl, setWaUrl] = useState("");
   const scrollRef = useRef(null);
   const sessionId = useRef(getSessionId()).current;
 
@@ -34,33 +34,35 @@ export default function ChatWidget() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
 
-  // Pull the Messenger deep-link (auto-derived from the FB page URL on the backend).
+  // Pull the WhatsApp number from site-config and build the wa.me deep-link.
+  // We route ALL "talk to a human" hand-offs through WhatsApp — one channel,
+  // one inbox, one owner-side app. Messenger is retired here per business ask.
   useEffect(() => {
     api.get("/site-config").then((r) => {
-      if (r?.data?.messenger_url) setMessengerUrl(r.data.messenger_url);
+      const num = (r?.data?.whatsapp_number || "").replace(/[^\d]/g, "");
+      if (num) setWaUrl(`https://wa.me/${num}`);
     }).catch(() => {});
   }, []);
 
   const handoffContext = () => {
     // Compose a short prefill referencing the visitor's latest question(s) so the
-    // business owner has instant context when the conversation lands in their FB inbox.
+    // business owner has instant context when the conversation lands in WhatsApp.
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
     return lastUser
       ? `Hi Rox! I was just chatting on your website about: "${lastUser.text}". Can you help me finish the booking?`
       : "Hi Rox! Sending this from your website chat — can you help me?";
   };
 
-  const openMessenger = () => {
-    if (!messengerUrl) return;
-    const ref = encodeURIComponent("website-chat-handoff");
-    const url = `${messengerUrl}${messengerUrl.includes("?") ? "&" : "?"}ref=${ref}`;
+  const openHandoff = () => {
+    if (!waUrl) return;
+    // wa.me supports ?text= to prefill the message body. This is huge — the
+    // owner opens WhatsApp and sees the visitor's actual question already typed.
+    const url = `${waUrl}?text=${encodeURIComponent(handoffContext())}`;
     window.open(url, "_blank", "noopener,noreferrer");
-    // Optimistic UI: log to the transcript so the visitor knows the handoff happened.
     setMessages((m) => [
       ...m,
-      { role: "assistant", text: "Opened Messenger in a new tab 👋 A real human will reply as soon as they see your message. This chat stays open in case you need Roxi in the meantime." },
+      { role: "assistant", text: "Opened WhatsApp in a new tab 👋 A real human will reply as soon as they see your message. This chat stays open in case you need Roxi in the meantime." },
     ]);
-    // Copy the suggested prefill to the clipboard so users can paste immediately.
     try { navigator.clipboard?.writeText(handoffContext()); } catch { /* ignore */ }
   };
 
@@ -101,7 +103,7 @@ export default function ChatWidget() {
           if (ev === "error") {
             setMessages((m) => {
               const c = [...m];
-              c[c.length - 1] = { role: "assistant", text: "Sorry — I ran into an issue. Please try again — or tap 'Continue on Messenger' to chat with a real human." };
+              c[c.length - 1] = { role: "assistant", text: "Sorry — I ran into an issue. Please try again — or tap 'Continue on WhatsApp' to chat with a real human." };
               return c;
             });
             continue;
@@ -157,15 +159,15 @@ export default function ChatWidget() {
               <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" /> Online · Instant reply
             </div>
           </div>
-          {messengerUrl && (
+          {waUrl && (
             <button
               type="button"
-              onClick={openMessenger}
-              title="Continue on Facebook Messenger"
-              data-testid="chat-messenger-header"
-              className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide px-3 py-1.5 rounded-full bg-[#0084FF] hover:bg-[#0073e0] transition-colors text-white"
+              onClick={openHandoff}
+              title="Continue on WhatsApp"
+              data-testid="chat-whatsapp-header"
+              className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-black tracking-wide px-3 py-1.5 rounded-full bg-[#25D366] hover:bg-[#1EBE5D] transition-colors text-white"
             >
-              <MessagesSquare className="w-3.5 h-3.5" /> Messenger
+              <MessagesSquare className="w-3.5 h-3.5" /> WhatsApp
             </button>
           )}
         </div>
@@ -202,15 +204,15 @@ export default function ChatWidget() {
           </div>
         )}
 
-        {messengerUrl && (
+        {waUrl && (
           <button
             type="button"
-            onClick={openMessenger}
-            data-testid="chat-messenger-cta"
-            className="mx-4 mb-2 rounded-xl bg-gradient-to-r from-[#0084FF] to-[#0073e0] text-white text-xs font-semibold tracking-wide py-2.5 px-3 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm"
+            onClick={openHandoff}
+            data-testid="chat-whatsapp-cta"
+            className="mx-4 mb-2 rounded-xl bg-gradient-to-r from-[#25D366] to-[#1EBE5D] text-white text-xs font-black tracking-wide py-2.5 px-3 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_6px_18px_rgba(37,211,102,0.35)]"
           >
             <MessagesSquare className="w-4 h-4" />
-            Continue on Messenger
+            Continue on WhatsApp
             <ExternalLink className="w-3.5 h-3.5 opacity-70" />
           </button>
         )}
