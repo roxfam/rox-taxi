@@ -1,0 +1,231 @@
+{
+	"_id": {
+		"$oid": "6a68fa6e4068edab3c516a74"
+	},
+	"user_id": "user_a6c2b0ba8bfd",
+	"session_token": "sess_b1892afd1a8c4887bed6eda5b212e9e6d0fd28c3ec1a4a7f8aa8135d65aa48c3",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:52:30.626596+00:00",
+	"last_activity_at": "2026-07-28T18:52:30.685130+00:00",
+	"created_at": "2026-07-28T18:52:30.626577+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68faecb9a0e2d837161559"
+	},
+	"user_id": "user_402ec10da1f3",
+	"session_token": "sess_60f4b1c76d8646a3a5e2afcb593241bc51a0e392fe2d4fb289be47024bba5863",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:54:36.505262+00:00",
+	"last_activity_at": "2026-07-28T18:54:36.505243+00:00",
+	"created_at": "2026-07-28T18:54:36.505243+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68faecb9a0e2d83716155c"
+	},
+	"user_id": "user_cf2caa6ad72a",
+	"session_token": "sess_ca7a960078524c05be7d403e9fadf7a8e61bb739d6194bdebda981e7048032b9",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:54:36.732434+00:00",
+	"last_activity_at": "2026-07-28T18:54:36.732416+00:00",
+	"created_at": "2026-07-28T18:54:36.732416+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68faecb9a0e2d83716155f"
+	},
+	"user_id": "user_64756b1b8d2f",
+	"session_token": "sess_960f218bdc584192b6d61028cee969ec19fa801554544f3fb91d817b9a233b41",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:54:36.965356+00:00",
+	"last_activity_at": "2026-07-28T18:54:36.965341+00:00",
+	"created_at": "2026-07-28T18:54:36.965341+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68faedb9a0e2d837161561"
+	},
+	"user_id": "user_64756b1b8d2f",
+	"session_token": "sess_be0315a523b1427bba03dc79199441d25f7e7d838a5e4f9ab8af24546f551128",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:54:37.189818+00:00",
+	"last_activity_at": "2026-07-28T18:54:37.189789+00:00",
+	"created_at": "2026-07-28T18:54:37.189789+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68faedb9a0e2d837161564"
+	},
+	"user_id": "user_ac2a3c2feb12",
+	"session_token": "sess_f8eaec6eed58454f8b9835cf00bde0b50259dd83a87d45ed837d69a805885691",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:54:37.642422+00:00",
+	"last_activity_at": "2026-07-28T18:54:37.642405+00:00",
+	"created_at": "2026-07-28T18:54:37.642405+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68faedb9a0e2d837161567"
+	},
+	"user_id": "user_d56bfe1e4691",
+	"session_token": "sess_4dcf18f52f984fe9b01b3218b54a9cbf69e8fbae349e4a239733abc00146e8ed",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:54:37.928198+00:00",
+	"last_activity_at": "2026-07-28T18:49:38.010778+00:00",
+	"created_at": "2026-07-28T18:54:37.928182+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68faeeb9a0e2d83716156a"
+	},
+	"user_id": "user_85d548052d81",
+	"session_token": "sess_47d11a567e4c47d799edf1c2659e0768ecbd13a730cc4c1b84bcf317755e1ea6",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:54:38.242848+00:00",
+	"last_activity_at": "2026-07-28T18:54:38.242826+00:00",
+	"created_at": "2026-07-28T18:54:38.242826+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68faeeb9a0e2d83716156d"
+	},
+	"user_id": "user_83a996a6ea1b",
+	"session_token": "sess_ac3f22b56c704083abf0ce4b8b8eb32ff61e279559bc4794b4409394b88f063f",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:54:38.519650+00:00",
+	"last_activity_at": "2026-07-28T17:49:38.522925+00:00",
+	"created_at": "2026-07-28T18:54:38.519618+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68faeeb9a0e2d837161570"
+	},
+	"user_id": "user_7b3bd9ac2949",
+	"session_token": "sess_75b64e9813194aad89233175bbf08e7bab76e4db90cd4f0d9bc41c3b2440c485",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:54:38.794617+00:00",
+	"last_activity_at": "2026-07-28T18:54:38.794601+00:00",
+	"created_at": "2026-07-28T18:54:38.794601+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68faefb9a0e2d837161573"
+	},
+	"user_id": "user_1f74bba82103",
+	"session_token": "sess_81412272660e4c02b970a3e66e9ea9460fce7bc62ddd4a47820bf3201ba59c71",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:54:39.070871+00:00",
+	"last_activity_at": "2026-07-28T18:54:39.070855+00:00",
+	"created_at": "2026-07-28T18:54:39.070855+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68faefb9a0e2d837161575"
+	},
+	"user_id": "user_dabb7c91719a",
+	"session_token": "sess_6b2a3b72bfcb4786aeb441eb96faa4f772d6d7cdff6441449a191f6f5366018a",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:54:39.344865+00:00",
+	"last_activity_at": "2026-07-28T18:54:39.344845+00:00",
+	"created_at": "2026-07-28T18:54:39.344845+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68fb251300ac3b7fe834c1"
+	},
+	"user_id": "user_7f28631bf486",
+	"session_token": "sess_1b6ab436d1f741eb81134567f977ff9146de829d83f04e2c99e3d39dcb4db99b",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:55:33.605275+00:00",
+	"last_activity_at": "2026-07-28T18:55:33.605254+00:00",
+	"created_at": "2026-07-28T18:55:33.605254+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68fb251300ac3b7fe834c4"
+	},
+	"user_id": "user_0725871a52c7",
+	"session_token": "sess_a1427b2626bf4646a7b13b641250684c322e8de992ce4314852f6665773d1603",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:55:33.836177+00:00",
+	"last_activity_at": "2026-07-28T18:55:33.836157+00:00",
+	"created_at": "2026-07-28T18:55:33.836157+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68fb261300ac3b7fe834c7"
+	},
+	"user_id": "user_8bbafcc313f1",
+	"session_token": "sess_96ff18da3e8146f18758263f819857a90ea9441c23ff4b44b7f0bef02b9ad5ac",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:55:34.068722+00:00",
+	"last_activity_at": "2026-07-28T18:55:34.068702+00:00",
+	"created_at": "2026-07-28T18:55:34.068702+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68fb261300ac3b7fe834c9"
+	},
+	"user_id": "user_8bbafcc313f1",
+	"session_token": "sess_8e01206b4bd640929f6b27dc7e98689d98e533e169084261917ca8d8a999eb86",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:55:34.293511+00:00",
+	"last_activity_at": "2026-07-28T18:55:34.293478+00:00",
+	"created_at": "2026-07-28T18:55:34.293478+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68fb261300ac3b7fe834cc"
+	},
+	"user_id": "user_ab8361a9b726",
+	"session_token": "sess_aeac923cf59342aead7d677b0d4064273a28a108dfef4158b1469cbafcea9657",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:55:34.746466+00:00",
+	"last_activity_at": "2026-07-28T18:55:34.749290+00:00",
+	"created_at": "2026-07-28T18:55:34.746448+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68fb271300ac3b7fe834cf"
+	},
+	"user_id": "user_2d77426b8951",
+	"session_token": "sess_d927378945da4642b38a0c7324c2b6315a6edbcc15a441088853988499e7b4a3",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:55:35.015010+00:00",
+	"last_activity_at": "2026-07-28T18:55:35.088617+00:00",
+	"created_at": "2026-07-28T18:55:35.014990+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68fb281300ac3b7fe834de"
+	},
+	"user_id": "user_1b71b5b2c388",
+	"session_token": "sess_2212545cd7cb4e0c978d59ed173a14da38f76b4c27ac442dae359b1e4dab0172",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:55:36.177354+00:00",
+	"last_activity_at": "2026-07-28T18:55:36.180317+00:00",
+	"created_at": "2026-07-28T18:55:36.177336+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68fb281300ac3b7fe834e0"
+	},
+	"user_id": "user_2291cd26fe77",
+	"session_token": "sess_f9045c53a75540f191216ad322f88a52556edcb42a774debbdb384c9d6addb07",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:55:36.449617+00:00",
+	"last_activity_at": "2026-07-28T18:55:36.449578+00:00",
+	"created_at": "2026-07-28T18:55:36.449578+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68fb571300ac3b7fe834e6"
+	},
+	"user_id": "user_2a5973f0b28a",
+	"session_token": "sess_f496058c2cc249c3a8e49699c226fd5f8e13ac0d13e343d9b63c96023082f82b",
+	"auth_method": "email",
+	"expires_at": "2026-08-04T18:56:23.120118+00:00",
+	"last_activity_at": "2026-07-28T18:56:23.223611+00:00",
+	"created_at": "2026-07-28T18:56:23.120084+00:00"
+}

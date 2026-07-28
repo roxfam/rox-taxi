@@ -1,0 +1,104 @@
+{
+	"_id": {
+		"$oid": "6a68846e092d740d1278793f"
+	},
+	"id": "hero-nassau",
+	"active": true,
+	"image_url": "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
+	"order": 1,
+	"subtitle": "Book a taxi, tour or rental in sixty seconds.",
+	"title": "Unlock Nassau."
+}
+{
+	"_id": {
+		"$oid": "6a68846e092d740d12787941"
+	},
+	"id": "hero-atlantis",
+	"active": true,
+	"image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/BHA_Nassau%2C_Paradise_Island%2C_Atlantis_Bridge_001.jpg/1920px-BHA_Nassau%2C_Paradise_Island%2C_Atlantis_Bridge_001.jpg",
+	"order": 2,
+	"subtitle": "Paradise Island transfers in minutes.",
+	"title": "Atlantis, direct.",
+	"updated_at": "2026-07-28T11:10:08.982439+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68846e092d740d12787943"
+	},
+	"id": "hero-rose-island",
+	"active": true,
+	"image_url": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
+	"order": 3,
+	"subtitle": "Snorkel gardens twenty minutes off Nassau.",
+	"title": "Rose Island reefs."
+}
+{
+	"_id": {
+		"$oid": "6a68846e092d740d12787945"
+	},
+	"id": "hero-junkanoo",
+	"active": true,
+	"image_url": "https://images.unsplash.com/photo-1573843981267-be1999ff37cd?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
+	"order": 4,
+	"subtitle": "Cable Beach, Cabbage Beach, hidden coves — you pick.",
+	"title": "Junkanoo golden hour."
+}
+{
+	"_id": {
+		"$oid": "6a68846e092d740d12787947"
+	},
+	"id": "hero-fish-fry",
+	"active": true,
+	"image_url": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
+	"order": 5,
+	"subtitle": "Conch salad, cracked lobster, sky-blue punch.",
+	"title": "Fish Fry, Arawak Cay."
+}
+{
+	"_id": {
+		"$oid": "6a68846e092d740d12787949"
+	},
+	"id": "hero-exuma",
+	"active": true,
+	"image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Vorobek_Bahamas_-_swimming_pigs.jpg/1920px-Vorobek_Bahamas_-_swimming_pigs.jpg",
+	"order": 6,
+	"subtitle": "The famous day-trip, curated by local captains.",
+	"title": "Exuma swimming pigs.",
+	"updated_at": "2026-07-28T11:02:05.209059+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68846e092d740d1278794b"
+	},
+	"id": "hero-straw",
+	"active": true,
+	"image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Straw_Market_Nassau_Bahamas_2024.jpg/1920px-Straw_Market_Nassau_Bahamas_2024.jpg",
+	"order": 7,
+	"subtitle": "Colonial architecture, hand-woven souvenirs, hot patties.",
+	"title": "Straw Market & Bay Street.",
+	"updated_at": "2026-07-28T11:07:43.961028+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68a90e5848b87a400ecb5c"
+	},
+	"id": "hero-fort-charlotte",
+	"active": true,
+	"image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Fort_Charlotte%2C_Nassau%2C_The_Bahamas.jpg/1920px-Fort_Charlotte%2C_Nassau%2C_The_Bahamas.jpg",
+	"order": 8,
+	"subtitle": "200-year-old British fortress overlooking Nassau Harbour — cannons, dungeons, panoramic views.",
+	"title": "Fort Charlotte."
+}
+{
+	"_id": {
+		"$oid": "6a68a9e35848b87a400ecbcf"
+	},
+	"id": "hero-baha-mar",
+	"active": true,
+	"image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Reflection_-_panoramio_%2857%29.jpg/1920px-Reflection_-_panoramio_%2857%29.jpg",
+	"link_label": "Book at Baha Mar",
+	"link_url": "https://www.bahamar.com/",
+	"order": 9,
+	"subtitle": "Cable Beach — casino, Rosewood, SLS + a Jack Nicklaus golf course.",
+	"title": "Baha Mar Resort."
+}

@@ -178,19 +178,23 @@ def _parse_booking_date(s: str) -> datetime:
 
 
 def _validate_open_day(service_type: str, booking_date: str, days: int = 1):
+    """Reject bookings whose PICKUP day falls on a closed weekday.
+
+    For rentals we only check the pickup day — customers can keep the car
+    through a Saturday closure since they're not returning it that day.
+    """
     if service_type not in CLOSED_APPLIES_TO:
         return
     try:
         start = _parse_booking_date(booking_date)
     except Exception:
         return
-    for offset in range(max(1, int(days or 1))):
-        d = (start + timedelta(days=offset)).date()
-        if d.weekday() in CLOSED_WEEKDAYS:
-            raise HTTPException(
-                400,
-                f"We are closed on Saturdays. Please choose a different date (issue on {d.isoformat()}).",
-            )
+    d = start.date()
+    if d.weekday() in CLOSED_WEEKDAYS:
+        raise HTTPException(
+            400,
+            f"We are closed on Saturdays. Please choose a different pickup date (requested {d.isoformat()}).",
+        )
 
 
 class LoginRequest(BaseModel):
@@ -893,6 +897,10 @@ async def create_booking(req: BookingCreate):
 
     # Base: taxi/tour = fixed price; rental = price * days
     base = float(req.price) * max(1, req.days or 1)
+    round_trip_fare_addition = 0.0
+    round_trip_discount = 0.0
+    rental_discount = 0.0
+    tip_amount = round(float(req.tip_amount or 0.0), 2)
 
     luggage_fee = 0.0
     passenger_fee = 0.0
@@ -918,6 +926,12 @@ async def create_booking(req: BookingCreate):
             _existing = str(req.notes or "").strip()
             _toll_note = f"⚠ Includes ${PARADISE_BRIDGE_TOLL_USD:.0f} Paradise Island bridge toll pass (round-trip). Toll billed to driver at the crossing and reimbursed on this booking."
             booking["notes"] = (_existing + " · " + _toll_note).strip(" ·") if _existing else _toll_note
+        # Round-trip: charge the fare twice, then apply 10% off both legs.
+        if req.round_trip:
+            round_trip_fare_addition = base
+            round_trip_discount = round((base * 2) * ROUND_TRIP_DISCOUNT_PCT, 2)
+            booking["round_trip"] = True
+            booking["round_trip_discount"] = round_trip_discount
     if req.service_type == "rental":
         deposit_amount = RENTAL_DEPOSIT_USD
         booking["deposit_amount"] = deposit_amount
@@ -926,8 +940,22 @@ async def create_booking(req: BookingCreate):
         additional_driver_fee = extra_drivers * ADDITIONAL_DRIVER_FEE_USD
         booking["additional_drivers"] = extra_drivers
         booking["additional_driver_fee"] = additional_driver_fee
+        # Multi-day discount tiers on the base rental price*days portion.
+        _pct = _rental_discount_pct(int(req.days or 1))
+        if _pct > 0:
+            rental_discount = round(base * _pct, 2)
+            booking["rental_discount"] = rental_discount
+            booking["rental_discount_pct"] = _pct
 
-    booking["total"] = round(base + luggage_fee + passenger_fee + deposit_amount + additional_driver_fee + bridge_toll_fee, 2)
+    if tip_amount > 0:
+        booking["tip_amount"] = tip_amount
+
+    booking["total"] = round(
+        base + round_trip_fare_addition - round_trip_discount - rental_discount
+        + luggage_fee + passenger_fee + deposit_amount + additional_driver_fee
+        + bridge_toll_fee + tip_amount,
+        2,
+    )
 
     await db.bookings.insert_one(booking)
     # Fire owner SMS alert for EVERY new booking (regardless of payment method).

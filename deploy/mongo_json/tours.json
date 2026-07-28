@@ -1,0 +1,348 @@
+{
+	"_id": {
+		"$oid": "6a65e7b04d3c6605701abe3d"
+	},
+	"id": "blue-lagoon",
+	"name": "Blue Lagoon Island Beach Day",
+	"price": 109.0,
+	"duration": "6 hours",
+	"description": "A quick ferry from Nassau lands you on a private-feel island — hammocks, kayaks, snorkeling and a rum punch bar.",
+	"image_url": "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwyfHxiYWhhbWFzJTIwYmVhY2glMjBjbGVhciUyMHdhdGVyfGVufDB8fHx8MTc4NTA2MjgxMXww&ixlib=rb-4.1.0&q=85",
+	"category": "excursion",
+	"active": true,
+	"featured": true,
+	"location": "Departs Nassau Harbour",
+	"seed_price": 89.0,
+	"external_booking_url": "https://www.bluelagoonisland.com/beach-day-experience/",
+	"updated_at": "2026-07-28T11:02:05.010353+00:00",
+	"price_history": [
+		{
+			"old_price": 89.0,
+			"new_price": 189.0,
+			"reason": "Edited via full form",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:43:08.598767+00:00"
+		},
+		{
+			"old_price": 189.0,
+			"new_price": 89.0,
+			"reason": "Edited via full form",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:43:24.465775+00:00"
+		},
+		{
+			"old_price": 89.0,
+			"new_price": 109.0,
+			"reason": "Edited via full form",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:57:34.029324+00:00"
+		}
+	]
+}
+{
+	"_id": {
+		"$oid": "6a65e7b04d3c6605701abe3f"
+	},
+	"id": "island-hop",
+	"name": "Three-Island Boat Hopping (from Nassau)",
+	"price": 149.0,
+	"duration": "7 hours",
+	"description": "Cruise Nassau's out-islands with beach stops, lunch, and unlimited drinks.",
+	"image_url": "https://images.pexels.com/photos/4166305/pexels-photo-4166305.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+	"category": "excursion",
+	"active": true,
+	"featured": false,
+	"location": "Departs Nassau",
+	"seed_price": 149.0,
+	"external_booking_url": "https://www.getyourguide.com/nassau-l326/island-hopping-tc16/",
+	"updated_at": "2026-07-28T10:57:34.292312+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a674205c91b923a3df327d6"
+	},
+	"id": "atlantis-tour",
+	"active": true,
+	"category": "tour",
+	"description": "Guided city tour ending at Atlantis Resort with photo stops at Fort Fincastle, Queen's Staircase and the Cloisters.",
+	"duration": "3 hours",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
+	"location": "Paradise Island",
+	"name": "Paradise Island & Atlantis City Tour",
+	"price": 195.0,
+	"seed_price": 45.0,
+	"price_history": [
+		{
+			"old_price": 45.0,
+			"new_price": 36.0,
+			"reason": "20% off promo",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:13:42.223305+00:00"
+		},
+		{
+			"old_price": 36.0,
+			"new_price": 45.0,
+			"reason": "Reset to seed default",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:13:42.387356+00:00"
+		},
+		{
+			"old_price": 45.0,
+			"new_price": 36.0,
+			"reason": "20% off promo",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:14:01.300026+00:00"
+		},
+		{
+			"old_price": 36.0,
+			"new_price": 45.0,
+			"reason": "Reset to seed default",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:14:01.463865+00:00"
+		},
+		{
+			"old_price": 45.0,
+			"new_price": 195.0,
+			"reason": "Edited via full form",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:57:34.114058+00:00"
+		}
+	],
+	"updated_at": "2026-07-28T10:57:34.114048+00:00",
+	"external_booking_url": "https://www.atlantisbahamas.com/things-to-do"
+}
+{
+	"_id": {
+		"$oid": "6a674205c91b923a3df327d8"
+	},
+	"id": "snorkel-rose",
+	"active": true,
+	"category": "excursion",
+	"description": "Just off Paradise Island — vibrant reef gardens, sea turtles and rum punch on the ride back.",
+	"duration": "4 hours",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1680635601834-581581c6cdfa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwyfHxzbm9ya2VsaW5nJTIwYmFoYW1hcyUyMGNsZWFyJTIwd2F0ZXJ8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
+	"location": "Departs Paradise Island",
+	"name": "Rose Island Reef Snorkeling",
+	"price": 139.0,
+	"seed_price": 65.0,
+	"external_booking_url": "https://www.viator.com/tours/Nassau/Rose-Island-Adventure-Snorkel-Sea-Turtles-and-Private-Beach/d420-17634097P1",
+	"price_history": [
+		{
+			"old_price": 65.0,
+			"new_price": 139.0,
+			"reason": "Edited via full form",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:57:34.207963+00:00"
+		}
+	],
+	"updated_at": "2026-07-28T10:57:34.207953+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68aa53f4e15d7c928e4012"
+	},
+	"name": "Dolphin Encounters — Close Encounter",
+	"description": "Meet Atlantic bottlenose dolphins waist-deep on Blue Lagoon Island — hug, kiss and photograph the friendliest pod in The Bahamas.",
+	"price": 200.0,
+	"duration": "5 hours",
+	"image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/on2zu6ni_dolphin%20encounter.jpg",
+	"category": "wildlife",
+	"active": true,
+	"location": "Departs Nassau Harbour",
+	"featured": true,
+	"external_booking_url": "https://www.dolphinencounters.com/programs/close-encounter/",
+	"id": "tou-5b9e0ece",
+	"created_at": "2026-07-28T13:10:43.339542+00:00",
+	"price_history": [
+		{
+			"old_price": null,
+			"new_price": 200.0,
+			"reason": "Item created",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T13:10:43.339552+00:00"
+		}
+	],
+	"updated_at": "2026-07-28T13:47:17.531153+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68aa53f4e15d7c928e4013"
+	},
+	"name": "Pearl Island Snorkel + Beach Day",
+	"description": "Private-feel snorkel park + beach lunch + open bar on a boutique island 15 minutes from Nassau.",
+	"price": 189.0,
+	"duration": "5 hours",
+	"image_url": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
+	"category": "snorkel",
+	"active": true,
+	"location": "Departs Nassau Harbour",
+	"featured": false,
+	"external_booking_url": "https://pearlislandbahamas.com/",
+	"id": "tou-f8605f94",
+	"created_at": "2026-07-28T13:10:43.469534+00:00",
+	"price_history": [
+		{
+			"old_price": null,
+			"new_price": 189.0,
+			"reason": "Item created",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T13:10:43.469545+00:00"
+		}
+	]
+}
+{
+	"_id": {
+		"$oid": "6a68aa53f4e15d7c928e4014"
+	},
+	"name": "Sandy Toes Rose Island All-Inclusive",
+	"description": "Beach day at the pristine Rose Island cove — hammocks, kayaks, paddleboards, buffet lunch and rum bar included.",
+	"price": 149.0,
+	"duration": "5 hours",
+	"image_url": "https://images.unsplash.com/photo-1583212292454-1fe6229603b7?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
+	"category": "beach",
+	"active": true,
+	"location": "Departs Paradise Island",
+	"featured": false,
+	"external_booking_url": "https://sandytoesbahamas.com/",
+	"id": "tou-d88caaa1",
+	"created_at": "2026-07-28T13:10:43.594381+00:00",
+	"price_history": [
+		{
+			"old_price": null,
+			"new_price": 149.0,
+			"reason": "Item created",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T13:10:43.594391+00:00"
+		}
+	]
+}
+{
+	"_id": {
+		"$oid": "6a68aa53f4e15d7c928e4015"
+	},
+	"name": "Exuma Cays Powerboat Day — Swimming Pigs",
+	"description": "High-speed powerboat to Exuma — swim with pigs, feed iguanas at Allen Cay, snorkel a WWII plane wreck. Lunch + drinks included.",
+	"price": 275.0,
+	"duration": "10 hours",
+	"image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Vorobek_Bahamas_-_swimming_pigs.jpg/1920px-Vorobek_Bahamas_-_swimming_pigs.jpg",
+	"category": "wildlife",
+	"active": true,
+	"location": "Departs Nassau Marina",
+	"featured": true,
+	"external_booking_url": "https://www.powerboatadventures.com/",
+	"id": "tou-6509fb7e",
+	"created_at": "2026-07-28T13:10:43.702089+00:00",
+	"price_history": [
+		{
+			"old_price": null,
+			"new_price": 275.0,
+			"reason": "Item created",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T13:10:43.702100+00:00"
+		}
+	]
+}
+{
+	"_id": {
+		"$oid": "6a68aa53f4e15d7c928e4016"
+	},
+	"name": "Atlantis Aquaventure Waterpark Day Pass",
+	"description": "Full-day access to Aquaventure — 20+ waterslides, the Leap of Faith, lazy river, aquariums, and Cove/Cabbage beach.",
+	"price": 210.0,
+	"duration": "All day",
+	"image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/BHA_Nassau%2C_Paradise_Island%2C_Atlantis_Bridge_001.jpg/1920px-BHA_Nassau%2C_Paradise_Island%2C_Atlantis_Bridge_001.jpg",
+	"category": "family",
+	"active": true,
+	"location": "Paradise Island",
+	"featured": true,
+	"external_booking_url": "https://www.atlantisbahamas.com/waterpark",
+	"id": "tou-acf99d2e",
+	"created_at": "2026-07-28T13:10:43.792985+00:00",
+	"price_history": [
+		{
+			"old_price": null,
+			"new_price": 210.0,
+			"reason": "Item created",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T13:10:43.792995+00:00"
+		}
+	]
+}
+{
+	"_id": {
+		"$oid": "6a68ac925848b87a400eccc3"
+	},
+	"id": "jet-ski-1hr",
+	"active": true,
+	"category": "watersport",
+	"description": "Rip across turquoise water on a modern jet ski — up to 2 riders per ski. Life vests, safety briefing and beach launch included. Book direct with our partner operator.",
+	"duration": "1 hour",
+	"external_booking_url": "https://www.viator.com/tours/Nassau/Jet-ski/d420-230576P1",
+	"featured": true,
+	"image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/necxwdup_CASMJETSKIANDBEACH-2.jpg",
+	"location": "Cabbage Beach, Paradise Island",
+	"name": "Jet Ski Rental — 1 Hour (Cabbage Beach / Paradise Island)",
+	"price": 120.0,
+	"price_history": [],
+	"seed_price": 120.0,
+	"updated_at": "2026-07-28T13:50:46.864101+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68ac925848b87a400eccc5"
+	},
+	"id": "jet-ski-30min",
+	"active": true,
+	"category": "watersport",
+	"description": "Quick-hit jet ski blast — perfect if your cruise ship is only in port for the day. Single or tandem, life vests included.",
+	"duration": "30 minutes",
+	"external_booking_url": "https://www.kcwatersportsbahamas.com/jetskirentals",
+	"featured": false,
+	"image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/0trvjsor_pine-cay-jet-ski-tour.jpg",
+	"location": "Nassau — beach launch",
+	"name": "Jet Ski Rental — 30 Minutes (Nassau)",
+	"price": 99.0,
+	"price_history": [],
+	"seed_price": 99.0,
+	"updated_at": "2026-07-28T13:52:06.434698+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68ac925848b87a400eccc7"
+	},
+	"id": "atv-tour-lunch",
+	"active": true,
+	"category": "adventure",
+	"description": "Guided ATV convoy through Nassau's back-roads, coastal viewpoints and Paradise Island vistas. Bahamian lunch, helmet, gloves and cruise-port pickup included. Driver must be 25+.",
+	"duration": "3 hours",
+	"external_booking_url": "https://www.viator.com/tours/Nassau/3-Hour-2-passenger-ATV-Tour-of-Nassau-and-Paradise-Island-Inclusive-of-Lunch/d420-70706P11",
+	"featured": true,
+	"image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/xkgd6xt4_images_atv.jpg",
+	"location": "Nassau — cruise-port pickup",
+	"name": "ATV Off-Road Tour of Nassau & Paradise Island (with Lunch)",
+	"price": 149.0,
+	"price_history": [],
+	"seed_price": 149.0,
+	"updated_at": "2026-07-28T13:56:10.612951+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68ac925848b87a400eccc9"
+	},
+	"id": "atv-tour-2hr",
+	"active": true,
+	"category": "adventure",
+	"description": "Fast-paced 2-hour ATV ride with roundtrip cruise-port transport. Great for shore-excursion timing. Book direct with Bowcar Bahamas.",
+	"duration": "2 hours",
+	"external_booking_url": "https://www.bowcarbahamas.com/tour/atv-tour/",
+	"featured": false,
+	"image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/w7ff6nbv_IMG-20250212-WA0083-1-scaled.webp",
+	"location": "Nassau — cruise-port pickup",
+	"name": "ATV Off-Road Power Tour — 2 Hours (Cruise-Port Pickup)",
+	"price": 122.0,
+	"price_history": [],
+	"seed_price": 122.0,
+	"updated_at": "2026-07-28T13:39:09.783179+00:00"
+}

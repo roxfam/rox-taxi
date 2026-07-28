@@ -1,0 +1,276 @@
+{
+	"_id": {
+		"$oid": "6a6742fcc91b923a3df32834"
+	},
+	"id": "spark-compact",
+	"active": true,
+	"body": "Compact",
+	"category": "compact",
+	"color": "White",
+	"description": "Zippy little compact — perfect for solo travelers and couples buzzing around Nassau. AC, automatic, unlimited miles. Free delivery to LPIA or your hotel.",
+	"image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/iyv8ywh8_spark.webp",
+	"make": "Chevrolet",
+	"model": "Spark",
+	"name": "2019 Chevrolet Spark — Compact",
+	"price": 65.0,
+	"seats": 4,
+	"year": 2019,
+	"updated_at": "2026-07-28T10:14:02.214363+00:00",
+	"price_history": [
+		{
+			"old_price": 65.0,
+			"new_price": 269.23,
+			"reason": "E2E test @ 269.23",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T09:53:56.330840+00:00"
+		},
+		{
+			"old_price": 269.23,
+			"new_price": 65.0,
+			"reason": "Revert after E2E test cleanup",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T09:56:37.360962+00:00"
+		},
+		{
+			"old_price": 65.0,
+			"new_price": 60.0,
+			"reason": "Peak-season adjustment",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:13:42.875389+00:00"
+		},
+		{
+			"old_price": 60.0,
+			"new_price": 65.0,
+			"reason": "Reset to seed default",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:13:43.119511+00:00"
+		},
+		{
+			"old_price": 65.0,
+			"new_price": 60.0,
+			"reason": "Peak-season adjustment",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:14:02.053599+00:00"
+		},
+		{
+			"old_price": 60.0,
+			"new_price": 65.0,
+			"reason": "Reset to seed default",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:14:02.214353+00:00"
+		}
+	],
+	"seed_price": 65.0
+}
+{
+	"_id": {
+		"$oid": "6a6742fcc91b923a3df32838"
+	},
+	"id": "malibu-fullsize",
+	"active": true,
+	"body": "Full-size Sedan",
+	"category": "full-size",
+	"color": "White",
+	"description": "Spacious full-size sedan for comfort on longer Bahamas drives. Bluetooth, backup camera, roomy trunk.",
+	"image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/cmfv1j07_2024-chevrolet-malibu-summit-white-color.webp",
+	"make": "Chevrolet",
+	"model": "Malibu",
+	"name": "2024 Chevrolet Malibu — Full-Size Sedan (White)",
+	"price": 79.0,
+	"seats": 5,
+	"year": 2024,
+	"updated_at": "2026-07-28T09:13:40.559930+00:00",
+	"seed_price": 79.0
+}
+{
+	"_id": {
+		"$oid": "6a6742fcc91b923a3df3283a"
+	},
+	"id": "trax-suv",
+	"active": true,
+	"body": "SUV",
+	"category": "suv",
+	"color": "White",
+	"description": "Brand-new 2025 SUV with clearance for out-of-town beach runs and cargo for the whole crew. Apple CarPlay, backup cam, roof rack.",
+	"image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/234w5zk7_image.webp",
+	"make": "Chevrolet",
+	"model": "Trax",
+	"name": "2025 Chevrolet Trax — SUV (White)",
+	"price": 115.0,
+	"seats": 5,
+	"year": 2025,
+	"updated_at": "2026-07-28T13:42:18.564715+00:00",
+	"seed_price": 115.0,
+	"price_history": [
+		{
+			"old_price": 125.0,
+			"new_price": 130.0,
+			"reason": "seasonal promo bump",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:13:43.202468+00:00"
+		},
+		{
+			"old_price": 130.0,
+			"new_price": 125.0,
+			"reason": "Reset to seed default",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:13:43.356265+00:00"
+		},
+		{
+			"old_price": 125.0,
+			"new_price": 130.0,
+			"reason": "seasonal promo bump",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:14:02.312075+00:00"
+		},
+		{
+			"old_price": 130.0,
+			"new_price": 125.0,
+			"reason": "Reset to seed default",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:14:02.473894+00:00"
+		},
+		{
+			"old_price": 125.0,
+			"new_price": 115.0,
+			"reason": "Admin price update — SUV set to $115/day",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T13:42:18.564705+00:00"
+		}
+	]
+}
+{
+	"_id": {
+		"$oid": "6a6742fcc91b923a3df3283c"
+	},
+	"id": "town-country-van",
+	"active": true,
+	"body": "Mini-Van",
+	"category": "mini-van",
+	"color": "White",
+	"description": "Family & group hauler — 7 seats, sliding doors, panoramic space. Perfect for cruise-port pickups and family beach days.",
+	"image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/7y8bashr_pacifica.webp",
+	"make": "Chrysler",
+	"model": "Town & Country",
+	"name": "2022 Chrysler Town & Country — Mini-Van (White)",
+	"price": 120.0,
+	"seats": 7,
+	"year": 2022,
+	"seed_price": 120.0,
+	"price_history": [
+		{
+			"old_price": 149.0,
+			"new_price": 120.0,
+			"reason": "Admin price update — Mini-Van set to $120/day",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T13:32:32.960316+00:00"
+		}
+	],
+	"updated_at": "2026-07-28T13:32:32.960326+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a67d92fe1c55776b3d7c704"
+	},
+	"id": "sentra-orange",
+	"active": true,
+	"body": "Sedan",
+	"category": "economy",
+	"color": "Orange",
+	"description": "Sharp, modern orange sedan — great fuel economy and easy to spot in a Nassau parking lot. AC, automatic, backup camera. Free delivery to LPIA or your hotel.",
+	"image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/5ky5n279_Nissan%20Versa.webp",
+	"make": "Nissan",
+	"model": "Versa",
+	"name": "2021 Nissan Versa — Orange Sedan",
+	"price": 65.0,
+	"seats": 5,
+	"year": 2021,
+	"seed_price": 65.0,
+	"price_history": [
+		{
+			"old_price": 39.0,
+			"new_price": 31.2,
+			"reason": "20% off promo",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:10:58.514543+00:00"
+		},
+		{
+			"old_price": 31.2,
+			"new_price": 39.0,
+			"reason": "Reset to seed default",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:10:58.714120+00:00"
+		},
+		{
+			"old_price": 39.0,
+			"new_price": 31.2,
+			"reason": "20% off promo",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:11:26.097759+00:00"
+		},
+		{
+			"old_price": 31.2,
+			"new_price": 39.0,
+			"reason": "Reset to seed default (test setup)",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:14:00.807866+00:00"
+		},
+		{
+			"old_price": 39.0,
+			"new_price": 31.2,
+			"reason": "20% off promo",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:14:00.899726+00:00"
+		},
+		{
+			"old_price": 31.2,
+			"new_price": 39.0,
+			"reason": "Reset to seed default",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:14:01.045022+00:00"
+		},
+		{
+			"old_price": 39.0,
+			"new_price": 31.2,
+			"reason": "20% off promo",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:15:20.639288+00:00"
+		},
+		{
+			"old_price": 31.2,
+			"new_price": 39.0,
+			"reason": "Reset to seed default",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T10:18:35.678074+00:00"
+		},
+		{
+			"old_price": 39.0,
+			"new_price": 65.0,
+			"reason": "Admin price update — Nissan Versa set to $65/day",
+			"changed_by": "admin@roxtaxi.com",
+			"changed_at": "2026-07-28T16:51:56.383859+00:00"
+		}
+	],
+	"updated_at": "2026-07-28T16:51:56.383869+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68ad605848b87a400ecd67"
+	},
+	"id": "silverado-truck",
+	"active": true,
+	"body": "Pickup Truck",
+	"category": "truck",
+	"color": "White",
+	"description": "Full-size pickup for hauling gear, jet skis, or a big family run. Crew cab, tow package, backup camera, Bluetooth, and a bed cover keep your beach kit dry.",
+	"image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/yk10r0dn_2022-Chevy-Silverado-1500-840-728x400.webp",
+	"make": "Chevrolet",
+	"model": "Silverado",
+	"name": "2023 Chevrolet Silverado — Pickup Truck (White)",
+	"price": 169.0,
+	"price_history": [],
+	"seats": 5,
+	"seed_price": 169.0,
+	"year": 2023,
+	"updated_at": "2026-07-28T13:31:26.971537+00:00"
+}

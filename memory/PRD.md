@@ -20,9 +20,9 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ### ✅ Shipped this session
 - **Customer auth** — email/password + Emergent Google, JWT/session cookie, 1h idle auto-logout via `IDLE_TIMEOUT_MINUTES`, heartbeat endpoint, login_events audit log, auto-links past bookings by email. Signup/Login pages, MyBookings dashboard with cancel + pay balance + download receipt actions.
-- **Round-trip taxi discount** — 10% off both legs, toggle in booking modal, computed server-side, shown on receipt.
+- **Round-trip taxi discount** — 10% off both legs, toggle in booking modal, computed server-side (base doubles, 10% off both legs, bridge toll applies once), shown on receipt.
 - **Multi-day rental discount tiers** — 3% at 5+ days, 7% at 7+ days, 12% at 14+ days. Auto-applied server-side.
-- **Tip field on booking** (`tip_amount` on model, ready for Pay-page UI).
+- **Tip field on booking** (`tip_amount` on model, accepted at booking-create time).
 - **Custom route quote widget** — `/api/taxi/quote` + `/api/taxi/quote-request` + 14 canonical Nassau locations. On /taxi page: pick From + To → instant fare OR request-a-quote form with SMS + email alerts.
 - **Live driver ETA** — Track page uses Haversine distance from customer's geolocation to driver's GPS ping, shows "Driver X min away · X.X km".
 - **QR code on booking success** — cruise-passenger friendly, embeds tracking link.
@@ -31,6 +31,14 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **8-language switcher** — Google Translate widget: EN, ES, FR, HT, DE, NL, ZH-CN, TR.
 - **Elegant branding** — gradient serif "Rox Taxi Service" + italic serif "& Tours" wordmark with gold hairline accent in header, mobile drawer, footer.
 - **Taxi fare edits** — LPIA→Downtown $40, LPIA→Cable Beach $35, Baha Mar↔Downtown $25, Downtown↔Paradise $20, Cruise Port→Baha Mar $25, LPIA→Cruise Port $40, Nassau→Adelaide $60, Hotel→Fish Fry $20, +Paradise Island→Montague Beach $20 (NEW).
+- **Bug fix — Saturday closure** — was blocking any 7+ day rental (impossible to span a Saturday). Now only pickup date is validated; customers can keep the car through Saturday.
+- **Deployment package** — `/app/deploy/` with:
+  - `DEPLOYMENT_GUIDE.md` (3-path playbook: hybrid recommended)
+  - `frontend_build/` (production React static — 285KB gzipped JS + 20KB CSS)
+  - `mongo_export/` (BSON for `mongorestore`)
+  - `mongo_json/` (per-collection portable JSON)
+  - `backend_php_starter/` (paused PHP/MySQL rewrite scaffolding)
+  - `rox_taxi_deploy_20260728.tar.gz` (1.5MB — single-file download)
 
 ### 🎯 Backlog — Wave 2 (revenue/trust)
 - **Airport flight tracker** — customer types flight #, auto-adjust pickup via AviationStack. Needs API key.

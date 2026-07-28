@@ -1,0 +1,195 @@
+{
+	"_id": {
+		"$oid": "6a674ca666244a0dee6d3c59"
+	},
+	"event_type": "wedding",
+	"event_date": "2026-06-15",
+	"guest_count": 42,
+	"needs": [
+		"taxi",
+		"tours"
+	],
+	"budget_range": "$5,000 – $15,000",
+	"customer_name": "Ivy Bride",
+	"customer_email": "ivy@example.com",
+	"customer_phone": "+12420001234",
+	"notes": "Ceremony at Ocean Club Paradise Island; need transport from Cable Beach + boat tour day 2",
+	"id": "GRP-F6696C01",
+	"status": "new",
+	"created_at": "2026-07-27T12:18:46.198490+00:00",
+	"updated_at": "2026-07-27T12:18:46.198502+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a674cef4f1bf0364a1f9641"
+	},
+	"event_type": "corporate",
+	"event_date": "2026-07-10",
+	"guest_count": 18,
+	"needs": [
+		"taxi",
+		"rentals"
+	],
+	"budget_range": "$1,500 – $5,000",
+	"customer_name": "Corp Test",
+	"customer_email": "corp@example.com",
+	"customer_phone": "+12420001111",
+	"notes": "Board offsite Baha Mar",
+	"id": "GRP-ECB15446",
+	"status": "contacted",
+	"created_at": "2026-07-27T12:19:59.181431+00:00",
+	"updated_at": "2026-07-27T12:20:00.080889+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a674ef07373236ff2a91e9b"
+	},
+	"event_type": "wedding",
+	"event_date": "2026-08-15",
+	"guest_count": 30,
+	"needs": [
+		"taxi",
+		"tours",
+		"rentals"
+	],
+	"budget_range": null,
+	"customer_name": "Test Bride",
+	"customer_email": "b@b.com",
+	"customer_phone": "+12420005555",
+	"notes": "Wedding builder test",
+	"package": {
+		"transport": {
+			"airport-paradise": 3,
+			"paradise-nassau": 2
+		},
+		"tourItems": {
+			"blue-lagoon": 20
+		},
+		"rentalItems": {
+			"malibu-fullsize": 3
+		},
+		"addons": [
+			"ceremony",
+			"afterparty"
+		]
+	},
+	"estimated_total": 3850.0,
+	"id": "GRP-8035B7D4",
+	"status": "new",
+	"created_at": "2026-07-27T12:28:32.975693+00:00",
+	"updated_at": "2026-07-27T12:28:32.975706+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a675f34b092f333bdbc45fa"
+	},
+	"event_type": "wedding",
+	"event_date": "2026-06-15",
+	"guest_count": 40,
+	"needs": [
+		"ceremony",
+		"transport"
+	],
+	"budget_range": "$5k-$10k",
+	"customer_name": "TEST_Wedding",
+	"customer_email": "wed@test.com",
+	"customer_phone": "+12420000009",
+	"notes": "test",
+	"package": {
+		"name": "Beach Ceremony",
+		"price": 2500,
+		"features": [
+			"ceremony",
+			"flowers"
+		]
+	},
+	"estimated_total": null,
+	"id": "GRP-ADB21878",
+	"status": "new",
+	"created_at": "2026-07-27T13:37:56.745276+00:00",
+	"updated_at": "2026-07-27T13:37:56.745285+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a675f3db092f333bdbc45fe"
+	},
+	"event_type": "wedding",
+	"event_date": "2026-06-15",
+	"guest_count": 40,
+	"needs": [
+		"ceremony",
+		"transport"
+	],
+	"budget_range": "$5k-$10k",
+	"customer_name": "TEST_Wedding",
+	"customer_email": "wed@test.com",
+	"customer_phone": "+12420000009",
+	"notes": "test",
+	"package": {
+		"name": "Beach Ceremony",
+		"price": 2500,
+		"features": [
+			"ceremony",
+			"flowers"
+		]
+	},
+	"estimated_total": null,
+	"id": "GRP-E82A1939",
+	"status": "new",
+	"created_at": "2026-07-27T13:38:05.186017+00:00",
+	"updated_at": "2026-07-27T13:38:05.186028+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a67fd2bd71742f21f8d8d6a"
+	},
+	"event_type": "wedding",
+	"event_date": "2026-06-20",
+	"guest_count": 40,
+	"needs": [
+		"taxi",
+		"tours"
+	],
+	"budget_range": null,
+	"customer_name": "TEST_Iter8 Wedding",
+	"customer_email": "test_iter8_wedding@example.com",
+	"customer_phone": "+15005550006",
+	"notes": "Test iter8 wedding",
+	"package": {
+		"transport": {
+			"van-group": 2
+		},
+		"tourItems": {
+			"blue-lagoon": 40
+		},
+		"rentalItems": {},
+		"addons": [
+			"ceremony"
+		]
+	},
+	"estimated_total": null,
+	"id": "GRP-30576865",
+	"status": "new",
+	"created_at": "2026-07-28T00:51:55.071298+00:00",
+	"updated_at": "2026-07-28T00:51:55.071308+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68135a0058f6d4df62aac6"
+	},
+	"event_type": "wedding",
+	"event_date": "2026-06-01",
+	"guest_count": 20,
+	"needs": [],
+	"budget_range": null,
+	"customer_name": "TEST_Iter9 Group",
+	"customer_email": "iter9-group@example.com",
+	"customer_phone": "+15005550006",
+	"notes": "Regression test",
+	"package": null,
+	"estimated_total": null,
+	"id": "GRP-D9001337",
+	"status": "contacted",
+	"created_at": "2026-07-28T02:26:34.576094+00:00",
+	"updated_at": "2026-07-28T02:26:39.978435+00:00"
+}

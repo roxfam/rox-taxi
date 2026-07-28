@@ -1,0 +1,19 @@
+# Rox Taxi Service and Tours — robots policy
+# Everything public is fair game for indexing. Admin + payment-return pages
+# are behind auth or query-string only, so we keep them out of the crawl.
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /payment/success
+Disallow: /payment/cancel
+Disallow: /api/
+
+# Aggressive scrapers — throttle them (Bingbot / Yandex handle Crawl-delay)
+User-agent: SemrushBot
+Crawl-delay: 10
+User-agent: AhrefsBot
+Crawl-delay: 10
+
+Sitemap: https://roxtaxi.com/sitemap.xml

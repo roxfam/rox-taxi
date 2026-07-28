@@ -1,0 +1,36 @@
+# ─── /api/* front controller ─────────────────────────────────────────────
+# Every request under /api goes to index.php which owns routing.
+# Uploaded files under /api/uploads/<name> are served as static (see below).
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /api/
+
+    # Serve real uploaded files directly (photos in /api/uploads/…)
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # Everything else = PHP route
+    RewriteRule ^ index.php [L,QSA]
+</IfModule>
+
+# Deny direct access to internals
+<FilesMatch "^(lib\.php|seed\.php|cron\.php|routes)">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^index\.php$">
+    Require all granted
+</FilesMatch>
+
+# CORS pre-flight
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Session-ID"
+    Header always set Access-Control-Max-Age "3600"
+</IfModule>
+
+# php.ini overrides for uploads
+php_value upload_max_filesize 25M
+php_value post_max_size       25M
+php_value memory_limit        128M

@@ -1,0 +1,92 @@
+{
+	"_id": {
+		"$oid": "6a681a9b43a5c219dc9d85d3"
+	},
+	"name": "Verify User",
+	"email": "verify@example.com",
+	"phone": "+15005550006",
+	"subject": "General inquiry",
+	"message": "testing the new endpoint",
+	"id": "CT-3155341D",
+	"status": "new",
+	"created_at": "2026-07-28T02:57:31.134499+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a6822e52c024bf4af8b6430"
+	},
+	"name": "TEST_Alice",
+	"email": "TEST_alice@example.com",
+	"phone": "+12421234567",
+	"subject": "TEST inquiry",
+	"message": "Hello, this is a test message from iteration 11.",
+	"id": "CT-67A85730",
+	"status": "new",
+	"created_at": "2026-07-28T03:32:53.765530+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a686d779b98512a20997abb"
+	},
+	"name": "TEST_Alice",
+	"email": "TEST_alice@example.com",
+	"phone": "+12421234567",
+	"subject": "TEST inquiry",
+	"message": "Hello, this is a test message from iteration 11.",
+	"id": "CT-6AA2FC2F",
+	"status": "new",
+	"created_at": "2026-07-28T08:51:03.659767+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a686def9b98512a20997abd"
+	},
+	"name": "TEST_Playwright",
+	"email": "TEST_playwright@example.com",
+	"phone": "+12421234567",
+	"subject": "Tour booking",
+	"message": "Playwright end-to-end submission test message.",
+	"id": "CT-72375E03",
+	"status": "new",
+	"created_at": "2026-07-28T08:53:03.315989+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a686e169b98512a20997abe"
+	},
+	"name": "TEST_UI",
+	"email": "ui@example.com",
+	"phone": "+12420000000",
+	"subject": "Ping",
+	"message": "From UI seed",
+	"id": "CT-FC0CF126",
+	"status": "new",
+	"created_at": "2026-07-28T08:53:42.661259+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a686e529b98512a20997abf"
+	},
+	"name": "TEST_UI",
+	"email": "ui@example.com",
+	"phone": "+12420000000",
+	"subject": "Ping",
+	"message": "From UI seed",
+	"id": "CT-CFC8D9DE",
+	"status": "new",
+	"created_at": "2026-07-28T08:54:42.642374+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a686e7c9b98512a20997ac0"
+	},
+	"name": "TEST_UI2",
+	"email": "ui2@example.com",
+	"phone": "+12420000001",
+	"subject": "Ping",
+	"message": "From UI seed 2",
+	"id": "CT-6D5AC519",
+	"status": "replied",
+	"created_at": "2026-07-28T08:55:24.573945+00:00",
+	"updated_at": "2026-07-28T08:55:31.254536+00:00"
+}

@@ -1,0 +1,395 @@
+{
+	"_id": {
+		"$oid": "6a65e7b04d3c6605701abe41"
+	},
+	"id": "airport-nassau",
+	"name": "LPIA Airport → Downtown Nassau",
+	"price": 40.0,
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Meet & greet at arrivals, luggage help, air-conditioned.",
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"featured": true,
+	"route": "LPIA → Downtown Nassau",
+	"seed_price": 40.0,
+	"price_history": [
+		{
+			"price": 32.0,
+			"is_promo": false,
+			"note": "Aligned to official Bahamas tariff (LPIA rank + Ministry table)",
+			"changed_at": "2026-07-28T14:53:05.866078+00:00"
+		},
+		{
+			"price": 40.0,
+			"is_promo": false,
+			"note": "Owner update — LPIA to Downtown Nassau set to $40",
+			"changed_at": "2026-07-28T18:09:08.744412+00:00"
+		}
+	]
+}
+{
+	"_id": {
+		"$oid": "6a65e7b04d3c6605701abe42"
+	},
+	"id": "airport-paradise",
+	"name": "LPIA Airport → Paradise Island / Atlantis",
+	"price": 45.0,
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Paradise Island $2 bridge toll included.",
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"featured": true,
+	"route": "LPIA → Paradise Island",
+	"seed_price": 45.0
+}
+{
+	"_id": {
+		"$oid": "6a65e7b04d3c6605701abe43"
+	},
+	"id": "hourly-charter",
+	"name": "Nassau / Paradise Island Hourly Charter",
+	"price": 55.0,
+	"description": "Private driver by the hour, 2-hour minimum. Perfect for shopping, sightseeing, or errands.",
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"featured": false,
+	"route": "By the hour (2-hour min)",
+	"seed_price": 55.0
+}
+{
+	"_id": {
+		"$oid": "6a65e7b04d3c6605701abe44"
+	},
+	"id": "van-group",
+	"name": "Group Van Transfer (up to 8 pax) — Nassau + Paradise Island",
+	"price": 90.0,
+	"description": "Weddings, families, cruise groups. Airport, hotel, cruise port pickups & drop-offs.",
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"featured": false,
+	"route": "Anywhere on Nassau / PI",
+	"seed_price": 90.0
+}
+{
+	"_id": {
+		"$oid": "6a674205c91b923a3df327de"
+	},
+	"id": "port-paradise",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Bridge toll included.",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Nassau Cruise Port → Paradise Island / Atlantis",
+	"price": 20.0,
+	"route": "Cruise Port → Paradise Island",
+	"seed_price": 20.0,
+	"price_history": [
+		{
+			"price": 18.0,
+			"is_promo": false,
+			"note": "Aligned to official Bahamas tariff (LPIA rank + Ministry table)",
+			"changed_at": "2026-07-28T14:53:05.866078+00:00"
+		},
+		{
+			"price": 20.0,
+			"is_promo": false,
+			"note": "Owner update — cruise port to Paradise Island set to $20",
+			"changed_at": "2026-07-28T18:00:14.356557+00:00"
+		}
+	]
+}
+{
+	"_id": {
+		"$oid": "6a675de8696c4b0a6648fc98"
+	},
+	"id": "airport-bahamar",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Baha Mar resort complex on Cable Beach.",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "LPIA Airport → Baha Mar / SLS / Grand Hyatt / Rosewood",
+	"price": 35.0,
+	"route": "LPIA → Baha Mar",
+	"seed_price": 35.0,
+	"price_history": [
+		{
+			"price": 32.0,
+			"is_promo": false,
+			"note": "Aligned to official Bahamas tariff (LPIA rank + Ministry table)",
+			"changed_at": "2026-07-28T14:53:05.866078+00:00"
+		},
+		{
+			"price": 35.0,
+			"is_promo": false,
+			"note": "Owner update — LPIA to Baha Mar set to $35",
+			"changed_at": "2026-07-28T18:11:45.954379+00:00"
+		}
+	]
+}
+{
+	"_id": {
+		"$oid": "6a675de8696c4b0a6648fc9a"
+	},
+	"id": "cablebeach-downtown",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Bay Street shopping / straw market from Cable Beach hotels.",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Cable Beach ↔ Downtown Nassau (Bay Street)",
+	"price": 20,
+	"route": "Cable Beach ↔ Downtown",
+	"seed_price": 20.0
+}
+{
+	"_id": {
+		"$oid": "6a675de8696c4b0a6648fc9c"
+	},
+	"id": "downtown-paradise",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Bay Street shopping, Fish Fry, Atlantis casino runs. Bridge toll included.",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Downtown Nassau ↔ Paradise Island",
+	"price": 20,
+	"route": "Downtown ↔ Paradise Island",
+	"seed_price": 20.0,
+	"price_history": [
+		{
+			"price": 13.0,
+			"is_promo": false,
+			"note": "Aligned to official Bahamas tariff (LPIA rank + Ministry table)",
+			"changed_at": "2026-07-28T14:53:05.866078+00:00"
+		}
+	]
+}
+{
+	"_id": {
+		"$oid": "6a675de8696c4b0a6648fc9e"
+	},
+	"id": "cablebeach-atlantis",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Popular for dinner + casino runs. Bridge toll included.",
+	"featured": false,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Cable Beach ↔ Atlantis / Paradise Island",
+	"price": 30.0,
+	"route": "Cable Beach ↔ Atlantis",
+	"seed_price": 30.0
+}
+{
+	"_id": {
+		"$oid": "6a675de8696c4b0a6648fca0"
+	},
+	"id": "fish-fry-shuttle",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. One-way evening ride to Nassau's iconic Fish Fry food strip.",
+	"featured": false,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Any Nassau Hotel → Arawak Cay Fish Fry (evening)",
+	"price": 20,
+	"route": "Hotel → Fish Fry",
+	"seed_price": 20.0
+}
+{
+	"_id": {
+		"$oid": "6a675de8696c4b0a6648fca2"
+	},
+	"id": "compass-point",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. West-side beach clubs and restaurants beyond Cable Beach.",
+	"featured": false,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Nassau → Compass Point / West Bay Street",
+	"price": 25.0,
+	"route": "Nassau → West Bay",
+	"seed_price": 25.0
+}
+{
+	"_id": {
+		"$oid": "6a675de8696c4b0a6648fca4"
+	},
+	"id": "adelaide-southwest",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Long-distance transfer to Adelaide Village and the south-west coast.",
+	"featured": false,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Nassau → Adelaide Village / South West",
+	"price": 60,
+	"route": "Nassau → Adelaide",
+	"seed_price": 60.0
+}
+{
+	"_id": {
+		"$oid": "6a675de8696c4b0a6648fca6"
+	},
+	"id": "blue-hole-roundtrip",
+	"description": "Round-trip driver waits up to 90 min. Great for beach picnics or Lyford visits.",
+	"featured": false,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Nassau → Blue Hole / Lyford Cay (round trip)",
+	"price": 80.0,
+	"route": "Nassau ↔ Lyford Cay",
+	"seed_price": 80.0
+}
+{
+	"_id": {
+		"$oid": "6a68b6a25848b87a400ed1ab"
+	},
+	"id": "bahamar-downtown",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Same tariff as Cable Beach ↔ Downtown.",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Baha Mar ↔ Downtown Nassau (Bay Street)",
+	"price": 25,
+	"price_history": [
+		{
+			"price": 18.0,
+			"is_promo": false,
+			"note": "Aligned to official Bahamas tariff (LPIA rank + Ministry table)",
+			"changed_at": "2026-07-28T14:53:05.866078+00:00"
+		}
+	],
+	"route": "Baha Mar ↔ Downtown",
+	"seed_price": 25.0
+}
+{
+	"_id": {
+		"$oid": "6a68b6a25848b87a400ed1ad"
+	},
+	"id": "bahamar-atlantis",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Bridge toll included.",
+	"featured": false,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Baha Mar ↔ Atlantis / Paradise Island",
+	"price": 30.0,
+	"price_history": [
+		{
+			"price": 30.0,
+			"is_promo": false,
+			"note": "Aligned to official Bahamas tariff (LPIA rank + Ministry table)",
+			"changed_at": "2026-07-28T14:53:05.866078+00:00"
+		}
+	],
+	"route": "Baha Mar ↔ Atlantis",
+	"seed_price": 30.0
+}
+{
+	"_id": {
+		"$oid": "6a68c18e954936f3a1cc1f8a"
+	},
+	"id": "airport-cablebeach",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Includes SuperClubs Breezes, Melia, Sandals Royal Bahamian.",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "LPIA Airport → Cable Beach",
+	"price": 35.0,
+	"price_history": [
+		{
+			"price": 35.0,
+			"is_promo": false,
+			"note": "Owner update — LPIA to Cable Beach set to $35",
+			"changed_at": "2026-07-28T18:12:57.511737+00:00"
+		}
+	],
+	"route": "LPIA → Cable Beach",
+	"seed_price": 35.0
+}
+{
+	"_id": {
+		"$oid": "6a68c18e954936f3a1cc1f8e"
+	},
+	"id": "airport-cruiseport",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Direct to Prince George Wharf for embarkation.",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "LPIA Airport → Nassau Cruise Port (Festival Place)",
+	"price": 40,
+	"price_history": [],
+	"route": "LPIA → Cruise Port",
+	"seed_price": 40.0
+}
+{
+	"_id": {
+		"$oid": "6a68c18e954936f3a1cc1f91"
+	},
+	"id": "port-bahamar",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Straight from Prince George Wharf to Cable Beach resorts.",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Nassau Cruise Port → Baha Mar / Cable Beach",
+	"price": 25,
+	"price_history": [],
+	"route": "Cruise Port → Baha Mar",
+	"seed_price": 25.0
+}
+{
+	"_id": {
+		"$oid": "6a68c58a954936f3a1cc21d4"
+	},
+	"id": "grocery-run",
+	"description": "Private driver waits while you shop and helps load groceries. Billed at the standard $55/hr hourly charter rate — 1-hour minimum, then pro-rata after. Popular stops: Solomon's, Super Value, Robin Hood, Family Value, Cost Right (Cable Beach & Baha Mar villas).",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Grocery Pick-Up & Drop-Off (hourly)",
+	"price": 55.0,
+	"price_history": [],
+	"route": "Hotel/Villa ↔ Supermarket (by the hour)",
+	"seed_price": 55.0
+}
+{
+	"_id": {
+		"$oid": "6a68f18c954936f3a1cc31a4"
+	},
+	"id": "fishfry-downtown",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Short hop between Fish Fry food strip and Bay Street / Prince George Wharf.",
+	"featured": false,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Arawak Cay Fish Fry ↔ Downtown Nassau",
+	"price": 20.0,
+	"price_history": [],
+	"route": "Fish Fry ↔ Downtown",
+	"seed_price": 20.0
+}
+{
+	"_id": {
+		"$oid": "6a68f1af954936f3a1cc3214"
+	},
+	"id": "fishfry-paradise",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Post-dinner ride from Fish Fry across the bridge to Paradise Island / Atlantis. Bridge toll auto-added on booking.",
+	"featured": false,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Arawak Cay Fish Fry → Paradise Island / Atlantis",
+	"price": 25.0,
+	"price_history": [],
+	"route": "Fish Fry → Paradise Island",
+	"seed_price": 25.0
+}
+{
+	"_id": {
+		"$oid": "6a68f293954936f3a1cc32a7"
+	},
+	"id": "fishfry-bahamar",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Post-dinner ride from Fish Fry west along Cable Beach to Baha Mar / SLS / Grand Hyatt / Rosewood.",
+	"featured": false,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Arawak Cay Fish Fry → Baha Mar / Cable Beach",
+	"price": 25.0,
+	"price_history": [],
+	"route": "Fish Fry → Baha Mar / Cable Beach",
+	"seed_price": 25.0
+}
+{
+	"_id": {
+		"$oid": "6a68f307954936f3a1cc32fb"
+	},
+	"id": "downtown-lyford",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. West-side long-haul transfer to Lyford Cay estates. $60 for the first 2 passengers · +$5 each additional passenger.",
+	"featured": false,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Downtown Nassau → Lyford Cay (one-way)",
+	"price": 60.0,
+	"price_history": [],
+	"route": "Downtown → Lyford Cay",
+	"seed_price": 60.0
+}
+{
+	"_id": {
+		"$oid": "6a68fdf4954936f3a1cc3bfc"
+	},
+	"id": "paradise-montague",
+	"description": "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable. Cross the bridge for a quick east-Nassau beach hop. $20 for the first 2 passengers · +$5 each additional passenger. Bridge toll included.",
+	"featured": true,
+	"image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85",
+	"name": "Paradise Island → Montague Beach",
+	"price": 20,
+	"price_history": [],
+	"route": "Paradise Island → Montague Beach",
+	"seed_price": 20.0,
+	"active": true
+}

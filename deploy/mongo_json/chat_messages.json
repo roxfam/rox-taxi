@@ -1,0 +1,99 @@
+{
+	"_id": {
+		"$oid": "6a65e81bcc46e2520b0af214"
+	},
+	"session_id": "test-1",
+	"role": "user",
+	"text": "Say hello in 5 words",
+	"ts": "2026-07-26T10:57:31.062547+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a65e81ecc46e2520b0af215"
+	},
+	"session_id": "test-1",
+	"role": "assistant",
+	"text": "**Hello! Welcome to Rox Taxi!** 🌴",
+	"ts": "2026-07-26T10:57:34.837710+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a65e832cc46e2520b0af216"
+	},
+	"session_id": "sess-5vdkr2jn-1785063471011",
+	"role": "user",
+	"text": "How much is an airport taxi to Atlantis?",
+	"ts": "2026-07-26T10:57:54.815686+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a65e836cc46e2520b0af217"
+	},
+	"session_id": "sess-5vdkr2jn-1785063471011",
+	"role": "assistant",
+	"text": "Great choice! 🌴\n\nAn airport taxi from **LPIA → Atlantis/Paradise Island** is **$45**, with the bridge toll already included. That covers up to **3 passengers**.\n\nNeed a larger group? Our **group van** (up to 8 pax) is **$90**.\n\nReady to book? You can reserve in advance at [roxtaxi.com/taxi](#) or I can help you get started right here! 🚖",
+	"ts": "2026-07-26T10:57:58.739453+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a67460c0c9ef4d3de60427b"
+	},
+	"session_id": "test_sess_home",
+	"role": "user",
+	"text": "Hi",
+	"ts": "2026-07-27T11:50:36.740588+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a6746490c9ef4d3de60427c"
+	},
+	"session_id": "sess-6k26zmei-1785153092070",
+	"role": "user",
+	"text": "Hi Roxi, how much is a taxi from LPIA?",
+	"ts": "2026-07-27T11:51:37.410878+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a67464d0c9ef4d3de60427d"
+	},
+	"session_id": "sess-6k26zmei-1785153092070",
+	"role": "assistant",
+	"text": "Hi there! Welcome to Rox Taxi & Tours! 😊\n\nThe fare from **LPIA Airport** depends on your destination:\n\n| Destination | Price |\n|---|---|\n| Downtown Nassau / Cable Beach | **$35** |\n| Paradise Island / Atlantis / Baha Mar | **$45** *(bridge toll included)* |\n\nBoth fares cover **up to 3 passengers**. Need a larger group? We have **van transfers for up to 8 pax at $90**. 🚐\n\nReady to book or have any other questions? You can also book directly at **rox.taxi/taxi** anytime! 🚕",
+	"ts": "2026-07-27T11:51:41.250155+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a675f08bda1c4c984049c97"
+	},
+	"session_id": "TEST_it3",
+	"role": "user",
+	"text": "hello",
+	"ts": "2026-07-27T13:37:12.588549+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a675f3db092f333bdbc4600"
+	},
+	"session_id": "TEST_it3",
+	"role": "user",
+	"text": "hello",
+	"ts": "2026-07-27T13:38:05.376439+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68dfc784e7aa7e835fefad"
+	},
+	"session_id": "sess-vtdnr809-1785063448250",
+	"role": "user",
+	"text": "How do I pay with Zelle?",
+	"ts": "2026-07-28T16:58:47.173996+00:00"
+}
+{
+	"_id": {
+		"$oid": "6a68dfcc84e7aa7e835fefae"
+	},
+	"session_id": "sess-vtdnr809-1785063448250",
+	"role": "assistant",
+	"text": "Great question! Here's how to pay with **Zelle**:\n\n1. **Open your Zelle app** (or your bank's app if Zelle is built in)\n2. **Send payment** to our registered Zelle account — contact us directly for our Zelle details to ensure you have the correct info\n3. **Include your name + booking reference** in the memo so we can match your payment\n\n📱 You can also reach us on **Facebook** for quick payment coordination: [facebook.com/roxtaxiservice](https://www.facebook.com/roxtaxiservice/)\n\nWould you like help booking a ride or tour first? 😊",
+	"ts": "2026-07-28T16:58:52.888072+00:00"
+}

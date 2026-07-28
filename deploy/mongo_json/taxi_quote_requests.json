@@ -1,0 +1,16 @@
+{
+	"_id": {
+		"$oid": "6a68ff4cf2aac1c06ba60317"
+	},
+	"from_location": "Cabbage Beach",
+	"to_location": "Junkanoo Beach",
+	"customer_name": "Smoke Test",
+	"customer_email": "smoketest@example.com",
+	"customer_phone": "+12421234567",
+	"passengers": 2,
+	"when": null,
+	"notes": "Backend smoke test",
+	"id": "QR-48826354",
+	"status": "new",
+	"created_at": "2026-07-28T19:13:16.293993+00:00"
+}
