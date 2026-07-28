@@ -109,6 +109,14 @@ TAXI_SERVICES: List[Dict] = [
      "route": "Nassau ↔ Lyford Cay", "featured": False,
      "description": "Round-trip driver waits up to 90 min. Great for beach picnics or Lyford visits.",
      "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
+    {"id": "bahamar-downtown", "name": "Baha Mar ↔ Downtown Nassau (Bay Street)", "price": 20.0,
+     "route": "Baha Mar ↔ Downtown", "featured": True,
+     "description": "Straight from Baha Mar / SLS / Grand Hyatt / Rosewood to Bay Street shopping, the straw market or Fish Fry. Flat one-way, up to 3 passengers.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
+    {"id": "bahamar-atlantis", "name": "Baha Mar ↔ Atlantis / Paradise Island", "price": 35.0,
+     "route": "Baha Mar ↔ Atlantis", "featured": False,
+     "description": "Cross-island transfer between Baha Mar and Atlantis / Paradise Island. Bridge toll included.",
+     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
 ]
 
 RENTALS_SEED: List[Dict] = [
