@@ -540,6 +540,17 @@ export default function Layout({ children }) {
                 <span className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 60%)" }} />
                 <Facebook className="relative w-[18px] h-[18px]" />
               </a>
+              {config.google_business_url && (
+                <a href={config.google_business_url} target="_blank" rel="noreferrer" title="Rox Taxi on Google" data-testid="footer-google-link" className="group relative w-12 h-12 rounded-full bg-white/[0.06] border border-white/10 hover:border-[#4285F4]/60 hover:bg-white hover:scale-110 flex items-center justify-center transition-all duration-300 hover:shadow-[0_15px_30px_rgba(66,133,244,0.45)]">
+                  <span className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.35), transparent 60%)" }} />
+                  <svg viewBox="0 0 24 24" className="relative w-[18px] h-[18px]" aria-hidden="true">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.26 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09A6.99 6.99 0 0 1 5.5 12c0-.73.12-1.43.34-2.09V7.07H2.18A11 11 0 0 0 1 12c0 1.77.42 3.44 1.18 4.93l3.66-2.84z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z" />
+                  </svg>
+                </a>
+              )}
               <a href={`https://wa.me/${(config.whatsapp_number || "+12420000000").replace(/[^\d]/g,"")}`} target="_blank" rel="noreferrer" title="WhatsApp" data-testid="footer-whatsapp" className="group relative w-12 h-12 rounded-full bg-white/[0.06] border border-white/10 hover:border-[#25D366]/60 hover:bg-[#25D366] hover:scale-110 flex items-center justify-center transition-all duration-300 hover:shadow-[0_15px_30px_rgba(37,211,102,0.5)]">
                 <span className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 60%)" }} />
                 <WhatsAppIcon className="relative w-[18px] h-[18px]" />
@@ -615,6 +626,48 @@ export default function Layout({ children }) {
               <p className="serif italic text-xs text-white/45 leading-relaxed">
                 All payments secured &amp; encrypted end-to-end. Refunds honored per our cancellation policy.
               </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Find us on — marketplace directory badges ───────────
+             Outbound trust links so guests can verify reviews on third-
+             party platforms. All URLs driven by site_config so admin can
+             swap them anytime via Site Config panel. Dashed "Coming soon"
+             chips subtly invite future review-platform onboarding. */}
+        <div className="relative border-t border-white/10 bg-black/20" data-testid="footer-marketplaces">
+          <div className="max-w-7xl mx-auto px-6 lg:px-10 py-8">
+            <div className="flex items-center gap-3 mb-5">
+              <span className="text-[10px] tracking-[0.4em] uppercase font-black text-[#D4A94A]">Find us on</span>
+              <span className="flex-1 h-[1px] bg-gradient-to-r from-[#D4A94A]/40 to-transparent" />
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <a href={config.facebook_url || "https://www.facebook.com/roxtaxiservice/"} target="_blank" rel="noreferrer" data-testid="marketplace-facebook" className="group inline-flex items-center gap-2.5 rounded-full bg-white/[0.05] hover:bg-[#1877F2] hover:scale-[1.03] border border-white/10 hover:border-[#1877F2] px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white/80 hover:text-white transition-all shadow-[0_6px_20px_rgba(0,0,0,0.2)] hover:shadow-[0_10px_30px_rgba(24,119,242,0.4)]">
+                <Facebook className="w-4 h-4" /> Facebook <span className="text-[9px] opacity-60 group-hover:opacity-100 normal-case">roxtaxiservice</span>
+              </a>
+              {config.google_business_url && (
+                <a href={config.google_business_url} target="_blank" rel="noreferrer" data-testid="marketplace-google" className="group inline-flex items-center gap-2.5 rounded-full bg-white/[0.05] hover:bg-white hover:scale-[1.03] border border-white/10 hover:border-[#4285F4] px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white/80 hover:text-[#0B192C] transition-all shadow-[0_6px_20px_rgba(0,0,0,0.2)] hover:shadow-[0_10px_30px_rgba(66,133,244,0.4)]">
+                  <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden="true">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.26 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09A6.99 6.99 0 0 1 5.5 12c0-.73.12-1.43.34-2.09V7.07H2.18A11 11 0 0 0 1 12c0 1.77.42 3.44 1.18 4.93l3.66-2.84z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z" />
+                  </svg>
+                  Google Reviews <span className="text-[9px] opacity-60 group-hover:opacity-100 normal-case">★ 4.9 rated</span>
+                </a>
+              )}
+              <a href={`https://wa.me/${(config.whatsapp_number || "+12424322587").replace(/[^\d]/g,"")}`} target="_blank" rel="noreferrer" data-testid="marketplace-whatsapp" className="group inline-flex items-center gap-2.5 rounded-full bg-white/[0.05] hover:bg-[#25D366] hover:scale-[1.03] border border-white/10 hover:border-[#25D366] px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white/80 hover:text-white transition-all shadow-[0_6px_20px_rgba(0,0,0,0.2)] hover:shadow-[0_10px_30px_rgba(37,211,102,0.4)]">
+                <WhatsAppIcon className="w-4 h-4" /> WhatsApp <span className="text-[9px] opacity-60 group-hover:opacity-100 normal-case">Chat 24/7</span>
+              </a>
+              <span data-testid="marketplace-tripadvisor-coming" title="Getting listed on TripAdvisor soon — help us by leaving a review!" className="inline-flex items-center gap-2.5 rounded-full bg-white/[0.03] border border-dashed border-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white/35 cursor-help">
+                <TripAdvisorIcon className="w-4 h-4" /> TripAdvisor <span className="text-[9px] opacity-70 normal-case">Coming soon</span>
+              </span>
+              <span data-testid="marketplace-viator-coming" title="Getting listed on Viator soon" className="inline-flex items-center gap-2.5 rounded-full bg-white/[0.03] border border-dashed border-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white/35 cursor-help">
+                🎫 Viator <span className="text-[9px] opacity-70 normal-case">Coming soon</span>
+              </span>
+              <span data-testid="marketplace-yelp-coming" title="Getting listed on Yelp soon" className="inline-flex items-center gap-2.5 rounded-full bg-white/[0.03] border border-dashed border-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white/35 cursor-help">
+                ⭐ Yelp <span className="text-[9px] opacity-70 normal-case">Coming soon</span>
+              </span>
             </div>
           </div>
         </div>

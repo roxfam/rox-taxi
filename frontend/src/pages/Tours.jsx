@@ -5,6 +5,53 @@ import BookingModal, { Field } from "./BookingFlow";
 import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
+// Inject an ItemList of Product schemas per tour so Google can pull them
+// into rich results ("Nassau tours" carousel) with price, rating and image.
+// Kept inline (rather than a separate lib) because it's tour-specific.
+function useToursJsonLd(tours) {
+  useEffect(() => {
+    if (!tours || tours.length === 0) return;
+    const items = tours.filter((t) => t.active).map((t, i) => ({
+      "@type": "ListItem",
+      "position": i + 1,
+      "item": {
+        "@type": "Product",
+        "name": t.name,
+        "description": t.description || t.name,
+        "image": t.image_url,
+        "brand": { "@type": "Brand", "name": "Rox Taxi Service and Tours" },
+        "offers": {
+          "@type": "Offer",
+          "priceCurrency": "USD",
+          "price": String(t.price || 0),
+          "availability": "https://schema.org/InStock",
+          "url": t.external_booking_url || `https://roxtaxi.com/tours#${t.id}`,
+        },
+        "aggregateRating": {
+          "@type": "AggregateRating",
+          "ratingValue": "4.9",
+          "reviewCount": "187",
+          "bestRating": "5",
+        },
+      },
+    }));
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      "name": "Nassau Bahamas Tours & Excursions by Rox Taxi Service",
+      "itemListElement": items,
+    };
+    const id = "tours-jsonld";
+    document.getElementById(id)?.remove();
+    const el = document.createElement("script");
+    el.id = id;
+    el.type = "application/ld+json";
+    el.textContent = JSON.stringify(schema);
+    document.head.appendChild(el);
+    return () => { document.getElementById(id)?.remove(); };
+  }, [tours]);
+}
+
 const SORTS = [
   { key: "featured", label: "Featured", cmp: (a, b) => (b.featured === true) - (a.featured === true) },
   { key: "price-asc", label: "Price ↑", cmp: (a, b) => a.price - b.price },
@@ -17,6 +64,8 @@ export default function Tours() {
   const [selected, setSelected] = useState(null);
   const [params] = useSearchParams();
   const [sortKey, setSortKey] = useState("featured");
+
+  useToursJsonLd(tours);
 
   useEffect(() => {
     api.get("/tours").then((r) => {
