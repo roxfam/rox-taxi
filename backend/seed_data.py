@@ -41,7 +41,7 @@ TOURS_SEED: List[Dict] = [
     {"id": "atv-tour-lunch", "name": "ATV Off-Road Tour of Nassau & Paradise Island (with Lunch)", "price": 149.0, "duration": "3 hours",
      "location": "Nassau — cruise-port pickup", "featured": True,
      "description": "Guided ATV convoy through Nassau's back-roads, coastal viewpoints and Paradise Island vistas. Bahamian lunch, helmet, gloves and cruise-port pickup included. Driver must be 25+.",
-     "image_url": "https://images.unsplash.com/photo-1533558701576-23c65e0272a3?crop=entropy&cs=srgb&fm=jpg&q=85&w=1600",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/xkgd6xt4_images_atv.jpg",
      "category": "adventure", "active": True,
      "external_booking_url": "https://www.viator.com/tours/Nassau/3-Hour-2-passenger-ATV-Tour-of-Nassau-and-Paradise-Island-Inclusive-of-Lunch/d420-70706P11"},
     {"id": "atv-tour-2hr", "name": "ATV Off-Road Power Tour — 2 Hours (Cruise-Port Pickup)", "price": 122.0, "duration": "2 hours",
