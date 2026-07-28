@@ -6,7 +6,7 @@ const SLIDES = [
   {
     name: "Paradise Island · Atlantis",
     tag: "Iconic resort",
-    img: "https://images.pexels.com/photos/9887784/pexels-photo-9887784.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    img: "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/vsaujgx2_smkkon4escfnl7k6uzih.webp",
   },
   {
     name: "Blue Lagoon Island",
@@ -26,7 +26,7 @@ const SLIDES = [
   {
     name: "Junkanoo Beach",
     tag: "Downtown Nassau",
-    img: "https://images.pexels.com/photos/3155666/pexels-photo-3155666.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    img: "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/i5gw02nf_junkanoo-beach-in-nassau-bahamas-optimized.webp",
   },
   {
     name: "Queen's Staircase",
