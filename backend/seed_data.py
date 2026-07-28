@@ -60,7 +60,7 @@ _TARIFF_NOTE = "Official Nassau tariff. First 2 passengers. +$4 per extra passen
 _TAXI_IMG = "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"
 
 TAXI_SERVICES: List[Dict] = [
-    {"id": "airport-nassau", "name": "LPIA Airport → Downtown Nassau", "price": 32.0,
+    {"id": "airport-nassau", "name": "LPIA Airport → Downtown Nassau", "price": 40.0,
      "route": "LPIA → Downtown Nassau", "featured": True,
      "description": f"{_TARIFF_NOTE} Meet & greet at arrivals, luggage help, air-conditioned.",
      "image_url": _TAXI_IMG},
