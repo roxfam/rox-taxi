@@ -125,7 +125,7 @@ HOME_SLIDES_SEED: List[Dict[str, Any]] = [
     {"id": "hero-nassau",     "title": "Unlock Nassau.",             "subtitle": "Book a taxi, tour or rental in sixty seconds.",
      "image_url": "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400", "order": 1, "active": True},
     {"id": "hero-atlantis",   "title": "Atlantis, direct.",           "subtitle": "Paradise Island transfers in minutes.",
-     "image_url": "https://images.unsplash.com/photo-1602002418082-a4443e081dd1?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400", "order": 2, "active": True},
+     "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/BHA_Nassau%2C_Paradise_Island%2C_Atlantis_Bridge_001.jpg/1920px-BHA_Nassau%2C_Paradise_Island%2C_Atlantis_Bridge_001.jpg", "order": 2, "active": True},
     {"id": "hero-rose-island","title": "Rose Island reefs.",          "subtitle": "Snorkel gardens twenty minutes off Nassau.",
      "image_url": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400", "order": 3, "active": True},
     {"id": "hero-junkanoo",   "title": "Junkanoo golden hour.",       "subtitle": "Cable Beach, Cabbage Beach, hidden coves — you pick.",
