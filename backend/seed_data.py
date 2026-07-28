@@ -136,7 +136,7 @@ TAXI_SERVICES: List[Dict] = [
      "route": "Nassau → West Bay", "featured": False,
      "description": f"{_TARIFF_NOTE} West-side beach clubs and restaurants beyond Cable Beach.",
      "image_url": _TAXI_IMG},
-    {"id": "adelaide-southwest", "name": "Nassau → Adelaide Village / South West", "price": 50.0,
+    {"id": "adelaide-southwest", "name": "Nassau → Adelaide Village / South West", "price": 60.0,
      "route": "Nassau → Adelaide", "featured": False,
      "description": f"{_TARIFF_NOTE} Long-distance transfer to Adelaide Village and the south-west coast.",
      "image_url": _TAXI_IMG},
