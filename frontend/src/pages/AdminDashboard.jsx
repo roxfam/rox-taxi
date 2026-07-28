@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { api, money } from "../lib/api";
-import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap } from "lucide-react";
+import { api, money, BACKEND_URL } from "../lib/api";
+import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity } from "lucide-react";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -82,6 +82,15 @@ export default function AdminDashboard() {
             </nav>
           </div>
           <div className="flex items-center gap-2">
+            <DeliverabilityBadge />
+            <button
+              onClick={downloadNotificationsCsv}
+              className="text-sm flex items-center gap-2 rounded-md px-3 py-1.5 hover:bg-[#F1F5F9] text-[#0B3B5C]"
+              data-testid="admin-export-notifications-csv"
+              title="Export the last 30 days of notification delivery status as CSV"
+            >
+              <Download className="w-4 h-4" /> Export CSV
+            </button>
             <button onClick={load} className="p-2 rounded-md hover:bg-[#F1F5F9]" data-testid="admin-refresh"><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></button>
             <button onClick={logout} className="text-sm flex items-center gap-2 rounded-md px-3 py-1.5 hover:bg-[#F1F5F9]" data-testid="admin-logout"><LogOut className="w-4 h-4" /> Sign out</button>
           </div>
@@ -383,6 +392,55 @@ function NotifyCell({ booking, onRefresh }) {
     </div>
   );
 }
+
+async function downloadNotificationsCsv() {
+  toast.info("Exporting last 30 days…");
+  try {
+    const token = localStorage.getItem("admin_token");
+    const res = await fetch(`${BACKEND_URL}/api/admin/notifications/report.csv?days=30`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const cd = res.headers.get("Content-Disposition") || "";
+    const nameMatch = cd.match(/filename="([^"]+)"/);
+    const filename = nameMatch ? nameMatch[1] : `rox-notifications-${Date.now()}.csv`;
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Downloaded — check your Downloads folder");
+  } catch (e) {
+    toast.error(`Export failed: ${e.message || e}`);
+  }
+}
+
+function DeliverabilityBadge() {
+  const [stats, setStats] = useState(null);
+  useEffect(() => {
+    api.get("/admin/notifications/summary?days=30")
+      .then((r) => setStats(r.data))
+      .catch(() => setStats(null));
+  }, []);
+  if (!stats) return null;
+  const emailRate = stats.email_success_rate;
+  const smsRate = stats.sms_success_rate;
+  const worst = Math.min(emailRate, smsRate);
+  const tint = worst >= 95 ? "text-[#059669] bg-[#059669]/10" : worst >= 80 ? "text-[#D4A94A] bg-[#D4A94A]/10" : "text-[#E86A3C] bg-[#E86A3C]/10";
+  return (
+    <div
+      className={`hidden md:inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold ${tint}`}
+      title={`Last 30 days: ${stats.email_sent}/${stats.email_sent + stats.email_failed} email · ${stats.sms_sent}/${stats.sms_sent + stats.sms_failed} SMS`}
+      data-testid="deliverability-badge"
+    >
+      <Activity className="w-3 h-3" />
+      <span>{emailRate}% email · {smsRate}% SMS</span>
+    </div>
+  );
+}
+
 
 function DepositActionModal({ booking, action, onClose, onDone }) {
   const [reason, setReason] = useState("");

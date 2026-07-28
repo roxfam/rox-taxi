@@ -89,9 +89,9 @@ TAXI_SERVICES: List[Dict] = [
 
 RENTALS_SEED: List[Dict] = [
     {"id": "spark-compact", "name": "2019 Chevrolet Spark — Compact", "price": 45.0, "seats": 4,
-     "year": 2019, "make": "Chevrolet", "model": "Spark", "color": "Silver", "body": "Compact",
+     "year": 2019, "make": "Chevrolet", "model": "Spark", "color": "White", "body": "Compact",
      "description": "Zippy little compact — perfect for solo travelers and couples buzzing around Nassau. AC, automatic, unlimited miles. Free delivery to LPIA or your hotel.",
-     "image_url": "https://images.unsplash.com/photo-1580273916550-e323be2ae537?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/iyv8ywh8_spark.webp",
      "category": "compact", "active": True},
     {"id": "sentra-orange", "name": "2001 Nissan Sentra — Orange Sedan", "price": 39.0, "seats": 5,
      "year": 2001, "make": "Nissan", "model": "Sentra", "color": "Orange", "body": "Sedan",

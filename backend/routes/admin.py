@@ -10,7 +10,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 
@@ -277,6 +277,104 @@ async def admin_delete_contact_message(msg_id: str, _: str = Depends(_admin_dep)
     if res.deleted_count == 0:
         raise HTTPException(404, "Message not found")
     return {"deleted": True, "id": msg_id.upper()}
+
+
+# ---- Admin: notification delivery report (CSV export) ---------------------
+
+@router.get("/admin/notifications/report.csv")
+async def admin_notifications_report(
+    days: int = 30,
+    _: str = Depends(_admin_dep),
+):
+    """Stream a CSV of every booking's notification delivery status.
+
+    Query param `days` filters to bookings created in the last N days (default 30).
+    Columns: booking_id, customer_name, customer_email, customer_phone,
+    booking_service, booking_date, booking_total, payment_method, payment_status,
+    booking_status, created_at, notified_at, email_enabled, email_sent,
+    email_provider, email_error, sms_enabled, sms_sent, sms_provider, sms_error.
+    """
+    import csv, io
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 365)))).isoformat()
+    cursor = _db.bookings.find({"created_at": {"$gte": cutoff}}).sort("created_at", -1)
+    docs = await cursor.to_list(5000)
+
+    def rows():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        header = [
+            "booking_id", "customer_name", "customer_email", "customer_phone",
+            "booking_service", "booking_date", "booking_total",
+            "payment_method", "payment_status", "booking_status",
+            "created_at", "notified_at",
+            "email_enabled", "email_sent", "email_provider", "email_error",
+            "sms_enabled", "sms_sent", "sms_provider", "sms_error",
+        ]
+        writer.writerow(header)
+        yield buf.getvalue()
+        buf.seek(0); buf.truncate(0)
+
+        for d in docs:
+            ns = d.get("notification_status") or {}
+            em = ns.get("email") or {}
+            sm = ns.get("sms") or {}
+            writer.writerow([
+                d.get("id", ""),
+                d.get("customer_name", ""),
+                d.get("customer_email", ""),
+                d.get("customer_phone", ""),
+                d.get("item_name", ""),
+                d.get("booking_date", ""),
+                d.get("total", ""),
+                d.get("payment_method", ""),
+                d.get("payment_status", ""),
+                d.get("status", ""),
+                d.get("created_at", ""),
+                d.get("notified_at", ""),
+                em.get("enabled", ""),
+                em.get("sent", ""),
+                em.get("provider", ""),
+                em.get("error", ""),
+                sm.get("enabled", ""),
+                sm.get("sent", ""),
+                sm.get("provider", ""),
+                sm.get("error", ""),
+            ])
+            yield buf.getvalue()
+            buf.seek(0); buf.truncate(0)
+
+    filename = f"rox-notifications-{days}d-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}.csv"
+    return StreamingResponse(
+        rows(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/admin/notifications/summary")
+async def admin_notifications_summary(days: int = 30, _: str = Depends(_admin_dep)):
+    """Rolling stats — used by the admin dashboard 'Deliverability' widget."""
+    from datetime import datetime, timedelta, timezone
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 365)))).isoformat()
+    docs = await _db.bookings.find({"created_at": {"$gte": cutoff}, "notification_status": {"$exists": True}}).to_list(5000)
+
+    total = len(docs)
+    email_sent = sum(1 for d in docs if (d.get("notification_status") or {}).get("email", {}).get("sent"))
+    email_failed = sum(1 for d in docs if not (d.get("notification_status") or {}).get("email", {}).get("sent") and (d.get("notification_status") or {}).get("email", {}).get("enabled"))
+    sms_sent = sum(1 for d in docs if (d.get("notification_status") or {}).get("sms", {}).get("sent"))
+    sms_failed = sum(1 for d in docs if not (d.get("notification_status") or {}).get("sms", {}).get("sent") and (d.get("notification_status") or {}).get("sms", {}).get("enabled"))
+    return {
+        "days": days,
+        "bookings_with_notifications": total,
+        "email_sent": email_sent,
+        "email_failed": email_failed,
+        "sms_sent": sms_sent,
+        "sms_failed": sms_failed,
+        "email_success_rate": round(100 * email_sent / max(1, email_sent + email_failed), 1),
+        "sms_success_rate": round(100 * sms_sent / max(1, sms_sent + sms_failed), 1),
+    }
 
 
 # ============================================================================
