@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle } from "lucide-react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { api, money } from "../lib/api";
+import { DateTimePicker } from "../components/DateTimePicker";
 
 function isClosedDate(dateStr, days = 1) {
   if (!dateStr) return false;
@@ -151,7 +152,18 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 <Field label="Full name *" val={form.customer_name} on={setF("customer_name")} testid="booking-name" />
                 <Field label="Email *" type="email" val={form.customer_email} on={setF("customer_email")} testid="booking-email" />
                 <Field label="Phone *" val={form.customer_phone} on={setF("customer_phone")} testid="booking-phone" />
-                <Field label={serviceType === "rental" ? "Pickup date *" : "Date & time *"} type={serviceType === "rental" ? "date" : "datetime-local"} val={form.booking_date} on={setF("booking_date")} testid="booking-date" />
+                <div>
+                  <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">
+                    {serviceType === "rental" ? "Pickup date *" : "Date & time *"}
+                  </label>
+                  <DateTimePicker
+                    value={form.booking_date}
+                    onChange={(v) => setForm({ ...form, booking_date: v })}
+                    includeTime={serviceType !== "rental"}
+                    testid="booking-date"
+                    placeholder={serviceType === "rental" ? "Select pickup date" : "Select date & time"}
+                  />
+                </div>
                 <div className="sm:col-span-2">
                   <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">Passengers *</label>
                   <div className="flex items-center gap-2">

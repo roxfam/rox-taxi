@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 8: Ran regression + P1 automation for the seed_data.py/pdf_utils.py refactor, resend-notification force flag, and the DateTimePicker replacement. Backend: 9/9 pytest cases pass (catalog counts 4/14/5, receipt.pdf + wedding quote.pdf return valid PDFs, POST /api/bookings now includes notified_at, resend-notification respects toggles by default and force:true bypasses them). Frontend: DateTimePicker replaces the old datetime-local input on both /taxi (with time) and /rentals (without time); popover opens with the correct testid; time-input update path completes a Zelle booking end-to-end and POST /api/bookings returns booking_date in YYYY-MM-DDTHH:mm format. CRITICAL UI BUG: clicking a day inside the calendar popover does NOT populate the trigger — the popover renders behind the booking modal because PopoverContent uses z-50 while the modal overlay uses z-[100]. Time input still works because handleTime falls back to `new Date()` as its base.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "DateTimePicker (BookingFlow modal)",
+        "issue": "Clicking a day in the calendar popover does not update the trigger label / booking_date. Root cause: PopoverContent inherits z-50 from /components/ui/popover.jsx (line 19) while the booking modal container uses z-[100] (BookingFlow.jsx line 137). The popover portal renders behind the modal overlay, so pointer events hit the modal backdrop first. This means the user only sees the popover if it visually pokes outside the modal, and mouse clicks on days never reach the day buttons. In our run the popover's day at (1056, 721) received the click but state did not update because the modal overlay intercepted it. Fix: raise the popover z-index above 100 — e.g. pass className='z-[110]' to the PopoverContent inside DateTimePicker.jsx, or make the popover z-[200].",
+        "selector": "[data-testid=\"booking-date-popover\"] button[name=\"day\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Booking modal (taxi + rentals)",
+        "issues": [
+          "Because the calendar popover renders behind the modal overlay (z-index issue above), users effectively cannot pick a date via the calendar UI — they can only change the time, which relies on today's date as a fallback. That defeats the whole point of the DateTimePicker replacement."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration8.py",
+    "/app/test_reports/pytest/iteration8.xml"
+  ],
+  "action_items": [
+    "HIGH: Fix popover z-index inside DateTimePicker. Simplest fix — in /app/frontend/src/components/DateTimePicker.jsx line ~72 change <PopoverContent className=\"w-auto p-0 ...\" ...> to include z-[110] (or higher than the modal's z-[100]). Alternatively bump the default z-50 in /app/frontend/src/components/ui/popover.jsx to z-[60] and lower the booking modal's z-[100] to z-40. After the fix, re-run: open booking modal → click booking-date-trigger → click a future day → confirm trigger label updates to something like 'Fri, Apr 3 2026 · 10:00 AM'."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1360 lines (down from 1677). Router extraction was clean — imports of build_wedding_pdf, build_receipt_pdf, TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS all resolve at boot and endpoints still respond correctly.",
+    "DateTimePicker.handleTime uses `dateOnly || new Date()` — subtle side effect: if the user only interacts with the time input (never opens the calendar), the booking_date silently uses today's date. That's fine functionally but combined with the z-index bug above it hides the fact that the calendar UI is broken.",
+    "PopoverContent default z-50 in /components/ui/popover.jsx conflicts with the app's fixed modal z-[100]. Recommend standardizing z-index scale (modal 100, popover 110, tooltip 120)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration8.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "50% — DateTimePicker present + rentals variant + time-input fallback all pass, but calendar click is unusable"},
+  "test_credentials": "admin@roxtaxi.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created 2 zelle test bookings (TEST_Iter8 Receipt, TEST_Iter8 Resend) against airport-nassau ($35 taxi) plus 1 UI-created booking (TEST_Iter8 UI) via the taxi Atlantis card. Also created 1 wedding group inquiry (TEST_Iter8 Wedding) for the quote.pdf regression. All prefixed with TEST_ for cleanup.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend fully green — no need to re-run test_iteration8.py after the z-index fix unless BookingFlow.jsx or the notify pipeline change again. For the UI retest, only need to: (1) open /taxi, click Atlantis card, click booking-date-trigger, click a day in the next month, verify trigger label updates and booking_date submits in YYYY-MM-DDTHH:mm; (2) same on /rentals but without time input. Note: current preview environment date is July 28 2026 (not Jan 2026 as review said) so the popover opens on July 2026 — most July days are already disabled 'before today'; test needs to navigate to next month via button[name='next-month'] first.",
+  "rca of the issue": "PopoverContent (/app/frontend/src/components/ui/popover.jsx line 19) applies Tailwind class 'z-50'. BookingFlow.jsx (line 137) applies 'z-[100]' to the modal container. Radix Popover renders its content into a portal appended to document.body — CSS z-index still applies. Since 50 < 100, the popover is rendered visually behind the modal's semi-transparent backdrop and, more critically, mouse events for the region behind the modal are absorbed by the modal's overlay element (which is a full-viewport fixed div). Users see the popover 'sort of visible' (because the modal backdrop is only 70% opaque) but cannot interact with day buttons. Fix: bump the PopoverContent's z-index above 100 in DateTimePicker — pass className=\"w-auto p-0 z-[110] bg-white border ...\" on line 72 of DateTimePicker.jsx. That alone will resolve both the visibility + click-through issue."
+}

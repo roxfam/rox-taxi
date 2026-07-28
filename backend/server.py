@@ -20,6 +20,8 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, Strea
 from fastapi.responses import StreamingResponse
 from notifications import notify_booking_confirmed
 import paypal_client
+from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS
+from pdf_utils import build_wedding_pdf, build_receipt_pdf
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -339,118 +341,7 @@ async def my_bookings(user: dict = Depends(get_current_user)):
 
 
 # ---------------- Seed content (Nassau / Paradise Island focus) ----------------
-
-TOURS_SEED = [
-    {"id": "blue-lagoon", "name": "Blue Lagoon Island Beach Day", "price": 89.0, "duration": "6 hours",
-     "location": "Departs Nassau Harbour", "featured": True,
-     "description": "A quick ferry from Nassau lands you on a private-feel island — hammocks, kayaks, snorkeling and a rum punch bar.",
-     "image_url": "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwyfHxiYWhhbWFzJTIwYmVhY2glMjBjbGVhciUyMHdhdGVyfGVufDB8fHx8MTc4NTA2MjgxMXww&ixlib=rb-4.1.0&q=85",
-     "category": "excursion", "active": True},
-    {"id": "atlantis-tour", "name": "Paradise Island & Atlantis City Tour", "price": 45.0, "duration": "3 hours",
-     "location": "Paradise Island", "featured": True,
-     "description": "Guided city tour ending at Atlantis Resort with photo stops at Fort Fincastle, Queen's Staircase and the Cloisters.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
-     "category": "tour", "active": True},
-    {"id": "snorkel-rose", "name": "Rose Island Reef Snorkeling", "price": 65.0, "duration": "4 hours",
-     "location": "Departs Paradise Island", "featured": True,
-     "description": "Just off Paradise Island — vibrant reef gardens, sea turtles and rum punch on the ride back.",
-     "image_url": "https://images.unsplash.com/photo-1680635601834-581581c6cdfa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwyfHxzbm9ya2VsaW5nJTIwYmFoYW1hcyUyMGNsZWFyJTIwd2F0ZXJ8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
-     "category": "excursion", "active": True},
-    {"id": "island-hop", "name": "Three-Island Boat Hopping (from Nassau)", "price": 149.0, "duration": "7 hours",
-     "location": "Departs Nassau", "featured": False,
-     "description": "Cruise Nassau's out-islands with beach stops, lunch, and unlimited drinks.",
-     "image_url": "https://images.pexels.com/photos/4166305/pexels-photo-4166305.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-     "category": "excursion", "active": True},
-]
-
-TAXI_SERVICES = [
-    {"id": "airport-nassau", "name": "LPIA Airport → Downtown Nassau / Cable Beach", "price": 35.0,
-     "route": "LPIA → Nassau", "featured": True,
-     "description": "Flat rate per taxi, up to 3 passengers. Meet & greet at arrivals, luggage help, air-conditioned.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
-    {"id": "airport-paradise", "name": "LPIA Airport → Paradise Island / Atlantis / Baha Mar", "price": 45.0,
-     "route": "LPIA → Paradise Island", "featured": True,
-     "description": "Flat rate per taxi, up to 3 passengers. Paradise Island bridge toll included.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
-    {"id": "port-paradise", "name": "Cruise Port (Prince George Wharf) → Paradise Island", "price": 25.0,
-     "route": "Cruise Port → Paradise Island", "featured": True,
-     "description": "Straight from the ship to your Paradise Island resort. Bridge toll included.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
-    {"id": "paradise-nassau", "name": "Paradise Island ↔ Downtown Nassau Shuttle", "price": 20.0,
-     "route": "Paradise Island ↔ Nassau", "featured": True,
-     "description": "Bay Street shopping, Fish Fry dinner, downtown nightlife — cross the bridge with ease.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
-    {"id": "hourly-charter", "name": "Nassau / Paradise Island Hourly Charter", "price": 55.0,
-     "route": "By the hour", "featured": False,
-     "description": "Private driver by the hour, 2-hour minimum. Perfect for shopping, sightseeing, or errands.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
-    {"id": "van-group", "name": "Group Van Transfer (up to 8 pax) — Nassau + Paradise Island", "price": 90.0,
-     "route": "Anywhere on Nassau / PI", "featured": False,
-     "description": "Weddings, families, cruise groups. Airport, hotel, cruise port pickups & drop-offs.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85"},
-    {"id": "airport-bahamar", "name": "LPIA Airport → Baha Mar / SLS / Grand Hyatt", "price": 35.0,
-     "route": "LPIA → Baha Mar", "featured": True,
-     "description": "Fixed rate to the Baha Mar resort complex on Cable Beach. Up to 3 passengers.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
-    {"id": "cablebeach-downtown", "name": "Cable Beach ↔ Downtown Nassau (Bay Street)", "price": 18.0,
-     "route": "Cable Beach ↔ Downtown", "featured": False,
-     "description": "Quick hop between Cable Beach hotels and Bay Street shopping / straw market. Nassau tariff.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
-    {"id": "downtown-paradise", "name": "Downtown Nassau → Paradise Island (via bridge)", "price": 12.0,
-     "route": "Downtown → Paradise Island", "featured": False,
-     "description": "Includes $1 Paradise Island bridge toll. Standard Nassau tariff for up to 2 passengers.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
-    {"id": "cablebeach-atlantis", "name": "Cable Beach ↔ Atlantis / Paradise Island", "price": 30.0,
-     "route": "Cable Beach ↔ Atlantis", "featured": False,
-     "description": "Cross-island transfer including bridge toll. Popular for dinner + casino runs.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
-    {"id": "fish-fry-shuttle", "name": "Hotel → Arawak Cay Fish Fry (evening)", "price": 15.0,
-     "route": "Any Nassau hotel → Fish Fry", "featured": False,
-     "description": "One-way evening ride to Nassau's iconic Fish Fry food strip. Return quote on request.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
-    {"id": "compass-point", "name": "Nassau → Compass Point / West Bay Street", "price": 25.0,
-     "route": "Nassau → West Bay", "featured": False,
-     "description": "West-side beach clubs and restaurants beyond Cable Beach. Fixed one-way rate.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
-    {"id": "adelaide-southwest", "name": "Nassau → Adelaide Village / South West", "price": 50.0,
-     "route": "Nassau → Adelaide", "featured": False,
-     "description": "Long-distance transfer to Adelaide Village and the south-west coast. Per Nassau tariff.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
-    {"id": "blue-hole-roundtrip", "name": "Nassau → Blue Hole / Lyford Cay (round trip)", "price": 80.0,
-     "route": "Nassau ↔ Lyford Cay", "featured": False,
-     "description": "Round-trip driver waits up to 90 min. Great for beach picnics or Lyford visits.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"},
-]
-
-RENTALS_SEED = [
-    {"id": "spark-compact", "name": "2019 Chevrolet Spark — Compact", "price": 45.0, "seats": 4,
-     "year": 2019, "make": "Chevrolet", "model": "Spark", "color": "Silver", "body": "Compact",
-     "description": "Zippy little compact — perfect for solo travelers and couples buzzing around Nassau. AC, automatic, unlimited miles. Free delivery to LPIA or your hotel.",
-     "image_url": "https://images.unsplash.com/photo-1580273916550-e323be2ae537?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
-     "category": "compact", "active": True},
-    {"id": "sentra-orange", "name": "2001 Nissan Sentra — Orange Sedan", "price": 39.0, "seats": 5,
-     "year": 2001, "make": "Nissan", "model": "Sentra", "color": "Orange", "body": "Sedan",
-     "description": "Old but reliable island cruiser — the ultimate budget rental. Bright orange, hard to lose in a parking lot. Free Nassau delivery.",
-     "image_url": "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
-     "category": "economy", "active": True},
-    {"id": "malibu-fullsize", "name": "2019 Chevrolet Malibu — Full-Size Sedan (White)", "price": 79.0, "seats": 5,
-     "year": 2019, "make": "Chevrolet", "model": "Malibu", "color": "White", "body": "Full-size Sedan",
-     "description": "Spacious full-size sedan for comfort on longer Bahamas drives. Bluetooth, backup camera, roomy trunk.",
-     "image_url": "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
-     "category": "full-size", "active": True},
-    {"id": "trax-suv", "name": "2025 Chevrolet Trax — SUV (White)", "price": 119.0, "seats": 5,
-     "year": 2025, "make": "Chevrolet", "model": "Trax", "color": "White", "body": "SUV",
-     "description": "Brand-new 2025 SUV with clearance for out-of-town beach runs and cargo for the whole crew. Apple CarPlay, backup cam, roof rack.",
-     "image_url": "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
-     "category": "suv", "active": True},
-    {"id": "town-country-van", "name": "2022 Chrysler Town & Country — Mini-Van (White)", "price": 149.0, "seats": 7,
-     "year": 2022, "make": "Chrysler", "model": "Town & Country", "color": "White", "body": "Mini-Van",
-     "description": "Family & group hauler — 7 seats, sliding doors, panoramic space. Perfect for cruise-port pickups and family beach days.",
-     "image_url": "https://images.unsplash.com/photo-1609521263047-f8f205293f24?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
-     "category": "mini-van", "active": True},
-]
-
-CURRENT_RENTAL_IDS = {r["id"] for r in RENTALS_SEED}
+# Catalog seed data lives in seed_data.py to keep this file lean.
 
 
 @app.on_event("startup")
@@ -907,124 +798,7 @@ async def admin_update_group_status(inquiry_id: str, req: GroupInquiryStatusUpda
 
 
 # ---- Wedding package PDF ----
-
-def _build_wedding_pdf(inquiry: dict) -> bytes:
-    from io import BytesIO
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
-    from reportlab.lib import colors
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak,
-    )
-
-    NAVY = colors.HexColor("#0B3B5C")
-    GOLD = colors.HexColor("#D4A94A")
-    CORAL = colors.HexColor("#E86A3C")
-    GREY = colors.HexColor("#64748B")
-    SAND = colors.HexColor("#FBF7EF")
-
-    buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=0.75 * inch, rightMargin=0.75 * inch, topMargin=0.75 * inch, bottomMargin=0.75 * inch)
-    styles = getSampleStyleSheet()
-    title = ParagraphStyle("title", parent=styles["Title"], fontName="Times-Italic", fontSize=32, textColor=NAVY, spaceAfter=6, leading=34)
-    sub = ParagraphStyle("sub", parent=styles["Normal"], fontName="Helvetica", fontSize=9, textColor=GREY, spaceAfter=18, letterSpacing=1)
-    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontName="Times-Italic", fontSize=18, textColor=NAVY, spaceBefore=10, spaceAfter=8)
-    p = ParagraphStyle("p", parent=styles["Normal"], fontName="Helvetica", fontSize=10, textColor=colors.HexColor("#0B192C"), leading=14, spaceAfter=6)
-    small = ParagraphStyle("small", parent=styles["Normal"], fontName="Helvetica", fontSize=8, textColor=GREY, leading=11)
-
-    story = []
-
-    # Header
-    story.append(Paragraph("ROX TAXI SERVICE AND TOURS", sub))
-    story.append(Paragraph(f"Wedding Package for <font color='#D4A94A'><i>{inquiry.get('customer_name','the happy couple')}</i></font>", title))
-    story.append(Paragraph(f"REFERENCE {inquiry['id']} · EVENT DATE {inquiry.get('event_date','')} · {inquiry.get('guest_count',0)} GUESTS", sub))
-
-    # Line items
-    lines = []
-    pkg = inquiry.get("package") or {}
-    for tid, count in (pkg.get("transport") or {}).items():
-        if not count:
-            continue
-        s = await_none = None
-    # (services fetched below asynchronously — handled by caller)
-
-    # We render item rows using stored labels via callback in the endpoint
-    for row in inquiry.get("_pdf_rows", []):
-        lines.append(row)
-
-    if lines:
-        story.append(Paragraph("Your package", h2))
-        tbl = Table([["Item", "Amount"]] + lines, colWidths=[4.5 * inch, 1.5 * inch], hAlign="LEFT")
-        tbl.setStyle(TableStyle([
-            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-            ("FONTSIZE", (0,0), (-1,-1), 9),
-            ("TEXTCOLOR", (0,0), (-1,0), NAVY),
-            ("BACKGROUND", (0,0), (-1,0), SAND),
-            ("LINEBELOW", (0,0), (-1,0), 0.5, NAVY),
-            ("LINEBELOW", (0,-1), (-1,-1), 0.5, GREY),
-            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, SAND]),
-            ("ALIGN", (1,0), (1,-1), "RIGHT"),
-            ("FONTNAME", (1,1), (1,-1), "Courier"),
-            ("TEXTCOLOR", (1,1), (1,-1), NAVY),
-            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("LEFTPADDING", (0,0), (-1,-1), 10),
-            ("RIGHTPADDING", (0,0), (-1,-1), 10),
-            ("TOPPADDING", (0,0), (-1,-1), 8),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 8),
-        ]))
-        story.append(tbl)
-        story.append(Spacer(1, 12))
-
-    # Totals
-    subtotal = float(inquiry.get("_subtotal", 0))
-    disc_pct = float(inquiry.get("_disc_pct", 0))
-    discount = subtotal * disc_pct
-    total = float(inquiry.get("estimated_total") or (subtotal - discount))
-
-    totals_rows = [
-        ["Subtotal", f"${subtotal:,.2f}"],
-    ]
-    if disc_pct:
-        totals_rows.append([f"Group discount ({int(disc_pct*100)}%)", f"-${discount:,.2f}"])
-    totals_rows.append(["Estimated total", f"${total:,.2f}"])
-
-    tot = Table(totals_rows, colWidths=[4.5 * inch, 1.5 * inch], hAlign="LEFT")
-    tot.setStyle(TableStyle([
-        ("FONTSIZE", (0,0), (-1,-1), 10),
-        ("FONTNAME", (0,-1), (-1,-1), "Times-Bold"),
-        ("FONTSIZE", (0,-1), (-1,-1), 14),
-        ("TEXTCOLOR", (0,-1), (-1,-1), CORAL),
-        ("ALIGN", (1,0), (1,-1), "RIGHT"),
-        ("LINEABOVE", (0,-1), (-1,-1), 0.5, NAVY),
-        ("TOPPADDING", (0,0), (-1,-1), 6),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-    ]))
-    story.append(tot)
-
-    story.append(Spacer(1, 24))
-    story.append(Paragraph("What happens next", h2))
-    story.append(Paragraph(
-        "Our concierge will confirm final pricing within <b>2 hours</b> during business hours. Once you approve, "
-        "we send a Stripe / PayPal / Zelle link and lock in your date. Cancellations at least 48 hours before the "
-        "service are refundable minus a 15% fee.",
-        p,
-    ))
-
-    if inquiry.get("notes"):
-        story.append(Spacer(1, 6))
-        story.append(Paragraph("Your notes", h2))
-        story.append(Paragraph(inquiry["notes"].replace("\n", "<br/>"), p))
-
-    story.append(Spacer(1, 30))
-    story.append(Paragraph(
-        "Rox Taxi Service and Tours · Nassau, New Providence · The Bahamas<br/>"
-        "hello@roxtaxi.com · facebook.com/roxtaxiservice · Estimate valid 30 days from date of issue.",
-        small,
-    ))
-
-    doc.build(story)
-    return buf.getvalue()
+# PDF builder lives in pdf_utils.py; endpoint below assembles the line items.
 
 
 @api_router.get("/wedding-package/{inquiry_id}/quote.pdf")
@@ -1072,7 +846,7 @@ async def wedding_quote_pdf(inquiry_id: str):
     doc["_subtotal"] = subtotal
     doc["_disc_pct"] = disc_pct
 
-    pdf_bytes = _build_wedding_pdf(doc)
+    pdf_bytes = build_wedding_pdf(doc)
     filename = f"Rox-Wedding-Quote-{doc['id']}.pdf"
     return Response(
         content=pdf_bytes, media_type="application/pdf",
@@ -1081,107 +855,8 @@ async def wedding_quote_pdf(inquiry_id: str):
 
 
 def _build_receipt_pdf(booking: dict) -> bytes:
-    from io import BytesIO
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
-    from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-
-    NAVY = colors.HexColor("#0B3B5C"); GOLD = colors.HexColor("#D4A94A")
-    CORAL = colors.HexColor("#E86A3C"); GREY = colors.HexColor("#64748B")
-    SAND = colors.HexColor("#FBF7EF")
-
-    buf = BytesIO()
-    doc_pdf = SimpleDocTemplate(buf, pagesize=letter, leftMargin=0.75*inch, rightMargin=0.75*inch, topMargin=0.75*inch, bottomMargin=0.75*inch)
-    styles = getSampleStyleSheet()
-    title = ParagraphStyle("t", parent=styles["Title"], fontName="Times-Italic", fontSize=30, textColor=NAVY, spaceAfter=6, leading=32)
-    sub = ParagraphStyle("s", parent=styles["Normal"], fontName="Helvetica", fontSize=9, textColor=GREY, spaceAfter=18)
-    h2 = ParagraphStyle("h", parent=styles["Heading2"], fontName="Times-Italic", fontSize=16, textColor=NAVY, spaceBefore=8, spaceAfter=6)
-    p = ParagraphStyle("p", parent=styles["Normal"], fontName="Helvetica", fontSize=10, textColor=colors.HexColor("#0B192C"), leading=14, spaceAfter=6)
-    small = ParagraphStyle("sm", parent=styles["Normal"], fontName="Helvetica", fontSize=8, textColor=GREY, leading=11)
-
-    story = []
-    story.append(Paragraph("ROX TAXI SERVICE AND TOURS", sub))
-    story.append(Paragraph(f"Booking receipt for <font color='#D4A94A'><i>{booking.get('customer_name','')}</i></font>", title))
-    paid = booking.get("payment_status") == "paid"
-    status_label = "PAID" if paid else "PENDING PAYMENT"
-    story.append(Paragraph(f"REFERENCE {booking['id']} · {status_label} · ISSUED {now_iso()[:10]}", sub))
-
-    # Details table
-    rows = [["Service", booking.get("item_name", "-")]]
-    rows.append(["Date", str(booking.get("booking_date", ""))])
-    if booking.get("pickup_location"):
-        rows.append(["Pickup", booking["pickup_location"]])
-    if booking.get("dropoff_location"):
-        rows.append(["Dropoff", booking["dropoff_location"]])
-    rows.append(["Passengers", str(booking.get("passengers", 1))])
-    if booking.get("service_type") == "rental":
-        rows.append(["Days", str(booking.get("days", 1))])
-    rows.append(["Payment method", str(booking.get("payment_method", "-")).title()])
-
-    story.append(Paragraph("Details", h2))
-    dtl = Table(rows, colWidths=[1.7*inch, 4.3*inch], hAlign="LEFT")
-    dtl.setStyle(TableStyle([
-        ("FONTSIZE", (0,0), (-1,-1), 9),
-        ("FONTNAME", (0,0), (0,-1), "Helvetica-Bold"),
-        ("TEXTCOLOR", (0,0), (0,-1), GREY),
-        ("ROWBACKGROUNDS", (0,0), (-1,-1), [colors.white, SAND]),
-        ("LEFTPADDING", (0,0), (-1,-1), 10),
-        ("RIGHTPADDING", (0,0), (-1,-1), 10),
-        ("TOPPADDING", (0,0), (-1,-1), 6),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-    ]))
-    story.append(dtl)
-    story.append(Spacer(1, 14))
-
-    # Amount breakdown
-    base = float(booking.get("price", 0)) * max(1, int(booking.get("days", 1)))
-    lug = float(booking.get("luggage_fee", 0))
-    pax = float(booking.get("passenger_fee", 0))
-    total = float(booking.get("total", base + lug + pax))
-    amt_rows = [["Base fare" if booking.get("service_type") != "rental" else f"Rental × {booking.get('days',1)} day(s)", f"${base:,.2f}"]]
-    if lug: amt_rows.append([f"Extra luggage ({booking.get('extra_luggage',0)} × $3)", f"${lug:,.2f}"])
-    if pax: amt_rows.append(["Group fee (3+ passengers)", f"${pax:,.2f}"])
-    amt_rows.append(["Total", f"${total:,.2f}"])
-
-    tot = Table(amt_rows, colWidths=[4.5*inch, 1.5*inch], hAlign="LEFT")
-    tot.setStyle(TableStyle([
-        ("FONTSIZE", (0,0), (-1,-1), 10),
-        ("FONTNAME", (0,-1), (-1,-1), "Times-Bold"),
-        ("FONTSIZE", (0,-1), (-1,-1), 14),
-        ("TEXTCOLOR", (0,-1), (-1,-1), CORAL if paid else NAVY),
-        ("ALIGN", (1,0), (1,-1), "RIGHT"),
-        ("FONTNAME", (1,0), (1,-2), "Courier"),
-        ("LINEABOVE", (0,-1), (-1,-1), 0.5, NAVY),
-        ("TOPPADDING", (0,0), (-1,-1), 6),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-    ]))
-    story.append(tot)
-
-    if paid:
-        story.append(Spacer(1, 12))
-        story.append(Paragraph("<font color='#D4A94A'><b>PAID IN FULL</b></font> — thank you for choosing Rox.", p))
-    else:
-        story.append(Spacer(1, 12))
-        story.append(Paragraph("<b>Payment pending.</b> Complete payment via the link in your confirmation email or contact us on WhatsApp.", p))
-
-    story.append(Spacer(1, 18))
-    story.append(Paragraph("Cancellation policy", h2))
-    story.append(Paragraph(
-        "Cancel 48+ hours before service to receive a refund minus a 15% cancellation fee. Cancellations within 48 hours are non-refundable.",
-        p,
-    ))
-
-    story.append(Spacer(1, 24))
-    story.append(Paragraph(
-        "Rox Taxi Service and Tours · Nassau, New Providence · The Bahamas<br/>"
-        "hello@roxtaxi.com · facebook.com/roxtaxiservice · Keep this receipt for your records.",
-        small,
-    ))
-
-    doc_pdf.build(story)
-    return buf.getvalue()
+    """Thin wrapper for backwards-compat callers; forwards to pdf_utils."""
+    return build_receipt_pdf(booking)
 
 
 @api_router.get("/bookings/{booking_id}/receipt.pdf")
@@ -1190,7 +865,7 @@ async def booking_receipt_pdf(booking_id: str):
     booking = await db.bookings.find_one({"id": booking_id.upper()})
     if not booking:
         raise HTTPException(404, "Booking not found")
-    pdf_bytes = _build_receipt_pdf(booking)
+    pdf_bytes = build_receipt_pdf(booking)
     filename = f"Rox-Receipt-{booking['id']}.pdf"
     return Response(
         content=pdf_bytes, media_type="application/pdf",
@@ -1296,22 +971,31 @@ async def admin_update_site(req: SiteConfigUpdate, _: str = Depends(require_admi
 
 
 @api_router.post("/admin/bookings/{booking_id}/resend-notification")
-async def admin_resend_notification(booking_id: str, _: str = Depends(require_admin)):
-    """Manually re-send the booking-confirmation email + SMS and update the stored report."""
+async def admin_resend_notification(booking_id: str, body: Optional[Dict[str, Any]] = None, _: str = Depends(require_admin)):
+    """Manually re-send the booking-confirmation email + SMS and update the stored report.
+
+    Body: `{ "force": bool }` — when true, bypasses the admin's notify_email_enabled/notify_sms_enabled
+    site-config toggles so the message goes out even if notifications are globally muted.
+    """
     booking = await db.bookings.find_one({"id": booking_id.upper()})
     if not booking:
         raise HTTPException(404, "Booking not found")
-    prefs = await db.site_config.find_one({"_id": "main"}) or {}
+    force = bool((body or {}).get("force"))
+    if force:
+        prefs = {"notify_email_enabled": True, "notify_sms_enabled": True}
+    else:
+        prefs = await db.site_config.find_one({"_id": "main"}) or {}
     try:
         report = notify_booking_confirmed(clean(dict(booking)), prefs)
     except Exception as e:  # noqa: BLE001
         logging.warning("resend notify err: %s", e)
         raise HTTPException(500, f"Notification error: {e}") from e
+    notified_at = now_iso()
     await db.bookings.update_one(
         {"id": booking["id"]},
-        {"$set": {"notification_status": report, "notified_at": now_iso()}},
+        {"$set": {"notification_status": report, "notified_at": notified_at}},
     )
-    return {"booking_id": booking["id"], "notification_status": report}
+    return {"booking_id": booking["id"], "notification_status": report, "notified_at": notified_at, "forced": force}
 
 
 # ---------------- Payments ----------------
