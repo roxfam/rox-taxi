@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 14 — Backend + Frontend E2E for (1) Home hero carousel + admin CRUD, (2) external_booking_url on tours, (3) CatalogPanel race regression. Backend: 8/8 pytest passing (public /home-slides sorted, admin list/create/update/delete, route-shadow check, tour external_booking_url PUT persist + public expose). Frontend E2E: hero carousel works (7 dots, prev/next changes background, title suffix 'On your terms.' always present, subtitle mirrors slide), /tours external link renders only when set (href=https://www.bluelagoonisland.com/, target=_blank, rel=noopener noreferrer), /admin/manage 'Home Slides' tab renders panel with 7 slides + Add + up/down chevrons + edit/delete controls, CatalogPanel race fix confirmed (rapid /admin/manage → Rentals no longer shows tours items), /rentals still renders (promo strike regression path OK). One HIGH frontend gap: the EditModal.jsx form does NOT render an input for external_booking_url — the state field + payload wiring exist (lines 29 & 63), but no <F l=... testid='edit-external-url' /> element is present in the JSX between lines 100-107, so admins have no UI to set the URL. Reproducible: /admin/manage → Tours → Edit any tour → modal has Name/Description/Price/Category/Duration/Location/ImageURL/Active/Featured but NO 'Official booking URL' field.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "EditModal (admin/manage → Tours → Edit)",
+        "issue": "Missing UI input for 'Official booking URL'. State (form.external_booking_url) and save payload wiring exist, but no <F> field is rendered — admins cannot set/clear the external_booking_url from the UI. Add a field similar to Location, e.g. `!isRental && !isTaxi && <F l=\"Official booking URL\" v={form.external_booking_url} on={(v)=>setForm({...form, external_booking_url:v})} testid=\"edit-external-url\" />`, ideally as a full-width row below the 2-col grid.",
+        "selector": "[data-testid='edit-external-url']",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration14_slides_external.py",
+    "/app/test_reports/pytest/iteration14.xml"
+  ],
+  "action_items": [
+    "Add the missing 'Official booking URL' input to EditModal.jsx tours branch — must expose data-testid='edit-external-url' bound to form.external_booking_url. Only render when kind === 'tours' (i.e. `!isRental && !isTaxi`).",
+    "Consider extending EditModal payload to always send external_booking_url (including empty→null) so admins can clear it. Currently `form.external_booking_url || null` correctly maps empty string to null, but backend admin_update_item filters out None keys — so a null send won't unset an existing URL. Either use $unset when null is sent, or send an empty string and adjust backend to treat empty string as clear."
+  ],
+  "critical_code_review_comments": [
+    "backend/routes/admin.py — home-slides literal routes correctly registered before /admin/{kind} catch-all (lines 507-538 vs 549+). Route-shadow test passes.",
+    "HomeHeroCarousel picks Math.floor(Math.random()*len) as start index — randomized start confirmed working. Auto-advance interval + prev/next + dots all functional.",
+    "Tours.jsx correctly gates external link on `t.external_booking_url` truthiness and sets rel='noopener noreferrer' — no XSS/tabnabbing concern.",
+    "CatalogPanel useEffect `alive` guard + eager setItems([]) on kind change resolves the iteration_13 HIGH race. Verified via rapid click reproduction.",
+    "EditModal.jsx: state + save payload include external_booking_url but the corresponding UI input was never rendered. Classic 'wired in JS but not in JSX' oversight."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration14_slides_external.py"
+  ],
+  "success_rate": { "backend": "100% (8/8 pytest)", "frontend": "~90% — HIGH: EditModal missing external URL input; all other iteration_14 UI flows pass" },
+  "test_credentials": "admin@roxtaxi.com / admin123",
+  "seed_data_creation": "Set blue-lagoon.external_booking_url = https://www.bluelagoonisland.com/ during tests (matches main agent's pre-existing state). No leftover test slides — created slide is deleted at end of CRUD test.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent adds the missing <F> field for edit-external-url in EditModal.jsx (tours branch only), re-run the frontend E2E script and verify: (a) input renders with current value 'https://www.bluelagoonisland.com/' when editing blue-lagoon, (b) save with empty value clears the URL and /tours no longer shows external link, (c) save with new URL persists. Backend already supports this — no backend change required unless main agent wants explicit unset semantics.",
+  "rca of the issue": "EditModal.jsx has form state initialization for external_booking_url (line 29) and the save payload correctly includes it for the tours kind (line 63), but no JSX <F> field was added to actually collect the value. Root cause: form field JSX section (lines 100-107) was not updated alongside the state/payload wiring. Fix: add `<F l=\"Official booking URL\" v={form.external_booking_url} on={(v)=>setForm({...form, external_booking_url:v})} testid=\"edit-external-url\" />` in the tours branch of the form (e.g., a new row below the image URL field or inside the 2-col grid guarded by `!isRental && !isTaxi`)."
+}

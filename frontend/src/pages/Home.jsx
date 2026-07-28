@@ -5,8 +5,7 @@ import { ArrowRight, Car, MapPinned, ShipWheel, Star, ShieldCheck, Clock, Users 
 import { api, money } from "../lib/api";
 import NassauCarousel from "../components/NassauCarousel";
 import GoogleReviews from "../components/GoogleReviews";
-
-const HERO_IMG = "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=2400";
+import HomeHeroCarousel from "../components/HomeHeroCarousel";
 
 export default function Home() {
   const [tours, setTours] = useState([]);
@@ -16,49 +15,55 @@ export default function Home() {
 
   return (
     <div data-testid="home-page">
-      {/* HERO */}
-      <section className="relative min-h-[92vh] overflow-hidden" data-testid="hero-section">
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${HERO_IMG})` }} />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0B192C]/50 via-[#0B192C]/15 to-[#0B192C]/80" />
-        <div className="relative max-w-7xl mx-auto px-6 lg:px-10 pt-32 pb-24 grid lg:grid-cols-12 gap-10">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7 }}
-            className="lg:col-span-7 text-white"
-          >
-            <span className="inline-block text-xs tracking-[0.3em] uppercase text-white/80 mb-6" data-testid="hero-tagline">
-              Nassau · Paradise Island
-            </span>
-            <h1 className="serif text-6xl sm:text-7xl lg:text-8xl leading-[0.9] tracking-tight">
-              Unlock <em className="italic text-[#F5E1A4]">Nassau</em>. On your terms.
-            </h1>
-            <p className="mt-8 max-w-xl text-lg text-white/85 leading-relaxed">
-              Booked in <em className="italic text-[#F5E1A4] not-italic font-semibold">sixty seconds</em>. Pay with card, PayPal or Zelle — then follow your driver live, door to door across Nassau &amp; Paradise Island.
-            </p>
-            <div className="mt-10 flex flex-wrap gap-4">
-              <Link
-                to="/taxi"
-                data-testid="hero-book-taxi-btn"
-                className="btn-shine rounded-full bg-[#E86A3C] text-white px-7 py-4 text-sm font-semibold hover:bg-[#d55a30] active:scale-95 flex items-center gap-2"
-              >
-                Book a Taxi <ArrowRight className="w-4 h-4" />
-              </Link>
-              <Link
-                to="/tours"
-                data-testid="hero-explore-tours-btn"
-                className="rounded-full glass text-[#0B192C] px-7 py-4 text-sm font-semibold hover:bg-white active:scale-95"
-              >
-                Explore Excursions
-              </Link>
-            </div>
+      {/* HERO — dynamic Bahamas carousel (admin-managed via /admin/manage → Home Slides) */}
+      <HomeHeroCarousel>
+        {({ slide }) => (
+          <div className="max-w-7xl mx-auto px-6 lg:px-10 pt-32 pb-24 grid lg:grid-cols-12 gap-10">
+            <motion.div
+              key={slide.id}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7 }}
+              className="lg:col-span-7 text-white"
+            >
+              <span className="inline-block text-xs tracking-[0.3em] uppercase text-white/80 mb-6" data-testid="hero-tagline">
+                Nassau · Paradise Island
+              </span>
+              <h1 className="serif text-6xl sm:text-7xl lg:text-8xl leading-[0.9] tracking-tight" data-testid="hero-title">
+                {slide.title.includes(".") ? (
+                  <>
+                    {slide.title.split(".").slice(0, -1).join(".")}. <em className="italic text-[#F5E1A4]">On your terms.</em>
+                  </>
+                ) : (
+                  <>{slide.title} <em className="italic text-[#F5E1A4]">On your terms.</em></>
+                )}
+              </h1>
+              <p className="mt-8 max-w-xl text-lg text-white/85 leading-relaxed" data-testid="hero-subtitle">
+                {slide.subtitle || "Booked in sixty seconds. Pay with card, PayPal or Zelle — then follow your driver live, door to door across Nassau & Paradise Island."}
+              </p>
+              <div className="mt-10 flex flex-wrap gap-4">
+                <Link
+                  to="/taxi"
+                  data-testid="hero-book-taxi-btn"
+                  className="btn-shine rounded-full bg-[#E86A3C] text-white px-7 py-4 text-sm font-semibold hover:bg-[#d55a30] active:scale-95 flex items-center gap-2"
+                >
+                  Book a Taxi <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  to="/tours"
+                  data-testid="hero-explore-tours-btn"
+                  className="rounded-full glass text-[#0B192C] px-7 py-4 text-sm font-semibold hover:bg-white active:scale-95"
+                >
+                  Explore Excursions
+                </Link>
+              </div>
 
-            <div className="mt-14 flex flex-wrap gap-8 text-sm text-white/80">
-              <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-[#D4A94A]" /> Licensed local drivers</div>
-              <div className="flex items-center gap-2"><Star className="w-4 h-4 text-[#F5E1A4]" /> 4.9 avg guest rating</div>
-              <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-[#D4A94A]" /> 24/7 dispatch</div>
-            </div>
-          </motion.div>
+              <div className="mt-14 flex flex-wrap gap-8 text-sm text-white/80">
+                <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-[#D4A94A]" /> Licensed local drivers</div>
+                <div className="flex items-center gap-2"><Star className="w-4 h-4 text-[#F5E1A4]" /> 4.9 avg guest rating</div>
+                <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-[#D4A94A]" /> 24/7 dispatch</div>
+              </div>
+            </motion.div>
 
           {/* Floating booking widget */}
           <motion.div
@@ -112,8 +117,9 @@ export default function Home() {
               </div>
             </div>
           </motion.div>
-        </div>
-      </section>
+          </div>
+        )}
+      </HomeHeroCarousel>
 
       {/* NASSAU · PARADISE ISLAND CAROUSEL */}
       <NassauCarousel />

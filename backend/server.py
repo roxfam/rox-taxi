@@ -20,7 +20,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, Strea
 from fastapi.responses import StreamingResponse
 from notifications import notify_booking_confirmed
 import paypal_client
-from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS
+from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS, HOME_SLIDES_SEED
 from pdf_utils import build_wedding_pdf, build_receipt_pdf
 from routes import payments as payments_module
 from routes import admin as admin_module
@@ -392,6 +392,13 @@ async def seed_db():
             {"$set": set_payload, "$setOnInsert": set_on_insert},
             upsert=True,
         )
+    # Home-page hero slides — $setOnInsert on the whole doc so admin edits win.
+    for slide in HOME_SLIDES_SEED:
+        await db.home_slides.update_one(
+            {"id": slide["id"]},
+            {"$setOnInsert": slide},
+            upsert=True,
+        )
     # site_config doc
     cfg = await db.site_config.find_one({"_id": "main"})
     if not cfg:
@@ -435,6 +442,13 @@ async def list_taxi():
 async def list_rentals():
     docs = await db.rentals.find({"active": True}).to_list(200)
     return [annotate_promo(clean(d)) for d in docs]
+
+
+@api_router.get("/home-slides")
+async def list_home_slides():
+    """Public feed for the home page hero carousel — sorted by admin-set order."""
+    docs = await db.home_slides.find({"active": True}).sort("order", 1).to_list(50)
+    return [clean(d) for d in docs]
 
 
 @api_router.get("/rentals/{rental_id}/availability")

@@ -26,6 +26,7 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
     route: initial.route || "",
     location: initial.location || "",
     featured: !!initial.featured,
+    external_booking_url: initial.external_booking_url || "",
   });
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -59,6 +60,7 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
           duration: form.duration || null,
           location: form.location || null,
           featured: !!form.featured,
+          external_booking_url: form.external_booking_url || null,
         });
       }
       if (initial.new) await api.post(`/admin/${kind}`, payload);

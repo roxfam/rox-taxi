@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
-import { Clock, ArrowRight } from "lucide-react";
+import { Clock, ArrowRight, ExternalLink } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
 export default function Tours() {
@@ -56,6 +56,19 @@ export default function Tours() {
                   Book <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
+              {t.external_booking_url && (
+                <a
+                  href={t.external_booking_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid={`tour-external-btn-${t.id}`}
+                  className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#0B3B5C]/70 hover:text-[#D4A94A] transition-colors group/ext"
+                  title="Book directly on the official operator site"
+                >
+                  <span className="underline decoration-dotted underline-offset-4">Or book on official operator site</span>
+                  <ExternalLink className="w-3 h-3 group-hover/ext:translate-x-0.5 transition-transform" />
+                </a>
+              )}
             </div>
           </div>
         ))}

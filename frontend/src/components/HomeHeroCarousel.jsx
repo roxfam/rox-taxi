@@ -1,0 +1,113 @@
+import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { api } from "../lib/api";
+
+const FALLBACK = [
+  {
+    id: "fallback-nassau",
+    title: "Unlock Nassau.",
+    subtitle: "Book a taxi, tour or rental in sixty seconds.",
+    image_url: "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&q=85&w=2400",
+  },
+];
+
+// Full-bleed rotating hero. Backend supplies the slides — this component
+// picks a random starting index (so returning visitors don't always see the
+// same photo first), auto-advances every 6s, and exposes prev/next + dot
+// controls. Children compose inside the tinted overlay so the existing hero
+// headline/CTA layout stays untouched.
+export default function HomeHeroCarousel({ children, className = "", intervalMs = 6000 }) {
+  const [slides, setSlides] = useState(FALLBACK);
+  const [i, setI] = useState(0);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.get("/home-slides").then((r) => {
+      if (!alive) return;
+      if (Array.isArray(r.data) && r.data.length) {
+        setSlides(r.data);
+        setI(Math.floor(Math.random() * r.data.length));
+      }
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (slides.length <= 1) return undefined;
+    timerRef.current = setInterval(() => setI((v) => (v + 1) % slides.length), intervalMs);
+    return () => clearInterval(timerRef.current);
+  }, [slides.length, intervalMs]);
+
+  const pause = () => { if (timerRef.current) clearInterval(timerRef.current); };
+  const resume = () => {
+    if (slides.length > 1) timerRef.current = setInterval(() => setI((v) => (v + 1) % slides.length), intervalMs);
+  };
+
+  const slide = slides[i] || slides[0];
+  const prev = () => setI((v) => (v - 1 + slides.length) % slides.length);
+  const next = () => setI((v) => (v + 1) % slides.length);
+
+  return (
+    <section
+      className={`relative min-h-[92vh] overflow-hidden ${className}`}
+      data-testid="hero-section"
+      onMouseEnter={pause}
+      onMouseLeave={resume}
+    >
+      <AnimatePresence mode="sync">
+        <motion.div
+          key={slide.id}
+          initial={{ opacity: 0, scale: 1.06 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1.2, ease: "easeOut" }}
+          className="absolute inset-0 bg-cover bg-center will-change-transform"
+          style={{ backgroundImage: `url(${slide.image_url})` }}
+          data-testid={`hero-slide-${slide.id}`}
+        />
+      </AnimatePresence>
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0B192C]/50 via-[#0B192C]/15 to-[#0B192C]/80" />
+
+      <div className="relative">
+        {typeof children === "function" ? children({ slide, index: i }) : children}
+      </div>
+
+      {slides.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={prev}
+            aria-label="Previous slide"
+            data-testid="hero-prev-btn"
+            className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/15 hover:bg-white/35 backdrop-blur-md text-white flex items-center justify-center transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={next}
+            aria-label="Next slide"
+            data-testid="hero-next-btn"
+            className="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/15 hover:bg-white/35 backdrop-blur-md text-white flex items-center justify-center transition-colors"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2" data-testid="hero-dots">
+            {slides.map((s, idx) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setI(idx)}
+                aria-label={`Go to slide ${idx + 1}`}
+                data-testid={`hero-dot-${idx}`}
+                className={`transition-all rounded-full ${idx === i ? "w-8 h-2 bg-[#D4A94A]" : "w-2 h-2 bg-white/50 hover:bg-white/80"}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}

@@ -70,6 +70,18 @@ class ItemUpsert(BaseModel):
     # Tour-specific
     location: Optional[str] = None
     featured: Optional[bool] = None
+    # Optional external booking link — surfaces a "Book on official site ↗"
+    # secondary CTA on the public tour card. Useful for excursions run by
+    # third-party operators (Atlantis Aquaventure, Blue Lagoon, etc.).
+    external_booking_url: Optional[str] = None
+
+
+class HomeSlideUpsert(BaseModel):
+    title: str
+    subtitle: Optional[str] = ""
+    image_url: str
+    order: int = 0
+    active: bool = True
 
 
 class PriceUpdate(BaseModel):
@@ -487,6 +499,43 @@ async def admin_update_site(req: SiteConfigUpdate, _: str = Depends(_admin_dep))
     cfg = await _db.site_config.find_one({"_id": "main"})
     cfg.pop("_id", None)
     return cfg
+
+
+# ---- Home hero slides CRUD ------------------------------------------------
+# Registered BEFORE the parameterized /admin/{kind} catch-all so FastAPI
+# routes /admin/home-slides literally instead of shadowing to kind="home-slides".
+@router.get("/admin/home-slides")
+async def admin_list_slides(_: str = Depends(_admin_dep)):
+    docs = await _db.home_slides.find({}).sort("order", 1).to_list(100)
+    return [_clean(d) for d in docs]
+
+
+@router.post("/admin/home-slides")
+async def admin_create_slide(slide: HomeSlideUpsert, _: str = Depends(_admin_dep)):
+    doc = slide.model_dump()
+    doc["id"] = f"slide-{uuid.uuid4().hex[:8]}"
+    doc["created_at"] = _now_iso()
+    await _db.home_slides.insert_one(doc)
+    return _clean(doc)
+
+
+@router.put("/admin/home-slides/{sid}")
+async def admin_update_slide(sid: str, slide: HomeSlideUpsert, _: str = Depends(_admin_dep)):
+    payload = slide.model_dump()
+    payload["updated_at"] = _now_iso()
+    res = await _db.home_slides.update_one({"id": sid}, {"$set": payload})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Slide not found")
+    doc = await _db.home_slides.find_one({"id": sid})
+    return _clean(doc)
+
+
+@router.delete("/admin/home-slides/{sid}")
+async def admin_delete_slide(sid: str, _: str = Depends(_admin_dep)):
+    res = await _db.home_slides.delete_one({"id": sid})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Slide not found")
+    return {"deleted": True}
 
 
 # ============================================================================
