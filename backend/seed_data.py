@@ -35,7 +35,7 @@ TOURS_SEED: List[Dict] = [
     {"id": "jet-ski-30min", "name": "Jet Ski Rental — 30 Minutes (Nassau)", "price": 99.0, "duration": "30 minutes",
      "location": "Nassau — beach launch", "featured": False,
      "description": "Quick-hit jet ski blast — perfect if your cruise ship is only in port for the day. Single or tandem, life vests included.",
-     "image_url": "https://images.unsplash.com/photo-1609542486843-2e0b40a4067b?crop=entropy&cs=srgb&fm=jpg&q=85&w=1600",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/0trvjsor_pine-cay-jet-ski-tour.jpg",
      "category": "watersport", "active": True,
      "external_booking_url": "https://www.kcwatersportsbahamas.com/jetskirentals"},
     {"id": "atv-tour-lunch", "name": "ATV Off-Road Tour of Nassau & Paradise Island (with Lunch)", "price": 149.0, "duration": "3 hours",
