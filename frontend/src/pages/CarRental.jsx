@@ -110,18 +110,18 @@ function BlackoutList({ blackouts }) {
 
   return (
     <div className="mt-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3" data-testid="rental-blackouts">
-      <div className="flex items-center gap-1.5 text-xs tracking-[0.2em] uppercase text-[#64748B]">
-        <CalendarX className="w-3 h-3" /> Blackout dates
+      <div className="flex items-center gap-1.5 text-xs tracking-[0.2em] uppercase text-[#0B3B5C] font-bold">
+        <CalendarX className="w-3.5 h-3.5" /> Blackout dates
       </div>
       {upcoming.length === 0 ? (
-        <div className="mt-1.5 text-xs text-[#D4A94A] flex items-center gap-1">
-          <Info className="w-3 h-3" /> Available now — no upcoming bookings
+        <div className="mt-1.5 text-sm font-bold text-[#D4A94A] flex items-center gap-1">
+          <Info className="w-3.5 h-3.5" /> Available now — no upcoming bookings
         </div>
       ) : (
         <ul className="mt-1.5 space-y-0.5">
           {upcoming.map((b) => (
-            <li key={b.booking_id} className="text-xs mono text-[#0B3B5C]">
-              {fmt(b.start)} → {fmt(b.end)} <span className="text-[#64748B]">({b.days}d)</span>
+            <li key={b.booking_id} className="text-sm mono font-bold text-[#0B3B5C]">
+              {fmt(b.start)} → {fmt(b.end)} <span className="text-[#0B3B5C]/70 font-semibold">({b.days}d)</span>
             </li>
           ))}
         </ul>

@@ -325,18 +325,37 @@ async def my_bookings(user: dict = Depends(get_current_user)):
 
 @app.on_event("startup")
 async def seed_db():
-    # Reseed catalog every startup with the Nassau/PI-focused data (idempotent via upsert-by-id)
+    # Idempotent seed. `price` + `price_history` are ONLY set on first insert so
+    # admin-managed price edits survive restarts. Every other field ($set) still
+    # tracks the seed file, so image / description tweaks propagate.
+    # NOTE: `delete_many` was removed so admin-added items persist across restarts.
+    def _split_seed(doc: Dict[str, Any]):
+        preserve_keys = {"price"}
+        set_payload = {k: v for k, v in doc.items() if k not in preserve_keys}
+        set_on_insert = {"price": doc.get("price"), "price_history": []}
+        return set_payload, set_on_insert
+
     for t in TOURS_SEED:
-        await db.tours.update_one({"id": t["id"]}, {"$set": t}, upsert=True)
-    # remove legacy tour ids no longer in seed
-    await db.tours.delete_many({"id": {"$nin": [t["id"] for t in TOURS_SEED]}})
+        set_payload, set_on_insert = _split_seed(t)
+        await db.tours.update_one(
+            {"id": t["id"]},
+            {"$set": set_payload, "$setOnInsert": set_on_insert},
+            upsert=True,
+        )
     for s in TAXI_SERVICES:
-        await db.taxi_services.update_one({"id": s["id"]}, {"$set": s}, upsert=True)
-    await db.taxi_services.delete_many({"id": {"$nin": [s["id"] for s in TAXI_SERVICES]}})
+        set_payload, set_on_insert = _split_seed(s)
+        await db.taxi_services.update_one(
+            {"id": s["id"]},
+            {"$set": set_payload, "$setOnInsert": set_on_insert},
+            upsert=True,
+        )
     for r in RENTALS_SEED:
-        await db.rentals.update_one({"id": r["id"]}, {"$set": r}, upsert=True)
-    # remove legacy rental IDs no longer in seed
-    await db.rentals.delete_many({"id": {"$nin": list(CURRENT_RENTAL_IDS)}})
+        set_payload, set_on_insert = _split_seed(r)
+        await db.rentals.update_one(
+            {"id": r["id"]},
+            {"$set": set_payload, "$setOnInsert": set_on_insert},
+            upsert=True,
+        )
     # site_config doc
     cfg = await db.site_config.find_one({"_id": "main"})
     if not cfg:

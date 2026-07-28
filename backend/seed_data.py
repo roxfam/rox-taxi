@@ -96,7 +96,7 @@ RENTALS_SEED: List[Dict] = [
     {"id": "sentra-orange", "name": "2001 Nissan Sentra — Orange Sedan", "price": 39.0, "seats": 5,
      "year": 2001, "make": "Nissan", "model": "Sentra", "color": "Orange", "body": "Sedan",
      "description": "Old but reliable island cruiser — the ultimate budget rental. Bright orange, hard to lose in a parking lot. Free Nassau delivery.",
-     "image_url": "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/5ky5n279_Nissan%20Versa.webp",
      "category": "economy", "active": True},
     {"id": "malibu-fullsize", "name": "2024 Chevrolet Malibu — Full-Size Sedan (White)", "price": 79.0, "seats": 5,
      "year": 2024, "make": "Chevrolet", "model": "Malibu", "color": "White", "body": "Full-size Sedan",

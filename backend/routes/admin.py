@@ -59,6 +59,22 @@ class ItemUpsert(BaseModel):
     category: Optional[str] = None
     seats: Optional[int] = None
     active: bool = True
+    # Rental-specific fields — surfaced on rental cards.
+    year: Optional[int] = None
+    make: Optional[str] = None
+    model: Optional[str] = None
+    color: Optional[str] = None
+    body: Optional[str] = None
+    # Taxi-specific
+    route: Optional[str] = None
+    # Tour-specific
+    location: Optional[str] = None
+    featured: Optional[bool] = None
+
+
+class PriceUpdate(BaseModel):
+    price: float
+    reason: Optional[str] = None
 
 
 class SiteConfigUpdate(BaseModel):
@@ -482,13 +498,21 @@ def _coll_by_kind(kind: str):
 
 
 @router.post("/admin/{kind}")
-async def admin_create_item(kind: str, item: ItemUpsert, _: str = Depends(_admin_dep)):
+async def admin_create_item(kind: str, item: ItemUpsert, admin_email: str = Depends(_admin_dep)):
     coll = _coll_by_kind(kind)
     if coll is None:
         raise HTTPException(404, "Unknown collection")
-    doc = item.model_dump()
+    doc = {k: v for k, v in item.model_dump().items() if v is not None}
     doc["id"] = f"{kind[:3]}-{uuid.uuid4().hex[:8]}"
     doc["created_at"] = _now_iso()
+    # Seed an initial price_history entry so audit trail starts from birth.
+    doc["price_history"] = [{
+        "old_price": None,
+        "new_price": float(item.price),
+        "reason": "Item created",
+        "changed_by": admin_email,
+        "changed_at": _now_iso(),
+    }]
     await coll.insert_one(doc)
     return _clean(doc)
 
@@ -503,17 +527,89 @@ async def admin_list_items(kind: str, _: str = Depends(_admin_dep)):
 
 
 @router.put("/admin/{kind}/{item_id}")
-async def admin_update_item(kind: str, item_id: str, item: ItemUpsert, _: str = Depends(_admin_dep)):
+async def admin_update_item(kind: str, item_id: str, item: ItemUpsert, admin_email: str = Depends(_admin_dep)):
     coll = _coll_by_kind(kind)
     if coll is None:
         raise HTTPException(404, "Unknown collection")
+    existing = await coll.find_one({"id": item_id})
+    if not existing:
+        raise HTTPException(404, "Item not found")
+
     payload = {k: v for k, v in item.model_dump().items() if v is not None}
     payload["updated_at"] = _now_iso()
-    res = await coll.update_one({"id": item_id}, {"$set": payload})
-    if res.matched_count == 0:
-        raise HTTPException(404, "Item not found")
+
+    # If price changed via the full-form save, log the change in price_history.
+    update_ops: Dict[str, Any] = {"$set": payload}
+    old_price = float(existing.get("price") or 0)
+    new_price = float(item.price)
+    if abs(old_price - new_price) > 0.001:
+        update_ops["$push"] = {"price_history": {
+            "old_price": old_price,
+            "new_price": new_price,
+            "reason": "Edited via full form",
+            "changed_by": admin_email,
+            "changed_at": _now_iso(),
+        }}
+    await coll.update_one({"id": item_id}, update_ops)
     doc = await coll.find_one({"id": item_id})
     return _clean(doc)
+
+
+@router.patch("/admin/{kind}/{item_id}/price")
+async def admin_update_price(kind: str, item_id: str, req: PriceUpdate, admin_email: str = Depends(_admin_dep)):
+    """Dedicated price-change endpoint that appends to price_history.
+
+    Kept separate from the full PUT so the admin UI can offer a lightweight
+    'change price + reason' flow without re-sending the entire item payload.
+    """
+    coll = _coll_by_kind(kind)
+    if coll is None:
+        raise HTTPException(404, "Unknown collection")
+    if req.price is None or req.price <= 0:
+        raise HTTPException(422, "Price must be a positive number")
+    doc = await coll.find_one({"id": item_id})
+    if not doc:
+        raise HTTPException(404, "Item not found")
+
+    old_price = float(doc.get("price") or 0)
+    new_price = float(req.price)
+    if abs(old_price - new_price) < 0.001:
+        raise HTTPException(400, "New price is identical to the current price")
+
+    entry = {
+        "old_price": old_price,
+        "new_price": new_price,
+        "reason": (req.reason or "").strip() or "No reason provided",
+        "changed_by": admin_email,
+        "changed_at": _now_iso(),
+    }
+    await coll.update_one(
+        {"id": item_id},
+        {
+            "$set": {"price": new_price, "updated_at": _now_iso()},
+            "$push": {"price_history": entry},
+        },
+    )
+    doc = await coll.find_one({"id": item_id})
+    return _clean(doc)
+
+
+@router.get("/admin/{kind}/{item_id}/price-history")
+async def admin_price_history(kind: str, item_id: str, _: str = Depends(_admin_dep)):
+    coll = _coll_by_kind(kind)
+    if coll is None:
+        raise HTTPException(404, "Unknown collection")
+    doc = await coll.find_one({"id": item_id})
+    if not doc:
+        raise HTTPException(404, "Item not found")
+    history = list(doc.get("price_history") or [])
+    history.sort(key=lambda h: h.get("changed_at") or "", reverse=True)
+    return {
+        "id": doc.get("id"),
+        "name": doc.get("name"),
+        "current_price": doc.get("price"),
+        "history": history,
+    }
 
 
 @router.delete("/admin/{kind}/{item_id}")
