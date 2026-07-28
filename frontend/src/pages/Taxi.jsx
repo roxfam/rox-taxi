@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, money } from "../lib/api";
 import BookingModal from "./BookingFlow";
+import RouteQuoteWidget from "../components/RouteQuoteWidget";
 import { Car, ArrowRight, Plane, Anchor, ShoppingBag, Utensils, Palmtree, MapPin, Ship, Hotel, ChevronDown } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
@@ -94,6 +95,15 @@ export default function Taxi() {
           </p>
         </div>
       </section>
+
+      {/* Custom-route instant quote — From/To picker with fallback request form */}
+      <RouteQuoteWidget
+        services={services}
+        onBook={({ service, pickup, dropoff }) => {
+          setPrefill({ pickup: pickup || "", dropoff: dropoff || "" });
+          setSelected(service);
+        }}
+      />
 
       {/* Popular Nassau destinations — quick booking picker */}
       <section

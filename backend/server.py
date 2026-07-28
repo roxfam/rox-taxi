@@ -243,6 +243,24 @@ class GroupInquiryCreate(BaseModel):
     estimated_total: Optional[float] = None
 
 
+class TaxiQuoteRequest(BaseModel):
+    """Fixed-rate lookup — user picks From + To, we match against known routes."""
+    from_location: str = Field(..., min_length=1, max_length=200)
+    to_location: str = Field(..., min_length=1, max_length=200)
+
+
+class TaxiCustomQuoteRequest(BaseModel):
+    """Fallback: customer requests a custom quote for a route we don't list."""
+    from_location: str = Field(..., min_length=1, max_length=200)
+    to_location: str = Field(..., min_length=1, max_length=200)
+    customer_name: str = Field(..., min_length=1, max_length=100)
+    customer_email: EmailStr
+    customer_phone: str = Field(..., min_length=5, max_length=40)
+    passengers: int = Field(1, ge=1, le=20)
+    when: Optional[str] = None  # optional date/time
+    notes: Optional[str] = None
+
+
 # ---------------- Admin JWT auth ----------------
 
 def make_admin_token(email: str) -> str:
@@ -604,6 +622,142 @@ async def list_tours():
 async def list_taxi():
     docs = await db.taxi_services.find({}).to_list(200)
     return [annotate_promo(clean(d)) for d in docs]
+
+
+# ---- Taxi custom-route quote lookup ----------------------------------------
+# Every fixed-fare service in db.taxi_services has a name like
+# "LPIA Airport → Downtown Nassau" or "Cable Beach ↔ Downtown". We normalise
+# both endpoints to a canonical `location tag` so a customer can pick From/To
+# from a dropdown and instantly see the matching fare. Bidirectional routes
+# (↔) match either direction. Unknown routes fall through to a "Request a
+# quote" form which stores an inquiry + pings the owner via SMS/email.
+TAXI_LOCATIONS = [
+    {"tag": "lpia",         "label": "LPIA — Nassau Airport",             "keywords": ["lpia", "airport", "l.p.i.a"]},
+    {"tag": "cruise_port",  "label": "Nassau Cruise Port",                "keywords": ["cruise port", "prince george", "festival place"]},
+    {"tag": "downtown",     "label": "Downtown Nassau / Bay Street",      "keywords": ["downtown", "bay street"]},
+    {"tag": "cable_beach",  "label": "Cable Beach",                       "keywords": ["cable beach"]},
+    {"tag": "baha_mar",     "label": "Baha Mar / SLS / Grand Hyatt",      "keywords": ["baha mar", "sls", "grand hyatt", "rosewood"]},
+    {"tag": "paradise",     "label": "Paradise Island / Atlantis",        "keywords": ["paradise island", "atlantis"]},
+    {"tag": "fish_fry",     "label": "Arawak Cay Fish Fry",               "keywords": ["fish fry", "arawak"]},
+    {"tag": "montague",     "label": "Montague Beach",                    "keywords": ["montague"]},
+    {"tag": "lyford",       "label": "Lyford Cay",                        "keywords": ["lyford"]},
+    {"tag": "adelaide",     "label": "Adelaide Village / South West",     "keywords": ["adelaide"]},
+    {"tag": "compass",      "label": "Compass Point / West Bay",          "keywords": ["compass point", "west bay"]},
+    {"tag": "junkanoo",     "label": "Junkanoo Beach",                    "keywords": ["junkanoo"]},
+    {"tag": "cabbage_beach","label": "Cabbage Beach",                     "keywords": ["cabbage"]},
+    {"tag": "any_hotel",    "label": "My Nassau hotel (any)",             "keywords": ["any nassau hotel", "hotel"]},
+]
+
+
+def _match_location_tag(text: str) -> Optional[str]:
+    t = (text or "").lower()
+    # Longest keyword first so "cable beach" wins over "beach".
+    all_keywords = []
+    for loc in TAXI_LOCATIONS:
+        for kw in loc["keywords"]:
+            all_keywords.append((len(kw), kw, loc["tag"]))
+    all_keywords.sort(reverse=True)
+    for _, kw, tag in all_keywords:
+        if kw in t:
+            return tag
+    return None
+
+
+def _service_endpoints(service: Dict[str, Any]) -> Dict[str, Any]:
+    name = (service.get("route") or service.get("name") or "")
+    bidirectional = "↔" in name
+    from_side, to_side = name, ""
+    for sep in ["↔", "→", "->"]:
+        if sep in name:
+            parts = name.split(sep, 1)
+            from_side, to_side = parts[0], parts[1]
+            break
+    return {
+        "from_tag": _match_location_tag(from_side),
+        "to_tag": _match_location_tag(to_side),
+        "bidirectional": bidirectional,
+    }
+
+
+@api_router.get("/taxi/locations")
+async def taxi_locations():
+    """Public list of canonical taxi endpoints used by the From/To picker."""
+    return TAXI_LOCATIONS
+
+
+@api_router.post("/taxi/quote")
+async def taxi_quote(req: TaxiQuoteRequest):
+    """Match the user's From + To against known fixed-rate routes."""
+    from_tag = _match_location_tag(req.from_location)
+    to_tag = _match_location_tag(req.to_location)
+    if not from_tag or not to_tag:
+        return {"matched": False, "reason": "unknown_location",
+                "message": "We couldn't recognize one of your locations. Request a custom quote below."}
+    if from_tag == to_tag:
+        return {"matched": False, "reason": "same_location",
+                "message": "Pickup and dropoff look like the same location."}
+
+    services = await db.taxi_services.find({}).to_list(200)
+    for s in services:
+        ep = _service_endpoints(s)
+        if not ep["from_tag"] or not ep["to_tag"]:
+            continue
+        forward = ep["from_tag"] == from_tag and ep["to_tag"] == to_tag
+        reverse = ep["bidirectional"] and ep["from_tag"] == to_tag and ep["to_tag"] == from_tag
+        if forward or reverse:
+            return {
+                "matched": True,
+                "service": annotate_promo(clean(s)),
+                "direction": "forward" if forward else "reverse",
+                "from_tag": from_tag,
+                "to_tag": to_tag,
+            }
+
+    hourly = await db.taxi_services.find_one({"id": "hourly-charter"})
+    return {
+        "matched": False,
+        "reason": "no_fixed_rate",
+        "message": "No fixed fare for this exact route yet — request a custom quote below or book our hourly charter.",
+        "fallback": annotate_promo(clean(hourly)) if hourly else None,
+        "from_tag": from_tag,
+        "to_tag": to_tag,
+    }
+
+
+@api_router.post("/taxi/quote-request")
+async def taxi_custom_quote_request(req: TaxiCustomQuoteRequest):
+    """Persist a custom-quote request and alert the owner."""
+    doc = req.model_dump()
+    doc["id"] = "QR-" + uuid.uuid4().hex[:8].upper()
+    doc["status"] = "new"
+    doc["created_at"] = now_iso()
+    await db.taxi_quote_requests.insert_one(doc)
+
+    try:
+        from notifications import send_email, send_sms
+        summary = (
+            f"New custom taxi quote request ({doc['id']})\n"
+            f"From: {req.from_location}\nTo: {req.to_location}\n"
+            f"Passengers: {req.passengers}\n"
+            f"When: {req.when or 'flexible'}\n"
+            f"Guest: {req.customer_name} <{req.customer_email}> / {req.customer_phone}\n"
+            f"Notes: {req.notes or '—'}"
+        )
+        if ADMIN_EMAIL:
+            send_email(ADMIN_EMAIL, f"Custom quote request {doc['id']}", f"<pre>{summary}</pre>", summary)
+        admin_sms = os.environ.get("ADMIN_SMS_NUMBER", "").strip()
+        if admin_sms:
+            send_sms(admin_sms, f"Rox custom quote {doc['id']}: {req.from_location} → {req.to_location} · {req.passengers}pax · {req.customer_name} {req.customer_phone}")
+        send_email(
+            req.customer_email,
+            f"We got your quote request — Rox Taxi ({doc['id']})",
+            f"<p>Hi {req.customer_name},</p><p>Thanks for reaching out. We'll reply within the hour with a price for <b>{req.from_location} → {req.to_location}</b>.</p>",
+            f"Hi {req.customer_name}, thanks — we'll reply within the hour with a price for {req.from_location} → {req.to_location}.",
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("quote-request notify err: %s", e)
+
+    return clean(doc)
 
 
 @api_router.get("/rentals")
