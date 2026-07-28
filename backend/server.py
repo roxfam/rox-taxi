@@ -180,6 +180,7 @@ class SiteConfigUpdate(BaseModel):
     zelle_email: Optional[str] = None
     zelle_phone: Optional[str] = None
     facebook_url: Optional[str] = None
+    messenger_url: Optional[str] = None
     phone: Optional[str] = None
     whatsapp_number: Optional[str] = None
     paypal_me_url: Optional[str] = None
@@ -436,8 +437,23 @@ async def rental_availability(rental_id: str):
 async def site_config():
     cfg = await db.site_config.find_one({"_id": "main"})
     if not cfg:
-        return {"facebook_url": FACEBOOK_URL, "zelle_email": ZELLE_EMAIL, "zelle_phone": ZELLE_PHONE, "phone": ""}
-    cfg.pop("_id", None)
+        cfg = {"facebook_url": FACEBOOK_URL, "zelle_email": ZELLE_EMAIL, "zelle_phone": ZELLE_PHONE, "phone": ""}
+    else:
+        cfg.pop("_id", None)
+    # Auto-derive Messenger deep link (m.me/<slug>) from the Facebook page URL if the
+    # admin hasn't set one explicitly. Handoff-to-Messenger button uses this.
+    if not cfg.get("messenger_url"):
+        fb = cfg.get("facebook_url") or ""
+        # Extract page slug from https://facebook.com/<slug>[/]
+        slug = ""
+        if fb:
+            try:
+                path = fb.split("://", 1)[-1].split("/", 1)[-1]
+                slug = path.strip("/").split("/")[0]
+            except Exception:  # noqa: BLE001
+                slug = ""
+        if slug:
+            cfg["messenger_url"] = f"https://m.me/{slug}"
     return cfg
 
 

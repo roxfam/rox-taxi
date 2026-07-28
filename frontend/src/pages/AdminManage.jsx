@@ -250,6 +250,7 @@ function SiteConfigPanel() {
 
       <div className="space-y-3">
         <F l="Facebook page URL" v={cfg.facebook_url || ""} on={(v) => setCfg({ ...cfg, facebook_url: v })} testid="site-fb" />
+        <F l="Messenger URL (auto-derived from Facebook — override if page slug differs)" v={cfg.messenger_url || ""} on={(v) => setCfg({ ...cfg, messenger_url: v })} testid="site-messenger" />
         <F l="Zelle email" v={cfg.zelle_email || ""} on={(v) => setCfg({ ...cfg, zelle_email: v })} testid="site-zelle-email" />
         <F l="Zelle phone" v={cfg.zelle_phone || ""} on={(v) => setCfg({ ...cfg, zelle_phone: v })} testid="site-zelle-phone" />
         <F l="Contact phone" v={cfg.phone || ""} on={(v) => setCfg({ ...cfg, phone: v })} testid="site-phone" />

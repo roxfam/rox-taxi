@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send, Waves } from "lucide-react";
-import { BACKEND_URL } from "../lib/api";
+import { MessageCircle, X, Send, Waves, MessagesSquare, ExternalLink } from "lucide-react";
+import { api, BACKEND_URL } from "../lib/api";
 
 const SUGGESTIONS = [
   "How much is an airport taxi?",
@@ -21,17 +21,48 @@ function getSessionId() {
 export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: "assistant", text: "Hey! I'm Roxi 🌊 — ask me anything about taxis, tours or car rentals in the Bahamas." },
+    { role: "assistant", text: "Hey! I'm Roxi 🌊 — ask me anything about taxis, tours or car rentals in the Bahamas. If you'd rather talk to a real human, just tap 'Continue on Messenger' below." },
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [unread, setUnread] = useState(false);
+  const [messengerUrl, setMessengerUrl] = useState("");
   const scrollRef = useRef(null);
   const sessionId = useRef(getSessionId()).current;
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
+
+  // Pull the Messenger deep-link (auto-derived from the FB page URL on the backend).
+  useEffect(() => {
+    api.get("/site-config").then((r) => {
+      if (r?.data?.messenger_url) setMessengerUrl(r.data.messenger_url);
+    }).catch(() => {});
+  }, []);
+
+  const handoffContext = () => {
+    // Compose a short prefill referencing the visitor's latest question(s) so the
+    // business owner has instant context when the conversation lands in their FB inbox.
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    return lastUser
+      ? `Hi Rox! I was just chatting on your website about: "${lastUser.text}". Can you help me finish the booking?`
+      : "Hi Rox! Sending this from your website chat — can you help me?";
+  };
+
+  const openMessenger = () => {
+    if (!messengerUrl) return;
+    const ref = encodeURIComponent("website-chat-handoff");
+    const url = `${messengerUrl}${messengerUrl.includes("?") ? "&" : "?"}ref=${ref}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    // Optimistic UI: log to the transcript so the visitor knows the handoff happened.
+    setMessages((m) => [
+      ...m,
+      { role: "assistant", text: "Opened Messenger in a new tab 👋 A real human will reply as soon as they see your message. This chat stays open in case you need Roxi in the meantime." },
+    ]);
+    // Copy the suggested prefill to the clipboard so users can paste immediately.
+    try { navigator.clipboard?.writeText(handoffContext()); } catch { /* ignore */ }
+  };
 
   const send = async (text) => {
     const msg = (text ?? input).trim();
@@ -51,7 +82,6 @@ export default function ChatWidget() {
       const dec = new TextDecoder();
       let buf = "";
       // read SSE stream
-      // Parses lines like `data: <chunk>\n\n` and `event: done`
       // eslint-disable-next-line no-constant-condition
       while (true) {
         const { done, value } = await reader.read();
@@ -71,7 +101,7 @@ export default function ChatWidget() {
           if (ev === "error") {
             setMessages((m) => {
               const c = [...m];
-              c[c.length - 1] = { role: "assistant", text: "Sorry — I ran into an issue. Please try again." };
+              c[c.length - 1] = { role: "assistant", text: "Sorry — I ran into an issue. Please try again — or tap 'Continue on Messenger' to chat with a real human." };
               return c;
             });
             continue;
@@ -84,10 +114,10 @@ export default function ChatWidget() {
           if (!open) setUnread(true);
         }
       }
-    } catch (e) {
+    } catch {
       setMessages((m) => {
         const c = [...m];
-        c[c.length - 1] = { role: "assistant", text: "Sorry — chat is temporarily unavailable. Please call +1 (242) 000-0000." };
+        c[c.length - 1] = { role: "assistant", text: messengerUrl ? "Sorry — the AI is temporarily unavailable. Tap 'Continue on Messenger' below to reach us live." : "Sorry — chat is temporarily unavailable. Please call +1 (242) 000-0000." };
         return c;
       });
     } finally {
@@ -102,7 +132,7 @@ export default function ChatWidget() {
         onClick={() => { setOpen((v) => !v); setUnread(false); }}
         data-testid="chat-fab"
         aria-label="Open live chat"
-        className="fixed bottom-5 right-5 z-[99] w-16 h-16 rounded-full bg-[#E86A3C] text-white shadow-[0_16px_40px_rgba(232,106,60,0.5)] hover:bg-[#d55a30] active:scale-95 transition-transform flex items-center justify-center"
+        className="fixed bottom-5 right-5 z-[85] w-16 h-16 rounded-full bg-[#E86A3C] text-white shadow-[0_16px_40px_rgba(232,106,60,0.5)] hover:bg-[#d55a30] active:scale-95 transition-transform flex items-center justify-center"
       >
         {open ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
         {unread && !open && (
@@ -113,7 +143,7 @@ export default function ChatWidget() {
       {/* Chat panel */}
       <div
         data-testid="chat-panel"
-        className={`fixed bottom-24 right-5 z-[99] w-[92vw] sm:w-[400px] max-h-[70vh] flex flex-col rounded-3xl shadow-[0_30px_80px_rgba(11,25,44,0.25)] border border-white/60 bg-white overflow-hidden origin-bottom-right transition-all duration-200 ${
+        className={`fixed bottom-24 right-5 z-[85] w-[92vw] sm:w-[400px] max-h-[70vh] flex flex-col rounded-3xl shadow-[0_30px_80px_rgba(11,25,44,0.25)] border border-white/60 bg-white overflow-hidden origin-bottom-right transition-all duration-200 ${
           open ? "opacity-100 scale-100 pointer-events-auto" : "opacity-0 scale-95 pointer-events-none"
         }`}
       >
@@ -121,12 +151,23 @@ export default function ChatWidget() {
           <div className="w-10 h-10 rounded-full bg-[#D4A94A] flex items-center justify-center">
             <Waves className="w-5 h-5" />
           </div>
-          <div>
+          <div className="flex-1">
             <div className="serif text-lg leading-none">Chat with Roxi</div>
             <div className="text-xs text-white/60 mt-1 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" /> Online · Instant reply
             </div>
           </div>
+          {messengerUrl && (
+            <button
+              type="button"
+              onClick={openMessenger}
+              title="Continue on Facebook Messenger"
+              data-testid="chat-messenger-header"
+              className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide px-3 py-1.5 rounded-full bg-[#0084FF] hover:bg-[#0073e0] transition-colors text-white"
+            >
+              <MessagesSquare className="w-3.5 h-3.5" /> Messenger
+            </button>
+          )}
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#FBF7EF]" data-testid="chat-messages">
@@ -159,6 +200,19 @@ export default function ChatWidget() {
               </button>
             ))}
           </div>
+        )}
+
+        {messengerUrl && (
+          <button
+            type="button"
+            onClick={openMessenger}
+            data-testid="chat-messenger-cta"
+            className="mx-4 mb-2 rounded-xl bg-gradient-to-r from-[#0084FF] to-[#0073e0] text-white text-xs font-semibold tracking-wide py-2.5 px-3 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm"
+          >
+            <MessagesSquare className="w-4 h-4" />
+            Continue on Messenger
+            <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+          </button>
         )}
 
         <form
