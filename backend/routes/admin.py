@@ -53,12 +53,11 @@ def _require_admin_placeholder(authorization: Optional[str] = Header(None)):
 # module so all admin surface area stays under one router.
 
 @router.get("/admin/payments")
-async def list_payments(admin: str = None):  # type: ignore
+async def list_payments(_: str = Depends(_require_admin_placeholder)):
     """Aggregate ALL payments across Stripe, PayPal, and Zelle for the admin
     Payments panel. Zelle bookings live in `bookings` (they never write a
     `payment_transactions` row), so we merge both sources and normalise the
     shape. Returns latest first, plus revenue totals."""
-    _require_admin_dep()  # will raise 401 if missing
     txs = await _db.payment_transactions.find({}).sort("created_at", -1).to_list(500)
     zelle_bookings = await _db.bookings.find({"payment_method": "zelle"}).sort("created_at", -1).to_list(500)
 
@@ -110,17 +109,6 @@ async def list_payments(admin: str = None):  # type: ignore
         "total_usd":  round(sum(r["amount"] for r in paid), 2),
     }
     return {"rows": rows, "totals": totals}
-
-
-def _require_admin_dep():
-    """Inline admin gate — resolves the Authorization header via _require_admin."""
-    from fastapi import Request  # noqa
-    # The router uses Depends(_require_admin) elsewhere. For endpoints declared
-    # without Depends we call _require_admin directly with the current header.
-    import inspect
-    frame = inspect.currentframe().f_back
-    # Cheap alternative: rely on the outer decorator wrap done at include_router
-    return None
 
 
 class ZelleMark(BaseModel):
