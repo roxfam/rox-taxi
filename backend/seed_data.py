@@ -84,7 +84,7 @@ TAXI_SERVICES: List[Dict] = [
      "route": "Cruise Port → Paradise Island", "featured": True,
      "description": f"{_TARIFF_NOTE} Bridge toll included.",
      "image_url": _TAXI_IMG},
-    {"id": "port-bahamar", "name": "Nassau Cruise Port → Baha Mar / Cable Beach", "price": 22.0,
+    {"id": "port-bahamar", "name": "Nassau Cruise Port → Baha Mar / Cable Beach", "price": 25.0,
      "route": "Cruise Port → Baha Mar", "featured": True,
      "description": f"{_TARIFF_NOTE} Straight from Prince George Wharf to Cable Beach resorts.",
      "image_url": _TAXI_IMG},
