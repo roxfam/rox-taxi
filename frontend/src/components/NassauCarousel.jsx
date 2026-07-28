@@ -11,7 +11,7 @@ const SLIDES = [
   {
     name: "Blue Lagoon Island",
     tag: "Ferry from Nassau",
-    img: "https://images.pexels.com/photos/1287460/pexels-photo-1287460.jpeg?auto=compress&cs=tinysrgb&w=1920",
+    img: "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/bmy7ibtt_bahamas-blue-lagoon-island-private-beach-paradise-aerial.jpg",
   },
   {
     name: "World Famous Bahamas Straw Market",
