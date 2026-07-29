@@ -14,7 +14,7 @@ TOURS_SEED: List[Dict] = [
     {"id": "atlantis-tour", "name": "Paradise Island & Atlantis City Tour", "price": 45.0, "duration": "3 hours",
      "location": "Paradise Island", "featured": True,
      "description": "Guided city tour ending at Atlantis Resort with photo stops at Fort Fincastle, Queen's Staircase and the Cloisters.",
-     "image_url": "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzdXYlMjBkcml2aW5nJTIwdHJvcGljYWx8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/08y2qvto_684289985_122108121422812605_8912813587859776552_n.jpg",
      "category": "tour", "active": True},
     {"id": "snorkel-rose", "name": "Rose Island Reef Snorkeling", "price": 65.0, "duration": "4 hours",
      "location": "Departs Paradise Island", "featured": True,
