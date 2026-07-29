@@ -29,6 +29,8 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **Live-stats social-proof badge** — `GET /api/live-stats`, shows "N booked / hr" chip in header.
 - **8-language switcher** — Google Translate widget: EN, ES, FR, HT, DE, NL, ZH-CN, TR.
 - **Elegant branding** — gradient serif "Rox Taxi Service" + italic serif "& Tours" wordmark with gold hairline accent in header, mobile drawer, footer.
+- **Official gold-R monogram logo** (Feb 2026) — rolled out to header, mobile drawer, footer (white variant on navy), payment success page, printable receipt, and browser favicon / Apple touch icon. Static assets at `/logo-gold.webp`, `/logo-white.webp`, `/logo-mark.png` under `frontend/public/`.
+- **Customer gallery submissions + admin approval queue** (Feb 2026) — public `GallerySubmitCard` on `/gallery` posts to `POST /api/gallery/submit` (multipart, ≤8MB, image only). New `GalleryPanel` in `/admin/manage?tab=gallery` lists pending submissions with Approve / Reject buttons hitting `POST /api/admin/gallery/{id}/approve|reject`. Approved photos flow into public `GET /api/gallery` under `category:"guests"`. Admin dashboard header includes a "Guest Photos" quick-link with pending-count badge so the operator can never miss a new submission. 12/12 backend pytests pass (`/app/backend/tests/test_gallery_submissions.py`).
 - **Taxi fare edits** — LPIA→Downtown $40, LPIA→Cable Beach $35, Baha Mar↔Downtown $25, Downtown↔Paradise $20, Cruise Port→Baha Mar $25, LPIA→Cruise Port $40, Nassau→Adelaide $60, Hotel→Fish Fry $20, +Paradise Island→Montague Beach $20 (NEW).
 - **Bug fix — Saturday closure** — was blocking any 7+ day rental (impossible to span a Saturday). Now only pickup date is validated; customers can keep the car through Saturday.
 - **Deployment package** — `/app/deploy/` with:
@@ -45,6 +47,8 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **Tour upsell on booking success** ✅ — New `TourUpsellCard` on the PaymentSuccess page shows 2 contextually chosen tours based on the completed booking's dropoff (Atlantis / Cruise Port / Cable Beach). Direct links to `/tours#{id}`. Featured/popular tours ranked first.
 - **Iteration 19 tests** ✅ — 15/15 backend pytest + FlightTrackerCard E2E validated (WU805 shows Western Air GGT→NAS with recommended pickup, ZZ9999 shows not-found, <3-char guard works, pickup-aligned indicator renders). Only sanitisation nit fixed (raw Stripe/PayPal error strings no longer leaked in refund_result.error).
 - **Blackout dates admin UI** ✅ — New `BlackoutDatesSection` inside `SiteConfigPanel`. Date picker + Add button + list with per-row Remove. Persists via existing `POST /api/admin/blackout-dates` endpoint. Auto-refreshes cache. Data-testids: `admin-blackout-panel`, `admin-blackout-date-input`, `admin-blackout-add-btn`, `admin-blackout-list`, `admin-blackout-item-{date}`, `admin-blackout-remove-{date}`, `admin-blackout-empty`.
+
+- **Admin Guest-Photos discoverability** (Feb 2026) — pending-count badge on `/admin` header ("Guest Photos" quick-link) so the owner never misses a new customer submission. AdminManage now supports `?tab=` deep-linking + URL sync on tab change. Verified 100% by testing agent (iteration_20). Test seeded 1 guest photo; approval flow round-trip clean.
 
 ### 🎯 Backlog — Wave 2 (revenue/trust)
 - ~~Airport flight tracker~~ ✅ shipped
