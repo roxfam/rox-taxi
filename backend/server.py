@@ -9,6 +9,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
 import uuid
+import asyncio
 import bcrypt
 import jwt
 from datetime import datetime, timezone, timedelta
@@ -18,7 +19,7 @@ from emergentintegrations.payments.stripe.checkout import (
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 from fastapi.responses import StreamingResponse
-from notifications import notify_booking_confirmed, notify_owner_booking_created
+from notifications import notify_booking_confirmed, notify_owner_booking_created, send_booking_reminder, send_rental_return_reminder
 from facebook import post_gallery_photo_to_facebook, facebook_status
 import paypal_client
 from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS, HOME_SLIDES_SEED
@@ -605,6 +606,117 @@ async def my_bookings(user: dict = Depends(get_current_user)):
 # Catalog seed data lives in seed_data.py to keep this file lean.
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# Day-of-booking reminder loop
+# ─────────────────────────────────────────────────────────────────────────
+# Every 10 minutes we scan for bookings whose pickup time is within the next
+# 24 hours (and any missed by up to 30 min due to a cron gap), that aren't
+# cancelled/completed, and that haven't already been reminded. Sends email +
+# SMS to the guest and an SMS to the on-call driver (ADMIN_SMS_NUMBER).
+# Idempotency: `reminder_sent_at` is set on the booking doc after a
+# successful send so we never double-notify.
+
+REMINDER_LOOKAHEAD_HOURS = 24
+REMINDER_INTERVAL_SECONDS = 600  # 10 min
+
+
+async def _booking_reminder_loop() -> None:
+    while True:
+        try:
+            await _run_reminder_tick()
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("rox.reminders").warning("tick error: %s", e)
+        await asyncio.sleep(REMINDER_INTERVAL_SECONDS)
+
+
+async def _run_reminder_tick() -> int:
+    """Single reminder scan. Returns the number of reminders sent this tick.
+    Broken out so tests can call it deterministically."""
+    log = logging.getLogger("rox.reminders")
+    now = datetime.now(timezone.utc)
+    cutoff = now + timedelta(hours=REMINDER_LOOKAHEAD_HOURS)
+    grace = now - timedelta(minutes=30)
+
+    cfg = await db.site_config.find_one({"_id": "main"}) or {}
+    prefs = {
+        "notify_email_enabled": cfg.get("notify_email_enabled", True),
+        "notify_sms_enabled":   cfg.get("notify_sms_enabled",   True),
+    }
+    driver_number = (secrets_store.get_secret("ADMIN_SMS_NUMBER") or WHATSAPP_NUMBER or "").strip() or None
+
+    cur = db.bookings.find({
+        "status": {"$nin": ["cancelled", "completed"]},
+        "reminder_sent_at": {"$exists": False},
+    })
+    sent = 0
+    async for b in cur:
+        try:
+            dt = _parse_booking_date(b.get("booking_date", ""))
+        except Exception:
+            continue
+        # Only bookings whose pickup falls in [now - 30m, now + 24h].
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if not (grace <= dt <= cutoff):
+            continue
+        try:
+            report = send_booking_reminder(b, prefs=prefs, driver_number=driver_number)
+            await db.bookings.update_one(
+                {"id": b["id"]},
+                {"$set": {"reminder_sent_at": now.isoformat(), "reminder_result": report}},
+            )
+            sent += 1
+            log.info("reminder sent for %s (email=%s guest_sms=%s driver_sms=%s)",
+                     b["id"],
+                     report.get("email", {}).get("sent"),
+                     report.get("guest_sms", {}).get("sent"),
+                     report.get("driver_sms", {}).get("sent"))
+        except Exception as e:  # noqa: BLE001
+            log.warning("reminder send fail for %s: %s", b.get("id"), e)
+
+    # ── Rental return reminders — fire on the return day ──────────────
+    # Return date = booking_date + days. Idempotent via `return_reminder_sent_at`.
+    office_phone = (cfg.get("phone") or PHONE_NUMBER or WHATSAPP_NUMBER or "+1 (242) 432-2587").strip()
+    cur2 = db.bookings.find({
+        "service_type": "rental",
+        "status": {"$nin": ["cancelled", "completed"]},
+        "return_reminder_sent_at": {"$exists": False},
+    })
+    async for b in cur2:
+        try:
+            pickup_dt = _parse_booking_date(b.get("booking_date", ""))
+        except Exception:
+            continue
+        if pickup_dt.tzinfo is None:
+            pickup_dt = pickup_dt.replace(tzinfo=timezone.utc)
+        days = int(b.get("days") or 1)
+        return_dt = pickup_dt + timedelta(days=days)
+        # Trigger when the return date falls inside [now - 30m, now + 24h].
+        if not (grace <= return_dt <= cutoff):
+            continue
+        try:
+            report = send_rental_return_reminder(
+                b,
+                return_date_iso=return_dt.isoformat(),
+                office_phone=office_phone,
+                prefs=prefs,
+                driver_number=driver_number,
+            )
+            await db.bookings.update_one(
+                {"id": b["id"]},
+                {"$set": {
+                    "return_reminder_sent_at": now.isoformat(),
+                    "return_reminder_result": report,
+                    "return_date": return_dt.isoformat(),
+                }},
+            )
+            sent += 1
+            log.info("rental return reminder sent for %s (return=%s)", b["id"], return_dt.date())
+        except Exception as e:  # noqa: BLE001
+            log.warning("return reminder send fail for %s: %s", b.get("id"), e)
+    return sent
+
+
 @app.on_event("startup")
 async def seed_db():
     # Prime the DB-backed secrets store so get_secret() returns admin-managed
@@ -613,6 +725,12 @@ async def seed_db():
         await secrets_store.prime()
     except Exception as e:  # noqa: BLE001
         logging.warning("secrets_store prime warn: %s", e)
+    # Kick off the day-of-booking reminder loop (email + SMS to guest, SMS to
+    # driver). Idempotent via `reminder_sent_at` on the booking doc.
+    try:
+        asyncio.create_task(_booking_reminder_loop())
+    except Exception as e:  # noqa: BLE001
+        logging.warning("reminder loop start warn: %s", e)
     # Ensure customer auth indexes exist
     try:
         await db.users.create_index("email", unique=True)
@@ -1434,6 +1552,32 @@ async def create_booking(req: BookingCreate):
             400,
             f"Car rentals have a {RENTAL_MIN_DAYS}-day minimum. Please increase the number of days.",
         )
+    # ── Per-vehicle blackout check (rentals only) ────────────────────────
+    # Reject the booking if ANY day between pickup and return matches a date
+    # in that specific rental's blackout_dates array (car in service, already
+    # held offline, etc.). Admin manages this list from /admin/manage?tab=rentals.
+    if req.service_type == "rental":
+        rental_doc = await db.rentals.find_one({"id": req.item_id})
+        vehicle_blackouts = set((rental_doc or {}).get("blackout_dates") or [])
+        if vehicle_blackouts:
+            try:
+                start_dt = _parse_booking_date(req.booking_date).date()
+                span_days = max(1, int(req.days or 1))
+                clashes = [
+                    (start_dt + timedelta(days=i)).isoformat()
+                    for i in range(span_days)
+                    if (start_dt + timedelta(days=i)).isoformat() in vehicle_blackouts
+                ]
+                if clashes:
+                    raise HTTPException(
+                        400,
+                        f"This vehicle is unavailable on {', '.join(clashes)}. "
+                        f"Please pick different dates or another vehicle.",
+                    )
+            except HTTPException:
+                raise
+            except Exception:  # noqa: BLE001
+                pass
     booking = req.model_dump()
     booking["id"] = str(uuid.uuid4())[:8].upper()
     booking["status"] = "pending_payment" if req.payment_method == "stripe" else "confirmed"

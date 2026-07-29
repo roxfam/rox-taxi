@@ -237,3 +237,204 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
         report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
 
     return report
+
+
+def send_booking_reminder(booking: dict, prefs: Optional[dict] = None, driver_number: Optional[str] = None) -> dict:
+    """Day-of-booking reminder — email + SMS to guest and SMS to the on-call
+    driver / owner. Sent by the background loop in server.py once, when the
+    trip is within the next 24 hours (idempotency via `reminder_sent_at`).
+
+    Args:
+        booking: the booking dict as stored in Mongo.
+        prefs: site_config prefs {notify_email_enabled, notify_sms_enabled}.
+        driver_number: E.164 number of the driver/dispatcher to alert (usually
+            ADMIN_SMS_NUMBER). Set to None to skip driver SMS.
+
+    Returns:
+        {"email": {...}, "guest_sms": {...}, "driver_sms": {...}}
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+
+    report = {
+        "email":      {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+        "guest_sms":  {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
+        "driver_sms": {"sent": False, "provider": "none", "error": None, "enabled": bool(driver_number)},
+    }
+
+    subject = f"Reminder — Your Rox Taxi booking {booking['id']} is coming up"
+    text = (
+        f"Hi {booking['customer_name']},\n\n"
+        f"Just a reminder for your Rox Taxi booking:\n\n"
+        f"  Confirmation: {booking['id']}\n"
+        f"  Service: {booking['item_name']}\n"
+        f"  Date: {booking['booking_date']}\n"
+        f"  Pickup: {booking.get('pickup_location','—')}\n"
+        f"  Dropoff: {booking.get('dropoff_location','—')}\n"
+        f"  Passengers: {booking.get('passengers', 1)}\n\n"
+        f"Track your ride live: https://roxtaxi.com/track?id={booking['id']}\n"
+        f"Need to change something? WhatsApp us: https://wa.me/12424322587\n\n"
+        f"Safe travels — see you soon.\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:0 0 8px;">See you soon!</h1>
+      <p style="color:#64748B;">Hi {booking['customer_name']}, a quick reminder for your Rox Taxi trip.</p>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:24px;margin-top:20px;">
+        <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#64748B;">Confirmation</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#0B3B5C;margin-top:4px;">{booking['id']}</div>
+        <hr style="border:none;border-top:1px solid #E2E8F0;margin:20px 0;">
+        <div><strong style="color:#0B3B5C;">{booking['item_name']}</strong></div>
+        <div style="color:#64748B;font-size:14px;margin-top:4px;">Date: <strong>{booking['booking_date']}</strong></div>
+        <div style="color:#64748B;font-size:14px;">Pickup: {booking.get('pickup_location','—')}</div>
+        <div style="color:#64748B;font-size:14px;">Dropoff: {booking.get('dropoff_location','—')}</div>
+        <div style="color:#64748B;font-size:14px;">Passengers: {booking.get('passengers', 1)}</div>
+      </div>
+      <p style="color:#64748B;font-size:13px;margin-top:20px;">
+        <a style="color:#D4A94A;font-weight:600;text-decoration:none;" href="https://roxtaxi.com/track?id={booking['id']}">Track live →</a>
+        &nbsp;·&nbsp;
+        <a style="color:#25D366;font-weight:600;text-decoration:none;" href="https://wa.me/12424322587">Message us on WhatsApp</a>
+      </p>
+      <p style="color:#94a3b8;font-size:11px;margin-top:28px;">Rox Taxi Service &amp; Tours · Nassau, Bahamas · 24/7 dispatch</p>
+    </div>
+    """
+
+    if email_enabled and booking.get("customer_email"):
+        result = send_email(booking["customer_email"], subject, html, text)
+        report["email"].update(result)
+    else:
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+
+    if sms_enabled and booking.get("customer_phone"):
+        guest_sms = (
+            f"Rox Taxi reminder: {booking['item_name']} on {booking['booking_date']}. "
+            f"Confirm #{booking['id']}. Pickup: {booking.get('pickup_location','—')}. "
+            f"Track: roxtaxi.com/track?id={booking['id']} · WhatsApp changes: wa.me/12424322587"
+        )
+        result = send_sms(booking["customer_phone"], guest_sms)
+        report["guest_sms"].update(result)
+    else:
+        report["guest_sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+
+    if driver_number:
+        driver_sms = (
+            f"🚕 DAY REMINDER · Booking {booking['id']}\n"
+            f"{booking['booking_date']} · {booking['item_name']}\n"
+            f"Guest: {booking['customer_name']} · {booking.get('customer_phone','')}\n"
+            f"Pickup: {booking.get('pickup_location','—')}\n"
+            f"Dropoff: {booking.get('dropoff_location','—')}\n"
+            f"Pax: {booking.get('passengers', 1)}"
+        )
+        result = send_sms(driver_number, driver_sms)
+        report["driver_sms"].update(result)
+
+    return report
+
+
+def send_rental_return_reminder(
+    booking: dict,
+    return_date_iso: str,
+    office_phone: str = "",
+    prefs: Optional[dict] = None,
+    driver_number: Optional[str] = None,
+) -> dict:
+    """Return-day reminder for a car rental — email + SMS to guest, SMS to
+    the owner/driver. Includes the exact return date, the office phone for
+    extensions, and a rebook link for a fresh rental.
+
+    Args:
+        booking: the rental booking doc.
+        return_date_iso: computed return date (YYYY-MM-DD or ISO).
+        office_phone: the office phone (E.164 or display string) shown in the
+            body so the guest can call to extend. Defaults to WhatsApp only.
+        prefs: {notify_email_enabled, notify_sms_enabled}.
+        driver_number: E.164 dispatcher number to alert; None to skip.
+
+    Returns: same shape as send_booking_reminder plus `kind`: "rental_return".
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+
+    report = {
+        "kind": "rental_return",
+        "email":      {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+        "guest_sms":  {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
+        "driver_sms": {"sent": False, "provider": "none", "error": None, "enabled": bool(driver_number)},
+    }
+
+    return_pretty = str(return_date_iso).split("T")[0]
+    tel_href = "".join(ch for ch in (office_phone or "+12424322587") if ch.isdigit() or ch == "+")
+    tel_display = office_phone or "+1 (242) 432-2587"
+
+    subject = f"Return today — Rental {booking['id']} ({booking['item_name']})"
+    text = (
+        f"Hi {booking['customer_name']},\n\n"
+        f"Your Rox car rental is due back today ({return_pretty}).\n\n"
+        f"  Confirmation: {booking['id']}\n"
+        f"  Vehicle: {booking['item_name']}\n"
+        f"  Pickup date: {booking['booking_date']}\n"
+        f"  Days: {booking.get('days', 1)}\n"
+        f"  Return date: {return_pretty}\n\n"
+        f"NEED MORE TIME?\n"
+        f"Call the office at {tel_display} to extend your rental, or book a\n"
+        f"fresh set of dates online at https://roxtaxi.com/rentals — walk-in\n"
+        f"or WhatsApp changes are welcome up until return time.\n\n"
+        f"Thanks for driving with Rox!\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:0 0 8px;">Return day today.</h1>
+      <p style="color:#64748B;">Hi {booking['customer_name']}, your car rental is due back today.</p>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:24px;margin-top:20px;">
+        <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#64748B;">Confirmation</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#0B3B5C;margin-top:4px;">{booking['id']}</div>
+        <hr style="border:none;border-top:1px solid #E2E8F0;margin:20px 0;">
+        <div><strong style="color:#0B3B5C;">{booking['item_name']}</strong></div>
+        <div style="color:#64748B;font-size:14px;margin-top:4px;">Pickup: <strong>{booking['booking_date']}</strong> · Days: <strong>{booking.get('days',1)}</strong></div>
+        <div style="color:#E86A3C;font-size:15px;font-weight:600;margin-top:8px;">Return today: {return_pretty}</div>
+      </div>
+      <div style="margin-top:22px;background:#FFF7E6;border:1px solid #F5DFA1;border-radius:14px;padding:18px;">
+        <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#A88235;font-weight:700;">Need more time?</div>
+        <p style="color:#0B3B5C;font-size:14px;margin:6px 0 12px;">Call the office to extend your rental, or reserve a fresh set of dates online.</p>
+        <a href="tel:{tel_href}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;font-size:13px;margin-right:8px;">Call {tel_display}</a>
+        <a href="https://roxtaxi.com/rentals" style="display:inline-block;background:#D4A94A;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;font-size:13px;">Rebook new dates</a>
+      </div>
+      <p style="color:#64748B;font-size:13px;margin-top:20px;">
+        Prefer chat? <a style="color:#25D366;font-weight:600;text-decoration:none;" href="https://wa.me/12424322587">WhatsApp us</a>.
+      </p>
+      <p style="color:#94a3b8;font-size:11px;margin-top:28px;">Rox Taxi Service &amp; Tours · Nassau, Bahamas · 24/7 dispatch</p>
+    </div>
+    """
+
+    if email_enabled and booking.get("customer_email"):
+        result = send_email(booking["customer_email"], subject, html, text)
+        report["email"].update(result)
+    else:
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+
+    if sms_enabled and booking.get("customer_phone"):
+        guest_sms = (
+            f"Rox Rental: Your {booking['item_name']} (#{booking['id']}) is due back TODAY {return_pretty}. "
+            f"Need more time? Call {tel_display} or rebook: roxtaxi.com/rentals · WhatsApp: wa.me/12424322587"
+        )
+        result = send_sms(booking["customer_phone"], guest_sms)
+        report["guest_sms"].update(result)
+    else:
+        report["guest_sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+
+    if driver_number:
+        driver_sms = (
+            f"🔑 RENTAL RETURN · #{booking['id']}\n"
+            f"Return: {return_pretty}\n"
+            f"{booking['item_name']}\n"
+            f"Guest: {booking['customer_name']} · {booking.get('customer_phone','')}\n"
+            f"Days: {booking.get('days', 1)} · Deposit: {_fmt_money(booking.get('deposit_amount', 0))}"
+        )
+        result = send_sms(driver_number, driver_sms)
+        report["driver_sms"].update(result)
+
+    return report

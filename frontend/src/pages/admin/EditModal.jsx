@@ -27,9 +27,11 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
     location: initial.location || "",
     featured: !!initial.featured,
     external_booking_url: initial.external_booking_url || "",
+    blackout_dates: Array.isArray(initial.blackout_dates) ? [...initial.blackout_dates] : [],
   });
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [newBlackout, setNewBlackout] = useState("");
 
   const save = async () => {
     if (!form.name.trim()) return toast.error("Name is required");
@@ -52,6 +54,7 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
           model: form.model || null,
           color: form.color || null,
           body: form.body || null,
+          blackout_dates: [...(form.blackout_dates || [])].sort(),
         });
       } else if (kind === "taxi_services") {
         Object.assign(payload, { route: form.route || null, featured: !!form.featured });
@@ -141,6 +144,61 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
             </label>
           )}
         </div>
+
+        {isRental && (
+          <div className="pt-3 border-t border-[#F1F5F9]" data-testid="edit-blackouts">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] tracking-[0.2em] uppercase text-[#64748B] font-semibold">Vehicle blackout dates</span>
+              <span className="text-[10px] text-[#94a3b8]">— days this specific car is unavailable</span>
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                type="date"
+                value={newBlackout}
+                onChange={(e) => setNewBlackout(e.target.value)}
+                data-testid="edit-blackout-date-input"
+                className="rounded-md border border-[#E2E8F0] px-3 py-1.5 text-sm focus:border-[#D4A94A] focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newBlackout) return toast.error("Pick a date first");
+                  if (form.blackout_dates.includes(newBlackout)) return toast.error("Already in list");
+                  setForm({ ...form, blackout_dates: [...form.blackout_dates, newBlackout].sort() });
+                  setNewBlackout("");
+                }}
+                data-testid="edit-blackout-add-btn"
+                className="rounded-md bg-[#0B3B5C] text-white px-3 py-1.5 text-xs font-semibold hover:bg-[#132a4a]"
+              >
+                Add blackout
+              </button>
+            </div>
+            {form.blackout_dates.length === 0 ? (
+              <div className="text-xs text-[#94a3b8]" data-testid="edit-blackout-empty">No blackouts — the car is bookable on every open day.</div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5" data-testid="edit-blackout-list">
+                {form.blackout_dates.map((d) => (
+                  <span
+                    key={d}
+                    data-testid={`edit-blackout-item-${d}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C] text-[11px] font-semibold px-2.5 py-1"
+                  >
+                    {d}
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, blackout_dates: form.blackout_dates.filter((x) => x !== d) })}
+                      data-testid={`edit-blackout-remove-${d}`}
+                      className="ml-0.5 -mr-1 hover:text-[#7f1d1d]"
+                      title="Remove"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex justify-end gap-2 pt-3">
           <button onClick={onClose} className="rounded-md border border-[#E2E8F0] px-4 py-2 text-sm">Cancel</button>
           <button onClick={save} disabled={saving} data-testid="edit-save" className="rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">

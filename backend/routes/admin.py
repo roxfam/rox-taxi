@@ -239,6 +239,10 @@ class ItemUpsert(BaseModel):
     # secondary CTA on the public tour card. Useful for excursions run by
     # third-party operators (Atlantis Aquaventure, Blue Lagoon, etc.).
     external_booking_url: Optional[str] = None
+    # Per-vehicle blackout dates (rentals only). Each entry is a YYYY-MM-DD
+    # string; booking creation refuses any day in this list, blocking the car
+    # while it's in maintenance / already reserved by an offline customer.
+    blackout_dates: Optional[List[str]] = None
 
 
 class HomeSlideUpsert(BaseModel):
