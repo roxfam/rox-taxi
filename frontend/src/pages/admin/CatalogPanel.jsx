@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Edit2, Trash2, DollarSign, History, Tag } from "lucide-react";
+import { Plus, Edit2, Trash2, DollarSign, History, Tag, ImageIcon } from "lucide-react";
 import { api, money } from "../../lib/api";
 import EditModal from "./EditModal";
 import PriceHistoryModal from "./PriceHistoryModal";
@@ -61,7 +61,19 @@ export default function CatalogPanel({ kind }) {
       <div className="divide-y divide-[#E2E8F0]">
         {items.map((it) => (
           <div key={it.id} className="p-4 flex items-center gap-4" data-testid={`admin-item-${it.id}`}>
-            {it.image_url && <img src={it.image_url} className="w-16 h-16 rounded-lg object-cover" alt="" />}
+            <PhotoDropzone
+              currentUrl={it.image_url}
+              onUploaded={async (newUrl) => {
+                try {
+                  await api.put(`/admin/${kind}/${it.id}`, { image_url: newUrl });
+                  toast.success("Photo updated");
+                  load();
+                } catch (e) {
+                  toast.error(e?.response?.data?.detail || "Failed to attach photo");
+                }
+              }}
+              testid={`admin-photo-drop-${it.id}`}
+            />
             <div className="flex-1">
               <div className="font-semibold text-[#0B3B5C] flex items-center gap-2">
                 {it.name}
@@ -107,6 +119,77 @@ export default function CatalogPanel({ kind }) {
 
       {editing && <EditModal kind={kind} initial={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
       {pricing && <PriceHistoryModal kind={kind} item={pricing} onClose={() => setPricing(null)} onSaved={() => { setPricing(null); load(); }} />}
+    </div>
+  );
+}
+
+// Inline photo dropzone — thumbnail with hover overlay + native drag-drop.
+// Uploads through the existing POST /admin/images endpoint, then hands the
+// resulting URL back to the parent to persist against the catalog item.
+function PhotoDropzone({ currentUrl, onUploaded, testid }) {
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [drag, setDrag] = useState(false);
+
+  const upload = async (file) => {
+    if (!file || !file.type.startsWith("image/")) {
+      return toast.error("Only image files are allowed");
+    }
+    if (file.size > 8 * 1024 * 1024) return toast.error("Image too large (max 8MB)");
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post("/admin/images", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      if (!data?.url) throw new Error("Upload returned no URL");
+      await onUploaded(data.url);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || e.message || "Upload failed");
+    } finally { setUploading(false); }
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault(); e.stopPropagation(); setDrag(false);
+    const f = e.dataTransfer?.files?.[0];
+    if (f) upload(f);
+  };
+
+  return (
+    <div
+      className={`relative w-16 h-16 shrink-0 rounded-lg overflow-hidden border-2 border-dashed transition-all cursor-pointer ${drag ? "border-[#D4A94A] scale-105 shadow-[0_6px_18px_rgba(212,169,74,0.35)]" : "border-transparent hover:border-[#D4A94A]/60"} ${!currentUrl ? "bg-[#F1F5F9]" : ""}`}
+      onDragEnter={(e) => { e.preventDefault(); setDrag(true); }}
+      onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={onDrop}
+      onClick={() => !uploading && fileRef.current?.click()}
+      data-testid={testid}
+      title="Click or drag an image to replace"
+    >
+      {currentUrl ? (
+        <img src={currentUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-[#94a3b8]">
+          <ImageIcon className="w-5 h-5" />
+        </div>
+      )}
+      {(drag || uploading) && (
+        <div className="absolute inset-0 bg-[#0B3B5C]/80 text-white flex items-center justify-center text-[10px] font-bold uppercase tracking-widest">
+          {uploading ? "Saving…" : "Drop"}
+        </div>
+      )}
+      {!drag && !uploading && currentUrl && (
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#0B3B5C]/85 to-transparent text-white text-[9px] font-bold uppercase tracking-widest text-center py-1 opacity-0 hover:opacity-100 transition-opacity">
+          Change
+        </div>
+      )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        data-testid={`${testid}-input`}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) { upload(f); e.target.value = ""; } }}
+      />
     </div>
   );
 }
