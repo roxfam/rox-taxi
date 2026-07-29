@@ -16,6 +16,9 @@ import Groups from "./pages/Groups";
 import WeddingBuilder from "./pages/WeddingBuilder";
 import Gallery from "./pages/Gallery";
 import Ardastra from "./pages/attractions/Ardastra";
+import Atlantis from "./pages/attractions/Atlantis";
+import BlueLagoon from "./pages/attractions/BlueLagoon";
+import BahaMar from "./pages/attractions/BahaMar";
 import Pay from "./pages/Pay";
 import { PaymentSuccess, PaymentCancel } from "./pages/PaymentReturn";
 import AdminLogin from "./pages/AdminLogin";
@@ -60,6 +63,9 @@ function AppRouter() {
       <Route path="/wedding-builder" element={<CustomerShell><WeddingBuilder /></CustomerShell>} />
       <Route path="/gallery" element={<CustomerShell><Gallery /></CustomerShell>} />
       <Route path="/tours/ardastra" element={<CustomerShell><Ardastra /></CustomerShell>} />
+      <Route path="/tours/atlantis" element={<CustomerShell><Atlantis /></CustomerShell>} />
+      <Route path="/tours/blue-lagoon" element={<CustomerShell><BlueLagoon /></CustomerShell>} />
+      <Route path="/tours/baha-mar" element={<CustomerShell><BahaMar /></CustomerShell>} />
       <Route path="/pay" element={<CustomerShell><Pay /></CustomerShell>} />
       <Route path="/pay/:bookingId" element={<CustomerShell><Pay /></CustomerShell>} />
       <Route path="/my-bookings" element={<CustomerShell><MyBookings /></CustomerShell>} />
