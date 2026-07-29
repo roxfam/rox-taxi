@@ -1113,6 +1113,47 @@ async def admin_facebook_status(_admin: str = Depends(require_admin)):
     return await facebook_status()
 
 
+@api_router.get("/admin/gallery/approved")
+async def admin_list_approved(_admin: str = Depends(require_admin)):
+    """Approved submissions with Facebook post-status for the admin panel repost UI."""
+    docs = await db.gallery_submissions.find({"status": "approved"}).sort("approved_at", -1).to_list(200)
+    return [clean(d) for d in docs]
+
+
+@api_router.post("/admin/gallery/{sub_id}/repost-facebook")
+async def admin_repost_facebook(sub_id: str, _admin: str = Depends(require_admin)):
+    """Manually retry the Facebook post for an already-approved submission.
+    Works whether the previous post attempt succeeded or failed."""
+    doc = await db.gallery_submissions.find_one({"id": sub_id, "status": "approved"})
+    if not doc:
+        raise HTTPException(404, "Approved submission not found")
+    result = await post_gallery_photo_to_facebook(
+        image_url=doc.get("url", ""),
+        submitter_name=doc.get("submitter_name", ""),
+        guest_caption=doc.get("caption", ""),
+    )
+    await db.gallery_submissions.update_one(
+        {"id": sub_id},
+        {"$set": {
+            "facebook_posted": result.get("ok", False),
+            "facebook_post_id": result.get("post_id"),
+            "facebook_error": result.get("error"),
+            "facebook_attempted_at": now_iso(),
+        }},
+    )
+    try:
+        if result.get("ok"):
+            await _send_admin_push(
+                title="Guest photo re-posted ✓",
+                body=f"{doc.get('submitter_name','guest')}'s photo is now live on Facebook.",
+                url="/admin/manage?tab=gallery",
+                tag=f"fb-repost-{sub_id}",
+            )
+    except Exception:  # noqa: BLE001
+        pass
+    return {"id": sub_id, "facebook": result}
+
+
 @api_router.post("/admin/gallery/{sub_id}/reject")
 async def admin_reject_submission(sub_id: str, _admin: str = Depends(require_admin)):
     doc = await db.gallery_submissions.find_one({"id": sub_id})

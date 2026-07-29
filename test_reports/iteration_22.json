@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 22 end-to-end verification for Rox Taxi guest-approve → Facebook post → gallery-live flow, plus new repost endpoint and Pillow 1200x630 auto-crop. 22/22 backend tests pass (10 new + 12 gallery regression). Frontend GalleryPanel two-tab UI works: Pending tab, Approved tab with FB status badges (posted/failed/not-attempted) and per-item repost button + view-live-post link. Facebook remains scope-blocked as expected (pages_manage_posts missing on token) — assertions treat that as the current state and validate the non-Facebook contract. Regressions verified for /driver/manifest (data renders) and PackagesStrip testids on home. PushToggle only renders inside AdminDashboard (by design).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_facebook_crop.py",
+    "/app/backend/tests/test_iteration22_gallery_fb.py",
+    "/app/backend/tests/test_gallery_submissions.py",
+    "/app/test_reports/pytest/iteration22.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 2086 lines — well over 700-line threshold; consider splitting into resource modules (gallery, bookings, push, etc.).",
+    "facebook.py fbPostUrl in GalleryPanel splits on '_' but Facebook post IDs use format 'pageid_postid'. Current logic is a best-effort; verify once a real post_id lands.",
+    "In server.py approve handler (~L1080), the DB write for facebook fields is inside try/except but if the update itself raises (e.g. Mongo hiccup), fb_result is overwritten with 'exception:' outside the outer post call scope — flow still returns approved, which is safe, but the DB update is not retried."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_facebook_crop.py (new)",
+    "/app/backend/tests/test_iteration22_gallery_fb.py (new)"
+  ],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "100%"},
+  "test_credentials": "Admin roxfam2509@gmail.com / admin123 (verified working)",
+  "seed_data_creation": "Created 1 approved test submission via end-to-end flow (TEST_Iter22Guest, TEST_iter22_e2e caption). Left approved for admin panel inspection.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_iteration22_gallery_fb.py + test_facebook_crop.py. Run with `pytest -o addopts='' tests/test_iteration22_gallery_fb.py tests/test_facebook_crop.py` (xdist causes ordering issues for E2E test). Facebook token is scope-blocked (pages_manage_posts missing) — this is intentional per user pending action, tests already assert that state. Once scope is granted, the E2E test's fb.ok=False assertion will need to be updated to allow ok=True. /admin/manage?tab=gallery — approved tab currently has 8 items (4 failed + 4 not-attempted badges). Repost button works and updates facebook_attempted_at.",
+  "rca of the issue": "N/A — no bugs found. Facebook errors are expected/intentional due to missing scope on the FB Page token; owner action pending outside this test scope."
+}

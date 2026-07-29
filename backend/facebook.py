@@ -11,12 +11,14 @@ can't break the gallery-approval flow.
 """
 from __future__ import annotations
 
+import io
 import logging
 import os
 import random
 from pathlib import Path
 
 import httpx
+from PIL import Image, ImageOps
 
 logger = logging.getLogger("rox.facebook")
 
@@ -26,6 +28,12 @@ CAPTION_TEMPLATES = [
     "Beautiful moment captured by {name} 🇧🇸 · Ride with Rox Taxi Service: +1 (242) 432-2587 · {website}",
     "Thanks {name} for sharing! Ready for your own Bahamas adventure? Book at {website} #Nassau #Bahamas #RoxTaxi",
 ]
+
+# Facebook's recommended Open Graph landscape image is 1200x630 (1.91:1).
+# Anything narrower or taller gets center-cropped by Facebook — often awkwardly.
+# We pre-crop here to guarantee the framing we want.
+FB_TARGET_WIDTH = 1200
+FB_TARGET_HEIGHT = 630
 
 UPLOAD_DIR = Path("/app/backend/uploads")
 
@@ -48,14 +56,46 @@ def _compose_caption(submitter_name: str, guest_caption: str, website: str) -> s
     return f"{base}\n\n\"{guest}\"" if guest else base
 
 
+def _optimise_for_facebook(image_bytes: bytes) -> tuple[bytes, str]:
+    """Return (jpeg_bytes, mime) center-cropped to 1200x630 (1.91:1).
+
+    Preserves EXIF orientation, converts alpha PNGs to white-backed JPEG, and
+    only up/down-scales when needed. On any decoding failure we fall back to
+    the original bytes so we never block a post over a Pillow hiccup.
+    """
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img = ImageOps.exif_transpose(img)  # respect phone camera rotation
+        if img.mode in ("RGBA", "LA", "P"):
+            bg = Image.new("RGB", img.size, (255, 255, 255))
+            bg.paste(img.convert("RGBA"), mask=img.convert("RGBA").split()[-1])
+            img = bg
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+        # Center-crop to target aspect ratio then resize
+        img = ImageOps.fit(
+            img,
+            (FB_TARGET_WIDTH, FB_TARGET_HEIGHT),
+            method=Image.Resampling.LANCZOS,
+            centering=(0.5, 0.5),
+        )
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=88, optimize=True, progressive=True)
+        return buf.getvalue(), "image/jpeg"
+    except Exception as e:  # noqa: BLE001
+        logger.warning("facebook crop failed, using original: %s", e)
+        return image_bytes, "image/jpeg"
+
+
 async def post_gallery_photo_to_facebook(
     *, image_url: str, submitter_name: str = "", guest_caption: str = ""
 ) -> dict:
     """Publishes a photo (with caption) to the Rox Taxi Service Facebook page.
 
     image_url — the /uploads/<filename> path stored on the gallery submission.
-                We resolve it to an absolute path on disk and upload the bytes,
-                so Facebook doesn't need to fetch from our preview host.
+                We resolve it to an absolute path on disk, auto-crop it to
+                Facebook's 1200x630 sweet spot, and upload the bytes so
+                Facebook doesn't need to fetch from our preview host.
     """
     cfg = _cfg()
     if not cfg["enabled"]:
@@ -64,21 +104,20 @@ async def post_gallery_photo_to_facebook(
         return {"ok": False, "post_id": None, "error": "not_configured"}
 
     # Resolve local file for upload
-    rel = image_url.lstrip("/")
-    rel = rel.removeprefix("uploads/")
+    rel = image_url.lstrip("/").removeprefix("uploads/")
     local = UPLOAD_DIR / rel
     if not local.is_file():
         return {"ok": False, "post_id": None, "error": f"file_not_found:{rel}"}
 
     caption = _compose_caption(submitter_name, guest_caption, cfg["website"])
     endpoint = f"https://graph.facebook.com/{cfg['version']}/{cfg['page_id']}/photos"
+    optimised_bytes, mime = _optimise_for_facebook(local.read_bytes())
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            with local.open("rb") as fh:
-                files = {"source": (local.name, fh, "image/jpeg")}
-                data = {"caption": caption, "access_token": cfg["token"], "published": "true"}
-                resp = await client.post(endpoint, data=data, files=files)
+            files = {"source": (f"rox_{local.stem}_fb.jpg", optimised_bytes, mime)}
+            data = {"caption": caption, "access_token": cfg["token"], "published": "true"}
+            resp = await client.post(endpoint, data=data, files=files)
         body = resp.json()
     except Exception as e:  # noqa: BLE001 — Facebook must never bring down the request
         logger.warning("facebook post threw: %s", e)
@@ -95,8 +134,7 @@ async def post_gallery_photo_to_facebook(
 
 
 async def facebook_status() -> dict:
-    """Read-only sanity check — reports whether the token is valid + which page it targets.
-    Used by an admin diagnostics endpoint."""
+    """Read-only sanity check — reports whether the token is valid + which page it targets."""
     cfg = _cfg()
     if not cfg["page_id"] or not cfg["token"]:
         return {"configured": False, "reason": "missing_env"}
