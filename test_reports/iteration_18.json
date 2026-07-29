@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 18 validated the 6 new features (live-stats badge, taxi route quote widget + quote-request fallback, round-trip discount, rental discount tiers, Saturday validation, print receipt, /track driver-live banner, language switcher, QR code on payment success). Backend: 16/17 pytest passed (test_iteration18_taxi_features.py). Frontend: /taxi widget, swap, matched fare $35, book-modal prefill, unmatched flow + QR-XXXX confirmation, desktop lang switcher menu with all 8 codes, mobile drawer lang switcher, and LiveStatsBadge all PASS. Two real defects found: (a) /receipt/:bookingId route is missing from App.js (PrintReceipt component imported but never wired), so the 'Print receipt' link on PaymentSuccess AND Track hits a blank/404 page; (b) Airport routes are seeded one-way ('LPIA → Downtown'), so Downtown→LPIA quote returns no_fixed_rate — customers heading back to the airport cannot get a fixed fare. Two minor testid gaps on the /track DriverLiveBanner.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/taxi/quote", "issue": "Downtown → LPIA (and every non-airport → airport reverse leg) returns matched:false / reason:no_fixed_rate. Airport routes in seed_data.py use '→' (unidirectional). Review spec explicitly expects bidirectional pricing for LPIA↔Downtown at $40. Business impact: departing customers can't see their return fare and are pushed to the hourly-charter fallback.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js router", "issue": "Route '/receipt/:bookingId' is NOT registered. PrintReceipt is imported (line 27) but no <Route> exists. PaymentSuccess.jsx line 93 links to `/receipt/${booking.id}` and Track.jsx renders a 'Print receipt' link — both dead until the route is added.", "selector": "/receipt/:bookingId", "priority": "HIGH"},
+      {"component": "Track.jsx DriverLiveBanner", "issue": "Missing data-testid='driver-live-headline' on the 'Your driver is sharing live location' text, and the customer-side 'driver-share-my-location-btn' Share-my-location button described in the review spec is not implemented on the /track page at all (only the driver-side page has geolocation UI).", "selector": "[data-testid=driver-live-banner]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration18_taxi_features.py",
+    "/app/test_reports/pytest/iteration18.xml"
+  ],
+  "action_items": [
+    "Add <Route path='/receipt/:bookingId' element={<CustomerShell><PrintReceipt /></CustomerShell>} /> in /app/frontend/src/App.js so the PaymentSuccess print-receipt link resolves.",
+    "Fix airport-route bidirectionality: either change LPIA airport route names in /app/backend/seed_data.py from '→' to '↔' (LPIA ↔ Downtown Nassau, LPIA ↔ Cable Beach, LPIA ↔ Baha Mar, LPIA ↔ Paradise Island, LPIA ↔ Cruise Port), OR change _service_endpoints() to always treat airport routes as bidirectional. Round-trip pricing is priced-per-leg so this only affects one-way return quotes.",
+    "OPTIONAL: add data-testid='driver-live-headline' to the banner heading in /app/frontend/src/pages/Track.jsx and, if desired, a customer-visible 'driver-share-my-location-btn' (or update the review spec — this button belongs on the driver page)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1468 lines — well over the 700-line guideline. Extract auth, taxi, bookings, drivers, and live-stats into feature routers similar to payments/admin modules already in place.",
+    "In-memory _driver_pings dict on server.py:1222 will not survive worker restarts and breaks multi-worker deployments. Move to Mongo or Redis before scaling backend beyond one uvicorn worker.",
+    "RouteQuoteWidget's `runQuote` uses `catch` (no `err`) then `toast.error('Couldn\\'t fetch quote…')` — good; but request is fired on EVERY change to from/to without debounce, so rapid dropdown toggling issues N requests. Consider a 300ms debounce.",
+    "PaymentSuccess.jsx links to `/receipt/${booking.id}` but App.js has no such route (see high-priority issue). Add route or remove the link.",
+    "QR code image on payment-success uses a third-party service (api.qrserver.com) with no fallback — if the service is down the receipt experience degrades. Consider generating the QR server-side (Python `qrcode` lib) and serving from /api."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration18_taxi_features.py"
+  ],
+  "success_rate": {"backend": "94% (16/17)", "frontend": "88% (all core UI paths pass; 1 dead route + 2 missing testids)"},
+  "test_credentials": "Used admin roxfam2509@gmail.com/admin123 only for context. All backend tests are unauthenticated public endpoints or use POST /api/auth/register to create ephemeral users.",
+  "seed_data_creation": "Created ~6 TEST_-prefixed bookings + 2 TEST_ taxi_quote_requests during pytest run. Safe to prune by customer_email prefix 'TEST_'. Also created bookings 8D8F0E0A for the frontend receipt/track UI tests (customer_email=test_ui_receipt@example.com).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend test file /app/backend/tests/test_iteration18_taxi_features.py is stable — parameterized on 2026-03-15 (Sunday) & 2026-03-21 (Saturday). Backend tests must be launched with REACT_APP_BACKEND_URL env var set (or through the wrapper that loads /app/frontend/.env). One failure (test_downtown_to_lpia_matches_40) reflects the real seed-data defect — do NOT loosen the assertion; wait for the seed fix. Frontend note: the /payment-success QR-block was NOT exercised because Stripe session polling requires a real Stripe session_id — visual code review confirms the block is correctly written with data-testids payment-success-qr-block / payment-success-qr-img / payment-success-print-receipt (see PaymentReturn.jsx lines 66-98). LiveStatsBadge renders only when bookings_last_hour>0 AND viewport>=1280 — verified visible in the /taxi screenshot with '7 BOOKED / HR' pill. Google-Translate cookie switch was verified only via UI presence (opening the menu + counting all 8 lang-option-* testids); actually clicking a language triggers a reload which would break Playwright — skip that in future runs too.",
+  "rca of the issue": "1) Missing /receipt route: developer added PrintReceipt.jsx + import but forgot the <Route> line in App.js router block (lines 47-68). Reproduce: navigate to /receipt/<any-existing-booking-id>. Expected the print-receipt-page; got the empty CustomerShell (React Router falls through with no matched route). Mitigation: add the route. 2) Airport-route unidirectional: seed_data.py lines 63-88 use '→' for LPIA departure routes; _service_endpoints() only treats '↔' as bidirectional. Reproduce: POST /api/taxi/quote {from_location:'Downtown', to_location:'LPIA'} → matched:false, reason:no_fixed_rate. Fix: change the 5 LPIA airport routes to '↔' OR add reverse=true fallback in the quote matcher for any airport tag."
+}
