@@ -19,7 +19,7 @@ TOURS_SEED: List[Dict] = [
     {"id": "snorkel-rose", "name": "Rose Island Reef Snorkeling", "price": 65.0, "duration": "4 hours",
      "location": "Departs Paradise Island", "featured": True,
      "description": "Just off Paradise Island — vibrant reef gardens, sea turtles and rum punch on the ride back.",
-     "image_url": "https://images.unsplash.com/photo-1680635601834-581581c6cdfa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwyfHxzbm9ya2VsaW5nJTIwYmFoYW1hcyUyMGNsZWFyJTIwd2F0ZXJ8ZW58MHx8fHwxNzg1MDYyODExfDA&ixlib=rb-4.1.0&q=85",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/hndk8d8i_img_2696snorkelling.webp",
      "category": "excursion", "active": True},
     {"id": "island-hop", "name": "Three-Island Boat Hopping (from Nassau)", "price": 149.0, "duration": "7 hours",
      "location": "Departs Nassau", "featured": False,
