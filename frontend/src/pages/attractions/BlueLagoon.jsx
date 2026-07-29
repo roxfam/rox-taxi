@@ -5,7 +5,7 @@ const BLUE_LAGOON_CONFIG = {
   kicker: "Ferry-only island escape",
   name: "Blue Lagoon Island",
   tagline: "A 250-acre private island three miles off Paradise Island — swim with dolphins, hammocks in the coconut grove, and one of the calmest beaches in the Bahamas.",
-  hero_image: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?crop=entropy&cs=srgb&fm=jpg&q=90&w=3200&sharp=15&sat=15&auto=format",
+  hero_image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920&q=80&auto=format&fit=crop",
   description: [
     "Blue Lagoon (aka Salt Cay) is a coral-fringed private island reachable only by a 30-minute catamaran ferry from Paradise Landing next to Atlantis. Once ashore you get an unlimited-beach day pass — palm-lined coves, calm turquoise water, hammocks strung between palms, kayaks, and paddleboards.",
     "Signature add-ons include Dolphin Encounter (waist-deep swim), Dolphin Swim (open-water swim with dolphins), sea-lion encounters, and stingray splash. Lunch buffet + open bar is often included with the day pass.",

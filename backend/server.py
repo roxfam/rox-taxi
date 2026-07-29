@@ -25,6 +25,7 @@ from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_ID
 from pdf_utils import build_wedding_pdf, build_receipt_pdf
 from routes import payments as payments_module
 from routes import admin as admin_module
+import secrets_store
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -32,6 +33,10 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# Wire the DB-backed secrets store early so any module that imports
+# `get_secret` after boot resolves overrides from Mongo.
+secrets_store.configure(db)
 
 JWT_SECRET = os.environ['JWT_SECRET']
 ADMIN_EMAIL = os.environ['ADMIN_EMAIL']
@@ -602,6 +607,12 @@ async def my_bookings(user: dict = Depends(get_current_user)):
 
 @app.on_event("startup")
 async def seed_db():
+    # Prime the DB-backed secrets store so get_secret() returns admin-managed
+    # overrides from the very first request.
+    try:
+        await secrets_store.prime()
+    except Exception as e:  # noqa: BLE001
+        logging.warning("secrets_store prime warn: %s", e)
     # Ensure customer auth indexes exist
     try:
         await db.users.create_index("email", unique=True)

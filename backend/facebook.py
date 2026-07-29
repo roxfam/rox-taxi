@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import io
 import logging
-import os
 import random
 from pathlib import Path
 
 import httpx
 from PIL import Image, ImageOps
+
+from secrets_store import get_secret
 
 logger = logging.getLogger("rox.facebook")
 
@@ -39,12 +40,14 @@ UPLOAD_DIR = Path("/app/backend/uploads")
 
 
 def _cfg() -> dict:
+    # Prefer admin-managed DB values (secrets_store) over static env values so
+    # the FB Page token can be rotated live from the admin panel.
     return {
-        "page_id": os.environ.get("FB_PAGE_ID", ""),
-        "token": os.environ.get("FB_PAGE_ACCESS_TOKEN", ""),
-        "version": os.environ.get("FB_GRAPH_VERSION", "v20.0"),
-        "enabled": os.environ.get("FB_AUTOPOST_ENABLED", "true").lower() == "true",
-        "website": os.environ.get("FB_SITE_URL", "https://roxtaxi.com"),
+        "page_id": get_secret("FB_PAGE_ID", ""),
+        "token": get_secret("FB_PAGE_ACCESS_TOKEN", ""),
+        "version": get_secret("FB_GRAPH_VERSION", "v20.0") or "v20.0",
+        "enabled": (get_secret("FB_AUTOPOST_ENABLED", "true") or "true").lower() == "true",
+        "website": get_secret("FB_SITE_URL", "https://roxtaxi.com") or "https://roxtaxi.com",
     }
 
 

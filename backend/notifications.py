@@ -5,9 +5,10 @@ against the booking (used for admin dashboard delivery badges):
 
     {"sent": bool, "provider": str, "error": Optional[str]}
 """
-import os
 import logging
 from typing import Optional
+
+from secrets_store import get_secret
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,8 @@ def send_email(to_email: str, subject: str, html: str, text: Optional[str] = Non
 
     Returns a status dict: {sent, provider, error}.
     """
-    api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
-    sender_sg = os.environ.get("SENDGRID_FROM_EMAIL", "").strip()
+    api_key = get_secret("SENDGRID_API_KEY", "").strip()
+    sender_sg = get_secret("SENDGRID_FROM_EMAIL", "").strip()
 
     # 1) SendGrid path
     if api_key and sender_sg:
@@ -53,12 +54,12 @@ def send_email(to_email: str, subject: str, html: str, text: Optional[str] = Non
         sendgrid_err = None
 
     # 2) Generic SMTP path (Namecheap Private Email, Zoho, Gmail, etc.)
-    host = os.environ.get("SMTP_HOST", "").strip()
-    port = int(os.environ.get("SMTP_PORT", "587") or 587)
-    user = os.environ.get("SMTP_USER", "").strip()
-    pw = os.environ.get("SMTP_PASSWORD", "").strip()
-    sender = os.environ.get("SMTP_FROM", "").strip() or user
-    use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
+    host = get_secret("SMTP_HOST", "").strip()
+    port = int(get_secret("SMTP_PORT", "587") or 587)
+    user = get_secret("SMTP_USER", "").strip()
+    pw = get_secret("SMTP_PASSWORD", "").strip()
+    sender = get_secret("SMTP_FROM", "").strip() or user
+    use_tls = (get_secret("SMTP_USE_TLS", "true") or "true").lower() == "true"
     if not (host and user and pw and sender):
         logger.info("Neither SendGrid nor SMTP configured; skipping email to %s", to_email)
         return {"sent": False, "provider": "none", "error": sendgrid_err or "Email not configured"}
@@ -96,9 +97,9 @@ def send_email(to_email: str, subject: str, html: str, text: Optional[str] = Non
 
 
 def send_sms(to_number: str, body: str) -> dict:
-    sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
-    token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
-    from_num = os.environ.get("TWILIO_FROM_NUMBER", "").strip()
+    sid = get_secret("TWILIO_ACCOUNT_SID", "").strip()
+    token = get_secret("TWILIO_AUTH_TOKEN", "").strip()
+    from_num = get_secret("TWILIO_FROM_NUMBER", "").strip()
     if not (sid and token and from_num):
         logger.info("Twilio not configured; skipping SMS to %s", to_number)
         return {"sent": False, "provider": "twilio", "error": "Twilio not configured"}
@@ -155,7 +156,7 @@ def notify_owner_booking_created(booking: dict) -> dict:
 
     Returns Twilio send-report dict.
     """
-    owner = (os.environ.get("ADMIN_SMS_NUMBER") or os.environ.get("WHATSAPP_NUMBER") or "").strip()
+    owner = (get_secret("ADMIN_SMS_NUMBER") or get_secret("WHATSAPP_NUMBER") or "").strip()
     if not owner:
         return {"sent": False, "provider": "none", "error": "ADMIN_SMS_NUMBER not set"}
     body = (
@@ -170,7 +171,7 @@ def notify_owner_payment_received(booking: dict, provider: str = "stripe") -> di
     """Send an SMS alert to the owner the moment a booking is marked paid.
     Fires from every payment path (Stripe webhook, PayPal capture, Zelle mark).
     """
-    owner = (os.environ.get("ADMIN_SMS_NUMBER") or os.environ.get("WHATSAPP_NUMBER") or "").strip()
+    owner = (get_secret("ADMIN_SMS_NUMBER") or get_secret("WHATSAPP_NUMBER") or "").strip()
     if not owner:
         return {"sent": False, "provider": "none", "error": "ADMIN_SMS_NUMBER not set"}
     body = (

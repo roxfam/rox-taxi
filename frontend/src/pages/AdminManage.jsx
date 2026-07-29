@@ -9,6 +9,7 @@ import PaymentsPanel from "./admin/PaymentsPanel";
 import ContentPanel from "./admin/ContentPanel";
 import GalleryPanel from "./admin/GalleryPanel";
 import PromotionsPanel from "./admin/PromotionsPanel";
+import TokensPanel from "./admin/TokensPanel";
 
 const TABS = [
   { key: "home_slides", label: "Home Slides" },
@@ -22,6 +23,7 @@ const TABS = [
   { key: "payments", label: "Payments" },
   { key: "content", label: "Content" },
   { key: "site", label: "Site Config" },
+  { key: "tokens", label: "Tokens" },
 ];
 
 // Thin routing shell for the /admin/manage screen. Each tab renders a
@@ -76,6 +78,7 @@ export default function AdminManage() {
           ))}
         </div>
         {tab === "site" ? <SiteConfigPanel />
+          : tab === "tokens" ? <TokensPanel />
           : tab === "images" ? <ImagesPanel />
           : tab === "gallery" ? <GalleryPanel />
           : tab === "promotions" ? <PromotionsPanel />

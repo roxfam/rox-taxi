@@ -5,7 +5,7 @@ const BAHA_MAR_CONFIG = {
   kicker: "Cable Beach mega-resort",
   name: "Baha Mar Resort",
   tagline: "$4.2 billion of Cable Beach beachfront — casino, Rosewood, Grand Hyatt, SLS, and a Jack Nicklaus signature golf course, all on one 1,000-acre property.",
-  hero_image: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Reflection_-_panoramio_%2857%29.jpg/1920px-Reflection_-_panoramio_%2857%29.jpg",
+  hero_image: "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=1920&q=80&auto=format&fit=crop",
   description: [
     "Baha Mar is the Bahamas' newest luxury resort complex — 1,000 acres of Cable Beach beachfront housing three flagship hotels (Grand Hyatt, SLS, and the ultra-luxe Rosewood), the largest casino in the Caribbean, a Jack Nicklaus signature golf course, an ESPA spa, and 40+ restaurants and bars.",
     "Even if you're not staying overnight, Baha Mar is worth a visit for dinner at Katsuya, a casino night, or the SLS Fi'lia rooftop for sunset cocktails. Cable Beach itself is 3½ miles of powder-soft sand right outside the doors.",

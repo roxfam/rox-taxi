@@ -670,6 +670,54 @@ async def admin_update_site(req: SiteConfigUpdate, _: str = Depends(_admin_dep))
     return cfg
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Tokens & Secrets — DB-managed API keys / access tokens.
+# Backed by secrets_store; overrides `.env` at read time. Sensitive values
+# are never returned in plaintext (only a last-4 mask).
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TokenUpdate(BaseModel):
+    key: str
+    value: Optional[str] = None  # None or "" clears the DB override
+
+
+@router.get("/admin/tokens")
+async def admin_list_tokens(_: str = Depends(_admin_dep)):
+    """Return the token registry with current fill status per key."""
+    import secrets_store as _ss
+    # Re-prime from Mongo so parallel admin sessions see fresh writes.
+    await _ss.prime()
+    return {"tokens": _ss.snapshot_for_admin()}
+
+
+@router.put("/admin/tokens")
+async def admin_upsert_token(req: TokenUpdate, _: str = Depends(_admin_dep)):
+    """Upsert a single token in Mongo. Empty value removes the override."""
+    import secrets_store as _ss
+    if not _ss.is_registered(req.key):
+        raise HTTPException(400, f"Unknown token key: {req.key}")
+    await _ss.set_secret(req.key, req.value)
+    return {"ok": True, "key": req.key, "cleared": req.value in (None, "")}
+
+
+@router.delete("/admin/tokens/{key}")
+async def admin_clear_token(key: str, _: str = Depends(_admin_dep)):
+    """Clear a token's DB override (falls back to .env value if any)."""
+    import secrets_store as _ss
+    if not _ss.is_registered(key):
+        raise HTTPException(400, f"Unknown token key: {key}")
+    await _ss.set_secret(key, None)
+    return {"ok": True, "key": key, "cleared": True}
+
+
+@router.get("/admin/tokens/facebook/status")
+async def admin_facebook_status(_: str = Depends(_admin_dep)):
+    """Live probe — hits Facebook Graph API with the current token so the
+    admin can confirm the token works before relying on auto-post."""
+    from facebook import facebook_status
+    return await facebook_status()
+
+
 # ---- Home hero slides CRUD ------------------------------------------------
 # Registered BEFORE the parameterized /admin/{kind} catch-all so FastAPI
 # routes /admin/home-slides literally instead of shadowing to kind="home-slides".
