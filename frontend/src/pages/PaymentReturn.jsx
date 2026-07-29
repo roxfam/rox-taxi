@@ -42,7 +42,14 @@ export function PaymentSuccess() {
   };
 
   return (
-    <div data-testid="payment-success-page" className="max-w-2xl mx-auto px-6 lg:px-10 py-24 text-center">
+    <div data-testid="payment-success-page" className="max-w-2xl mx-auto px-6 lg:px-10 py-16 text-center">
+      <img
+        src="/logo-gold.webp"
+        alt="Rox Taxi Service & Tours"
+        width={120} height={120}
+        className="mx-auto h-24 w-auto object-contain mb-4 drop-shadow-[0_6px_20px_rgba(212,169,74,0.35)]"
+        data-testid="payment-success-logo"
+      />
       <div className="mx-auto w-20 h-20 rounded-full bg-[#D4A94A]/10 flex items-center justify-center mb-8">
         {paid ? <CheckCircle2 className="w-10 h-10 text-[#D4A94A]" /> : <Loader2 className="w-10 h-10 text-[#D4A94A] animate-spin" />}
       </div>

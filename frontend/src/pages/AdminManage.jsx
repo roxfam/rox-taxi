@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import CatalogPanel from "./admin/CatalogPanel";
 import ImagesPanel from "./admin/ImagesPanel";
 import MessagesPanel from "./admin/MessagesPanel";
@@ -25,12 +25,22 @@ const TABS = [
 // Thin routing shell for the /admin/manage screen. Each tab renders a
 // self-contained panel from ./admin/* so this file stays under 100 lines.
 export default function AdminManage() {
-  const [tab, setTab] = useState("tours");
+  const [params, setParams] = useSearchParams();
+  const initialTab = params.get("tab") && TABS.some((t) => t.key === params.get("tab")) ? params.get("tab") : "tours";
+  const [tab, setTab] = useState(initialTab);
   const nav = useNavigate();
 
   useEffect(() => {
     if (!localStorage.getItem("admin_token")) nav("/admin/login");
   }, [nav]);
+
+  useEffect(() => {
+    // Keep the URL query param in sync so refresh / share preserves the tab
+    if (params.get("tab") !== tab) {
+      setParams({ tab }, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   return (
     <div className="min-h-screen bg-[#F1F5F9]" data-testid="admin-manage">
@@ -38,7 +48,7 @@ export default function AdminManage() {
         <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-md bg-[#0B3B5C] text-white flex items-center justify-center text-xs font-bold">RX</div>
+              <img src="/logo-gold.webp" alt="Rox" width={32} height={32} className="w-9 h-9 object-contain" data-testid="admin-manage-logo" />
               <span className="font-semibold text-[#0B3B5C]">Manage catalog</span>
             </div>
             <nav className="hidden sm:flex items-center gap-1 text-sm">

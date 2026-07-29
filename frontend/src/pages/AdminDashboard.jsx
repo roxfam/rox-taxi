@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money, BACKEND_URL } from "../lib/api";
-import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity } from "lucide-react";
+import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images } from "lucide-react";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -19,13 +19,19 @@ export default function AdminDashboard() {
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(false);
   const [depositModal, setDepositModal] = useState(null); // { booking, action: 'released'|'forfeited' }
+  const [pendingPhotos, setPendingPhotos] = useState(0);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [s, b] = await Promise.all([api.get("/admin/stats"), api.get("/admin/bookings")]);
+      const [s, b, g] = await Promise.all([
+        api.get("/admin/stats"),
+        api.get("/admin/bookings"),
+        api.get("/admin/gallery/pending").catch(() => ({ data: [] })),
+      ]);
       setStats(s.data);
       setBookings(b.data);
+      setPendingPhotos(Array.isArray(g.data) ? g.data.length : 0);
     } catch (e) {
       if (e?.response?.status === 401) {
         localStorage.removeItem("admin_token");
@@ -72,13 +78,27 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-md bg-[#0B3B5C] text-white flex items-center justify-center text-xs font-bold">RX</div>
+              <img src="/logo-gold.webp" alt="Rox" width={32} height={32} className="w-9 h-9 object-contain" data-testid="admin-console-logo" />
               <span className="font-semibold text-[#0B3B5C]">Admin Console</span>
             </div>
             <nav className="hidden sm:flex items-center gap-1 text-sm">
               <button onClick={() => nav("/admin")} className="px-3 py-1.5 rounded-md bg-[#0B3B5C] text-white" data-testid="admin-nav-bookings">Bookings</button>
               <button onClick={() => nav("/admin/manage")} className="px-3 py-1.5 rounded-md hover:bg-[#F1F5F9] text-[#64748B]" data-testid="admin-nav-manage">Manage catalog</button>
               <button onClick={() => nav("/admin/groups")} className="px-3 py-1.5 rounded-md hover:bg-[#F1F5F9] text-[#64748B]" data-testid="admin-nav-groups">Group inquiries</button>
+              <button
+                onClick={() => nav("/admin/manage?tab=gallery")}
+                className={`relative px-3 py-1.5 rounded-md text-sm inline-flex items-center gap-1.5 transition-colors ${pendingPhotos > 0 ? "bg-[#D4A94A]/12 text-[#0B3B5C] hover:bg-[#D4A94A]/20 font-semibold" : "hover:bg-[#F1F5F9] text-[#64748B]"}`}
+                data-testid="admin-nav-gallery"
+                title={pendingPhotos > 0 ? `${pendingPhotos} photo${pendingPhotos > 1 ? "s" : ""} awaiting review` : "Guest photo submissions"}
+              >
+                <Images className="w-4 h-4" />
+                Guest Photos
+                {pendingPhotos > 0 && (
+                  <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[#E86A3C] text-white text-[10px] font-bold" data-testid="admin-nav-gallery-badge">
+                    {pendingPhotos}
+                  </span>
+                )}
+              </button>
             </nav>
           </div>
           <div className="flex items-center gap-2">

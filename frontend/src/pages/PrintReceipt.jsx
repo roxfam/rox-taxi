@@ -50,11 +50,20 @@ export default function PrintReceipt() {
       {/* Receipt */}
       <div className="max-w-3xl mx-auto bg-white rounded-2xl border border-[#E2E8F0] shadow-[0_20px_60px_rgba(0,0,0,0.06)] p-10 print:shadow-none print:rounded-none print:border-0 print:p-8" data-testid="print-receipt-body">
         <div className="flex items-start justify-between gap-6 pb-6 border-b-2 border-[#0B3B5C]">
-          <div>
-            <div className="serif text-2xl text-[#0B3B5C] font-black">Rox Taxi Service <em className="italic text-[#D4A94A]">& Tours</em></div>
-            <div className="text-xs text-[#64748B] mt-1 leading-snug">
-              Nassau, New Providence · The Bahamas<br />
-              {cfg.phone || "+1 (242) 432-2587"} · <a href="mailto:roxfam2509@gmail.com" className="text-[#0B3B5C]">roxfam2509@gmail.com</a>
+          <div className="flex items-start gap-4">
+            <img
+              src="/logo-gold.webp"
+              alt="Rox Taxi Service & Tours"
+              width={72} height={72}
+              className="h-16 w-auto object-contain shrink-0"
+              data-testid="print-receipt-logo"
+            />
+            <div>
+              <div className="serif text-2xl text-[#0B3B5C] font-black">Rox Taxi Service <em className="italic text-[#D4A94A]">& Tours</em></div>
+              <div className="text-xs text-[#64748B] mt-1 leading-snug">
+                Nassau, New Providence · The Bahamas<br />
+                {cfg.phone || "+1 (242) 432-2587"} · <a href="mailto:roxfam2509@gmail.com" className="text-[#0B3B5C]">roxfam2509@gmail.com</a>
+              </div>
             </div>
           </div>
           <div className="text-right">
