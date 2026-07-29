@@ -5,7 +5,7 @@ const ATLANTIS_CONFIG = {
   kicker: "Paradise Island icon",
   name: "Atlantis Paradise Island",
   tagline: "The Bahamas' legendary mega-resort — waterpark, aquarium, casino, and 11 pools spread across Paradise Island.",
-  hero_image: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/BHA_Nassau%2C_Paradise_Island%2C_Atlantis_Bridge_001.jpg/1920px-BHA_Nassau%2C_Paradise_Island%2C_Atlantis_Bridge_001.jpg",
+  hero_image: "https://images.unsplash.com/photo-1540541338287-41700207dee6?w=1920&q=80&auto=format&fit=crop",
   description: [
     "Atlantis is the Bahamas' most iconic resort — 141 acres of ocean-themed excess on Paradise Island. Beyond hotel guests, day-passes let you access Aquaventure Waterpark (141 acres of slides, rapids, and river rides), Marine Habitat (50,000+ sea creatures across 11 lagoons), Dolphin Cay, and the casino.",
     "Paradise Island connects to Nassau via the toll bridge from downtown ($1 bridge toll included in every Rox taxi fare). LPIA airport is a straight 20-minute shot; from the cruise port it's 10 minutes.",
