@@ -21,7 +21,6 @@ const NAV = [
   { to: "/taxi", label: "Taxi", icon: Car },
   { to: "/tours", label: "Tours", icon: ShipWheel },
   { to: "/rentals", label: "Rentals", icon: MapPinned },
-  { to: "/fleet", label: "Fleet", icon: Users },
   { to: "/gallery", label: "Gallery", icon: Images },
   { to: "/groups", label: "Groups", icon: Heart },
   { to: "/track", label: "Track", icon: Search },
