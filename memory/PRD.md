@@ -50,6 +50,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 - **Admin Guest-Photos discoverability** (Feb 2026) — pending-count badge on `/admin` header ("Guest Photos" quick-link) so the owner never misses a new customer submission. AdminManage now supports `?tab=` deep-linking + URL sync on tab change. Verified 100% by testing agent (iteration_20). Test seeded 1 guest photo; approval flow round-trip clean.
 
+- **Package deals frontend + admin push + driver manifest** (Feb 2026, this pass):
+  - **PackagesStrip** — new component on `/` (`data-testid="packages-strip"`) presenting the 2 seeded bundles (airport-atlantis-airport, airport-tour-airport) with subtotal → package price, savings badge, item list, "Book bundle" CTA that deep-links to `/contact?package={id}`. Auto-hides when no active packages. Also exports a compact `variant="booking"` mode for future embedding in the booking flow.
+  - **Admin Web Push (VAPID)** — `pywebpush` server-side, service worker at `/sw.js`, endpoints: `GET /api/admin/push/vapid-public-key`, `POST /api/admin/push/subscribe`, `POST /api/admin/push/unsubscribe`, `POST /api/admin/push/test`. Auto-triggered on new bookings and new guest-photo submissions. `PushToggle` in admin header lets the owner enable / test / disable with one tap. VAPID keys already generated + stored in `backend/.env` (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`). Dead subscriptions (410 Gone) auto-cleaned.
+  - **Driver Manifest** `/driver/manifest` — mobile-first navy screen for the owner/driver: today's bookings with time chips, per-card tap-to-call + WhatsApp + Google Maps buttons, and one-tap advance button (Confirmed → Assigned → En route → Arrived → Completed) hitting `PATCH /api/admin/bookings/{id}/status`. Backed by new `GET /api/admin/driver/manifest?date=YYYY-MM-DD`. Auto-refreshes every 60s. Discoverable via a "Manifest" quick-link in the admin dashboard header (`data-testid="admin-nav-manifest"`).
+
 ### 🎯 Backlog — Wave 2 (revenue/trust)
 - ~~Airport flight tracker~~ ✅ shipped
 - ~~Cross-sell "Add a tour" upsell~~ ✅ shipped
