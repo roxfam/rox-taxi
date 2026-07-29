@@ -18,10 +18,24 @@ export default function RouteQuoteWidget({ services, onBook }) {
   const [to, setTo] = useState("");
   const [quote, setQuote] = useState(null); // {matched, service?, fallback?, message?}
   const [loading, setLoading] = useState(false);
+  // First-paint nudge for the swap arrow — fades out after 3s so it never
+  // becomes visual noise for returning users. Dismissed immediately once the
+  // user actually picks a location (they've clearly engaged).
+  const [showSwapHint, setShowSwapHint] = useState(true);
 
   useEffect(() => {
     api.get("/taxi/locations").then((r) => setLocations(r.data || [])).catch(() => {});
   }, []);
+
+  // 3-second fade-out timer for the swap-direction hint.
+  useEffect(() => {
+    if (!showSwapHint) return;
+    const t = setTimeout(() => setShowSwapHint(false), 3000);
+    return () => clearTimeout(t);
+  }, [showSwapHint]);
+
+  // Kill the hint the moment the user selects anything — they're engaged.
+  useEffect(() => { if (from || to) setShowSwapHint(false); }, [from, to]);
 
   const canQuote = from && to && from !== to;
 
@@ -98,6 +112,17 @@ export default function RouteQuoteWidget({ services, onBook }) {
               <ArrowLeftRight className="w-4 h-4" />
             </button>
             <LocationSelect label="To" tag="to" value={to} onChange={setTo} locations={locations} exclude={from} />
+          </div>
+
+          {/* First-paint swap-arrow nudge — fades out after 3s. */}
+          <div
+            aria-hidden={!showSwapHint}
+            data-testid="quote-swap-hint"
+            className={`mt-2 flex items-center gap-2 text-[11px] tracking-widest uppercase text-[#94a3b8] transition-opacity duration-700 ${showSwapHint ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+          >
+            <ArrowLeftRight className="w-3 h-3 text-[#D4A94A] animate-pulse" />
+            <span className="font-semibold">Tip:</span>
+            <span>Tap the arrows to swap direction for round-trip fares.</span>
           </div>
 
           {/* Result */}
