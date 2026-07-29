@@ -718,6 +718,56 @@ async def admin_facebook_status(_: str = Depends(_admin_dep)):
     return await facebook_status()
 
 
+@router.get("/admin/tokens/env-snapshot")
+async def admin_env_snapshot(reveal: bool = False, _: str = Depends(_admin_dep)):
+    """Export the current effective config as a .env-style text block.
+
+    - Groups keys by section (mirrors the admin panel layout).
+    - Sensitive values are always masked ("<masked-••••XXXX>") unless the
+      caller explicitly passes `reveal=true`, which requires admin auth
+      (already gated by _admin_dep) and echoes plaintext so the owner can
+      hand off / migrate hosts.
+    - Also annotates each line with its current source (`# db-override`,
+      `# .env`, or `# unset`).
+    """
+    import secrets_store as _ss
+    from datetime import datetime, timezone
+    await _ss.prime()
+    snapshot = _ss.snapshot_for_admin()
+
+    # Group by registry order.
+    lines: list[str] = []
+    lines.append(f"# Rox Taxi — effective config snapshot")
+    lines.append(f"# Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    lines.append(f"# Source: {'PLAINTEXT (reveal=true)' if reveal else 'MASKED — regenerate with reveal=true to export real secrets'}")
+    lines.append("")
+
+    current_group = None
+    for row in snapshot:
+        if row["group"] != current_group:
+            current_group = row["group"]
+            lines.append(f"# ── {current_group} ──")
+        key = row["key"]
+        source_tag = {"db": "db-override", "env": ".env", "unset": "unset"}.get(row["source"], "unknown")
+        if not row["has_value"]:
+            lines.append(f'# {key}=  # unset')
+            continue
+        if row["sensitive"]:
+            if reveal:
+                # Read the real underlying value via get_secret (db-first, env-fallback).
+                val = _ss.get_secret(key, "")
+                lines.append(f'{key}="{val}"  # {source_tag}')
+            else:
+                lines.append(f'# {key}=<masked-{row["masked"]}>  # {source_tag} (sensitive — use reveal=true to export)')
+        else:
+            val = row.get("value") or _ss.get_secret(key, "")
+            lines.append(f'{key}="{val}"  # {source_tag}')
+        # blank line between visually-related groups is handled by the group header
+
+    text = "\n".join(lines) + "\n"
+    return {"generated_at": datetime.now(timezone.utc).isoformat(), "reveal": reveal, "text": text}
+
+
 # ---- Home hero slides CRUD ------------------------------------------------
 # Registered BEFORE the parameterized /admin/{kind} catch-all so FastAPI
 # routes /admin/home-slides literally instead of shadowing to kind="home-slides".

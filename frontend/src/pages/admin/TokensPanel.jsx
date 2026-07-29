@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Key, Eye, EyeOff, Save, X, CheckCircle2, AlertCircle, Facebook, RefreshCw } from "lucide-react";
+import { Key, Eye, EyeOff, Save, X, CheckCircle2, AlertCircle, Facebook, RefreshCw, Download, Copy } from "lucide-react";
 import { api } from "../../lib/api";
 
 // ---- Group meta (icons + subtitles) ------------------------------------
@@ -40,6 +40,7 @@ export default function TokensPanel() {
   const [reveal, setReveal] = useState({}); // key -> bool (show plaintext of pending draft)
   const [fbStatus, setFbStatus] = useState(null);
   const [fbLoading, setFbLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -92,6 +93,45 @@ export default function TokensPanel() {
     } finally { setFbLoading(false); }
   };
 
+  // Copy the current effective config to clipboard as a .env text block.
+  // `reveal=true` echoes plaintext for handoff/migration (double-confirm),
+  // default masks sensitive values.
+  const exportEnv = async ({ reveal = false, download = false } = {}) => {
+    if (reveal && !window.confirm(
+      "Export PLAINTEXT secrets?\n\n" +
+      "All API keys, tokens and passwords will be included in cleartext. " +
+      "Only do this if you're handing off the site or migrating hosts, and " +
+      "share the resulting file via a secure channel (never email or Slack)."
+    )) return;
+    setExporting(true);
+    try {
+      const { data } = await api.get(`/admin/tokens/env-snapshot?reveal=${reveal ? "true" : "false"}`);
+      const text = data.text || "";
+      if (download) {
+        const blob = new Blob([text], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `rox-taxi-env${reveal ? "-plaintext" : "-masked"}-${new Date().toISOString().slice(0, 10)}.env`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        toast.success(`.env snapshot downloaded${reveal ? " (plaintext)" : " (masked)"}`);
+      } else {
+        try {
+          await navigator.clipboard.writeText(text);
+          toast.success(`Copied ${text.split("\n").length} lines${reveal ? " (plaintext)" : " (masked)"}`);
+        } catch {
+          // Clipboard blocked → fall back to a prompt.
+          window.prompt("Copy manually (Ctrl-C / ⌘-C):", text);
+        }
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Snapshot export failed");
+    } finally { setExporting(false); }
+  };
+
   const grouped = groupBy(tokens);
 
   return (
@@ -107,13 +147,33 @@ export default function TokensPanel() {
               <p className="text-xs text-[#64748B] mt-0.5">Rotate live — no restart needed. DB values override the .env file at read time.</p>
             </div>
           </div>
-          <button
-            onClick={load}
-            className="text-xs inline-flex items-center gap-1.5 rounded-full border border-[#E2E8F0] px-3 py-1.5 hover:border-[#0B3B5C] text-[#0B3B5C]"
-            data-testid="tokens-refresh"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => exportEnv({ reveal: false, download: false })}
+              disabled={exporting}
+              className="text-xs inline-flex items-center gap-1.5 rounded-full border border-[#E2E8F0] px-3 py-1.5 hover:border-[#0B3B5C] text-[#0B3B5C] disabled:opacity-60"
+              data-testid="tokens-copy-env-masked"
+              title="Copy the current effective config to clipboard (sensitive values masked)"
+            >
+              <Copy className="w-3.5 h-3.5" /> {exporting ? "Working…" : "Copy .env (masked)"}
+            </button>
+            <button
+              onClick={() => exportEnv({ reveal: true, download: true })}
+              disabled={exporting}
+              className="text-xs inline-flex items-center gap-1.5 rounded-full bg-[#0B3B5C] hover:bg-[#132a4a] text-white px-3 py-1.5 disabled:opacity-60"
+              data-testid="tokens-download-env-plaintext"
+              title="Download a plaintext .env for handoff / migration"
+            >
+              <Download className="w-3.5 h-3.5" /> Download plaintext
+            </button>
+            <button
+              onClick={load}
+              className="text-xs inline-flex items-center gap-1.5 rounded-full border border-[#E2E8F0] px-3 py-1.5 hover:border-[#0B3B5C] text-[#0B3B5C]"
+              data-testid="tokens-refresh"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+            </button>
+          </div>
         </div>
       </div>
 
