@@ -86,8 +86,11 @@ export default function HomeHeroCarousel({ children, className = "", intervalMs 
             backgroundImage: `url(${slide.image_url})`,
             transformOrigin: i % 2 === 0 ? "center 40%" : "60% 55%",
             filter: "brightness(1.08) contrast(1.14) saturate(1.12)",
+            backgroundSize: slide.id === "hero-ardastra" ? "contain" : "cover",
+            backgroundRepeat: "no-repeat",
+            backgroundColor: slide.id === "hero-ardastra" ? "#0B192C" : undefined,
           }}
-          className="absolute inset-0 bg-cover bg-center will-change-transform"
+          className="absolute inset-0 bg-center will-change-transform"
           data-testid={`hero-slide-${slide.id}`}
         />
       </AnimatePresence>

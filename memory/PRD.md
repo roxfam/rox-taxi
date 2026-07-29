@@ -70,6 +70,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
   - **New home slide** — Ardastra Gardens Zoo, with flamingo photo and CTA linking to `https://ardastra.com/`.
   - **Package photo swap** — "Airport + Blue Lagoon + Airport" bundle renamed to "LPIA → Blue Lagoon → LPIA" (matches sibling package format) with owner-supplied LPIA terminal photo.
 
+- **Ardastra Gardens taxi routes + slide zoom-out + missing endpoint fix** (Feb 2026):
+  - Two new taxi routes seeded: `downtown-ardastra` ($15) and `airport-ardastra` ($35) — both featured on `/taxi` with the flamingo photo.
+  - `HomeHeroCarousel` now uses `background-size: contain` for `hero-ardastra` specifically (with a navy fill), so the whole family + flamingoes photo is visible instead of being top-cropped by `cover`.
+  - **Bug fix**: `/api/taxi-services` was missing entirely — `Taxi.jsx` silently swallowed the 404 with `.catch(() => {})`. Added `@api_router.get("/taxi-services")` returning all active routes. All 26 fixed-fare routes now render on `/taxi`.
+
 ### 🎯 Backlog — Wave 2 (revenue/trust)
 - ~~Airport flight tracker~~ ✅ shipped
 - ~~Cross-sell "Add a tour" upsell~~ ✅ shipped

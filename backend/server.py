@@ -778,6 +778,13 @@ async def list_tours():
     return [annotate_promo(clean(d)) for d in docs]
 
 
+@api_router.get("/taxi-services")
+async def list_taxi_services():
+    """Public fixed-fare taxi routes for the /taxi page grid."""
+    docs = await db.taxi_services.find({"active": {"$ne": False}}).to_list(200)
+    return [annotate_promo(clean(d)) for d in docs]
+
+
 @api_router.get("/packages")
 async def list_packages():
     """Public curated bundles. Each: {id, name, description, items:[{service_type,item_name}], subtotal, package_price, savings}."""
