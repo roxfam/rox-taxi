@@ -602,6 +602,154 @@ async def my_bookings(user: dict = Depends(get_current_user)):
     return [clean(d) for d in docs]
 
 
+# ─── Rental extension — guest self-serve extend flow ─────────────────────
+# Quote endpoint computes the extra-days cost (respecting multi-day discount
+# tiers) WITHOUT a fresh security deposit — the original deposit stays held
+# on the parent booking until the (now longer) rental is completed.
+
+class RentalExtendQuote(BaseModel):
+    additional_days: int = Field(..., ge=1, le=30)
+
+
+def _compute_extension_amount(booking: dict, additional_days: int) -> Dict[str, Any]:
+    """Return {extra_cost, new_days, new_return_date, discount_pct_before, discount_pct_after}."""
+    orig_days = int(booking.get("days") or 1)
+    new_days = orig_days + additional_days
+    daily = float(booking.get("price") or 0.0)
+    orig_pct = _rental_discount_pct(orig_days)
+    new_pct = _rental_discount_pct(new_days)
+    # Fair pricing: charge additional_days × daily, but re-apply the (possibly
+    # better) tier that unlocks with the new total length across the extension.
+    extra_gross = round(daily * additional_days, 2)
+    extra_discount = round(extra_gross * new_pct, 2)
+    extra_cost = round(extra_gross - extra_discount, 2)
+    pickup_dt = _parse_booking_date(booking["booking_date"])
+    return {
+        "orig_days": orig_days,
+        "new_days": new_days,
+        "additional_days": additional_days,
+        "daily_price": daily,
+        "extra_gross": extra_gross,
+        "extra_discount": extra_discount,
+        "extra_cost": extra_cost,
+        "orig_discount_pct": orig_pct,
+        "new_discount_pct": new_pct,
+        "new_return_date": (pickup_dt + timedelta(days=new_days)).date().isoformat(),
+    }
+
+
+async def _check_extension_blackouts(booking: dict, additional_days: int):
+    """Reject if any day of the extension window matches a vehicle or
+    site-wide blackout. Raises HTTPException(400) with clashing dates."""
+    orig_days = int(booking.get("days") or 1)
+    pickup = _parse_booking_date(booking["booking_date"]).date()
+    veh = await db.rentals.find_one({"id": booking.get("item_id")}) or {}
+    veh_blk = set(veh.get("blackout_dates") or [])
+    cfg = await db.site_config.find_one({"_id": "main"}) or {}
+    site_blk = set(cfg.get("blackout_dates") or [])
+    clashes = []
+    for i in range(orig_days, orig_days + additional_days):
+        d = (pickup + timedelta(days=i)).isoformat()
+        if d in veh_blk or d in site_blk:
+            clashes.append(d)
+    if clashes:
+        raise HTTPException(400, f"Extension blocked — vehicle unavailable on {', '.join(clashes)}.")
+
+
+@api_router.post("/my/bookings/{booking_id}/extend/quote")
+async def rental_extend_quote(booking_id: str, req: RentalExtendQuote, user: dict = Depends(get_current_user)):
+    booking = await db.bookings.find_one({"id": booking_id, "customer_email": user["email"]})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    if booking.get("service_type") != "rental":
+        raise HTTPException(400, "Only rentals can be extended")
+    if booking.get("status") in {"cancelled", "completed"}:
+        raise HTTPException(400, f"Cannot extend a {booking['status']} booking")
+    if booking.get("payment_status") != "paid":
+        raise HTTPException(400, "Pay the original booking first, then extend.")
+    await _check_extension_blackouts(booking, req.additional_days)
+    quote = _compute_extension_amount(booking, req.additional_days)
+    quote["deposit_note"] = "Your existing security deposit stays held on the original booking — no new deposit charged."
+    return quote
+
+
+class RentalExtendCheckout(BaseModel):
+    additional_days: int = Field(..., ge=1, le=30)
+    origin_url: str
+
+
+@api_router.post("/my/bookings/{booking_id}/extend/checkout")
+async def rental_extend_checkout(booking_id: str, req: RentalExtendCheckout, request: Request, user: dict = Depends(get_current_user)):
+    booking = await db.bookings.find_one({"id": booking_id, "customer_email": user["email"]})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    if booking.get("service_type") != "rental" or booking.get("status") in {"cancelled", "completed"} or booking.get("payment_status") != "paid":
+        raise HTTPException(400, "Booking is not eligible for extension.")
+    await _check_extension_blackouts(booking, req.additional_days)
+    quote = _compute_extension_amount(booking, req.additional_days)
+    if quote["extra_cost"] <= 0:
+        raise HTTPException(400, "Extension amount must be > $0")
+
+    host_url = str(request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    stripe_key = secrets_store.get_secret("STRIPE_API_KEY", "")
+    sc = StripeCheckout(api_key=stripe_key, webhook_url=webhook_url)
+    ext_id = f"ext_{uuid.uuid4().hex[:10]}"
+    success_url = f"{req.origin_url.rstrip('/')}/my-bookings?extended={booking_id}&session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{req.origin_url.rstrip('/')}/my-bookings?extend_cancelled={booking_id}"
+    checkout_req = CheckoutSessionRequest(
+        amount=float(quote["extra_cost"]), currency="usd",
+        success_url=success_url, cancel_url=cancel_url,
+        metadata={"booking_id": booking_id, "extension_id": ext_id, "kind": "rental_extension"},
+    )
+    session = await sc.create_checkout_session(checkout_req)
+    await db.rental_extensions.insert_one({
+        "id": ext_id, "booking_id": booking_id, "customer_email": user["email"],
+        "additional_days": req.additional_days, "extra_cost": quote["extra_cost"],
+        "quote": quote, "session_id": session.session_id,
+        "status": "pending", "created_at": now_iso(),
+    })
+    await db.payment_transactions.insert_one({
+        "session_id": session.session_id, "booking_id": booking_id,
+        "kind": "rental_extension", "extension_id": ext_id,
+        "amount": float(quote["extra_cost"]), "currency": "usd",
+        "status": "initiated", "payment_status": "pending",
+        "created_at": now_iso(), "updated_at": now_iso(),
+    })
+    return {"checkout_url": session.url, "session_id": session.session_id, "extension_id": ext_id, "quote": quote}
+
+
+async def apply_rental_extension_if_paid(session_id: str) -> bool:
+    """Called by _mark_paid when the session belongs to a rental extension.
+    Extends the parent booking's `days`, records the extension, keeps the
+    original deposit untouched. Idempotent via `applied_at`."""
+    ext = await db.rental_extensions.find_one({"session_id": session_id})
+    if not ext or ext.get("applied_at"):
+        return False
+    booking = await db.bookings.find_one({"id": ext["booking_id"]})
+    if not booking:
+        return False
+    add_days = int(ext["additional_days"])
+    new_days = int(booking.get("days") or 1) + add_days
+    new_total = round(float(booking.get("total") or 0.0) + float(ext["extra_cost"]), 2)
+    ts = now_iso()
+    entry = {
+        "extension_id": ext["id"], "additional_days": add_days,
+        "extra_cost": ext["extra_cost"], "applied_at": ts,
+        "session_id": session_id,
+    }
+    await db.bookings.update_one(
+        {"id": booking["id"]},
+        {
+            "$set": {"days": new_days, "total": new_total, "updated_at": ts},
+            "$push": {"extensions": entry},
+            "$unset": {"return_reminder_sent_at": "", "return_reminder_result": ""},
+        },
+    )
+    await db.rental_extensions.update_one({"id": ext["id"]}, {"$set": {"status": "applied", "applied_at": ts}})
+    return True
+
+
 # ---------------- Seed content (Nassau / Paradise Island focus) ----------------
 # Catalog seed data lives in seed_data.py to keep this file lean.
 

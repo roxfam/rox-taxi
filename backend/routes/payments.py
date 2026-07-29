@@ -90,6 +90,17 @@ async def _mark_paid(session_id: str, booking_id: Optional[str]):
         {"session_id": session_id, "payment_status": {"$ne": "paid"}},
         {"$set": {"status": "completed", "payment_status": "paid", "updated_at": _now_iso()}},
     )
+    # Rental extension short-circuit: apply the extension against the parent
+    # booking and STOP. We don't want to trip the normal "booking confirmed"
+    # notification pipeline for the parent — the parent was already paid.
+    try:
+        from server import apply_rental_extension_if_paid  # noqa: PLC0415
+        applied = await apply_rental_extension_if_paid(session_id)
+        if applied:
+            return
+    except Exception as e:  # noqa: BLE001
+        logging.warning("rental extension apply err: %s", e)
+
     if booking_id:
         res = await _db.bookings.update_one(
             {"id": booking_id, "payment_status": {"$ne": "paid"}},

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Edit2, Trash2, DollarSign, History, Tag, ImageIcon } from "lucide-react";
+import { Plus, Edit2, Trash2, DollarSign, History, Tag, ImageIcon, CalendarX } from "lucide-react";
 import { api, money } from "../../lib/api";
 import EditModal from "./EditModal";
 import PriceHistoryModal from "./PriceHistoryModal";
+import BulkBlackoutModal from "./BulkBlackoutModal";
 
 // Table/list of tour / taxi / rental items with inline price-edit + history
 // buttons. Uses backend annotation: `promo` is present when the latest
@@ -12,6 +13,7 @@ export default function CatalogPanel({ kind }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [pricing, setPricing] = useState(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // Guarded fetch: cancel late-arriving responses when `kind` changes so a
   // stale /admin/tours result can't overwrite the freshly loaded /admin/rentals
@@ -48,15 +50,27 @@ export default function CatalogPanel({ kind }) {
 
   return (
     <div className="bg-white rounded-xl border border-[#E2E8F0]">
-      <div className="p-4 border-b border-[#E2E8F0] flex justify-between items-center">
+      <div className="p-4 border-b border-[#E2E8F0] flex justify-between items-center gap-3 flex-wrap">
         <div className="text-sm text-[#64748B]">{items.length} item(s)</div>
-        <button
-          onClick={() => setEditing(emptyForm())}
-          data-testid="admin-add-item-btn"
-          className="inline-flex items-center gap-2 rounded-md bg-[#0B3B5C] text-white px-3 py-2 text-sm hover:bg-[#132a4a]"
-        >
-          <Plus className="w-4 h-4" /> Add {kind === "rentals" ? "vehicle" : "item"}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {kind === "rentals" && (
+            <button
+              onClick={() => setBulkOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#EFE7D5] bg-white hover:border-[#B91C1C] hover:text-[#B91C1C] text-[#0B3B5C] text-sm font-semibold px-3.5 py-2"
+              data-testid="admin-bulk-blackout-btn"
+              title="Add or remove blackout dates across many rentals at once"
+            >
+              <CalendarX className="w-3.5 h-3.5 text-[#B91C1C]" /> Bulk block for maintenance
+            </button>
+          )}
+          <button
+            onClick={() => setEditing(emptyForm())}
+            data-testid="admin-add-item-btn"
+            className="inline-flex items-center gap-2 rounded-md bg-[#0B3B5C] text-white px-3 py-2 text-sm hover:bg-[#132a4a]"
+          >
+            <Plus className="w-4 h-4" /> Add {kind === "rentals" ? "vehicle" : "item"}
+          </button>
+        </div>
       </div>
       <div className="divide-y divide-[#E2E8F0]">
         {items.map((it) => (
@@ -119,6 +133,13 @@ export default function CatalogPanel({ kind }) {
 
       {editing && <EditModal kind={kind} initial={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
       {pricing && <PriceHistoryModal kind={kind} item={pricing} onClose={() => setPricing(null)} onSaved={() => { setPricing(null); load(); }} />}
+      {bulkOpen && kind === "rentals" && (
+        <BulkBlackoutModal
+          rentals={items}
+          onClose={() => setBulkOpen(false)}
+          onDone={() => { setBulkOpen(false); load(); }}
+        />
+      )}
     </div>
   );
 }

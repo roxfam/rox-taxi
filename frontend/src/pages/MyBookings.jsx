@@ -2,14 +2,16 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API, money, STATUS_STEPS, STATUS_INDEX, BACKEND_URL } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { Ticket, MapPin, ArrowRight, LogOut, XCircle, Download, CreditCard, Clock, Shield } from "lucide-react";
+import { Ticket, MapPin, ArrowRight, LogOut, XCircle, Download, CreditCard, Clock, Shield, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
+import ExtendRentalModal from "./ExtendRentalModal";
 
 export default function MyBookings() {
   const { user, loading, logout } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [fetching, setFetching] = useState(true);
   const [cancelling, setCancelling] = useState(null);
+  const [extending, setExtending] = useState(null);
 
   const loadBookings = async () => {
     setFetching(true);
@@ -23,6 +25,15 @@ export default function MyBookings() {
     if (loading) return;
     if (!user) { setFetching(false); return; }
     loadBookings();
+    // Post-checkout success toast
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("extended")) {
+      toast.success(`Rental ${q.get("extended")} extended — new return date applied.`);
+      window.history.replaceState({}, "", "/my-bookings");
+    } else if (q.get("extend_cancelled")) {
+      toast("Extension cancelled — no charge made.");
+      window.history.replaceState({}, "", "/my-bookings");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loading]);
 
@@ -153,6 +164,17 @@ export default function MyBookings() {
                       <XCircle className="w-3.5 h-3.5" /> {cancelling === b.id ? "Cancelling…" : "Cancel"}
                     </button>
                   )}
+                  {/* Extend rental — only for paid, active rentals */}
+                  {b.service_type === "rental" && paid && !isCancelled && !isCompleted && (
+                    <button
+                      onClick={() => setExtending(b)}
+                      data-testid={`mybookings-extend-${b.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[#EFE7D5] bg-white hover:border-[#D4A94A] text-[#0B3B5C] text-xs font-semibold px-3.5 py-2"
+                      title="Add more days — no new deposit needed"
+                    >
+                      <CalendarPlus className="w-3.5 h-3.5 text-[#D4A94A]" /> Extend rental
+                    </button>
+                  )}
                   {isCancelled && b.cancellation && (
                     <span className="text-[11px] text-[#64748B]" data-testid={`mybookings-cancel-info-${b.id}`}>
                       Cancelled · fee {money(b.cancellation.fee)} · refund est {money(b.cancellation.refund_estimate)}
@@ -163,6 +185,13 @@ export default function MyBookings() {
             );
           })}
         </div>
+      )}
+      {extending && (
+        <ExtendRentalModal
+          booking={extending}
+          onClose={() => setExtending(null)}
+          onSuccess={() => { setExtending(null); loadBookings(); }}
+        />
       )}
     </div>
   );

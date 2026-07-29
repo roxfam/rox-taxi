@@ -170,6 +170,64 @@ async def refund_payment(payment_id: str, admin: str = Depends(_require_admin_pl
     return {"ok": True, "payment_id": payment_id, "refund": result}
 
 
+# ─── Bulk blackout for maintenance / hurricane / insurance days ───────
+# Pick a date range + optional category filter → every matching rental
+# gets the range added to (or removed from) its `blackout_dates` array.
+
+class BulkBlackoutRequest(BaseModel):
+    start_date: str  # YYYY-MM-DD inclusive
+    end_date: str    # YYYY-MM-DD inclusive
+    category: Optional[str] = None    # e.g. "compact" — filters rentals by exact match
+    rental_ids: Optional[List[str]] = None  # explicit override; ignores category if set
+    action: str = "add"  # "add" or "remove"
+    reason: Optional[str] = None
+
+
+@router.post("/admin/rentals/bulk-blackout")
+async def rentals_bulk_blackout(req: BulkBlackoutRequest, _: str = Depends(_require_admin_placeholder)):
+    from datetime import date, timedelta as _td
+    try:
+        start = date.fromisoformat(req.start_date)
+        end = date.fromisoformat(req.end_date)
+    except Exception as e:
+        raise HTTPException(400, f"Invalid date: {e}") from e
+    if end < start:
+        raise HTTPException(400, "end_date must be on or after start_date")
+    if (end - start).days > 365:
+        raise HTTPException(400, "Range too large (max 365 days per bulk action)")
+
+    dates = [(start + _td(days=i)).isoformat() for i in range((end - start).days + 1)]
+    action = (req.action or "add").lower()
+    if action not in {"add", "remove"}:
+        raise HTTPException(400, "action must be 'add' or 'remove'")
+
+    # Build filter — explicit ids win; else category equality; else all rentals.
+    match: dict = {}
+    if req.rental_ids:
+        match["id"] = {"$in": req.rental_ids}
+    elif req.category:
+        # Category on rentals is stored on the `body`/`category` field varies;
+        # match both to keep the UX forgiving.
+        match["$or"] = [{"category": req.category}, {"body": req.category}]
+
+    rentals = await _db.rentals.find(match).to_list(500)
+    if not rentals:
+        return {"ok": True, "affected": 0, "dates": dates, "action": action, "note": "No matching rentals."}
+
+    update = {"$addToSet": {"blackout_dates": {"$each": dates}}} if action == "add" \
+             else {"$pull": {"blackout_dates": {"$in": dates}}}
+    result = await _db.rentals.update_many({"id": {"$in": [r["id"] for r in rentals]}}, update)
+
+    return {
+        "ok": True,
+        "affected": result.modified_count,
+        "target_count": len(rentals),
+        "dates": dates,
+        "action": action,
+        "reason": req.reason,
+    }
+
+
 # ─── Website content panel ─────────────────────────────────────────────
 class ContentUpdate(BaseModel):
     hero_taglines: Optional[List[str]] = None
