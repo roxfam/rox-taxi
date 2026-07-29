@@ -19,6 +19,7 @@ from emergentintegrations.payments.stripe.checkout import (
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 from fastapi.responses import StreamingResponse
 from notifications import notify_booking_confirmed, notify_owner_booking_created
+from facebook import post_gallery_photo_to_facebook, facebook_status
 import paypal_client
 from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS, HOME_SLIDES_SEED
 from pdf_utils import build_wedding_pdf, build_receipt_pdf
@@ -1062,7 +1063,54 @@ async def admin_approve_submission(sub_id: str, _admin: str = Depends(require_ad
     )
     if r.matched_count == 0:
         raise HTTPException(404, "Submission not found or not pending")
-    return {"id": sub_id, "status": "approved"}
+    # Auto-post to Facebook (best-effort — approval succeeds either way)
+    doc = await db.gallery_submissions.find_one({"id": sub_id})
+    fb_result = {"ok": False, "post_id": None, "error": "not_attempted"}
+    try:
+        fb_result = await post_gallery_photo_to_facebook(
+            image_url=doc.get("url", ""),
+            submitter_name=doc.get("submitter_name", ""),
+            guest_caption=doc.get("caption", ""),
+        )
+        await db.gallery_submissions.update_one(
+            {"id": sub_id},
+            {"$set": {
+                "facebook_posted": fb_result.get("ok", False),
+                "facebook_post_id": fb_result.get("post_id"),
+                "facebook_error": fb_result.get("error"),
+                "facebook_attempted_at": now_iso(),
+            }},
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"facebook autopost failed: {e}")
+        fb_result = {"ok": False, "post_id": None, "error": f"exception:{e}"}
+    # Push notify the admin about the outcome
+    try:
+        if fb_result.get("ok"):
+            await _send_admin_push(
+                title="Guest photo published ✓",
+                body=f"Posted to Facebook — {doc.get('submitter_name','guest')}'s photo is live.",
+                url="/admin/manage?tab=gallery",
+                tag=f"fb-{sub_id}",
+            )
+        else:
+            reason = fb_result.get("error", "unknown")
+            if reason not in ("not_configured", "disabled"):
+                await _send_admin_push(
+                    title="Facebook post failed",
+                    body=f"Photo approved locally, but Facebook returned: {reason}",
+                    url="/admin/manage?tab=gallery",
+                    tag=f"fb-fail-{sub_id}",
+                )
+    except Exception:  # noqa: BLE001
+        pass
+    return {"id": sub_id, "status": "approved", "facebook": fb_result}
+
+
+@api_router.get("/admin/integrations/facebook/status")
+async def admin_facebook_status(_admin: str = Depends(require_admin)):
+    """Diagnostics — is the Facebook page token still valid and reachable?"""
+    return await facebook_status()
 
 
 @api_router.post("/admin/gallery/{sub_id}/reject")

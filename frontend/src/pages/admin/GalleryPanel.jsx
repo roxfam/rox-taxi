@@ -27,8 +27,19 @@ export default function GalleryPanel() {
   const act = async (id, action) => {
     setBusy((b) => ({ ...b, [id]: action }));
     try {
-      await api.post(`/admin/gallery/${id}/${action}`);
-      toast.success(action === "approve" ? "Photo approved — now live in the public gallery" : "Photo rejected & removed");
+      const { data } = await api.post(`/admin/gallery/${id}/${action}`);
+      if (action === "approve") {
+        const fb = data?.facebook || {};
+        if (fb.ok) {
+          toast.success("Approved & posted to Facebook ✓");
+        } else if (fb.error === "not_configured" || fb.error === "disabled") {
+          toast.success("Photo approved — now live in the public gallery");
+        } else {
+          toast.success("Approved (Facebook post failed — photo still live on site)");
+        }
+      } else {
+        toast.success("Photo rejected & removed");
+      }
       setItems((xs) => xs.filter((x) => x.id !== id));
     } catch (e) {
       toast.error(e?.response?.data?.detail || `Failed to ${action}`);
@@ -94,6 +105,14 @@ export default function GalleryPanel() {
                   <div className="text-[10px] uppercase tracking-widest text-[#94a3b8]">
                     {it.created_at && new Date(it.created_at).toLocaleString()}
                   </div>
+                  <p
+                    className="text-[10px] leading-snug rounded-lg bg-[#1877F2]/8 text-[#1877F2] px-2 py-1.5 inline-flex items-start gap-1.5"
+                    title="On approval, this photo will auto-post to the Rox Taxi Service Facebook page. If Facebook fails, the photo still goes live on your website."
+                    data-testid={`admin-gallery-fb-hint-${it.id}`}
+                  >
+                    <span className="mt-0.5">📣</span>
+                    <span>Approving will auto-post this photo to your Facebook page.</span>
+                  </p>
                   <div className="mt-auto flex gap-2 pt-2">
                     <button
                       onClick={() => act(it.id, "approve")}
