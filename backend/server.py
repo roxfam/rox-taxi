@@ -671,6 +671,94 @@ async def seed_db():
         if patch:
             await db.site_config.update_one({"_id": "main"}, {"$set": patch})
 
+    # ── Fleet (drivers + vehicles) — seeded once, editable via admin ──
+    fleet_doc = await db.fleet.find_one({"_id": "main"})
+    if not fleet_doc:
+        await db.fleet.insert_one({
+            "_id": "main",
+            "headline": "The team behind your ride",
+            "subheadline": "Bahamas-licensed. Full insured. Twelve years of Nassau shortcuts.",
+            "drivers": [
+                {"id": "d-rox",   "name": "Rox (Owner-Driver)",   "photo_url": "",
+                 "tagline": "Founder · dispatcher · driver",
+                 "years_driving": 12, "languages": ["English", "Bahamian Creole"],
+                 "badges": ["TSA-Cleared", "First-Aid", "5★ Owner"],
+                 "bio": "Started Rox Taxi with one van and a promise. Still answers the phone."},
+                {"id": "d-julien", "name": "Julien W.", "photo_url": "",
+                 "tagline": "Airport specialist",
+                 "years_driving": 8, "languages": ["English", "French"],
+                 "badges": ["TSA-Cleared", "Bilingual"],
+                 "bio": "Runs the LPIA + cruise-port morning rush. Ask him about the best conch salad on West Bay."},
+                {"id": "d-marcus", "name": "Marcus P.", "photo_url": "",
+                 "tagline": "Tour guide certified",
+                 "years_driving": 6, "languages": ["English", "Spanish"],
+                 "badges": ["Certified Guide", "First-Aid"],
+                 "bio": "Blue Lagoon + Atlantis regulars. Grew up on Paradise Island, knows every reef."},
+                {"id": "d-nia",    "name": "Nia S.", "photo_url": "",
+                 "tagline": "Wedding + private transfers",
+                 "years_driving": 5, "languages": ["English"],
+                 "badges": ["Wedding-Certified", "Chauffeur"],
+                 "bio": "Discreet driver for weddings, honeymoons, and private-jet arrivals."},
+            ],
+            "vehicles": [
+                {"id": "v-minivan", "name": "Toyota Sienna", "year": 2023, "type": "minivan",
+                 "capacity": 7, "luggage_capacity": 8, "photo_url": "",
+                 "features": ["Air Conditioning", "Free Wi-Fi", "USB charging", "Bottled water"],
+                 "tagline": "Our workhorse — great for families & airport runs"},
+                {"id": "v-suv", "name": "Chevrolet Suburban", "year": 2022, "type": "suv",
+                 "capacity": 6, "luggage_capacity": 7, "photo_url": "",
+                 "features": ["Leather", "Tinted windows", "Free Wi-Fi", "USB charging"],
+                 "tagline": "Executive SUV for private tours & VIP transfers"},
+                {"id": "v-sedan", "name": "Toyota Camry XLE", "year": 2023, "type": "sedan",
+                 "capacity": 4, "luggage_capacity": 3, "photo_url": "",
+                 "features": ["Air Conditioning", "Free Wi-Fi", "Bluetooth", "USB charging"],
+                 "tagline": "Fuel-efficient sedan for solo travelers & couples"},
+                {"id": "v-luxury", "name": "Cadillac Escalade", "year": 2024, "type": "luxury",
+                 "capacity": 6, "luggage_capacity": 6, "photo_url": "",
+                 "features": ["Premium leather", "Chauffeur service", "Champagne cooler", "Panoramic roof"],
+                 "tagline": "For weddings, anniversaries & Baha Mar arrivals"},
+                {"id": "v-pickup", "name": "Ford F-150 Convoy Truck", "year": 2022, "type": "pickup",
+                 "capacity": 5, "luggage_capacity": 4, "photo_url": "",
+                 "features": ["Bluetooth", "Bed cover", "Air Conditioning"],
+                 "tagline": "For adventurous cruiser rentals — beach kit ready"},
+            ],
+            "trust_notes": [
+                "Every driver: Bahamas Ministry of Tourism licensed",
+                "Every vehicle: fully insured with roadside cover",
+                "Live GPS tracking on every airport transfer",
+                "Cashless payment options: Zelle · PayPal · Stripe · Cash",
+            ],
+        })
+
+
+# ── Fleet — public read + admin write (drivers + vehicles) ─────────────
+@api_router.get("/fleet")
+async def get_fleet():
+    doc = await db.fleet.find_one({"_id": "main"})
+    if not doc:
+        return {"drivers": [], "vehicles": [], "headline": "", "subheadline": "", "trust_notes": []}
+    doc.pop("_id", None)
+    return doc
+
+
+class FleetUpdate(BaseModel):
+    headline: Optional[str] = None
+    subheadline: Optional[str] = None
+    drivers: Optional[List[Dict[str, Any]]] = None
+    vehicles: Optional[List[Dict[str, Any]]] = None
+    trust_notes: Optional[List[str]] = None
+
+
+@api_router.put("/admin/fleet")
+async def admin_update_fleet(patch: FleetUpdate, _admin: str = Depends(require_admin)):
+    payload = {k: v for k, v in patch.model_dump().items() if v is not None}
+    if not payload:
+        return {"ok": True, "noop": True}
+    await db.fleet.update_one({"_id": "main"}, {"$set": payload}, upsert=True)
+    doc = await db.fleet.find_one({"_id": "main"})
+    doc.pop("_id", None)
+    return doc
+
 
 # ---------------- Public catalog ----------------
 

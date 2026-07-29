@@ -15,6 +15,7 @@ import About from "./pages/About";
 import Groups from "./pages/Groups";
 import WeddingBuilder from "./pages/WeddingBuilder";
 import Gallery from "./pages/Gallery";
+import Fleet from "./pages/Fleet";
 import Pay from "./pages/Pay";
 import { PaymentSuccess, PaymentCancel } from "./pages/PaymentReturn";
 import AdminLogin from "./pages/AdminLogin";
@@ -58,6 +59,7 @@ function AppRouter() {
       <Route path="/groups" element={<CustomerShell><Groups /></CustomerShell>} />
       <Route path="/wedding-builder" element={<CustomerShell><WeddingBuilder /></CustomerShell>} />
       <Route path="/gallery" element={<CustomerShell><Gallery /></CustomerShell>} />
+      <Route path="/fleet" element={<CustomerShell><Fleet /></CustomerShell>} />
       <Route path="/pay" element={<CustomerShell><Pay /></CustomerShell>} />
       <Route path="/pay/:bookingId" element={<CustomerShell><Pay /></CustomerShell>} />
       <Route path="/my-bookings" element={<CustomerShell><MyBookings /></CustomerShell>} />

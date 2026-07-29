@@ -1,7 +1,7 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Facebook, Phone, MapPin, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart, ChevronDown, User as UserIcon, Images } from "lucide-react";
+import { Menu, X, Facebook, Phone, MapPin, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart, ChevronDown, User as UserIcon, Images, Users } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
 const BOOK_OPTIONS = [
@@ -20,6 +20,7 @@ const NAV = [
   { to: "/taxi", label: "Taxi", icon: Car },
   { to: "/tours", label: "Tours", icon: ShipWheel },
   { to: "/rentals", label: "Rentals", icon: MapPinned },
+  { to: "/fleet", label: "Fleet", icon: Users },
   { to: "/gallery", label: "Gallery", icon: Images },
   { to: "/groups", label: "Groups", icon: Heart },
   { to: "/track", label: "Track", icon: Search },
