@@ -218,6 +218,6 @@ HOME_SLIDES_SEED: List[Dict[str, Any]] = [
      "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Reflection_-_panoramio_%2857%29.jpg/2560px-Reflection_-_panoramio_%2857%29.jpg",
      "link_url": "https://www.bahamar.com/", "link_label": "Book at Baha Mar", "order": 9, "active": True},
     {"id": "hero-ardastra",   "title": "Ardastra Gardens Zoo.",       "subtitle": "Marching flamingos, native wildlife & tropical gardens in the heart of Nassau.",
-     "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/American_Flamingos_%28Phoenicopterus_ruber%29_-Ardastra_Gardens.jpg/2560px-American_Flamingos_%28Phoenicopterus_ruber%29_-Ardastra_Gardens.jpg",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/ihvm9tl2_zoo.jpg",
      "link_url": "https://ardastra.com/", "link_label": "Book at Ardastra Gardens", "order": 10, "active": True},
 ]
