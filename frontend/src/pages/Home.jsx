@@ -7,6 +7,7 @@ import NassauCarousel from "../components/NassauCarousel";
 import GoogleReviews from "../components/GoogleReviews";
 import HomeHeroCarousel from "../components/HomeHeroCarousel";
 import QuickBookWidget from "../components/QuickBookWidget";
+import PackagesStrip from "../components/PackagesStrip";
 
 export default function Home() {
   const [tours, setTours] = useState([]);
@@ -93,6 +94,9 @@ export default function Home() {
 
       {/* NASSAU · PARADISE ISLAND CAROUSEL */}
       <NassauCarousel />
+
+      {/* PACKAGE DEALS — bundle & save strip (auto-hides if no active packages) */}
+      <PackagesStrip variant="home" />
 
       {/* FEATURED TOURS */}
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24" data-testid="featured-tours">

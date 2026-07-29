@@ -964,6 +964,46 @@ async def list_gallery():
     return list(seen.values())
 
 
+# ── Web Push helper (defined before endpoints that call it) ────────────
+async def _send_admin_push(*, title: str, body: str, url: str = "/admin", tag: Optional[str] = None) -> int:
+    """Broadcasts a Web Push to every stored admin subscription. Returns delivered count.
+    Dead subscriptions (410 Gone) are cleaned up automatically."""
+    priv = os.environ.get("VAPID_PRIVATE_KEY", "")
+    subj = os.environ.get("VAPID_SUBJECT", "mailto:admin@example.com")
+    if not priv:
+        return 0
+    try:
+        from pywebpush import webpush, WebPushException  # local import so missing lib doesn't crash server boot
+    except Exception:  # noqa: BLE001
+        logger.warning("pywebpush not installed — skipping push")
+        return 0
+    subs = await db.push_subscriptions.find({}).to_list(200)
+    if not subs:
+        return 0
+    import json as _json
+    payload = _json.dumps({"title": title, "body": body, "url": url, "tag": tag or "rox-taxi"})
+    delivered = 0
+    for s in subs:
+        try:
+            webpush(
+                subscription_info={"endpoint": s["endpoint"], "keys": s["keys"]},
+                data=payload,
+                vapid_private_key=priv,
+                vapid_claims={"sub": subj},
+                ttl=3600,
+            )
+            delivered += 1
+        except WebPushException as e:
+            code = getattr(getattr(e, "response", None), "status_code", None)
+            if code in (404, 410):
+                # Subscription is dead — drop it
+                await db.push_subscriptions.delete_one({"endpoint": s["endpoint"]})
+            logger.info(f"push send failed {code}: {e}")
+        except Exception as e:  # noqa: BLE001
+            logger.info(f"push send error: {e}")
+    return delivered
+
+
 # ── Customer gallery submissions ─────────────────────────────────────────
 @api_router.post("/gallery/submit")
 async def submit_gallery_photo(
@@ -995,6 +1035,16 @@ async def submit_gallery_photo(
         "created_at": now_iso(),
     }
     await db.gallery_submissions.insert_one(doc)
+    # Fire-and-forget admin push — never let a push failure block the response
+    try:
+        await _send_admin_push(
+            title="New guest photo submitted",
+            body=f"{doc['submitter_name']} sent a photo — review it in the admin panel.",
+            url="/admin/manage?tab=gallery",
+            tag=f"gallery-{sub_id}",
+        )
+    except Exception:  # noqa: BLE001
+        pass
     return {"id": sub_id, "status": "pending", "message": "Thanks — we'll review your photo and post it soon."}
 
 
@@ -1027,6 +1077,82 @@ async def admin_reject_submission(sub_id: str, _admin: str = Depends(require_adm
         pass
     await db.gallery_submissions.update_one({"id": sub_id}, {"$set": {"status": "rejected", "rejected_at": now_iso()}})
     return {"id": sub_id, "status": "rejected"}
+
+
+# ── Web Push notifications (admin-only alerts) ─────────────────────────
+# Owner installs the site as a PWA / grants notification permission once,
+# then gets a phone-native push every time a customer books, submits a
+# photo, or a new contact message arrives. Free forever — no Twilio spend.
+@api_router.get("/admin/push/vapid-public-key")
+async def push_vapid_public_key(_admin: str = Depends(require_admin)):
+    key = os.environ.get("VAPID_PUBLIC_KEY", "")
+    if not key:
+        raise HTTPException(503, "Push not configured — set VAPID_PUBLIC_KEY in backend/.env")
+    return {"public_key": key}
+
+
+@api_router.post("/admin/push/subscribe")
+async def push_subscribe(sub: Dict[str, Any], _admin: str = Depends(require_admin)):
+    """Persist the browser's PushSubscription so we can send from the server."""
+    endpoint = (sub or {}).get("endpoint")
+    keys = (sub or {}).get("keys") or {}
+    if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
+        raise HTTPException(400, "Invalid subscription payload")
+    doc = {
+        "endpoint": endpoint,
+        "keys": keys,
+        "user_agent": (sub or {}).get("user_agent", ""),
+        "created_at": now_iso(),
+    }
+    await db.push_subscriptions.update_one({"endpoint": endpoint}, {"$set": doc}, upsert=True)
+    return {"ok": True}
+
+
+@api_router.post("/admin/push/unsubscribe")
+async def push_unsubscribe(sub: Dict[str, Any], _admin: str = Depends(require_admin)):
+    endpoint = (sub or {}).get("endpoint")
+    if endpoint:
+        await db.push_subscriptions.delete_one({"endpoint": endpoint})
+    return {"ok": True}
+
+
+@api_router.post("/admin/push/test")
+async def push_test(_admin: str = Depends(require_admin)):
+    """Sends a hello-world push to every registered admin device."""
+    sent = await _send_admin_push(
+        title="Rox Taxi — test notification",
+        body="If you see this, push notifications are working. 🎉",
+        url="/admin",
+        tag="rox-push-test",
+    )
+    return {"sent": sent}
+
+
+# ── Driver manifest (today's assigned bookings) ────────────────────────
+@api_router.get("/admin/driver/manifest")
+async def driver_manifest(
+    date: Optional[str] = None,
+    _admin: str = Depends(require_admin),
+):
+    """Returns bookings scheduled for the given day (default today, America/Nassau).
+    Ordered by booking_date ASC. Used by /driver/manifest mobile page."""
+    if date:
+        try:
+            target = datetime.fromisoformat(date).date()
+        except Exception:
+            raise HTTPException(400, "date must be YYYY-MM-DD")
+    else:
+        # Nassau is UTC-5 year-round (no DST) — cheap approx w/o pulling pytz
+        target = (datetime.now(timezone.utc) + timedelta(hours=-5)).date()
+    day_start = datetime.combine(target, datetime.min.time(), tzinfo=timezone.utc).isoformat()
+    day_end = datetime.combine(target, datetime.max.time(), tzinfo=timezone.utc).isoformat()
+    active_statuses = ["confirmed", "driver_assigned", "en_route", "arrived", "completed", "pending_payment"]
+    cursor = db.bookings.find({
+        "booking_date": {"$gte": day_start, "$lte": day_end},
+        "status": {"$in": active_statuses},
+    }).sort("booking_date", 1)
+    docs = await cursor.to_list(200)
+    return {"date": target.isoformat(), "bookings": [clean(d) for d in docs]}
 
 
 @api_router.get("/rentals/{rental_id}/availability")
@@ -1186,6 +1312,16 @@ async def create_booking(req: BookingCreate):
     booking["total"] = round(max(0.0, computed_total - gift_credit), 2)
 
     await db.bookings.insert_one(booking)
+    # Admin push — never let a push failure block the response
+    try:
+        await _send_admin_push(
+            title=f"New booking · {booking['id']}",
+            body=f"{booking.get('customer_name','A guest')} booked {booking.get('item_name','a service')} — ${booking.get('total',0):.2f}",
+            url="/admin",
+            tag=f"booking-{booking['id']}",
+        )
+    except Exception:  # noqa: BLE001
+        pass
     # Fire owner SMS alert for EVERY new booking (regardless of payment method).
     # We swallow errors so a Twilio hiccup can't block a successful reservation.
     try:

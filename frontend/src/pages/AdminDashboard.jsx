@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money, BACKEND_URL } from "../lib/api";
-import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images } from "lucide-react";
+import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route } from "lucide-react";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -99,10 +99,19 @@ export default function AdminDashboard() {
                   </span>
                 )}
               </button>
+              <button
+                onClick={() => nav("/driver/manifest")}
+                className="px-3 py-1.5 rounded-md hover:bg-[#F1F5F9] text-[#64748B] inline-flex items-center gap-1.5"
+                data-testid="admin-nav-manifest"
+                title="Today's driver manifest"
+              >
+                <Route className="w-4 h-4" /> Manifest
+              </button>
             </nav>
           </div>
           <div className="flex items-center gap-2">
             <DeliverabilityBadge />
+            <PushToggle />
             <button
               onClick={downloadNotificationsCsv}
               className="text-sm flex items-center gap-2 rounded-md px-3 py-1.5 hover:bg-[#F1F5F9] text-[#0B3B5C]"
@@ -436,6 +445,108 @@ async function downloadNotificationsCsv() {
     toast.error(`Export failed: ${e.message || e}`);
   }
 }
+
+function PushToggle() {
+  // Web Push (VAPID) subscribe button — one-tap opt-in for phone-native
+  // notifications on new bookings + guest photo submissions.
+  const [supported] = useState(() => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
+  const [status, setStatus] = useState("checking"); // 'checking' | 'off' | 'on' | 'denied' | 'unsupported'
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!supported) { setStatus("unsupported"); return; }
+    if (Notification.permission === "denied") { setStatus("denied"); return; }
+    navigator.serviceWorker.getRegistration("/sw.js").then(async (reg) => {
+      if (!reg) return setStatus("off");
+      const sub = await reg.pushManager.getSubscription();
+      setStatus(sub ? "on" : "off");
+    }).catch(() => setStatus("off"));
+  }, [supported]);
+
+  const urlBase64ToUint8Array = (base64String) => {
+    const pad = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const b64 = (base64String + pad).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = window.atob(b64);
+    const arr = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+  };
+
+  const enable = async () => {
+    setBusy(true);
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { setStatus(perm === "denied" ? "denied" : "off"); toast.error("Notifications not granted"); return; }
+      const { data } = await api.get("/admin/push/vapid-public-key");
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(data.public_key),
+      });
+      await api.post("/admin/push/subscribe", { ...sub.toJSON(), user_agent: navigator.userAgent });
+      setStatus("on");
+      toast.success("Push notifications enabled");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || e.message || "Enable failed");
+    } finally { setBusy(false); }
+  };
+
+  const disable = async () => {
+    setBusy(true);
+    try {
+      const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+      const sub = reg && (await reg.pushManager.getSubscription());
+      if (sub) {
+        await api.post("/admin/push/unsubscribe", { endpoint: sub.endpoint });
+        await sub.unsubscribe();
+      }
+      setStatus("off");
+      toast.success("Push notifications disabled");
+    } catch (e) {
+      toast.error(e?.message || "Disable failed");
+    } finally { setBusy(false); }
+  };
+
+  const sendTest = async () => {
+    try {
+      const { data } = await api.post("/admin/push/test");
+      toast.success(`Test sent to ${data?.sent ?? 0} device${(data?.sent ?? 0) === 1 ? "" : "s"}`);
+    } catch { toast.error("Test send failed"); }
+  };
+
+  if (status === "unsupported") return null;
+  if (status === "denied") {
+    return (
+      <span className="hidden md:inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[#DC2626]/10 text-[#DC2626] font-semibold" title="Enable notifications in your browser site settings" data-testid="push-toggle-denied">
+        <BellOff className="w-3 h-3" /> Push blocked
+      </span>
+    );
+  }
+  if (status === "on") {
+    return (
+      <div className="hidden md:inline-flex items-center gap-1" data-testid="push-toggle-on">
+        <button onClick={sendTest} className="text-[11px] rounded-full bg-[#059669]/10 text-[#059669] font-semibold px-2.5 py-1 hover:bg-[#059669]/20 inline-flex items-center gap-1.5" title="Send a test push" data-testid="push-test-btn">
+          <Bell className="w-3 h-3" /> Push on
+        </button>
+        <button onClick={disable} disabled={busy} className="text-[10px] text-[#94a3b8] hover:text-[#DC2626]" title="Disable push" data-testid="push-disable-btn">off</button>
+      </div>
+    );
+  }
+  return (
+    <button
+      onClick={enable}
+      disabled={busy || status === "checking"}
+      className="hidden md:inline-flex items-center gap-1.5 text-[11px] rounded-full bg-[#0B3B5C]/10 text-[#0B3B5C] font-semibold px-3 py-1 hover:bg-[#0B3B5C] hover:text-white transition-colors disabled:opacity-60"
+      data-testid="push-enable-btn"
+      title="Enable push notifications on this device"
+    >
+      <Bell className="w-3 h-3" /> {busy ? "…" : "Enable push"}
+    </button>
+  );
+}
+
+
 
 function DeliverabilityBadge() {
   const [stats, setStats] = useState(null);

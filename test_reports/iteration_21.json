@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 21 verified three in-flight features end-to-end: (1) Packages strip on Home renders both bundles with all sub-testids and correct /contact?package=... deep-links; (2) Web Push VAPID endpoint returns base64url key with 401 without auth, subscribe validates missing keys (400) and accepts valid payloads storing to db.push_subscriptions, /admin/push/test returns {sent: int}; (3) Driver Manifest backend + frontend fully functional — /api/admin/driver/manifest 401 without auth, 200 with valid date, 400 on malformed date; /driver/manifest page renders all required testids (page/date/refresh/summary), redirects to /admin/login without token, and shows the booking card for a today-seeded booking. PushToggle button renders as 'push-toggle-denied' in Playwright (expected — headless denies Notification permission by default). Admin-nav-manifest quick-link works. Gallery regression 12/12 pass with serial execution.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration21_push_manifest_packages.py",
+    "/app/test_reports/pytest/iter21.xml",
+    "/app/backend/tests/test_gallery_submissions.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Booking-create endpoint requires item_name, price, passengers — but the review_request instructions said 'pax' (not 'passengers'). Payload contract in the request was inaccurate. The API itself is correct; just note this for future test seed docs.",
+    "test_gallery_submissions.py shares state via pytest.submission_id which fails under xdist parallel execution (workers are separate processes). Fine when run serially but flaky under the repo's default pytest.ini (uses xdist loadscope). Consider refactoring to a fixture-scoped shared ID or class-scoped state."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration21_push_manifest_packages.py"],
+  "success_rate": {"backend": "100% (14/14 new + 12/12 gallery regression, serial)", "frontend": "100% (all testids present, redirect verified, manifest card renders)"},
+  "test_credentials": "Admin: roxfam2509@gmail.com / admin123 (working)",
+  "seed_data_creation": "Created 1 booking via POST /api/bookings: service_type=taxi, item_id=airport-transfer-lpia, item_name='Airport Transfer - LPIA', price=40.0, passengers=2, booking_date=today UTC, customer TEST_ManifestUser / test.manifest@example.com / +12425550123, payment_method=zelle. Booking appeared as card 7C2D3AF5 on /driver/manifest and advanced to 'driver_assigned' via PATCH /api/admin/bookings/{id}/status. Also subscribed a fake push endpoint (TEST_iter21_endpoint) and unsubscribed at end.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Packages strip, Web Push (VAPID + subscribe/unsubscribe/test), and Driver Manifest are all green. To create bookings via POST /api/bookings, required fields are: service_type, item_id, item_name, price (number), passengers (int), customer_name, customer_email, customer_phone, booking_date (ISO), payment_method. 'pax' is accepted but not the required key. PushToggle in Playwright shows push-toggle-denied because headless browsers default-deny Notification permission — main agent should self-test in a real browser to see push-enable-btn/push-toggle-on states. Gallery regression file must be run without xdist (-o addopts='') due to shared pytest.submission_id state.",
+  "rca of the issue": "N/A — no issues found."
+}

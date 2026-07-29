@@ -9,6 +9,7 @@ import Tours from "./pages/Tours";
 import CarRental from "./pages/CarRental";
 import Track from "./pages/Track";
 import DriverShare from "./pages/DriverShare";
+import DriverManifest from "./pages/DriverManifest";
 import Contact from "./pages/Contact";
 import About from "./pages/About";
 import Groups from "./pages/Groups";
@@ -51,6 +52,7 @@ function AppRouter() {
       <Route path="/rentals" element={<CustomerShell><CarRental /></CustomerShell>} />
       <Route path="/track" element={<CustomerShell><Track /></CustomerShell>} />
       <Route path="/driver/:booking_id" element={<DriverShare />} />
+      <Route path="/driver/manifest" element={<DriverManifest />} />
       <Route path="/contact" element={<CustomerShell><Contact /></CustomerShell>} />
       <Route path="/about" element={<CustomerShell><About /></CustomerShell>} />
       <Route path="/groups" element={<CustomerShell><Groups /></CustomerShell>} />
