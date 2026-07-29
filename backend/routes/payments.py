@@ -109,6 +109,13 @@ async def _mark_paid(session_id: str, booking_id: Optional[str]):
         if res.modified_count:
             booking = await _db.bookings.find_one({"id": booking_id})
             provider = (await _db.payment_transactions.find_one({"session_id": session_id}) or {}).get("provider", "stripe")
+            # Hook the referral conversion — no-op if the referee has no
+            # referred_by or already had a paid booking. Silent fail is safe.
+            try:
+                from server import _apply_referral_conversion_if_paid  # noqa: PLC0415
+                await _apply_referral_conversion_if_paid(booking_id)
+            except Exception as e:  # noqa: BLE001
+                logging.warning("referral conversion err: %s", e)
             try:
                 prefs = await _db.site_config.find_one({"_id": "main"}) or {}
                 report = _notify(_clean(dict(booking)), prefs)

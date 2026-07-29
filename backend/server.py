@@ -518,13 +518,27 @@ async def process_google_session(request: Request, response: Response):
 
 @api_router.post("/auth/register")
 async def customer_register(req: CustomerRegisterRequest, response: Response):
-    """Customer email/password signup. Auto-links past bookings by email."""
+    """Customer email/password signup. Auto-links past bookings by email.
+
+    Referral: an optional `referral_code` in the payload links this new
+    account back to the referrer. The credit unlocks after this user's
+    FIRST paid booking (see `_apply_referral_conversion_if_paid`).
+    """
     email = req.email.lower()
     existing = await db.users.find_one({"email": email})
     if existing and existing.get("password_hash"):
         raise HTTPException(400, "An account with this email already exists. Please sign in.")
 
     ts = now_iso()
+    # Look up referrer if a code was supplied — MUST resolve before we create
+    # the user record so we can store `referred_by` from day one.
+    referred_by: Optional[str] = None
+    if req.referral_code:
+        rc = req.referral_code.strip().upper()
+        if rc:
+            ref = await db.users.find_one({"referral_code": rc})
+            if ref and ref["email"] != email:
+                referred_by = ref["user_id"]
     if existing:
         user_id = existing["user_id"]
         await db.users.update_one(
@@ -533,13 +547,26 @@ async def customer_register(req: CustomerRegisterRequest, response: Response):
                       "provider": "email" if not existing.get("provider") else "both",
                       "updated_at": ts}},
         )
+        # Retro-fit referral_code + referred_by if never set.
+        if not existing.get("referral_code"):
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$set": {"referral_code": _new_referral_code()}},
+            )
+        if referred_by and not existing.get("referred_by"):
+            await db.users.update_one({"user_id": user_id}, {"$set": {"referred_by": referred_by}})
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
+        insert_doc = {
             "user_id": user_id, "email": email, "name": req.name, "picture": "",
             "password_hash": _hash_password(req.password), "provider": "email",
+            "referral_code": _new_referral_code(),
+            "credit_balance": 0.0,
             "created_at": ts,
-        })
+        }
+        if referred_by:
+            insert_doc["referred_by"] = referred_by
+        await db.users.insert_one(insert_doc)
 
     token = await _create_customer_session(user_id, "email")
     _set_session_cookie(response, token)
@@ -600,6 +627,131 @@ async def logout(request: Request, response: Response):
 async def my_bookings(user: dict = Depends(get_current_user)):
     docs = await db.bookings.find({"customer_email": user["email"]}).sort("created_at", -1).to_list(200)
     return [clean(d) for d in docs]
+
+
+# ─── Referral rewards ────────────────────────────────────────────────
+# One code per user (auto-generated on signup, format ROX-XXXX). A referral
+# converts on the referee's FIRST paid booking. Every 5th conversion unlocks
+# a $25 credit for the referrer, accumulated in `users.credit_balance`.
+
+REFERRAL_REWARD_USD = 25.0
+REFERRAL_REWARD_EVERY = 5
+
+
+def _new_referral_code() -> str:
+    import secrets, string
+    chars = string.ascii_uppercase + string.digits
+    tail = "".join(secrets.choice(chars) for _ in range(6))
+    return f"ROX-{tail}"
+
+
+async def _apply_referral_conversion_if_paid(booking_id: str) -> Optional[dict]:
+    """Called by payments._mark_paid after a booking transitions to paid.
+    If the customer was referred and this is their first paid booking, mark
+    the referral converted and (every Nth) credit the referrer.
+    Idempotent — safe to call multiple times per booking.
+    """
+    booking = await db.bookings.find_one({"id": booking_id})
+    if not booking or booking.get("referral_applied"):
+        return None
+    email = (booking.get("customer_email") or "").lower()
+    if not email:
+        return None
+    referee = await db.users.find_one({"email": email})
+    if not referee or not referee.get("referred_by"):
+        return None
+    # First paid booking only.
+    prior_paid = await db.bookings.count_documents({
+        "customer_email": email,
+        "payment_status": "paid",
+        "id": {"$ne": booking_id},
+    })
+    if prior_paid > 0:
+        # Mark applied so we don't re-check every future payment.
+        await db.bookings.update_one({"id": booking_id}, {"$set": {"referral_applied": True}})
+        return None
+    referrer_id = referee["referred_by"]
+    ts = now_iso()
+    await db.referrals.insert_one({
+        "referrer_id": referrer_id, "referee_id": referee["user_id"],
+        "referee_email": email, "booking_id": booking_id,
+        "converted_at": ts, "credit_awarded": 0.0,
+    })
+    # Count total conversions for the referrer and award every Nth.
+    conv_count = await db.referrals.count_documents({"referrer_id": referrer_id})
+    credit_awarded = REFERRAL_REWARD_USD if conv_count > 0 and conv_count % REFERRAL_REWARD_EVERY == 0 else 0.0
+    if credit_awarded > 0:
+        await db.users.update_one({"user_id": referrer_id}, {"$inc": {"credit_balance": credit_awarded}})
+        await db.referrals.update_one(
+            {"referrer_id": referrer_id, "booking_id": booking_id},
+            {"$set": {"credit_awarded": credit_awarded, "unlock_number": conv_count // REFERRAL_REWARD_EVERY}},
+        )
+    await db.bookings.update_one({"id": booking_id}, {"$set": {"referral_applied": True}})
+    return {"referrer_id": referrer_id, "conv_count": conv_count, "credit_awarded": credit_awarded}
+
+
+@api_router.get("/referrals/summary")
+async def referral_summary(user: dict = Depends(get_current_user)):
+    doc = await db.users.find_one({"user_id": user["user_id"]}) or {}
+    code = doc.get("referral_code")
+    if not code:
+        code = _new_referral_code()
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"referral_code": code}})
+    total_referred = await db.users.count_documents({"referred_by": user["user_id"]})
+    total_converted = await db.referrals.count_documents({"referrer_id": user["user_id"]})
+    credits_earned = round(REFERRAL_REWARD_USD * (total_converted // REFERRAL_REWARD_EVERY), 2)
+    next_reward_at = REFERRAL_REWARD_EVERY - (total_converted % REFERRAL_REWARD_EVERY) if total_converted else REFERRAL_REWARD_EVERY
+    return {
+        "code": code,
+        "referral_link": f"https://roxtaxi.com/signup?ref={code}",
+        "total_referred": total_referred,
+        "total_converted": total_converted,
+        "credits_earned": credits_earned,
+        "credit_balance": round(float(doc.get("credit_balance") or 0.0), 2),
+        "next_reward_at": next_reward_at,
+        "reward_per_unlock_usd": REFERRAL_REWARD_USD,
+        "unlock_every": REFERRAL_REWARD_EVERY,
+    }
+
+
+# ─── Multi-city foundation ────────────────────────────────────────────
+# Nassau is the flagship (active + inventoried). Other cities show a
+# "Coming soon" splash with an email-capture wait-list until inventory is
+# seeded. `active=True` means the switcher takes the guest to the main site.
+
+CITIES = [
+    {"slug": "nassau",   "name": "Nassau", "tagline": "The flagship — Paradise Island, cruise port, LPIA.", "active": True,  "path": "/"},
+    {"slug": "freeport", "name": "Freeport", "tagline": "Grand Bahama's beach-town gateway.",              "active": False, "path": "/cities/freeport"},
+    {"slug": "exuma",    "name": "Exuma",  "tagline": "Swimming pigs, sandbars and turquoise cays.",       "active": False, "path": "/cities/exuma"},
+    {"slug": "andros",   "name": "Andros", "tagline": "The largest island — blue holes and bonefishing.",  "active": False, "path": "/cities/andros"},
+]
+
+
+@api_router.get("/cities")
+async def list_cities():
+    return {"cities": CITIES}
+
+
+class WaitlistEntry(BaseModel):
+    email: EmailStr
+    city: str = Field(..., max_length=40)
+    name: Optional[str] = Field(None, max_length=80)
+
+
+@api_router.post("/waitlist")
+async def join_waitlist(req: WaitlistEntry):
+    slug = req.city.strip().lower()
+    if slug not in {c["slug"] for c in CITIES}:
+        raise HTTPException(400, "Unknown city")
+    await db.waitlist.update_one(
+        {"email": req.email.lower(), "city": slug},
+        {"$setOnInsert": {
+            "email": req.email.lower(), "city": slug, "name": req.name,
+            "joined_at": now_iso(),
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "city": slug, "message": f"You're on the {slug.title()} wait-list — we'll email you when we launch."}
 
 
 # ─── Rental extension — guest self-serve extend flow ─────────────────────

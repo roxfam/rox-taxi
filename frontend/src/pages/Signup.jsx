@@ -22,7 +22,7 @@ export default function Signup() {
     if (form.password !== form.confirm) return setErr("Passwords don't match.");
     setBusy(true);
     try {
-      await register(form.name.trim(), form.email.trim().toLowerCase(), form.password);
+      await register(form.name.trim(), form.email.trim().toLowerCase(), form.password, (form.referral_code || "").trim().toUpperCase() || null);
       nav("/my-bookings", { replace: true });
     } catch (ex) {
       setErr(ex.message || "Signup failed");
