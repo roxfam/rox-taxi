@@ -85,7 +85,7 @@ export default function RouteQuoteWidget({ services, onBook }) {
 
           {/* From / Swap / To */}
           <div className="mt-8 grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 md:gap-4 items-end">
-            <LocationSelect label="Pick your" tag="from" value={from} onChange={setFrom} locations={locations} exclude={to} />
+            <LocationSelect label="From" tag="from" value={from} onChange={setFrom} locations={locations} exclude={to} />
             <button
               type="button"
               onClick={swap}
@@ -97,7 +97,7 @@ export default function RouteQuoteWidget({ services, onBook }) {
             >
               <ArrowLeftRight className="w-4 h-4" />
             </button>
-            <LocationSelect label="Destination" tag="to" value={to} onChange={setTo} locations={locations} exclude={from} />
+            <LocationSelect label="To" tag="to" value={to} onChange={setTo} locations={locations} exclude={from} />
           </div>
 
           {/* Result */}
