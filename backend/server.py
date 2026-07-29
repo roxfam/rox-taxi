@@ -1056,11 +1056,22 @@ async def list_home_slides():
 @api_router.get("/gallery")
 async def list_gallery():
     """Aggregated public photo feed — home carousel + catalog images + admin
-    uploads + APPROVED customer-submitted photos."""
+    uploads + APPROVED customer-submitted photos.
+
+    Legacy guest uploads stored their URL as `/uploads/<file>`. The static
+    handler lives at `/api/uploads/<file>` today, so we normalise those URLs
+    at read time — old approvals keep rendering without a data migration.
+    """
+
+    def _canonicalise(url: str) -> str:
+        if url and url.startswith("/uploads/"):
+            return "/api" + url
+        return url
 
     seen: dict[str, dict] = {}
 
     def _add(url, category, title, submitter=None):
+        url = _canonicalise(url or "")
         if not url or url in seen:
             return
         entry = {"url": url, "category": category, "title": title}
@@ -1143,7 +1154,7 @@ async def submit_gallery_photo(
     (UPLOAD_DIR / filename).write_bytes(contents)
     doc = {
         "id": sub_id,
-        "url": f"/uploads/{filename}",
+        "url": f"/api/uploads/{filename}",
         "filename": filename,
         "submitter_name": (submitter_name or "").strip()[:80] or "Anonymous guest",
         "submitter_email": (submitter_email or "").strip().lower()[:120],
