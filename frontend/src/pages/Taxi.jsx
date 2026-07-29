@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, money } from "../lib/api";
 import BookingModal from "./BookingFlow";
 import RouteQuoteWidget from "../components/RouteQuoteWidget";
+import FlightTrackerCard from "../components/FlightTrackerCard";
 import { Car, ArrowRight, Plane, Anchor, ShoppingBag, Utensils, Palmtree, MapPin, Ship, Hotel, ChevronDown } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
@@ -254,6 +255,18 @@ export default function Taxi() {
                   Save 10%
                 </span>
               </label>
+
+              <FlightTrackerCard
+                value={form.flight_number}
+                onChange={(v) => setForm({ ...form, flight_number: v })}
+                pickupDate={form.booking_date}
+                onSuggestPickup={(iso) => {
+                  // Convert to local datetime-local string YYYY-MM-DDTHH:MM
+                  const d = new Date(iso);
+                  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                  setForm({ ...form, booking_date: local });
+                }}
+              />
             </>
           )}
         />

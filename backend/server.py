@@ -139,6 +139,7 @@ class BookingCreate(BaseModel):
     payment_method: str
     round_trip: Optional[bool] = False  # taxi: same-day return, 10% off both legs
     tip_amount: Optional[float] = Field(0, ge=0, le=1000)
+    flight_number: Optional[str] = Field(None, max_length=12)
 
 
 LUGGAGE_FEE_USD = 3.0
@@ -910,6 +911,8 @@ async def create_booking(req: BookingCreate):
     additional_driver_fee = 0.0
     bridge_toll_fee = 0.0
     if req.service_type == "taxi":
+        if req.flight_number:
+            booking["flight_number"] = req.flight_number.strip().upper().replace(" ", "")
         extra = max(0, min(int(req.extra_luggage or 0), LUGGAGE_MAX))
         luggage_fee = extra * LUGGAGE_FEE_USD
         booking["luggage_fee"] = luggage_fee
@@ -1407,6 +1410,97 @@ async def chat_history(session_id: str):
 @api_router.get("/")
 async def root():
     return {"service": "Rox Taxi Service & Tours Bahamas API", "status": "running", "focus": "Nassau & Paradise Island"}
+
+
+# ── Airport flight tracker ───────────────────────────────────────────────
+# Uses AviationStack free tier (100 requests / month) to look up scheduled +
+# actual arrival for the customer's flight number so we can auto-adjust
+# pickup time. Responses are cached for 10 min to conserve quota.
+_FLIGHT_CACHE: Dict[str, Dict[str, Any]] = {}
+_FLIGHT_CACHE_TTL_SEC = 600
+
+
+@api_router.get("/flight/{flight_number}")
+async def lookup_flight(flight_number: str):
+    key = os.environ.get("AVIATIONSTACK_API_KEY", "").strip()
+    if not key:
+        raise HTTPException(503, "Flight tracking not configured on this server")
+
+    fn = flight_number.strip().upper().replace(" ", "")
+    if not fn or len(fn) < 3 or len(fn) > 10:
+        raise HTTPException(400, "Invalid flight number")
+
+    # Cache hit — return within TTL
+    now_ts = datetime.now(timezone.utc).timestamp()
+    cached = _FLIGHT_CACHE.get(fn)
+    if cached and (now_ts - cached["_ts"]) < _FLIGHT_CACHE_TTL_SEC:
+        return cached["data"]
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as ac:
+            r = await ac.get(
+                "http://api.aviationstack.com/v1/flights",
+                params={"access_key": key, "flight_iata": fn, "limit": 1},
+            )
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Flight API unreachable: {e}")
+
+    if r.status_code != 200:
+        raise HTTPException(502, f"Flight API error {r.status_code}")
+
+    body = r.json()
+    if body.get("error"):
+        raise HTTPException(400, f"Flight lookup failed: {body['error'].get('message', 'unknown')}")
+
+    flights = body.get("data") or []
+    if not flights:
+        result = {"found": False, "flight_number": fn,
+                  "message": "No flight found — check the number (e.g. AA123, BA251, JBU617)."}
+        _FLIGHT_CACHE[fn] = {"_ts": now_ts, "data": result}
+        return result
+
+    f = flights[0]
+    arr = f.get("arrival") or {}
+    dep = f.get("departure") or {}
+    airline = f.get("airline") or {}
+    delay_min = arr.get("delay")
+
+    result = {
+        "found": True,
+        "flight_number": fn,
+        "status": f.get("flight_status"),
+        "airline": airline.get("name"),
+        "departure": {
+            "airport_iata": dep.get("iata"),
+            "airport": dep.get("airport"),
+            "scheduled": dep.get("scheduled"),
+            "actual": dep.get("actual"),
+        },
+        "arrival": {
+            "airport_iata": arr.get("iata"),
+            "airport": arr.get("airport"),
+            "scheduled": arr.get("scheduled"),
+            "estimated": arr.get("estimated"),
+            "actual": arr.get("actual"),
+            "delay_minutes": delay_min,
+        },
+        "recommended_pickup": _recommended_pickup(arr),
+    }
+    _FLIGHT_CACHE[fn] = {"_ts": now_ts, "data": result}
+    return result
+
+
+def _recommended_pickup(arr: Dict[str, Any]) -> Optional[str]:
+    """Suggested pickup = actual/estimated/scheduled arrival + 25 min buffer for
+    disembark, luggage and immigration."""
+    ts = arr.get("actual") or arr.get("estimated") or arr.get("scheduled")
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        return (dt + timedelta(minutes=25)).isoformat()
+    except Exception:  # noqa: BLE001
+        return None
 
 
 @api_router.get("/live-stats")

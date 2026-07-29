@@ -40,8 +40,10 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
   - `backend_php_starter/` (paused PHP/MySQL rewrite scaffolding)
   - `rox_taxi_deploy_20260728.tar.gz` (1.5MB — single-file download)
 
+- **Airport flight tracker** ✅ — AviationStack API integrated (`/api/flight/{fn}` with 10-min cache). New `FlightTrackerCard` on taxi bookings shows live flight status, ETA, delay minutes, and one-click "adjust pickup" that auto-syncs booking time to arrival + 25-min buffer. `flight_number` now stored on booking records. Free tier = 100 lookups/month; cached responses conserve quota.
+
 ### 🎯 Backlog — Wave 2 (revenue/trust)
-- **Airport flight tracker** — customer types flight #, auto-adjust pickup via AviationStack. Needs API key.
+- ~~Airport flight tracker~~ ✅ shipped
 - **Cross-sell "Add a tour" upsell** on booking success (LPIA→Atlantis → suggest Blue Lagoon $109 for tomorrow).
 - **Gift cards / prepaid credits** via Stripe.
 - **Package deals** — auto-generated bundles (e.g. "Airport + Tour + Airport return = $210 save $20").

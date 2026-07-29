@@ -46,6 +46,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     extra_luggage: 0,
     additional_drivers: 0,
     round_trip: false,
+    flight_number: "",
     notes: "",
   });
   const LUGGAGE_FEE = 3;
@@ -126,6 +127,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         notes: form.notes || null,
         payment_method: payMethod,
         round_trip: !!form.round_trip,
+        flight_number: form.flight_number ? form.flight_number.trim().toUpperCase().replace(/\s+/g, "") : null,
       };
       const { data: b } = await api.post("/bookings", payload);
       setBooking(b);
