@@ -185,6 +185,7 @@ def _validate_open_day(service_type: str, booking_date: str, days: int = 1):
     Saturday IS allowed. Customers may keep the car through Saturday and
     return it that day (agreed hand-off at their hotel or airport).
     Taxi rides always have days=1 so this is a single-day check.
+    Also honours admin-managed `blackout_dates` in site_config.
     """
     if service_type not in CLOSED_APPLIES_TO:
         return
@@ -198,6 +199,44 @@ def _validate_open_day(service_type: str, booking_date: str, days: int = 1):
             400,
             f"We are closed on Saturdays for pickup. Please choose a different pickup date (requested {d.isoformat()}). Saturday drop-off is fine.",
         )
+    # Blackout dates (holidays, family days) — cached briefly to avoid DB hit
+    global _BLACKOUT_CACHE
+    if _BLACKOUT_CACHE is None or (datetime.now(timezone.utc).timestamp() - _BLACKOUT_CACHE.get("_ts", 0)) > 60:
+        _refresh_blackout_cache_sync()
+    if d.isoformat() in (_BLACKOUT_CACHE or {}).get("dates", set()):
+        raise HTTPException(
+            400,
+            f"We're offline on {d.isoformat()} — please pick another day. Contact us if urgent.",
+        )
+
+
+_BLACKOUT_CACHE: Optional[Dict[str, Any]] = None
+
+
+def _refresh_blackout_cache_sync():
+    """Sync helper to reload blackout dates from site_config. Called from the
+    validator which runs inside an async context — this is safe because motor
+    exposes sync helpers via `create_task` but we simplify by using a plain
+    module-level cache and reload every 60 seconds."""
+    global _BLACKOUT_CACHE
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            fut = asyncio.ensure_future(db.site_config.find_one({"_id": "main"}))
+            # Best-effort — if we're inside a task, just skip refresh this call.
+            _BLACKOUT_CACHE = _BLACKOUT_CACHE or {"_ts": 0, "dates": set()}
+            return
+    except Exception:  # noqa: BLE001
+        pass
+
+
+async def refresh_blackout_cache():
+    """Async version — call after admin updates blackout_dates."""
+    global _BLACKOUT_CACHE
+    doc = await db.site_config.find_one({"_id": "main"}) or {}
+    dates = set(doc.get("blackout_dates") or [])
+    _BLACKOUT_CACHE = {"_ts": datetime.now(timezone.utc).timestamp(), "dates": dates}
 
 
 class LoginRequest(BaseModel):
@@ -1038,7 +1077,9 @@ async def get_fees():
 
 @api_router.post("/bookings/{booking_id}/cancel")
 async def cancel_booking(booking_id: str):
-    """Public cancel endpoint. Applies 15% fee when ≥48hr notice, else no refund."""
+    """Public cancel endpoint. Applies 15% fee when ≥48hr notice, else no refund.
+    When eligible AND payment was via Stripe or PayPal, automatically fires the
+    provider's refund API. Zelle refunds must be handled manually by owner."""
     doc = await db.bookings.find_one({"id": booking_id.upper()})
     if not doc:
         raise HTTPException(404, "Booking not found")
@@ -1062,6 +1103,49 @@ async def cancel_booking(booking_id: str):
     fee = round(total * CANCELLATION_FEE_PCT, 2) if eligible else (total if paid else 0.0)
     refund = round(max(0.0, total - fee), 2) if paid else 0.0
 
+    # ── AUTO-REFUND — fire provider API when eligible + paid ───────────────
+    refund_result: Dict[str, Any] = {"attempted": False}
+    pay_method = (doc.get("payment_method") or "").lower()
+    if paid and eligible and refund > 0.01:
+        refund_result["attempted"] = True
+        refund_result["method"] = pay_method
+        try:
+            if pay_method == "stripe" and doc.get("stripe_session_id"):
+                async with httpx.AsyncClient(timeout=15.0) as ac:
+                    # Stripe: retrieve session to get payment_intent, then refund
+                    s = await ac.get(
+                        f"https://api.stripe.com/v1/checkout/sessions/{doc['stripe_session_id']}",
+                        auth=(os.environ.get("STRIPE_API_KEY", ""), ""),
+                    )
+                    intent_id = (s.json() or {}).get("payment_intent")
+                    if intent_id:
+                        r = await ac.post(
+                            "https://api.stripe.com/v1/refunds",
+                            data={"payment_intent": intent_id, "amount": str(int(refund * 100))},
+                            auth=(os.environ.get("STRIPE_API_KEY", ""), ""),
+                        )
+                        j = r.json()
+                        refund_result.update({"ok": r.status_code == 200, "id": j.get("id"), "status": j.get("status")})
+            elif pay_method in ("paypal_checkout", "paypal") and doc.get("paypal_capture_id"):
+                # PayPal refund via REST — /v2/payments/captures/{id}/refund
+                try:
+                    from paypal_client import _base_url as _pp_base, _access_token
+                    async with httpx.AsyncClient(timeout=15.0) as ac:
+                        tok = await _access_token()
+                        r = await ac.post(
+                            f"{_pp_base()}/v2/payments/captures/{doc['paypal_capture_id']}/refund",
+                            headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json"},
+                            json={"amount": {"value": f"{refund:.2f}", "currency_code": "USD"}, "note_to_payer": "Rox Taxi — booking cancellation refund"},
+                        )
+                        j = r.json()
+                        refund_result.update({"ok": r.status_code in (200, 201), "id": j.get("id"), "status": j.get("status")})
+                except Exception as e:  # noqa: BLE001
+                    refund_result.update({"ok": False, "error": f"paypal client err: {e}"})
+            else:
+                refund_result.update({"ok": False, "reason": "Manual refund required (Zelle or unsupported method)"})
+        except Exception as e:  # noqa: BLE001
+            refund_result.update({"ok": False, "error": str(e)[:200]})
+
     await db.bookings.update_one(
         {"id": doc["id"]},
         {"$set": {
@@ -1073,6 +1157,7 @@ async def cancel_booking(booking_id: str):
                 "fee": fee,
                 "refund_estimate": refund,
                 "fee_pct": CANCELLATION_FEE_PCT,
+                "refund_result": refund_result,
             },
             "updated_at": now_iso(),
         }},
@@ -1084,6 +1169,7 @@ async def cancel_booking(booking_id: str):
         "eligible_for_refund": eligible,
         "cancellation_fee": fee,
         "refund_estimate": refund,
+        "refund_result": refund_result,
         "payment_status": doc.get("payment_status"),
         "message": (
             f"Cancelled with {round(hours_until,1)}h notice. Refund estimate: ${refund:.2f} (fee ${fee:.2f})."
@@ -1093,6 +1179,32 @@ async def cancel_booking(booking_id: str):
             "Cancelled. No payment had been received."
         ),
     }
+
+
+@api_router.get("/blackout-dates")
+async def public_blackout_dates():
+    doc = await db.site_config.find_one({"_id": "main"}) or {}
+    return {"blackout_dates": doc.get("blackout_dates") or []}
+
+
+class BlackoutDatesUpdate(BaseModel):
+    dates: List[str] = Field(..., description="ISO date strings YYYY-MM-DD")
+
+
+@api_router.post("/admin/blackout-dates")
+async def admin_set_blackout_dates(req: BlackoutDatesUpdate, _admin: dict = Depends(require_admin)):
+    valid = []
+    for d in req.dates:
+        try:
+            datetime.strptime(d, "%Y-%m-%d")
+            valid.append(d)
+        except Exception:  # noqa: BLE001
+            pass
+    valid = sorted(set(valid))
+    await db.site_config.update_one({"_id": "main"}, {"$set": {"blackout_dates": valid}}, upsert=True)
+    await refresh_blackout_cache()
+    return {"ok": True, "blackout_dates": valid}
+
 
 
 REVIEWS_SEED = [

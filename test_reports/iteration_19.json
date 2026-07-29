@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 19 validated all 4 new features shipped in this session (flight tracker, auto-refund on cancel, blackout calendar, tour upsell). Backend: 15/15 pytest passed in test_iteration19_flight_refund_blackout.py. Frontend: FlightTrackerCard on /taxi booking modal tested end-to-end — WU805 correctly returns Western Air GGT→NAS with populated arrival time, ZZ9999 shows flight-not-found, 'AB' does not fire a lookup (<3-char guard works), and the flight-pickup-aligned indicator renders when the current booking_date already matches the recommended pickup. TourUpsellCard was code-reviewed only (real Stripe session polling required to reach /payment-success — same limitation as iteration 18) but the underlying /api/tours endpoint returns >=2 active tours and the component wiring is correct.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/bookings/{id}/cancel (unpaid + eligible)", "issue": "When a booking is unpaid AND cancelled with >48h notice, cancellation_fee is set to 0.0 and refund_estimate is 0.0 (both because `paid` is false). The response body still exposes `eligible_for_refund: true` even though nothing was paid, which can be confusing. Not a bug per spec, but the semantics of 'eligible_for_refund' + fee=0 look inconsistent to a reader."},
+      {"endpoint": "GET /api/flight/{fn}", "issue": "AviationStack free tier is HTTP-only (http://api.aviationstack.com) — cache mitigates but each cold flight number costs a call. Consider adding negative-response caching for unknown flight numbers (already implemented — cache stores the not-found result) and rate-limit per-IP."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration19_flight_refund_blackout.py",
+    "/app/test_reports/pytest/iteration19.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: normalise the cancel response so eligible_for_refund only reports true when a refund is actually issued (paid==true). Cosmetic — not blocking.",
+    "OPTIONAL: schedule a live Stripe test-session flow so /payment-success + TourUpsellCard get exercised by Playwright (currently only code-review verified)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1675 lines — well past the 700-line guideline. Extract flight tracker, blackout dates, and cancel/refund into feature routers alongside admin.py and payments.py.",
+    "_refresh_blackout_cache_sync() (server.py:216-231) is essentially a no-op when called from a running event loop — it just seeds an empty set and returns. The blackout check therefore relies on refresh_blackout_cache() being invoked by the admin endpoint. If the process is restarted while a blackout is set, the FIRST booking on that date will slip through until the admin endpoint is hit again. Fix: seed the cache on startup (add to configure()/lifespan) or move the check to `await db.site_config.find_one(...)` inline (single Mongo read).",
+    "lookup_flight has no per-IP rate limiting — a determined visitor could burn the 100-call/month AviationStack quota in seconds by cycling flight numbers. Add a simple sliding-window limiter or ban queries with >20 rpm from one IP.",
+    "cancel_booking exposes internal stripe/paypal error strings in refund_result.error verbatim (line 1147) — those can leak internal keys, request IDs, or infra hostnames. Sanitise before returning to public API.",
+    "AVIATIONSTACK_API_KEY is committed to /app/backend/.env in the repo (visible in this iteration) — rotate before pushing to a public branch."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration19_flight_refund_blackout.py"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% for FlightTrackerCard flows tested; TourUpsellCard code-reviewed only (requires paid Stripe session to reach /payment-success)"},
+  "test_credentials": "Used admin roxfam2509@gmail.com / admin123 to hit /api/admin/blackout-dates and /api/admin/payments/zelle-mark-paid. All test bookings are TEST_-prefixed (customer_email starts with TEST_).",
+  "seed_data_creation": "Created ~8 TEST_-prefixed bookings during pytest (all in cancelled state by end-of-run). Also set/cleared blackout_dates on site_config — left CLEARED (empty list) so subsequent bookings are not blocked. Safe to leave as-is.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Server clock in this environment is running at ~2026-07-29 (real time), so booking dates in tests must be > that. I use 2026-12-14 through 2026-12-21 for far-future scenarios. WU805 (Western Air GGT→NAS) is a REAL scheduled flight that AviationStack returns data for on any day of the month — do NOT change the test to a different flight number without checking AviationStack quota (100/mo). The FlightTrackerCard debounce is 750ms, so Playwright must wait >=3s after typing before asserting flight-info. To reach /payment-success in a browser test you'd need a Stripe Checkout live session — the polling loop /api/payments/status/{session_id} will 404 without one; alternatives are (a) add a test-only /api/dev/mock-paid-session endpoint or (b) drive the /pay/{booking_id} → Zelle mark-paid flow, but neither redirects to /payment-success.",
+  "rca of the issue": "No blocking issues found in this iteration. All 4 features work as documented."
+}

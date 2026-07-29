@@ -3,6 +3,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, money } from "../lib/api";
+import TourUpsellCard from "../components/TourUpsellCard";
 
 export function PaymentSuccess() {
   const [params] = useSearchParams();
@@ -114,6 +115,9 @@ export function PaymentSuccess() {
           </div>
         </div>
       )}
+
+      {/* Tour upsell — only shown for successful taxi/rental bookings */}
+      {booking && booking.service_type !== "tour" && <TourUpsellCard booking={booking} />}
     </div>
   );
 }

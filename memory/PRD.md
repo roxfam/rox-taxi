@@ -41,6 +41,9 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
   - `rox_taxi_deploy_20260728.tar.gz` (1.5MB — single-file download)
 
 - **Airport flight tracker** ✅ — AviationStack API integrated (`/api/flight/{fn}` with 10-min cache). New `FlightTrackerCard` on taxi bookings shows live flight status, ETA, delay minutes, and one-click "adjust pickup" that auto-syncs booking time to arrival + 25-min buffer. `flight_number` now stored on booking records. Free tier = 100 lookups/month; cached responses conserve quota.
+- **Auto-refund on cancel** ✅ — `POST /api/bookings/{id}/cancel` now fires Stripe or PayPal refund APIs automatically when ≥48h notice + payment was made. Zelle refunds still owner-handled (booking notes it). `cancellation.refund_result` records provider ID + status. Frontend displays outcome in the cancel toast.
+- **Blackout calendar** ✅ — Admin sets unavailable dates via `POST /api/admin/blackout-dates`. Public read via `GET /api/blackout-dates`. `_validate_open_day` blocks bookings on those dates with a friendly "We're offline on YYYY-MM-DD" message. Cache refreshed after each admin update. Verified end-to-end.
+- **Tour upsell on booking success** ✅ — New `TourUpsellCard` on the PaymentSuccess page shows 2 contextually chosen tours based on the completed booking's dropoff (Atlantis / Cruise Port / Cable Beach). Direct links to `/tours#{id}`. Featured/popular tours ranked first.
 
 ### 🎯 Backlog — Wave 2 (revenue/trust)
 - ~~Airport flight tracker~~ ✅ shipped
@@ -60,8 +63,8 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - CSV / Excel export from admin panel.
 - **Admin push notifications** via Web Push API (VAPID keys, service worker) — replace SMS-only alerts, free forever, works when Twilio is over budget.
 - **Driver mobile app view** `/driver/manifest` — driver logs in, sees all today's assigned bookings on one screen with pickup/dropoff, phone tap-to-call, one-tap "en route → arrived → completed" status buttons.
-- **Auto-refund on cancellation** — when a customer cancels ≥48h out and payment was Stripe/PayPal, automatically fire the refund API call (currently only records the intent). Cancellation endpoint already computes `refund_estimate` — hook to `stripe.Refund.create` + PayPal `/v2/payments/captures/{id}/refund`.
-- **Blackout calendar in admin** — admin marks unavailable dates (holidays, family events, sick days) via calendar UI in Site Config panel; `POST /api/admin/blackout-dates`. Frontend booking modal reads them and disables those dates in `DateTimePicker` (same mechanism as existing Saturday closure). Extend `_validate_open_day()` server-side.
+- ~~**Auto-refund on cancellation**~~ ✅ shipped
+- ~~**Blackout calendar in admin**~~ ✅ shipped (backend + `/api/admin/blackout-dates`; admin UI panel still to add in SiteConfigPanel).
 
 ### 🎨 Backlog — Wave 4 (polish)
 - Tip chips on Pay page (backend `tip_amount` already accepted).

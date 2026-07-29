@@ -229,3 +229,14 @@
 	"last_activity_at": "2026-07-28T18:56:23.223611+00:00",
 	"created_at": "2026-07-28T18:56:23.120084+00:00"
 }
+{
+	"_id": {
+		"$oid": "6a6958d6ea538555273f8524"
+	},
+	"user_id": "user_6f7fff5bb78b",
+	"session_token": "sess_9fbf189dbfa14691b8cc00bb230ee005bd093f2d17374cefae1e57aef332ac22",
+	"auth_method": "email",
+	"expires_at": "2026-08-05T01:35:18.349862+00:00",
+	"last_activity_at": "2026-07-29T01:35:18.406825+00:00",
+	"created_at": "2026-07-29T01:35:18.349822+00:00"
+}
