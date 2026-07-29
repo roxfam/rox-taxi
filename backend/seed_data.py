@@ -9,7 +9,7 @@ TOURS_SEED: List[Dict] = [
     {"id": "blue-lagoon", "name": "Blue Lagoon Island Beach Day", "price": 89.0, "duration": "6 hours",
      "location": "Departs Nassau Harbour", "featured": True,
      "description": "A quick ferry from Nassau lands you on a private-feel island — hammocks, kayaks, snorkeling and a rum punch bar.",
-     "image_url": "https://images.unsplash.com/photo-1723567017685-86060d4861c7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwyfHxiYWhhbWFzJTIwYmVhY2glMjBjbGVhciUyMHdhdGVyfGVufDB8fHx8MTc4NTA2MjgxMXww&ixlib=rb-4.1.0&q=85",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/v6copd5d_blue-lagoon-island-beach-day6.jpg",
      "category": "excursion", "active": True},
     {"id": "atlantis-tour", "name": "Paradise Island & Atlantis City Tour", "price": 45.0, "duration": "3 hours",
      "location": "Paradise Island", "featured": True,
