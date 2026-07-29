@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { api } from "../lib/api";
-import { Images, X, MapPin, Car, ShipWheel, MapPinned, Camera } from "lucide-react";
+import { Images, X, MapPin, Car, ShipWheel, MapPinned, Camera, Upload, CheckCircle2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 // Filter chips mirror the site's primary IA (Nassau/Home = "the place",
 // then Tours / Rentals / Taxi = the three service pillars). Icons repeat
@@ -149,6 +150,176 @@ export default function Gallery() {
           </figure>
         </div>
       )}
+
+      <div className="max-w-6xl mx-auto px-6 lg:px-10 pb-16">
+        <GallerySubmitCard />
+      </div>
     </div>
+  );
+}
+
+// Public "share your trip photo" card. Sends multipart form to
+// POST /api/gallery/submit — the photo lands in the pending queue until the
+// admin approves it in the Gallery panel of /admin/manage.
+function GallerySubmitCard() {
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [caption, setCaption] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const inputRef = useRef(null);
+
+  const pick = (f) => {
+    if (!f) return;
+    if (!f.type.startsWith("image/")) { toast.error("Please choose an image file"); return; }
+    if (f.size > 8 * 1024 * 1024) { toast.error("Image too large (max 8MB)"); return; }
+    setFile(f);
+    setPreview(URL.createObjectURL(f));
+  };
+
+  const reset = () => {
+    setFile(null); setPreview(""); setName(""); setEmail(""); setCaption("");
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!file) { toast.error("Choose a photo first"); return; }
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("submitter_name", name);
+      fd.append("submitter_email", email);
+      fd.append("caption", caption);
+      await api.post("/gallery/submit", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setSubmitted(true);
+      reset();
+      toast.success("Thanks — we'll review your photo and post it soon.");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Upload failed — please try again");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="rounded-3xl border border-[#059669]/30 bg-[#059669]/5 p-8 text-center" data-testid="gallery-submit-thanks">
+        <CheckCircle2 className="w-10 h-10 text-[#059669] mx-auto mb-3" />
+        <h3 className="serif text-2xl text-[#0B3B5C]">Photo received</h3>
+        <p className="text-sm text-[#64748B] mt-2 max-w-md mx-auto">
+          Our team reviews every submission before it appears in the gallery.
+          You'll see yours here within a day or two.
+        </p>
+        <button
+          type="button"
+          onClick={() => setSubmitted(false)}
+          className="mt-5 text-sm font-semibold text-[#0B3B5C] underline underline-offset-4 hover:text-[#D4A94A]"
+          data-testid="gallery-submit-another"
+        >
+          Share another photo
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className="rounded-3xl border border-[#E2E8F0] bg-white p-6 lg:p-8 shadow-[0_10px_30px_rgba(11,25,44,0.06)]"
+      data-testid="gallery-submit-card"
+    >
+      <div className="flex items-start gap-4 mb-5">
+        <div className="w-11 h-11 rounded-xl bg-[#D4A94A]/15 text-[#D4A94A] flex items-center justify-center shrink-0">
+          <Camera className="w-5 h-5" />
+        </div>
+        <div>
+          <h3 className="serif text-2xl text-[#0B3B5C]">Share your trip photo</h3>
+          <p className="text-sm text-[#64748B] mt-1">
+            Rode with us? Send us your favourite Nassau memory — approved shots appear in this gallery.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-5">
+        <label
+          htmlFor="gallery-submit-file"
+          className="group relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#E2E8F0] hover:border-[#D4A94A] bg-[#F7F5EF] cursor-pointer min-h-[220px] overflow-hidden transition-colors"
+          data-testid="gallery-submit-dropzone"
+        >
+          {preview ? (
+            <img src={preview} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
+          ) : (
+            <>
+              <Upload className="w-7 h-7 text-[#0B3B5C]/60 group-hover:text-[#D4A94A]" />
+              <span className="text-sm font-semibold text-[#0B3B5C]">Tap to choose a photo</span>
+              <span className="text-[11px] text-[#64748B]">JPG / PNG / WEBP · up to 8MB</span>
+            </>
+          )}
+          <input
+            id="gallery-submit-file"
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={(e) => pick(e.target.files?.[0])}
+            data-testid="gallery-submit-file"
+          />
+        </label>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-[11px] uppercase tracking-widest text-[#64748B] font-semibold">Your name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Optional"
+              maxLength={80}
+              className="mt-1 w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm focus:outline-none focus:border-[#D4A94A]"
+              data-testid="gallery-submit-name"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] uppercase tracking-widest text-[#64748B] font-semibold">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Optional — so we can thank you"
+              maxLength={120}
+              className="mt-1 w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm focus:outline-none focus:border-[#D4A94A]"
+              data-testid="gallery-submit-email"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] uppercase tracking-widest text-[#64748B] font-semibold">Caption</label>
+            <textarea
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              rows={3}
+              maxLength={200}
+              placeholder="Where was this? Which tour or ride?"
+              className="mt-1 w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm focus:outline-none focus:border-[#D4A94A] resize-none"
+              data-testid="gallery-submit-caption"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={submitting || !file}
+            className="btn-shine w-full rounded-full bg-[#0B3B5C] hover:bg-[#132a4a] text-white py-2.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed active:scale-95"
+            data-testid="gallery-submit-btn"
+          >
+            {submitting ? (<><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>) : (<><Upload className="w-4 h-4" /> Submit for review</>)}
+          </button>
+          <p className="text-[11px] text-[#94a3b8] leading-relaxed">
+            By submitting you grant Rox Taxi permission to feature this photo in our public gallery and marketing.
+          </p>
+        </div>
+      </div>
+    </form>
   );
 }

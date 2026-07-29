@@ -19,7 +19,6 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 ## Feature status snapshot — Feb 2026
 
 ### ✅ Shipped this session
-- **Customer auth** — email/password + Emergent Google, JWT/session cookie, 1h idle auto-logout via `IDLE_TIMEOUT_MINUTES`, heartbeat endpoint, login_events audit log, auto-links past bookings by email. Signup/Login pages, MyBookings dashboard with cancel + pay balance + download receipt actions.
 - **Round-trip taxi discount** — 10% off both legs, toggle in booking modal, computed server-side (base doubles, 10% off both legs, bridge toll applies once), shown on receipt.
 - **Multi-day rental discount tiers** — 3% at 5+ days, 7% at 7+ days, 12% at 14+ days. Auto-applied server-side.
 - **Tip field on booking** (`tip_amount` on model, accepted at booking-create time).
@@ -49,9 +48,9 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ### 🎯 Backlog — Wave 2 (revenue/trust)
 - ~~Airport flight tracker~~ ✅ shipped
-- **Cross-sell "Add a tour" upsell** on booking success (LPIA→Atlantis → suggest Blue Lagoon $109 for tomorrow).
-- **Gift cards / prepaid credits** via Stripe.
-- **Package deals** — auto-generated bundles (e.g. "Airport + Tour + Airport return = $210 save $20").
+- ~~Cross-sell "Add a tour" upsell~~ ✅ shipped
+- ~~Gift cards / prepaid credits~~ ✅ shipped
+- ~~Package deals~~ ✅ backend + auto-seed shipped; admin editor UI still pending
 - **Verified TripAdvisor/Google badge** with real review stars.
 - **"5 bookings today" ticker** widget under hero (backend `/api/live-stats` already exposes `bookings_last_24h`).
 - **Selfie / license verification** for car rentals (deposit-dispute protection).

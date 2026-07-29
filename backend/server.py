@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, Response, Cookie, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, Response, Cookie, UploadFile, File, Form
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -140,6 +140,7 @@ class BookingCreate(BaseModel):
     round_trip: Optional[bool] = False  # taxi: same-day return, 10% off both legs
     tip_amount: Optional[float] = Field(0, ge=0, le=1000)
     flight_number: Optional[str] = Field(None, max_length=12)
+    gift_code: Optional[str] = Field(None, max_length=32)
 
 
 LUGGAGE_FEE_USD = 3.0
@@ -273,6 +274,20 @@ class DriverPing(BaseModel):
     accuracy_m: Optional[float] = None
     heading: Optional[float] = None
     speed_mps: Optional[float] = None
+
+
+class GiftCardPurchaseRequest(BaseModel):
+    amount: float = Field(..., ge=25, le=1000)
+    buyer_name: str = Field(..., min_length=1, max_length=100)
+    buyer_email: EmailStr
+    recipient_email: EmailStr
+    recipient_name: Optional[str] = Field(None, max_length=100)
+    message: Optional[str] = Field(None, max_length=400)
+    origin_url: str
+
+
+class GiftCardRedeemRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=32)
 
 
 class GroupInquiryCreate(BaseModel):
@@ -664,10 +679,112 @@ async def list_tours():
     return [annotate_promo(clean(d)) for d in docs]
 
 
-@api_router.get("/taxi-services")
-async def list_taxi():
-    docs = await db.taxi_services.find({}).to_list(200)
-    return [annotate_promo(clean(d)) for d in docs]
+@api_router.get("/packages")
+async def list_packages():
+    """Public curated bundles. Each: {id, name, description, items:[{service_type,item_name}], subtotal, package_price, savings}."""
+    docs = await db.packages.find({"active": {"$ne": False}}).to_list(50)
+    if not docs:
+        # Seed default packages if empty (idempotent — inserted once)
+        seeds = [
+            {"id": "airport-atlantis-airport", "active": True, "featured": True,
+             "name": "LPIA → Atlantis → LPIA", "kicker": "Airport round-trip",
+             "description": "Airport pickup, Atlantis drop-off, then return airport pickup on your departure day. Bridge tolls both ways included.",
+             "items": [
+                 {"service_type": "taxi", "item_name": "LPIA → Atlantis / Paradise Island", "price": 47.0},
+                 {"service_type": "taxi", "item_name": "Atlantis / Paradise Island → LPIA", "price": 47.0},
+             ],
+             "subtotal": 94.0, "package_price": 84.0, "savings": 10.0,
+             "image_url": "https://images.unsplash.com/photo-1509233725247-49e657c54213?crop=entropy&cs=srgb&fm=jpg&q=85"},
+            {"id": "airport-tour-airport", "active": True, "featured": True,
+             "name": "Airport + Blue Lagoon + Airport", "kicker": "Cruise-week bundle",
+             "description": "LPIA transfer, full-day Blue Lagoon Island tour, plus return LPIA transfer for your flight home.",
+             "items": [
+                 {"service_type": "taxi", "item_name": "LPIA → Downtown Nassau", "price": 40.0},
+                 {"service_type": "tour", "item_name": "Blue Lagoon Island Day Pass", "price": 109.0},
+                 {"service_type": "taxi", "item_name": "Downtown Nassau → LPIA", "price": 40.0},
+             ],
+             "subtotal": 189.0, "package_price": 169.0, "savings": 20.0,
+             "image_url": "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?crop=entropy&cs=srgb&fm=jpg&q=85"},
+        ]
+        for s in seeds:
+            s["created_at"] = now_iso()
+            await db.packages.update_one({"id": s["id"]}, {"$setOnInsert": s}, upsert=True)
+        docs = await db.packages.find({"active": {"$ne": False}}).to_list(50)
+    return [clean(d) for d in docs]
+
+
+# ── Gift cards ────────────────────────────────────────────────────────────
+def _new_gift_code() -> str:
+    """Generates a human-friendly gift-card code like RXT-A9F3-XZ4Q."""
+    import secrets, string
+    alphabet = string.ascii_uppercase + string.digits
+    def block(n): return "".join(secrets.choice(alphabet) for _ in range(n))
+    return f"RXT-{block(4)}-{block(4)}"
+
+
+@api_router.post("/gift-cards/purchase")
+async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
+    """Creates a pending gift card and a Stripe Checkout Session for it.
+    Card is activated when the Stripe webhook confirms payment."""
+    stripe_key = os.environ.get("STRIPE_API_KEY", "")
+    if not stripe_key:
+        raise HTTPException(503, "Stripe not configured")
+
+    code = _new_gift_code()
+    ts = now_iso()
+    doc = {
+        "code": code,
+        "amount": round(float(req.amount), 2),
+        "balance": round(float(req.amount), 2),
+        "buyer_name": req.buyer_name,
+        "buyer_email": req.buyer_email.lower(),
+        "recipient_name": req.recipient_name or "",
+        "recipient_email": req.recipient_email.lower(),
+        "message": req.message or "",
+        "status": "pending",   # → 'active' after Stripe webhook
+        "created_at": ts,
+    }
+    await db.gift_cards.insert_one(doc)
+
+    host_url = str(request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    sc = StripeCheckout(api_key=stripe_key, webhook_url=webhook_url)
+    session = await sc.create_checkout_session(CheckoutSessionRequest(
+        amount=float(req.amount), currency="usd",
+        success_url=f"{req.origin_url}/gift-cards/success?code={code}",
+        cancel_url=f"{req.origin_url}/gift-cards?cancelled=1",
+        metadata={"gift_code": code, "type": "gift_card", "buyer_email": req.buyer_email},
+    ))
+    await db.gift_cards.update_one({"code": code}, {"$set": {"stripe_session_id": session.session_id, "updated_at": now_iso()}})
+    return {"checkout_url": session.url, "code": code}
+
+
+@api_router.get("/gift-cards/{code}")
+async def gift_card_balance(code: str):
+    doc = await db.gift_cards.find_one({"code": code.upper().strip()})
+    if not doc:
+        raise HTTPException(404, "Gift card not found")
+    return {
+        "code": doc["code"],
+        "amount": doc.get("amount"),
+        "balance": doc.get("balance"),
+        "status": doc.get("status"),
+        "recipient_name": doc.get("recipient_name") or None,
+    }
+
+
+@api_router.post("/gift-cards/redeem-check")
+async def gift_card_redeem_check(req: GiftCardRedeemRequest):
+    """Validate a code + return current balance. Actual deduction happens at booking-create time."""
+    doc = await db.gift_cards.find_one({"code": req.code.upper().strip()})
+    if not doc:
+        raise HTTPException(404, "Gift card not found")
+    if doc.get("status") != "active":
+        raise HTTPException(400, f"Gift card is not active (status: {doc.get('status')})")
+    if float(doc.get("balance", 0)) <= 0:
+        raise HTTPException(400, "Gift card has no remaining balance")
+    return {"code": doc["code"], "balance": float(doc.get("balance", 0)), "status": "active"}
+
 
 
 # ---- Taxi custom-route quote lookup ----------------------------------------
@@ -821,19 +938,17 @@ async def list_home_slides():
 
 @api_router.get("/gallery")
 async def list_gallery():
-    """Aggregated public photo feed: home carousel slides + every active catalog
-    item's image (tours, rentals, taxi) + every admin-uploaded photo in the
-    /uploads dir (excluding site logos). Deduped by URL, tagged with category
-    so the frontend can offer filter chips (Tours / Rentals / Taxi / Nassau /
-    Studio). This lets us reuse existing catalog uploads + the admin thumbnail
-    library for the Gallery tab without a dedicated `gallery` collection."""
+    """Aggregated public photo feed — home carousel + catalog images + admin
+    uploads + APPROVED customer-submitted photos."""
 
     seen: dict[str, dict] = {}
 
-    def _add(url, category, title):
+    def _add(url, category, title, submitter=None):
         if not url or url in seen:
             return
-        seen[url] = {"url": url, "category": category, "title": title}
+        entry = {"url": url, "category": category, "title": title}
+        if submitter: entry["submitter"] = submitter
+        seen[url] = entry
 
     for d in await db.home_slides.find({"active": True}).sort("order", 1).to_list(50):
         _add(d.get("image_url"), "nassau", d.get("title") or "Nassau")
@@ -841,30 +956,77 @@ async def list_gallery():
         _add(d.get("image_url"), "tours", d.get("name"))
     for d in await db.rentals.find({"active": True}).to_list(200):
         _add(d.get("image_url"), "rentals", d.get("name"))
-    for d in await db.taxi_services.find({}).to_list(200):
+    for d in await db.taxi_services.find({"active": True}).to_list(200):
         _add(d.get("image_url"), "taxi", d.get("name"))
-
-    # Admin-uploaded thumbnails (from Image Manager). We exclude `logo-*` files
-    # because those are branding assets, not gallery-worthy photos.
-    if UPLOAD_DIR.exists():
-        photo_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-        for p in sorted(UPLOAD_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
-            if not p.is_file() or p.suffix.lower() not in photo_exts:
-                continue
-            if p.name.startswith("logo-"):
-                continue
-            # Pretty title from the slug (`cat-my-photo-abc123.jpg` -> "My Photo").
-            stem = p.stem
-            for prefix in ("cat-", "img-", "photo-"):
-                if stem.startswith(prefix):
-                    stem = stem[len(prefix):]
-                    break
-            if "-" in stem:
-                stem = stem.rsplit("-", 1)[0]  # trim the 6-char uuid suffix
-            title = stem.replace("-", " ").replace("_", " ").strip().title() or p.name
-            _add(f"/api/uploads/{p.name}", "studio", title)
-
+    # Approved customer submissions
+    for d in await db.gallery_submissions.find({"status": "approved"}).sort("approved_at", -1).to_list(200):
+        _add(d.get("url"), "guests", d.get("caption") or "Guest moment", submitter=d.get("submitter_name"))
     return list(seen.values())
+
+
+# ── Customer gallery submissions ─────────────────────────────────────────
+@api_router.post("/gallery/submit")
+async def submit_gallery_photo(
+    file: UploadFile = File(...),
+    submitter_name: str = Form(""),
+    submitter_email: str = Form(""),
+    caption: str = Form(""),
+):
+    """Public: guests upload their trip photos. Goes into `pending` queue awaiting admin approval."""
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(400, "Only image files are allowed")
+    contents = await file.read()
+    if len(contents) > 8 * 1024 * 1024:
+        raise HTTPException(400, "Image too large (max 8MB)")
+    ext = (file.filename or "photo.jpg").rsplit(".", 1)[-1].lower()
+    if ext not in ("jpg", "jpeg", "png", "webp", "heic", "heif"):
+        ext = "jpg"
+    sub_id = uuid.uuid4().hex[:12]
+    filename = f"guest_{sub_id}.{ext}"
+    (UPLOAD_DIR / filename).write_bytes(contents)
+    doc = {
+        "id": sub_id,
+        "url": f"/uploads/{filename}",
+        "filename": filename,
+        "submitter_name": (submitter_name or "").strip()[:80] or "Anonymous guest",
+        "submitter_email": (submitter_email or "").strip().lower()[:120],
+        "caption": (caption or "").strip()[:200],
+        "status": "pending",
+        "created_at": now_iso(),
+    }
+    await db.gallery_submissions.insert_one(doc)
+    return {"id": sub_id, "status": "pending", "message": "Thanks — we'll review your photo and post it soon."}
+
+
+@api_router.get("/admin/gallery/pending")
+async def admin_list_pending(_admin: str = Depends(require_admin)):
+    docs = await db.gallery_submissions.find({"status": "pending"}).sort("created_at", 1).to_list(200)
+    return [clean(d) for d in docs]
+
+
+@api_router.post("/admin/gallery/{sub_id}/approve")
+async def admin_approve_submission(sub_id: str, _admin: str = Depends(require_admin)):
+    r = await db.gallery_submissions.update_one(
+        {"id": sub_id, "status": "pending"},
+        {"$set": {"status": "approved", "approved_at": now_iso()}},
+    )
+    if r.matched_count == 0:
+        raise HTTPException(404, "Submission not found or not pending")
+    return {"id": sub_id, "status": "approved"}
+
+
+@api_router.post("/admin/gallery/{sub_id}/reject")
+async def admin_reject_submission(sub_id: str, _admin: str = Depends(require_admin)):
+    doc = await db.gallery_submissions.find_one({"id": sub_id})
+    if not doc:
+        raise HTTPException(404, "Submission not found")
+    # Delete file from disk + mark rejected
+    try:
+        (UPLOAD_DIR / doc["filename"]).unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        pass
+    await db.gallery_submissions.update_one({"id": sub_id}, {"$set": {"status": "rejected", "rejected_at": now_iso()}})
+    return {"id": sub_id, "status": "rejected"}
 
 
 @api_router.get("/rentals/{rental_id}/availability")
@@ -994,12 +1156,34 @@ async def create_booking(req: BookingCreate):
     if tip_amount > 0:
         booking["tip_amount"] = tip_amount
 
-    booking["total"] = round(
+    computed_total = round(
         base + round_trip_fare_addition - round_trip_discount - rental_discount
         + luggage_fee + passenger_fee + deposit_amount + additional_driver_fee
         + bridge_toll_fee + tip_amount,
         2,
     )
+
+    # ── Gift-card redemption ────────────────────────────────────────────
+    gift_credit = 0.0
+    if req.gift_code:
+        code = req.gift_code.upper().strip()
+        gc = await db.gift_cards.find_one({"code": code, "status": "active"})
+        if not gc:
+            raise HTTPException(400, "Gift card not found or not active")
+        bal = float(gc.get("balance", 0.0))
+        if bal <= 0:
+            raise HTTPException(400, "Gift card has no remaining balance")
+        gift_credit = round(min(bal, computed_total), 2)
+        booking["gift_code"] = code
+        booking["gift_credit"] = gift_credit
+        # Deduct from card + record redemption
+        await db.gift_cards.update_one(
+            {"code": code},
+            {"$inc": {"balance": -gift_credit},
+             "$push": {"redemptions": {"booking_id": booking["id"], "amount": gift_credit, "at": now_iso()}}},
+        )
+
+    booking["total"] = round(max(0.0, computed_total - gift_credit), 2)
 
     await db.bookings.insert_one(booking)
     # Fire owner SMS alert for EVERY new booking (regardless of payment method).

@@ -7,6 +7,7 @@ import SiteConfigPanel from "./admin/SiteConfigPanel";
 import HomeSlidesPanel from "./admin/HomeSlidesPanel";
 import PaymentsPanel from "./admin/PaymentsPanel";
 import ContentPanel from "./admin/ContentPanel";
+import GalleryPanel from "./admin/GalleryPanel";
 
 const TABS = [
   { key: "home_slides", label: "Home Slides" },
@@ -14,6 +15,7 @@ const TABS = [
   { key: "taxi_services", label: "Taxi Services" },
   { key: "rentals", label: "Rentals" },
   { key: "images", label: "Images" },
+  { key: "gallery", label: "Guest Photos" },
   { key: "messages", label: "Messages" },
   { key: "payments", label: "Payments" },
   { key: "content", label: "Content" },
@@ -63,6 +65,7 @@ export default function AdminManage() {
         </div>
         {tab === "site" ? <SiteConfigPanel />
           : tab === "images" ? <ImagesPanel />
+          : tab === "gallery" ? <GalleryPanel />
           : tab === "messages" ? <MessagesPanel />
           : tab === "home_slides" ? <HomeSlidesPanel />
           : tab === "payments" ? <PaymentsPanel />

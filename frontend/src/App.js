@@ -25,6 +25,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import AuthCallback from "./pages/AuthCallback";
 import PrintReceipt from "./pages/PrintReceipt";
+import GiftCards from "./pages/GiftCards";
 import { AuthProvider } from "./lib/auth";
 import { useEffect } from "react";
 
