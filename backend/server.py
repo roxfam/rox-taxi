@@ -1144,7 +1144,9 @@ async def cancel_booking(booking_id: str):
             else:
                 refund_result.update({"ok": False, "reason": "Manual refund required (Zelle or unsupported method)"})
         except Exception as e:  # noqa: BLE001
-            refund_result.update({"ok": False, "error": str(e)[:200]})
+            # Log full error internally, expose only sanitised summary to public.
+            logging.getLogger(__name__).warning("refund err on %s: %s", doc.get("id"), e)
+            refund_result.update({"ok": False, "error": "Refund could not be processed automatically — owner will refund manually."})
 
     await db.bookings.update_one(
         {"id": doc["id"]},
