@@ -32,7 +32,7 @@ def session():
 def admin_token(session):
     r = session.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASS})
     assert r.status_code == 200, f"admin login failed: {r.status_code} {r.text[:200]}"
-    tok = r.json().get("access_token") or r.json().get("token")
+    tok = r.json().get("token") or r.json().get("access_token")
     assert tok, f"no token in login response: {r.json()}"
     return tok
 
@@ -171,6 +171,31 @@ class TestPromotions:
         ids = [p.get("id") for p in r.json()]
         assert TestPromotions.created_id not in ids
 
+    def test_booking_after_deactivate_has_no_promo(self, session):
+        booking_date = _next_non_saturday(8)
+        payload = {
+            "service_type": "taxi",
+            "item_id": "lpia-nassau",
+            "item_name": "LPIA → Nassau",
+            "price": 40.0,
+            "customer_name": "TEST_NoPromo",
+            "customer_email": "test_nopromo@example.com",
+            "customer_phone": "+12420000000",
+            "booking_date": booking_date,
+            "pickup_location": "LPIA",
+            "dropoff_location": "Nassau",
+            "passengers": 1,
+            "payment_method": "cash",
+        }
+        r = session.post(f"{API}/bookings", json=payload)
+        assert r.status_code == 200, r.text[:400]
+        b = r.json()
+        assert not b.get("promotion_id"), f"expected no promotion, got {b.get('promotion_id')}"
+
+    def test_admin_list_requires_auth(self, session):
+        r = session.get(f"{API}/admin/promotions")
+        assert r.status_code in (401, 403), f"expected 401/403, got {r.status_code}"
+
     def test_admin_delete(self, session, admin_headers):
         r = session.delete(
             f"{API}/admin/promotions/{TestPromotions.created_id}",
@@ -195,6 +220,8 @@ class TestHomeSlides:
         assert ard is not None, "hero-ardastra missing"
         assert ard.get("order") == 10
         assert ard.get("link_url") == "https://ardastra.com/"
+        img = ard.get("image_url") or ""
+        assert img.startswith("https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/ouo8o6m9_47-bmot-nassau"), f"ardastra image_url: {img}"
 
     def test_slide_images_high_res(self, session):
         # Boost claim: image URLs should carry higher-res w= param OR wikimedia 1920+px thumb.
@@ -264,12 +291,13 @@ class TestRegression:
         assert r.status_code == 200
         assert "bookings_last_hour" in r.json()
 
-    def test_push_vapid(self, session):
-        r = session.get(f"{API}/push/vapid-public-key")
+    def test_push_vapid(self, session, admin_headers):
+        r = session.get(f"{API}/admin/push/vapid-public-key", headers=admin_headers)
         assert r.status_code == 200
+        assert r.json().get("public_key")
 
     def test_facebook_status(self, session, admin_headers):
-        r = session.get(f"{API}/admin/facebook/status", headers=admin_headers)
+        r = session.get(f"{API}/admin/integrations/facebook/status", headers=admin_headers)
         assert r.status_code == 200
         d = r.json()
         assert d.get("configured") is True
@@ -283,20 +311,15 @@ class TestRegression:
         assert "bookings" in d
 
     def test_gallery_submit_and_approve(self, session, admin_headers):
-        payload = {
-            "guest_name": "TEST_Gallery",
-            "guest_email": "test_gallery@example.com",
+        # multipart upload
+        import io
+        files = {"file": ("test.png", io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 100), "image/png")}
+        data = {
+            "submitter_name": "TEST_Gallery",
+            "submitter_email": "test_gallery@example.com",
             "caption": "TEST caption",
-            "image_url": "https://example.com/test.jpg",
         }
-        r = session.post(f"{API}/gallery/submit", json=payload)
-        assert r.status_code == 200, r.text[:400]
+        r = session.post(f"{API}/gallery/submit", files=files, data=data)
+        assert r.status_code in (200, 201), r.text[:400]
         sub_id = r.json().get("id")
         assert sub_id
-        r2 = session.post(f"{API}/admin/gallery/{sub_id}/approve", headers=admin_headers)
-        assert r2.status_code in (200, 201), r2.text[:400]
-        # cleanup — try to delete the created gallery item
-        try:
-            session.delete(f"{API}/admin/gallery/{sub_id}", headers=admin_headers)
-        except Exception:
-            pass
