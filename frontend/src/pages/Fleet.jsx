@@ -29,7 +29,13 @@ export default function Fleet() {
               <Shield className="w-3.5 h-3.5" /> Our people · Our vehicles
             </span>
             <h1 className="serif text-white text-5xl sm:text-6xl lg:text-7xl mt-4 leading-[0.95] tracking-tight" data-testid="fleet-headline">
-              {fleet.headline || "The team behind"} <em className="italic text-[#D4A94A]">your ride</em>.
+              {fleet.headline || "The team behind"}{" "}
+              <em
+                className="italic font-black text-[#F5C462]"
+                style={{ textShadow: "0 4px 24px rgba(212,169,74,0.55), 0 0 1px rgba(0,0,0,0.4)" }}
+              >
+                {fleet.headline_accent || "your ride"}
+              </em>.
             </h1>
             <p className="text-white/75 text-lg mt-6 max-w-xl leading-relaxed" data-testid="fleet-subhead">
               {fleet.subheadline || "Bahamas-licensed. Fully insured. Twelve years of Nassau shortcuts."}
@@ -129,7 +135,8 @@ export default function Fleet() {
                 <CarIcon className="w-3.5 h-3.5" /> The fleet
               </span>
               <h2 className="serif text-4xl sm:text-5xl text-[#0B3B5C] mt-2 tracking-tight">
-                Every ride, <em className="italic text-[#D4A94A]">AC & Wi-Fi standard</em>.
+                Every ride,{" "}
+                <em className="italic font-black text-[#D4A94A]" style={{ textShadow: "0 3px 14px rgba(212,169,74,0.35)" }}>AC &amp; Wi-Fi standard</em>.
               </h2>
             </div>
           </div>
@@ -200,7 +207,8 @@ export default function Fleet() {
       <section className="max-w-4xl mx-auto px-6 lg:px-10 py-20 text-center" data-testid="fleet-cta">
         <MapPin className="w-8 h-8 mx-auto text-[#D4A94A] mb-4" />
         <h2 className="serif text-4xl sm:text-5xl text-[#0B3B5C] tracking-tight">
-          Now that you've met us — <em className="italic text-[#D4A94A]">ride with us</em>.
+          Now that you've met us —{" "}
+          <em className="italic font-black text-[#D4A94A]" style={{ textShadow: "0 3px 14px rgba(212,169,74,0.35)" }}>ride with us</em>.
         </h2>
         <p className="text-[#64748B] mt-4 max-w-lg mx-auto">
           Airport transfers, private tours, wedding transport, or a week-long car rental — we've got the right vehicle and driver.

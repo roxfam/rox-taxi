@@ -62,6 +62,14 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 - **Facebook auto-crop + repost + approved-tab UI** (Feb 2026) — Approved submissions bucket in GalleryPanel with Pending / Approved tab switcher, FB status badge (posted/failed/not-sent), per-item Repost button (`POST /api/admin/gallery/{id}/repost-facebook`), and "view live post" ExternalLink icon when `facebook_post_id` is stored. Pillow (12.3.0) `_optimise_for_facebook` center-crops every upload to 1200×630 in-memory (respects EXIF rotation, flattens alpha PNGs, falls back gracefully on decode error). New backend endpoints: `GET /api/admin/gallery/approved`, `POST /api/admin/gallery/{id}/repost-facebook`. All covered by `/app/backend/tests/test_facebook_crop.py` + `test_iteration22_gallery_fb.py`.
 
+- **Batch iter 23–24 (Feb 2026)** — shipped in one session:
+  - **Fleet page `/fleet`** — 4 driver bios + 5 vehicles + trust notes. Backend `GET /api/fleet` + `PUT /api/admin/fleet`. Header nav updated.
+  - **Baby / child seat rental add-on** — `$7 per seat / day`, **free** on rentals of **14+ days**. Backend `BABY_SEAT_FEE_USD=7`, `BABY_SEAT_MAX=3`, `BABY_SEAT_FREE_AFTER_DAYS=14`. Frontend counter block in BookingFlow (rental only) with live fee/free-badge preview.
+  - **Admin-run Promotions** — new `Promotions` tab in `/admin/manage`. CRUD via `GET/POST/PATCH/DELETE /api/admin/promotions`. Live-only feed at `GET /api/promotions`. Auto-applies best-matching active promo (percent or fixed-USD) to every booking; excludes deposit + tip. Fields: label, description, discount_type, discount_value, applies_to[taxi/tour/rental/all], starts_at, ends_at, active.
+  - **Home slide upgrades** — image resolutions bumped from `w=1920/2400` → `w=2560/3200` with `q=90`, `sharp=15`, `sat=15`, `auto=format` (Unsplash) or `2560px` (Wikimedia thumbs). Slide backgrounds get a `filter: brightness(1.08) contrast(1.14) saturate(1.12)` for richer color. Nassau carousel thumbnails also boosted.
+  - **New home slide** — Ardastra Gardens Zoo, with flamingo photo and CTA linking to `https://ardastra.com/`.
+  - **Package photo swap** — "Airport + Blue Lagoon + Airport" bundle renamed to "LPIA → Blue Lagoon → LPIA" (matches sibling package format) with owner-supplied LPIA terminal photo.
+
 ### 🎯 Backlog — Wave 2 (revenue/trust)
 - ~~Airport flight tracker~~ ✅ shipped
 - ~~Cross-sell "Add a tour" upsell~~ ✅ shipped

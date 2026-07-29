@@ -45,6 +45,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     days: defaultDays,
     extra_luggage: 0,
     additional_drivers: 0,
+    baby_seats: 0,
     round_trip: false,
     flight_number: "",
     notes: "",
@@ -55,6 +56,9 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const RENTAL_DEPOSIT = 150;
   const ADDITIONAL_DRIVER_FEE = 25;
   const ADDITIONAL_DRIVER_MAX = 4;
+  const BABY_SEAT_FEE = 7;
+  const BABY_SEAT_MAX = 3;
+  const BABY_SEAT_FREE_AFTER_DAYS = 14;
   const [payMethod, setPayMethod] = useState("stripe");
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
   const [loading, setLoading] = useState(false);
@@ -84,7 +88,11 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     : 0;
   const rentalDeposit = serviceType === "rental" ? RENTAL_DEPOSIT : 0;
   const additionalDriverFee = serviceType === "rental" ? Number(form.additional_drivers || 0) * ADDITIONAL_DRIVER_FEE : 0;
-  const total = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee;
+  const rentalDays = Number(form.days || 1);
+  const babySeatCount = serviceType === "rental" ? Number(form.baby_seats || 0) : 0;
+  const babySeatFree = serviceType === "rental" && rentalDays >= BABY_SEAT_FREE_AFTER_DAYS;
+  const babySeatFee = babySeatFree ? 0 : babySeatCount * BABY_SEAT_FEE * Math.max(1, rentalDays);
+  const total = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee + babySeatFee;
 
   const submit = async () => {
     if (!form.customer_name || !form.customer_email || !form.customer_phone || !form.booking_date) {
@@ -124,6 +132,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         passengers: Number(form.passengers) || 1,
         days: Number(form.days) || 1,
         extra_luggage: Number(form.extra_luggage) || 0,
+        additional_drivers: Number(form.additional_drivers) || 0,
+        baby_seats: Number(form.baby_seats) || 0,
         notes: form.notes || null,
         payment_method: payMethod,
         round_trip: !!form.round_trip,
@@ -266,6 +276,57 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                         <div className="mt-3 flex items-center justify-between text-xs pt-3 border-t border-[#F1F5F9]" data-testid="additional-drivers-line">
                           <span className="text-[#64748B]">{Number(form.additional_drivers)} additional {Number(form.additional_drivers) === 1 ? "driver" : "drivers"} × ${ADDITIONAL_DRIVER_FEE}</span>
                           <span className="mono font-semibold text-[#0B3B5C]" data-testid="additional-drivers-fee">+${additionalDriverFee.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {serviceType === "rental" && (
+                <div className="rounded-xl border border-[#E86A3C]/25 bg-white p-4" data-testid="baby-seats-section">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full bg-[#E86A3C]/12 flex items-center justify-center shrink-0" aria-hidden>
+                      <svg className="w-4 h-4 text-[#E86A3C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="6" r="3"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M12 12v3"/></svg>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <div className="text-sm font-semibold text-[#0B3B5C]">Baby / child seat</div>
+                          <div className="text-xs text-[#64748B] mt-1 leading-relaxed">
+                            <span className="mono font-semibold text-[#E86A3C]">${BABY_SEAT_FEE}</span>/seat/day.{" "}
+                            <span className="font-semibold text-[#059669]">Free on rentals of {BABY_SEAT_FREE_AFTER_DAYS}+ days.</span>
+                          </div>
+                        </div>
+                        <div className="inline-flex items-center gap-2" data-testid="baby-seats-stepper">
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, baby_seats: Math.max(0, Number(form.baby_seats || 0) - 1) })}
+                            disabled={Number(form.baby_seats || 0) <= 0}
+                            className="w-8 h-8 rounded-full border border-[#E2E8F0] text-[#0B3B5C] text-lg font-bold hover:bg-[#F1F5F9] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                            data-testid="baby-seats-decrement"
+                            aria-label="Remove baby seat"
+                          >−</button>
+                          <span className="mono w-8 text-center text-base font-bold text-[#0B3B5C]" data-testid="baby-seats-count">{Number(form.baby_seats || 0)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, baby_seats: Math.min(BABY_SEAT_MAX, Number(form.baby_seats || 0) + 1) })}
+                            disabled={Number(form.baby_seats || 0) >= BABY_SEAT_MAX}
+                            className="w-8 h-8 rounded-full border border-[#E2E8F0] text-[#0B3B5C] text-lg font-bold hover:bg-[#F1F5F9] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                            data-testid="baby-seats-increment"
+                            aria-label="Add baby seat"
+                          >+</button>
+                        </div>
+                      </div>
+                      {Number(form.baby_seats || 0) > 0 && (
+                        <div className="mt-3 flex items-center justify-between text-xs pt-3 border-t border-[#F1F5F9]" data-testid="baby-seats-line">
+                          <span className="text-[#64748B]">
+                            {Number(form.baby_seats)} × ${BABY_SEAT_FEE} × {Math.max(1, rentalDays)} day{Math.max(1, rentalDays) === 1 ? "" : "s"}
+                            {babySeatFree && <span className="ml-1 text-[#059669] font-semibold">(free — 14+ day rental)</span>}
+                          </span>
+                          <span className={`mono font-semibold ${babySeatFree ? "text-[#059669]" : "text-[#0B3B5C]"}`} data-testid="baby-seats-fee">
+                            {babySeatFree ? "FREE" : `+$${babySeatFee.toFixed(2)}`}
+                          </span>
                         </div>
                       )}
                     </div>

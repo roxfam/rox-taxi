@@ -140,7 +140,12 @@ export default function BahamasSlider() {
               data-testid={`slider-thumb-${idx}`}
               className={`shrink-0 w-40 sm:w-48 h-24 rounded-xl overflow-hidden relative group transition-transform ${idx === i ? "ring-2 ring-[#D4A94A]" : "opacity-70 hover:opacity-100"}`}
             >
-              <img src={s.img} alt={s.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+              <img
+                src={s.img}
+                alt={s.name}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                style={{ filter: "brightness(1.08) contrast(1.12) saturate(1.1)" }}
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
               <div className="absolute bottom-2 left-2 right-2 text-left">
                 <div className="text-[10px] tracking-widest uppercase text-[#D4A94A] leading-none">{s.tag}</div>

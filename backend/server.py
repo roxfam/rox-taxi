@@ -136,6 +136,7 @@ class BookingCreate(BaseModel):
     days: Optional[int] = 1
     extra_luggage: Optional[int] = 0
     additional_drivers: Optional[int] = Field(0, ge=0, le=4)
+    baby_seats: Optional[int] = Field(0, ge=0, le=3)
     notes: Optional[str] = None
     payment_method: str
     round_trip: Optional[bool] = False  # taxi: same-day return, 10% off both legs
@@ -152,6 +153,9 @@ RENTAL_DEPOSIT_USD = 150.0  # refundable security deposit applied automatically 
 ADDITIONAL_DRIVER_FEE_USD = 25.0  # flat fee per extra registered driver on a car rental
 ADDITIONAL_DRIVER_MAX = 4
 RENTAL_MIN_DAYS = 2  # 2-day minimum booking policy for car rentals
+BABY_SEAT_FEE_USD = 7.0
+BABY_SEAT_MAX = 3
+BABY_SEAT_FREE_AFTER_DAYS = 14  # 14+ day rentals include baby seats free
 PARADISE_BRIDGE_TOLL_USD = 2.0  # $2 bridge toll auto-added to any taxi fare crossing to Paradise Island / Atlantis
 ROUND_TRIP_DISCOUNT_PCT = 0.10  # 10% off when a taxi is booked as a same-day round trip
 # Multi-day rental discount tiers — applied to price*days base (not deposit / add-ons).
@@ -676,7 +680,8 @@ async def seed_db():
     if not fleet_doc:
         await db.fleet.insert_one({
             "_id": "main",
-            "headline": "The team behind your ride",
+            "headline": "The team behind",
+            "headline_accent": "your ride",
             "subheadline": "Bahamas-licensed. Full insured. Twelve years of Nassau shortcuts.",
             "drivers": [
                 {"id": "d-rox",   "name": "Rox (Owner-Driver)",   "photo_url": "",
@@ -729,9 +734,13 @@ async def seed_db():
                 "Cashless payment options: Zelle · PayPal · Stripe · Cash",
             ],
         })
-
-
-# ── Fleet — public read + admin write (drivers + vehicles) ─────────────
+    else:
+        # One-shot backfill: split legacy 'headline' that used to include the accent
+        if fleet_doc.get("headline") == "The team behind your ride" and not fleet_doc.get("headline_accent"):
+            await db.fleet.update_one(
+                {"_id": "main"},
+                {"$set": {"headline": "The team behind", "headline_accent": "your ride"}},
+            )
 @api_router.get("/fleet")
 async def get_fleet():
     doc = await db.fleet.find_one({"_id": "main"})
@@ -743,6 +752,7 @@ async def get_fleet():
 
 class FleetUpdate(BaseModel):
     headline: Optional[str] = None
+    headline_accent: Optional[str] = None
     subheadline: Optional[str] = None
     drivers: Optional[List[Dict[str, Any]]] = None
     vehicles: Optional[List[Dict[str, Any]]] = None
@@ -785,7 +795,7 @@ async def list_packages():
              "subtotal": 94.0, "package_price": 84.0, "savings": 10.0,
              "image_url": "https://images.unsplash.com/photo-1509233725247-49e657c54213?crop=entropy&cs=srgb&fm=jpg&q=85"},
             {"id": "airport-tour-airport", "active": True, "featured": True,
-             "name": "Airport + Blue Lagoon + Airport", "kicker": "Cruise-week bundle",
+             "name": "LPIA → Blue Lagoon → LPIA", "kicker": "Cruise-week bundle",
              "description": "LPIA transfer, full-day Blue Lagoon Island tour, plus return LPIA transfer for your flight home.",
              "items": [
                  {"service_type": "taxi", "item_name": "LPIA → Downtown Nassau", "price": 40.0},
@@ -793,7 +803,7 @@ async def list_packages():
                  {"service_type": "taxi", "item_name": "Downtown Nassau → LPIA", "price": 40.0},
              ],
              "subtotal": 189.0, "package_price": 169.0, "savings": 20.0,
-             "image_url": "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?crop=entropy&cs=srgb&fm=jpg&q=85"},
+             "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/ou78camd_Photo-Caption-2-Airport-stakeholders-gear-up-for-busy-Thanksgiving-weekend-at-LPIA-002.webp"},
         ]
         for s in seeds:
             s["created_at"] = now_iso()
@@ -1449,6 +1459,18 @@ async def create_booking(req: BookingCreate):
         additional_driver_fee = extra_drivers * ADDITIONAL_DRIVER_FEE_USD
         booking["additional_drivers"] = extra_drivers
         booking["additional_driver_fee"] = additional_driver_fee
+        # Baby seat add-on: $7/day/seat, free when rental is 14+ days
+        seat_count = max(0, min(int(req.baby_seats or 0), BABY_SEAT_MAX))
+        rental_days = int(req.days or 1)
+        if seat_count > 0:
+            booking["baby_seats"] = seat_count
+            if rental_days >= BABY_SEAT_FREE_AFTER_DAYS:
+                baby_seat_fee = 0.0
+                booking["baby_seat_free"] = True
+            else:
+                baby_seat_fee = round(seat_count * BABY_SEAT_FEE_USD * rental_days, 2)
+                booking["baby_seat_free"] = False
+            booking["baby_seat_fee"] = baby_seat_fee
         # Multi-day discount tiers on the base rental price*days portion.
         _pct = _rental_discount_pct(int(req.days or 1))
         if _pct > 0:
@@ -1462,9 +1484,28 @@ async def create_booking(req: BookingCreate):
     computed_total = round(
         base + round_trip_fare_addition - round_trip_discount - rental_discount
         + luggage_fee + passenger_fee + deposit_amount + additional_driver_fee
-        + bridge_toll_fee + tip_amount,
+        + bridge_toll_fee + tip_amount + booking.get("baby_seat_fee", 0.0),
         2,
     )
+
+    # ── Admin-run promotion auto-apply ──────────────────────────────────
+    # If any active promotion matches the service type + is within its
+    # start/end window, apply the largest discount. Percent promos are
+    # applied to the pre-discount base (before rental discount); fixed
+    # promos come off the computed_total directly. Excludes deposit + tip.
+    promo = await _best_active_promo(req.service_type)
+    promo_discount = 0.0
+    if promo:
+        discountable = round(max(0.0, computed_total - deposit_amount - tip_amount), 2)
+        if promo.get("discount_type") == "percent":
+            promo_discount = round(discountable * (float(promo.get("discount_value", 0)) / 100.0), 2)
+        else:
+            promo_discount = round(min(float(promo.get("discount_value", 0)), discountable), 2)
+        if promo_discount > 0:
+            booking["promotion_id"] = promo.get("id")
+            booking["promotion_label"] = promo.get("label")
+            booking["promotion_discount"] = promo_discount
+            computed_total = round(computed_total - promo_discount, 2)
 
     # ── Gift-card redemption ────────────────────────────────────────────
     gift_credit = 0.0
@@ -2112,6 +2153,103 @@ def _recommended_pickup(arr: Dict[str, Any]) -> Optional[str]:
         return (dt + timedelta(minutes=25)).isoformat()
     except Exception:  # noqa: BLE001
         return None
+
+
+# ── Promotions helper (used by create_booking auto-apply) ──────────────
+def _promo_is_live(p: Dict[str, Any]) -> bool:
+    if not p.get("active", True):
+        return False
+    now = datetime.now(timezone.utc)
+    for key, cmp in (("starts_at", lambda t: t <= now), ("ends_at", lambda t: t >= now)):
+        v = p.get(key)
+        if not v:
+            continue
+        try:
+            t = datetime.fromisoformat(v.replace("Z", "+00:00"))
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=timezone.utc)
+            if not cmp(t):
+                return False
+        except Exception:  # noqa: BLE001
+            continue
+    return True
+
+
+async def _best_active_promo(service_type: str) -> Optional[Dict[str, Any]]:
+    docs = await db.promotions.find({"active": True}).to_list(50)
+    matches = [
+        p for p in docs
+        if _promo_is_live(p)
+        and (service_type in (p.get("applies_to") or []) or "all" in (p.get("applies_to") or []))
+    ]
+    if not matches:
+        return None
+    matches.sort(key=lambda p: float(p.get("discount_value", 0)), reverse=True)
+    return matches[0]
+
+
+class PromotionIn(BaseModel):
+    label: str = Field(..., min_length=2, max_length=80)
+    description: Optional[str] = Field(None, max_length=280)
+    discount_type: str = Field("percent")  # "percent" | "fixed"
+    discount_value: float = Field(..., gt=0)
+    applies_to: List[str] = Field(default_factory=lambda: ["all"])
+    starts_at: Optional[str] = None
+    ends_at: Optional[str] = None
+    active: bool = True
+
+
+@api_router.get("/promotions")
+async def list_active_promotions():
+    docs = await db.promotions.find({"active": True}).sort("discount_value", -1).to_list(50)
+    return [clean(p) for p in docs if _promo_is_live(p)]
+
+
+@api_router.get("/admin/promotions")
+async def admin_list_promotions(_admin: str = Depends(require_admin)):
+    docs = await db.promotions.find({}).sort("created_at", -1).to_list(200)
+    out = []
+    for p in docs:
+        c = clean(p)
+        c["live"] = _promo_is_live(p)
+        out.append(c)
+    return out
+
+
+@api_router.post("/admin/promotions")
+async def admin_create_promotion(promo: PromotionIn, _admin: str = Depends(require_admin)):
+    if promo.discount_type not in ("percent", "fixed"):
+        raise HTTPException(400, "discount_type must be 'percent' or 'fixed'")
+    valid_types = {"taxi", "tour", "rental", "all"}
+    bad = [t for t in promo.applies_to if t not in valid_types]
+    if bad:
+        raise HTTPException(400, f"applies_to has invalid values: {bad}")
+    doc = promo.model_dump()
+    doc["id"] = str(uuid.uuid4())[:8].upper()
+    doc["created_at"] = now_iso()
+    await db.promotions.insert_one(doc)
+    return clean(doc)
+
+
+@api_router.patch("/admin/promotions/{promo_id}")
+async def admin_update_promotion(promo_id: str, patch: Dict[str, Any], _admin: str = Depends(require_admin)):
+    allowed = {"label", "description", "discount_type", "discount_value", "applies_to", "starts_at", "ends_at", "active"}
+    clean_patch = {k: v for k, v in patch.items() if k in allowed}
+    if not clean_patch:
+        return {"ok": True, "noop": True}
+    r = await db.promotions.update_one({"id": promo_id}, {"$set": clean_patch})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Promotion not found")
+    doc = await db.promotions.find_one({"id": promo_id})
+    return clean(doc)
+
+
+@api_router.delete("/admin/promotions/{promo_id}")
+async def admin_delete_promotion(promo_id: str, _admin: str = Depends(require_admin)):
+    r = await db.promotions.delete_one({"id": promo_id})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Promotion not found")
+    return {"ok": True, "id": promo_id}
 
 
 @api_router.get("/live-stats")
