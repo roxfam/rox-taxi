@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Settings, Upload, FolderOpen } from "lucide-react";
+import { Settings, Upload, FolderOpen, Calendar, Trash2, Plus } from "lucide-react";
 import { api } from "../../lib/api";
 import { F, Toggle } from "./shared";
 import ImagePickerModal from "./ImagePickerModal";
@@ -134,6 +134,110 @@ export default function SiteConfigPanel() {
 
         <button onClick={save} disabled={saving} data-testid="site-save" className="mt-2 rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm">Save</button>
       </div>
+
+      <BlackoutDatesSection />
+    </div>
+  );
+}
+
+
+function BlackoutDatesSection() {
+  const [dates, setDates] = useState([]);
+  const [newDate, setNewDate] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get("/blackout-dates");
+      setDates(data.blackout_dates || []);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const persist = async (next) => {
+    setSaving(true);
+    try {
+      const { data } = await api.post("/admin/blackout-dates", { dates: next });
+      setDates(data.blackout_dates || []);
+      toast.success("Blackout dates saved");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Save failed");
+    } finally { setSaving(false); }
+  };
+
+  const addDate = () => {
+    if (!newDate) return;
+    if (dates.includes(newDate)) { toast.info("Already in list"); return; }
+    persist([...dates, newDate].sort());
+    setNewDate("");
+  };
+
+  const removeDate = (d) => persist(dates.filter((x) => x !== d));
+
+  return (
+    <div className="max-w-3xl bg-white/95 backdrop-blur-md rounded-2xl border border-white/80 shadow-[0_20px_50px_rgba(11,25,44,0.10)] p-6 lg:p-8 mt-6" data-testid="admin-blackout-panel">
+      <div className="flex items-center gap-2 mb-4">
+        <Calendar className="w-4 h-4 text-[#D4A94A]" />
+        <h2 className="serif text-xl text-[#0B3B5C] font-bold">Blackout dates</h2>
+      </div>
+      <p className="text-xs text-[#64748B] mb-5 leading-relaxed">
+        Mark days you're offline — holidays, family events, sick days. Customers won't be able to book pickups on these dates.
+        Saturday closures are handled separately (already blocked for pickup, allowed for drop-off).
+      </p>
+
+      <div className="flex items-end gap-3 mb-6">
+        <label className="block flex-1 max-w-xs">
+          <span className="text-[10px] tracking-[0.28em] uppercase text-[#64748B] font-black mb-1.5 block">Add a date</span>
+          <input
+            type="date"
+            value={newDate}
+            onChange={(e) => setNewDate(e.target.value)}
+            data-testid="admin-blackout-date-input"
+            min={new Date().toISOString().slice(0, 10)}
+            className="w-full rounded-xl border border-[#EFE7D5] bg-white px-3.5 py-2.5 text-sm text-[#0B3B5C] focus:border-[#D4A94A] focus:outline-none focus:ring-2 focus:ring-[#D4A94A]/20"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={addDate}
+          disabled={!newDate || saving}
+          data-testid="admin-blackout-add-btn"
+          className="inline-flex items-center gap-1.5 rounded-full bg-[#D4A94A] hover:bg-[#c69938] text-white px-4 py-2.5 text-xs font-black uppercase tracking-widest disabled:opacity-50 shadow-[0_8px_20px_rgba(212,169,74,0.35)]"
+        >
+          <Plus className="w-3.5 h-3.5" /> Add
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="text-sm text-[#94a3b8]">Loading…</div>
+      ) : dates.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-[#E2E8F0] p-6 text-center text-sm text-[#94a3b8]" data-testid="admin-blackout-empty">
+          No blackout dates set. All future days are open for booking.
+        </div>
+      ) : (
+        <ul className="space-y-2" data-testid="admin-blackout-list">
+          {dates.map((d) => (
+            <li key={d} className="flex items-center justify-between gap-3 rounded-xl border border-[#EFE7D5] bg-white px-4 py-2.5" data-testid={`admin-blackout-item-${d}`}>
+              <div>
+                <div className="mono text-sm text-[#0B3B5C] font-semibold">{d}</div>
+                <div className="text-[10px] text-[#94a3b8]">{new Date(d + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" })}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeDate(d)}
+                disabled={saving}
+                data-testid={`admin-blackout-remove-${d}`}
+                className="inline-flex items-center gap-1 rounded-full border border-[#FECACA] bg-[#FEF2F2] hover:bg-[#B91C1C] hover:text-white text-[#B91C1C] text-xs font-semibold px-3 py-1.5 transition-colors disabled:opacity-50"
+                title={`Remove ${d}`}
+              >
+                <Trash2 className="w-3 h-3" /> Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

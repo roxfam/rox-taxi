@@ -45,6 +45,7 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **Blackout calendar** ✅ — Admin sets unavailable dates via `POST /api/admin/blackout-dates`. Public read via `GET /api/blackout-dates`. `_validate_open_day` blocks bookings on those dates with a friendly "We're offline on YYYY-MM-DD" message. Cache refreshed after each admin update. Verified end-to-end.
 - **Tour upsell on booking success** ✅ — New `TourUpsellCard` on the PaymentSuccess page shows 2 contextually chosen tours based on the completed booking's dropoff (Atlantis / Cruise Port / Cable Beach). Direct links to `/tours#{id}`. Featured/popular tours ranked first.
 - **Iteration 19 tests** ✅ — 15/15 backend pytest + FlightTrackerCard E2E validated (WU805 shows Western Air GGT→NAS with recommended pickup, ZZ9999 shows not-found, <3-char guard works, pickup-aligned indicator renders). Only sanitisation nit fixed (raw Stripe/PayPal error strings no longer leaked in refund_result.error).
+- **Blackout dates admin UI** ✅ — New `BlackoutDatesSection` inside `SiteConfigPanel`. Date picker + Add button + list with per-row Remove. Persists via existing `POST /api/admin/blackout-dates` endpoint. Auto-refreshes cache. Data-testids: `admin-blackout-panel`, `admin-blackout-date-input`, `admin-blackout-add-btn`, `admin-blackout-list`, `admin-blackout-item-{date}`, `admin-blackout-remove-{date}`, `admin-blackout-empty`.
 
 ### 🎯 Backlog — Wave 2 (revenue/trust)
 - ~~Airport flight tracker~~ ✅ shipped
