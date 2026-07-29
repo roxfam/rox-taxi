@@ -103,6 +103,21 @@ export default function Layout({ children }) {
               <span className="inline-flex items-center gap-2 mt-1.5">
                 <span className="w-8 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-[#D4A94A]" />
                 <span className="serif italic text-lg xl:text-xl tracking-[0.15em] font-bold text-[#D4A94A]">&amp; Tours</span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    const num = (config.whatsapp_number || "+12424322587").replace(/[^\d]/g, "");
+                    window.open(`https://wa.me/${num}?text=${encodeURIComponent("Hi Rox — I saw you're live. Quick question:")}`, "_blank", "noopener");
+                  }}
+                  title="Available 24/7 — WhatsApp us"
+                  data-testid="brand-live-dot"
+                  className="relative inline-flex w-2.5 h-2.5 rounded-full bg-[#D4A94A] shadow-[0_0_10px_rgba(212,169,74,0.7)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#D4A94A]/60"
+                  aria-label="Available 24/7 — WhatsApp us"
+                >
+                  <span className="absolute inset-0 rounded-full bg-[#D4A94A] animate-ping opacity-75" />
+                </span>
               </span>
             </div>
           </Link>
@@ -341,6 +356,21 @@ export default function Layout({ children }) {
                     <div className="inline-flex items-center gap-1.5 mt-1.5">
                       <span className="w-6 h-[1px] bg-gradient-to-r from-transparent via-[#D4A94A] to-[#D4A94A]" />
                       <span className="serif italic text-base tracking-[0.12em] font-bold text-[#D4A94A]">&amp; Tours</span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.preventDefault(); e.stopPropagation();
+                          const num = (config.whatsapp_number || "+12424322587").replace(/[^\d]/g, "");
+                          window.open(`https://wa.me/${num}?text=${encodeURIComponent("Hi Rox — I saw you're live. Quick question:")}`, "_blank", "noopener");
+                        }}
+                        title="Available 24/7 — WhatsApp us"
+                        data-testid="brand-live-dot-mobile"
+                        className="relative inline-flex w-2 h-2 rounded-full bg-[#D4A94A] shadow-[0_0_8px_rgba(212,169,74,0.7)] cursor-pointer"
+                        aria-label="Available 24/7 — WhatsApp us"
+                      >
+                        <span className="absolute inset-0 rounded-full bg-[#D4A94A] animate-ping opacity-75" />
+                      </span>
                     </div>
                   </div>
                 </div>
