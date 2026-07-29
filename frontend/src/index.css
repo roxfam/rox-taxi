@@ -211,3 +211,21 @@ h2.serif em, h2.serif i {
 [data-debug-wrapper="true"] {
     display: contents !important;
 }
+
+/* Marquee for the sitewide PromoBanner — continuous horizontal scroll.
+   Pauses on hover so guests can read the full sentence; honours
+   prefers-reduced-motion for accessibility. */
+.promo-marquee-track {
+    animation: promo-scroll 32s linear infinite;
+    will-change: transform;
+}
+.promo-marquee:hover .promo-marquee-track {
+    animation-play-state: paused;
+}
+@keyframes promo-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .promo-marquee-track { animation: none; }
+}

@@ -75,6 +75,10 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
   - `HomeHeroCarousel` now uses `background-size: contain` for `hero-ardastra` specifically (with a navy fill), so the whole family + flamingoes photo is visible instead of being top-cropped by `cover`.
   - **Bug fix**: `/api/taxi-services` was missing entirely — `Taxi.jsx` silently swallowed the 404 with `.catch(() => {})`. Added `@api_router.get("/taxi-services")` returning all active routes. All 26 fixed-fare routes now render on `/taxi`.
 
+- **Attraction micro-landing template + Ardastra page** (Feb 2026) — new `AttractionLanding` component (reusable for Atlantis, Blue Lagoon, Baha Mar, etc.) + first instance at `/tours/ardastra`. Hero image, description, sidebar with address / hours / flamingo march times (10:30 · 2:15 · 4:15), auto-loaded taxi route cards ($15 downtown / $35 LPIA) with per-route "Book this ride" CTA, feature grid, and external CTA to `https://ardastra.com/`.
+- **PromoBanner continuous marquee** (Feb 2026) — sitewide banner now scrolls the promo unit continuously (32s loop, pauses on hover, honours `prefers-reduced-motion`). Duplicated 4× in the DOM so the scroll never runs out of content.
+- **Admin Promotions toggle UX** (Feb 2026) — button labels now read "On — click to turn OFF" (green) and "Off — click to turn ON" (grey outline) so the current state is unambiguous.
+
 ### 🎯 Backlog — Wave 2 (revenue/trust)
 - ~~Airport flight tracker~~ ✅ shipped
 - ~~Cross-sell "Add a tour" upsell~~ ✅ shipped

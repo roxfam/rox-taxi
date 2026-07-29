@@ -5,8 +5,9 @@ import { api, money } from "../lib/api";
 
 // Sitewide dismissable banner — auto-shows whenever an active promo exists.
 // Renders NOTHING when the /api/promotions feed is empty, so the admin
-// toggle acts as the on/off switch. Dismiss state lives in sessionStorage
-// (per-tab) so guests re-see the banner on their next visit.
+// toggle acts as the on/off switch. The content strip animates as a
+// continuous horizontal marquee for visibility. Dismiss state lives in
+// sessionStorage (per-tab) so guests re-see the banner on their next visit.
 const DISMISS_KEY = "rox-promo-banner-dismissed";
 
 export default function PromoBanner() {
@@ -44,27 +45,39 @@ export default function PromoBanner() {
     } catch { return null; }
   })();
 
+  // Build a single logical message unit, then repeat it in the marquee so
+  // the strip visually never runs out of content while scrolling.
+  const message = promo.description || `${promo.label} — on ${scope}`;
+  const unit = (
+    <span className="inline-flex items-center gap-3 shrink-0 whitespace-nowrap">
+      <Sparkles className="w-4 h-4" />
+      <span className="font-black uppercase tracking-widest text-xs sm:text-sm">{label}</span>
+      <span className="text-[#0B192C]/85">{message}</span>
+      {endsBadge && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-[#0B192C]/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
+          {endsBadge}
+        </span>
+      )}
+      <span className="text-[#0B192C]/40" aria-hidden>·</span>
+    </span>
+  );
+
   return (
     <div
-      className="relative bg-gradient-to-r from-[#D4A94A] via-[#c69938] to-[#A88235] text-[#0B192C] shadow-[0_2px_20px_rgba(212,169,74,0.35)]"
+      className="relative bg-gradient-to-r from-[#D4A94A] via-[#c69938] to-[#A88235] text-[#0B192C] shadow-[0_2px_20px_rgba(212,169,74,0.35)] overflow-hidden"
       data-testid="promo-banner"
       role="region"
       aria-label="Site-wide promotion"
     >
-      <div className="max-w-7xl mx-auto px-6 lg:px-10 py-2.5 flex items-center justify-between gap-4 text-sm">
-        <div className="flex items-center gap-3 flex-wrap flex-1 min-w-0">
-          <Sparkles className="w-4 h-4 shrink-0" />
-          <span className="font-black uppercase tracking-widest text-xs sm:text-sm" data-testid="promo-banner-label">
-            {label}
-          </span>
-          <span className="hidden sm:inline text-[#0B192C]/85 truncate">
-            {promo.description || `${promo.label} — on ${scope}`}
-          </span>
-          {endsBadge && (
-            <span className="hidden md:inline-flex items-center gap-1 rounded-full bg-[#0B192C]/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
-              {endsBadge}
-            </span>
-          )}
+      <div className="max-w-7xl mx-auto flex items-center gap-3 pl-6 lg:pl-10 pr-2">
+        {/* Continuous scrolling marquee. Duplicated twice so the tail of the
+            first copy meets the head of the second seamlessly. Respects
+            prefers-reduced-motion (see global CSS override below). */}
+        <div className="promo-marquee flex-1 overflow-hidden py-2.5" data-testid="promo-banner-marquee">
+          <div className="promo-marquee-track inline-flex items-center gap-6 text-sm">
+            <span data-testid="promo-banner-label" className="sr-only">{label}</span>
+            {unit}{unit}{unit}{unit}
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Link

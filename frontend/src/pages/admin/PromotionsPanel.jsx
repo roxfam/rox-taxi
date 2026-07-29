@@ -264,10 +264,13 @@ export default function PromotionsPanel() {
                 <div className="mt-auto pt-2 flex gap-2">
                   <button
                     onClick={() => toggleActive(p)}
-                    className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-full text-xs font-semibold py-2 active:scale-95 ${p.active ? "bg-white border border-[#E2E8F0] text-[#64748B] hover:border-[#DC2626] hover:text-[#DC2626]" : "bg-[#059669] hover:bg-[#047857] text-white"}`}
+                    className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-full text-xs font-semibold py-2 active:scale-95 transition-colors ${p.active ? "bg-[#059669] hover:bg-[#047857] text-white" : "bg-white border border-[#E2E8F0] text-[#64748B] hover:border-[#0B3B5C] hover:text-[#0B3B5C]"}`}
                     data-testid={`promotion-toggle-${p.id}`}
+                    title={p.active ? "Click to turn this promotion OFF" : "Click to turn this promotion ON"}
                   >
-                    {p.active ? <><ToggleLeft className="w-3.5 h-3.5" /> Pause</> : <><ToggleRight className="w-3.5 h-3.5" /> Activate</>}
+                    {p.active
+                      ? <><ToggleRight className="w-3.5 h-3.5" /> On — click to turn OFF</>
+                      : <><ToggleLeft className="w-3.5 h-3.5" /> Off — click to turn ON</>}
                   </button>
                   <button
                     onClick={() => del(p)}
