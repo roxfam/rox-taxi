@@ -11,6 +11,7 @@ const BOOK_OPTIONS = [
 ];
 import { api } from "../lib/api";
 import ChatWidget from "./ChatWidget";
+import PromoBanner from "./PromoBanner";
 import LanguageSwitcher from "./LanguageSwitcher";
 import LiveStatsBadge from "./LiveStatsBadge";
 import { WhatsAppIcon, TripAdvisorIcon } from "./BrandIcons";
