@@ -77,7 +77,7 @@ export default function RouteQuoteWidget({ services, onBook }) {
             <span className="text-[10px] tracking-[0.35em] uppercase font-black text-[#D4A94A]">Instant quote</span>
           </div>
           <h2 className="serif text-4xl sm:text-5xl text-[#0B3B5C] font-bold leading-[1.02] mt-3">
-            Pick your <em className="italic text-[#D4A94A]">from</em> &amp; <em className="italic text-[#E86A3C]">to</em>.
+            Pick your <em className="italic text-[#D4A94A]">destination</em>.
           </h2>
           <p className="text-sm text-[#64748B] mt-2 max-w-xl leading-relaxed">
             Choose any two Nassau or Paradise Island locations and we'll show the fixed fare instantly. Route not listed? Send us a one-click custom quote request.
@@ -85,7 +85,7 @@ export default function RouteQuoteWidget({ services, onBook }) {
 
           {/* From / Swap / To */}
           <div className="mt-8 grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 md:gap-4 items-end">
-            <LocationSelect label="From" tag="from" value={from} onChange={setFrom} locations={locations} exclude={to} />
+            <LocationSelect label="Pick your" tag="from" value={from} onChange={setFrom} locations={locations} exclude={to} />
             <button
               type="button"
               onClick={swap}
@@ -97,7 +97,7 @@ export default function RouteQuoteWidget({ services, onBook }) {
             >
               <ArrowLeftRight className="w-4 h-4" />
             </button>
-            <LocationSelect label="To" tag="to" value={to} onChange={setTo} locations={locations} exclude={from} />
+            <LocationSelect label="Destination" tag="to" value={to} onChange={setTo} locations={locations} exclude={from} />
           </div>
 
           {/* Result */}
