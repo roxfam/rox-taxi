@@ -24,6 +24,8 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **`CORS_ORIGINS` documented** in `.env.example` + `DEPLOYMENT.md` step 6a.
 - **ChatWidget FAB & panel logo** switched from Emergent CDN → local `/logo-gold.webp` (portable after VPS deploy).
 - **PDF receipts logo** — `pdf_utils.py` now reads from `frontend/public/logo-gold.webp` first, falls back to `PDF_LOGO_URL` env (defaults to `https://roxtaxi.com/logo-gold.webp`).
+- **Referral card timeout fix** — `MyBookings.jsx` now renders the `[data-testid="referral-card"]` wrapper unconditionally for logged-in users, with a skeleton state while `/referrals/summary` is loading. Playwright selectors no longer time out.
+- **Image Health panel (NEW)** — `GET /api/admin/images/scan` HEAD-checks every image URL across home slides, tours, rentals, taxi services, and approved guest photos concurrently (semaphore=16). New "Image Health" tab in `/admin/manage` shows total scanned / broken / healthy counts, per-item error, copy-URL, open, and one-tap "Fix" link to the matching catalog tab. Verified: 63/63 healthy on current catalog.
 
 ### ✅ Shipped this session
 - **Round-trip taxi discount** — 10% off both legs, toggle in booking modal, computed server-side (base doubles, 10% off both legs, bridge toll applies once), shown on receipt.

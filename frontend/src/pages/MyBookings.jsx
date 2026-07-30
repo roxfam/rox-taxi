@@ -143,51 +143,66 @@ export default function MyBookings() {
         </div>
       )}
 
-      {referral && referral.code && (
-        <div
-          className="mt-8 rounded-2xl border border-[#EFE7D5] bg-gradient-to-br from-[#FBF7EF] to-white p-5 shadow-[0_10px_30px_rgba(212,169,74,0.08)]"
-          data-testid="referral-card"
-        >
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="w-10 h-10 rounded-xl bg-[#D4A94A]/12 text-[#D4A94A] flex items-center justify-center">
-                <Gift className="w-5 h-5" />
-              </span>
-              <div className="min-w-0">
-                <div className="text-[11px] tracking-[0.25em] uppercase text-[#64748B] font-semibold">Your referral code</div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span data-testid="referral-code" className="mono font-bold text-lg text-[#0B3B5C]">{referral.code}</span>
-                  <button
-                    onClick={() => { navigator.clipboard?.writeText(referral.referral_link).then(() => toast.success("Link copied")); }}
-                    className="inline-flex items-center gap-1 rounded-full border border-[#E2E8F0] hover:border-[#D4A94A] text-[11px] text-[#0B3B5C] px-2.5 py-1"
-                    data-testid="referral-copy-link"
-                    title="Copy your invite link"
-                  >
-                    <Copy className="w-3 h-3" /> Copy link
-                  </button>
-                </div>
-                <div className="text-[11px] text-[#64748B] mt-1">
-                  Refer <strong className="text-[#0B3B5C]">{referral.unlock_every}</strong> friends who complete their first paid trip →
-                  unlock a <strong className="text-[#059669]">${referral.reward_per_unlock_usd}</strong> credit.
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-6 shrink-0">
-              <Stat label="Invited" value={referral.total_referred} testid="referral-total-referred" />
-              <Stat label="Rides completed" value={referral.total_converted} testid="referral-total-converted" />
-              <Stat label="Credit balance" value={money(referral.credit_balance)} tone="ok" testid="referral-credit-balance" />
+      {/* Referral card — wrapper always renders for logged-in users so
+          data-testid="referral-card" resolves immediately. Skeleton shows
+          while /referrals/summary is loading; real content when ready. */}
+      <div
+        className="mt-8 rounded-2xl border border-[#EFE7D5] bg-gradient-to-br from-[#FBF7EF] to-white p-5 shadow-[0_10px_30px_rgba(212,169,74,0.08)]"
+        data-testid="referral-card"
+      >
+        {!referral || !referral.code ? (
+          <div className="flex items-center gap-3" data-testid="referral-card-skeleton">
+            <span className="w-10 h-10 rounded-xl bg-[#D4A94A]/12 text-[#D4A94A] flex items-center justify-center">
+              <Gift className="w-5 h-5" />
+            </span>
+            <div className="flex-1">
+              <div className="h-3 w-32 bg-[#EFE7D5] rounded animate-pulse" />
+              <div className="h-4 w-48 bg-[#EFE7D5]/70 rounded mt-2 animate-pulse" />
             </div>
           </div>
-          {referral.total_converted > 0 && (
-            <div className="mt-3 h-1.5 bg-[#EFE7D5] rounded-full overflow-hidden" data-testid="referral-progress">
-              <div
-                className="h-full bg-gradient-to-r from-[#D4A94A] to-[#A88235]"
-                style={{ width: `${((referral.total_converted % referral.unlock_every) / referral.unlock_every) * 100 || 100}%` }}
-              />
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="w-10 h-10 rounded-xl bg-[#D4A94A]/12 text-[#D4A94A] flex items-center justify-center">
+                  <Gift className="w-5 h-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[11px] tracking-[0.25em] uppercase text-[#64748B] font-semibold">Your referral code</div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span data-testid="referral-code" className="mono font-bold text-lg text-[#0B3B5C]">{referral.code}</span>
+                    <button
+                      onClick={() => { navigator.clipboard?.writeText(referral.referral_link).then(() => toast.success("Link copied")); }}
+                      className="inline-flex items-center gap-1 rounded-full border border-[#E2E8F0] hover:border-[#D4A94A] text-[11px] text-[#0B3B5C] px-2.5 py-1"
+                      data-testid="referral-copy-link"
+                      title="Copy your invite link"
+                    >
+                      <Copy className="w-3 h-3" /> Copy link
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-[#64748B] mt-1">
+                    Refer <strong className="text-[#0B3B5C]">{referral.unlock_every}</strong> friends who complete their first paid trip →
+                    unlock a <strong className="text-[#059669]">${referral.reward_per_unlock_usd}</strong> credit.
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-6 shrink-0">
+                <Stat label="Invited" value={referral.total_referred} testid="referral-total-referred" />
+                <Stat label="Rides completed" value={referral.total_converted} testid="referral-total-converted" />
+                <Stat label="Credit balance" value={money(referral.credit_balance)} tone="ok" testid="referral-credit-balance" />
+              </div>
             </div>
-          )}
-        </div>
-      )}
+            {referral.total_converted > 0 && (
+              <div className="mt-3 h-1.5 bg-[#EFE7D5] rounded-full overflow-hidden" data-testid="referral-progress">
+                <div
+                  className="h-full bg-gradient-to-r from-[#D4A94A] to-[#A88235]"
+                  style={{ width: `${((referral.total_converted % referral.unlock_every) / referral.unlock_every) * 100 || 100}%` }}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       <h2 className="serif text-3xl text-[#0B3B5C] mt-12">Your bookings</h2>
       {bookings.length === 0 ? (

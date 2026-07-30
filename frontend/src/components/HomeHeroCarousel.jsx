@@ -76,7 +76,7 @@ export default function HomeHeroCarousel({ children, className = "", intervalMs 
         <motion.div
           key={slide.id}
           initial={{ opacity: 0, scale: 1.0 }}
-          animate={{ opacity: 1, scale: 1.06 }}
+          animate={{ opacity: 1, scale: slide.id === "hero-fort-charlotte" ? 1.0 : 1.06 }}
           exit={{ opacity: 0 }}
           transition={{
             opacity: { duration: 1.2, ease: "easeOut" },
@@ -89,8 +89,9 @@ export default function HomeHeroCarousel({ children, className = "", intervalMs 
             backgroundSize: slide.id === "hero-ardastra" ? "contain" : "cover",
             backgroundRepeat: "no-repeat",
             backgroundColor: slide.id === "hero-ardastra" ? "#0B192C" : undefined,
+            backgroundPosition: slide.id === "hero-fort-charlotte" ? "center 30%" : "center",
           }}
-          className="absolute inset-0 bg-center will-change-transform"
+          className="absolute inset-0 will-change-transform"
           data-testid={`hero-slide-${slide.id}`}
         />
       </AnimatePresence>

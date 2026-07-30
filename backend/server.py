@@ -1709,6 +1709,117 @@ async def admin_reject_submission(sub_id: str, _admin: str = Depends(require_adm
     return {"id": sub_id, "status": "rejected"}
 
 
+# ── Broken-image detector ──────────────────────────────────────────────
+# Scans every user-facing image URL across home slides, tours, taxi
+# services, rentals and approved gallery submissions, HEAD-checks them
+# concurrently, and returns everything that failed (status != 2xx or
+# network timeout). Powers the "Image Health" panel in /admin/manage.
+
+def _abs_image_url(url: str) -> str:
+    """Turn a stored image_url into a fully-qualified URL suitable for
+    HEAD. Legacy `/uploads/*` and `/api/uploads/*` are joined against the
+    PUBLIC_SITE_URL so we can verify them from the backend host too."""
+    if not url:
+        return ""
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+    base = (os.environ.get("PUBLIC_SITE_URL") or "http://127.0.0.1:8001").rstrip("/")
+    if url.startswith("/uploads/"):
+        url = "/api" + url
+    if not url.startswith("/"):
+        url = "/" + url
+    return base + url
+
+
+async def _check_one_image(client: httpx.AsyncClient, entry: dict) -> dict:
+    url = entry.get("_check_url") or entry["url"]
+    try:
+        r = await client.head(url, follow_redirects=True, timeout=8.0)
+        # Some CDNs (incl. Unsplash + Wikimedia) 405/403 on HEAD but 200 on GET.
+        if r.status_code in (403, 405):
+            r = await client.get(url, follow_redirects=True, timeout=8.0)
+        entry["status_code"] = r.status_code
+        entry["ok"] = 200 <= r.status_code < 400
+        entry["error"] = None if entry["ok"] else f"HTTP {r.status_code}"
+    except Exception as e:  # noqa: BLE001
+        entry["status_code"] = 0
+        entry["ok"] = False
+        entry["error"] = str(e)[:200] or "network error"
+    entry.pop("_check_url", None)
+    return entry
+
+
+@api_router.get("/admin/images/scan")
+async def admin_scan_images(_admin: str = Depends(require_admin)):
+    """Return a list of every image URL used across the customer-facing
+    catalog + gallery, annotated with reachability status. Broken items
+    surface first so operators can spot 404s at a glance."""
+    entries: list[dict] = []
+
+    for d in await db.home_slides.find({}).sort("order", 1).to_list(100):
+        if d.get("image_url"):
+            entries.append({
+                "source": "home_slide", "item_id": d.get("id"),
+                "title": d.get("title") or "Home slide",
+                "url": d.get("image_url"),
+                "_check_url": _abs_image_url(d.get("image_url")),
+                "admin_url": "/admin/manage?tab=home_slides",
+            })
+    for d in await db.tours.find({}).to_list(300):
+        if d.get("image_url"):
+            entries.append({
+                "source": "tour", "item_id": d.get("id"),
+                "title": d.get("name") or "Tour",
+                "url": d.get("image_url"),
+                "_check_url": _abs_image_url(d.get("image_url")),
+                "admin_url": "/admin/manage?tab=tours",
+            })
+    for d in await db.rentals.find({}).to_list(300):
+        if d.get("image_url"):
+            entries.append({
+                "source": "rental", "item_id": d.get("id"),
+                "title": d.get("name") or "Rental",
+                "url": d.get("image_url"),
+                "_check_url": _abs_image_url(d.get("image_url")),
+                "admin_url": "/admin/manage?tab=rentals",
+            })
+    for d in await db.taxi_services.find({}).to_list(300):
+        if d.get("image_url"):
+            entries.append({
+                "source": "taxi_service", "item_id": d.get("id"),
+                "title": d.get("name") or "Taxi service",
+                "url": d.get("image_url"),
+                "_check_url": _abs_image_url(d.get("image_url")),
+                "admin_url": "/admin/manage?tab=taxi_services",
+            })
+    for d in await db.gallery_submissions.find({"status": "approved"}).sort("approved_at", -1).to_list(300):
+        if d.get("url"):
+            entries.append({
+                "source": "guest_photo", "item_id": d.get("id"),
+                "title": d.get("caption") or f"Guest photo by {d.get('submitter_name') or 'guest'}",
+                "url": d.get("url"),
+                "_check_url": _abs_image_url(d.get("url")),
+                "admin_url": "/admin/manage?tab=gallery",
+            })
+
+    # Concurrent HEAD checks (bounded to prevent overwhelming remote CDNs)
+    sem = asyncio.Semaphore(16)
+    async with httpx.AsyncClient(headers={"User-Agent": "RoxTaxi-ImageHealth/1.0"}) as client:
+        async def _bounded(e: dict) -> dict:
+            async with sem:
+                return await _check_one_image(client, e)
+        results = await asyncio.gather(*[_bounded(e) for e in entries])
+
+    broken = [r for r in results if not r["ok"]]
+    return {
+        "scanned_at": now_iso(),
+        "total": len(results),
+        "broken_count": len(broken),
+        "broken": broken,
+        "all": results,
+    }
+
+
 # ── Web Push notifications (admin-only alerts) ─────────────────────────
 # Owner installs the site as a PWA / grants notification permission once,
 # then gets a phone-native push every time a customer books, submits a

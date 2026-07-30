@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Ticket, ShieldCheck, MapPin, ArrowRight, Sparkles, Waves, Mail, Lock, LogIn, AlertCircle } from "lucide-react";
+import { Ticket, ShieldCheck, MapPin, ArrowRight, Sparkles, Mail, Lock, LogIn, AlertCircle } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
 const BENEFITS = [
@@ -79,12 +79,20 @@ export default function Login() {
 
             <div className="relative">
               <div className="flex items-center gap-3">
-                <span className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#A88235] text-white flex items-center justify-center shadow-[0_10px_25px_rgba(212,169,74,0.4)]">
-                  <Waves className="w-5 h-5" />
+                <span className="relative w-12 h-12 rounded-full bg-white ring-1 ring-[#D4A94A]/40 shadow-[0_10px_25px_rgba(212,169,74,0.35)] flex items-center justify-center overflow-hidden">
+                  <span className="absolute -inset-1 rounded-full bg-gradient-to-br from-[#D4A94A]/40 via-transparent to-[#E86A3C]/25 blur-md" />
+                  <img
+                    src="/logo-gold.webp"
+                    alt="Rox Taxi Service and Tours"
+                    width={40}
+                    height={40}
+                    className="relative w-10 h-10 object-contain drop-shadow-[0_4px_10px_rgba(168,130,53,0.35)]"
+                    data-testid="login-brand-logo"
+                  />
                 </span>
                 <div className="leading-none">
-                  <div className="serif text-xl text-[#0B3B5C]">Rox Taxi</div>
-                  <div className="text-[10px] tracking-[0.3em] uppercase text-[#64748B]">Member sign-in</div>
+                  <div className="serif text-xl text-[#0B3B5C]">Rox Taxi <em className="italic text-[#D4A94A]">Service</em></div>
+                  <div className="text-[10px] tracking-[0.3em] uppercase text-[#64748B] mt-1">Member sign-in</div>
                 </div>
               </div>
 
