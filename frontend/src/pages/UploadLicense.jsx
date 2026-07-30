@@ -23,6 +23,8 @@ export default function UploadLicense() {
   const token = params.get("t") || "";
 
   const [status, setStatus] = useState(null);
+  const [wallet, setWallet] = useState(null);
+  const [reusing, setReusing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -48,8 +50,32 @@ export default function UploadLicense() {
         setStatus(await r.json());
       } catch (e) { setErr(e.message || "Couldn't load your booking."); }
       finally { setLoading(false); }
+      // Best-effort wallet lookup — offers "Reuse my saved license?" if the
+      // guest already has an approved license on file from a past rental.
+      try {
+        const rw = await fetch(`${API}/api/bookings/${bookingId}/wallet-license-preview?t=${encodeURIComponent(token)}`);
+        if (rw.ok) {
+          const w = await rw.json();
+          if (w.has_wallet) setWallet(w);
+        }
+      } catch { /* ignore */ }
     })();
   }, [bookingId, token, API]);
+
+  const reuseWallet = async () => {
+    setReusing(true);
+    try {
+      const fd = new FormData(); fd.append("t", token);
+      const r = await fetch(`${API}/api/bookings/${bookingId}/reuse-wallet-license`, { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+      toast.success("Saved license reused — pending admin approval.");
+      const r2 = await fetch(`${API}/api/bookings/${bookingId}/license/status?t=${encodeURIComponent(token)}`);
+      setStatus(await r2.json());
+      setWallet(null);
+    } catch (e) { toast.error(e.message || "Reuse failed"); }
+    finally { setReusing(false); }
+  };
 
   // Local preview object-URLs (revoke on unmount / change).
   useEffect(() => {
@@ -118,6 +144,25 @@ export default function UploadLicense() {
         <div className={`transition-all duration-300 ${st === "not_uploaded" ? "hidden" : "block mb-6"}`}>
           <StatusBanner status={st} reason={status?.rejection_reason} at={status?.uploaded_at} />
         </div>
+
+        {/* ── Wallet reuse (returning guests) ─────────────────── */}
+        {wallet && st === "not_uploaded" && (
+          <div className="mb-6 rounded-2xl border border-[#C7D2FE] bg-gradient-to-br from-[#EEF2FF] to-white p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3" data-testid="wallet-reuse-card">
+            <div className="w-11 h-11 rounded-2xl bg-[#3730A3] text-white flex items-center justify-center flex-shrink-0 font-bold">♻</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-[#312E81]">Welcome back{wallet.name_on_license ? `, ${firstName(wallet.name_on_license)}` : ""}.</div>
+              <div className="text-[13px] text-[#4C4B95]">We have your <strong>{wallet.state_or_country || "driver's"} license</strong> on file{wallet.license_number_masked ? ` (${wallet.license_number_masked})` : ""}{wallet.expiry_date ? ` — expires ${wallet.expiry_date}` : ""}. Skip the photos.</div>
+            </div>
+            <button
+              onClick={reuseWallet}
+              disabled={reusing}
+              data-testid="wallet-reuse-btn"
+              className="rounded-full bg-[#3730A3] hover:bg-[#312E81] disabled:opacity-60 text-white text-sm font-semibold px-5 py-2.5 whitespace-nowrap"
+            >
+              {reusing ? "Applying…" : "Reuse my saved license"}
+            </button>
+          </div>
+        )}
 
         {/* ── Drop-zone cards ────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

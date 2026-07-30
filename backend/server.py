@@ -1070,7 +1070,64 @@ async def upload_license(
     except Exception:  # noqa: BLE001
         pass
 
+    # Kick off AI OCR + selfie face-match in the background — never blocks the
+    # upload response. Fields land on `license.ai_*` when Claude replies.
+    try:
+        asyncio.create_task(_run_license_ai(booking_id, lic))
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("license ai schedule err: %s", e)
+
     return {"ok": True, "status": "pending", "message": "Thanks — we'll review your license and confirm within a few hours."}
+
+
+async def _run_license_ai(booking_id: str, lic: dict) -> None:
+    """Background: run Claude vision on the uploaded images and persist the
+    OCR fields + selfie-match score onto the booking's license doc."""
+    from license_ai import analyze_license as _analyze
+
+    def _path_for(url: Optional[str]):
+        if not url or not url.startswith("/api/uploads/"):
+            return None
+        return UPLOAD_DIR / url.rsplit("/", 1)[-1]
+
+    api_key = (secrets_store.get_secret("EMERGENT_LLM_KEY") or os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+    if not api_key:
+        logging.getLogger("rox.license_ai").info("skip AI — EMERGENT_LLM_KEY not set")
+        return
+    result = await _analyze(
+        _path_for(lic.get("front_url")),
+        _path_for(lic.get("back_url")),
+        _path_for(lic.get("selfie_url")),
+        api_key=api_key,
+        session_id=f"license-ai-{booking_id}",
+    )
+    if not result:
+        return
+    ts = now_iso()
+    patch = {
+        "license.ai_analyzed_at": ts,
+        "license.ai_name": result.get("name_on_license", ""),
+        "license.ai_license_number": result.get("license_number", ""),
+        "license.ai_expiry_date": result.get("expiry_date", ""),
+        "license.ai_state_or_country": result.get("state_or_country", ""),
+        "license.ai_selfie_match": result.get("selfie_match_confidence", 0),
+        "license.ai_notes": result.get("notes", ""),
+    }
+    if result.get("_error"):
+        patch["license.ai_error"] = result["_error"]
+    # Auto-fill any guest-blank fields with the OCR result so the admin panel
+    # displays useful data even when the guest didn't type anything.
+    b_after = await db.bookings.find_one({"id": booking_id})
+    if b_after and (b_after.get("license") or {}).get("name_on_license", "") == "" and result.get("name_on_license"):
+        patch["license.name_on_license"] = result["name_on_license"]
+    if b_after and (b_after.get("license") or {}).get("license_number", "") == "" and result.get("license_number"):
+        patch["license.license_number"] = result["license_number"]
+    if b_after and (b_after.get("license") or {}).get("expiry_date", "") == "" and result.get("expiry_date"):
+        patch["license.expiry_date"] = result["expiry_date"]
+    await db.bookings.update_one({"id": booking_id}, {"$set": patch})
+    logging.getLogger("rox.license_ai").info(
+        "AI license analysis stored for %s (match=%s)", booking_id, patch.get("license.ai_selfie_match")
+    )
 
 
 # One-tap admin approve from the SMS/email link. Token-guarded GET so the
@@ -1107,6 +1164,13 @@ async def admin_quick_approve_license(booking_id: str, token: str = ""):
             )
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("quick-approve notify err: %s", e)
+    # Persist to the customer's wallet so returning guests can reuse it.
+    try:
+        fresh = await db.bookings.find_one({"id": booking_id})
+        if fresh:
+            await _save_wallet_license(fresh)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("wallet save err (quick approve): %s", e)
     return HTMLResponse(_license_action_page(
         f"License approved · {booking_id}",
         f"You approved {b.get('customer_name','the guest')}'s driver's license for {b.get('item_name','their rental')} on {b.get('booking_date','')}. A confirmation email has been sent.",
@@ -1132,6 +1196,109 @@ def _license_action_page(title: str, body: str, danger: bool = False) -> str:
 
 
 # ── Admin: driver's-license review queue ────────────────────────────────
+async def _save_wallet_license(booking: dict) -> None:
+    """Copy an approved license snapshot onto the customer's user profile
+    so returning customers can reuse it on future rentals. Best-effort."""
+    email = (booking or {}).get("customer_email", "").strip().lower()
+    lic = (booking or {}).get("license") or {}
+    if not email or lic.get("status") != "approved":
+        return
+    if not (lic.get("front_url") or lic.get("back_url") or lic.get("selfie_url")):
+        return
+    snapshot = {
+        "front_url": lic.get("front_url"),
+        "back_url": lic.get("back_url"),
+        "selfie_url": lic.get("selfie_url"),
+        "name_on_license": lic.get("name_on_license", ""),
+        "license_number": lic.get("license_number", ""),
+        "expiry_date": lic.get("expiry_date", ""),
+        "state_or_country": lic.get("ai_state_or_country") or "",
+        "approved_at": lic.get("reviewed_at") or now_iso(),
+        "source_booking_id": booking["id"],
+    }
+    await db.users.update_one(
+        {"email": email},
+        {"$set": {"license_wallet": snapshot, "license_wallet_updated_at": now_iso(), "email": email}},
+        upsert=True,
+    )
+
+
+async def _lookup_wallet_license(email: str) -> Optional[dict]:
+    """Return a still-valid wallet license for this email (expiry_date in the
+    future) or None."""
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    u = await db.users.find_one({"email": email})
+    w = (u or {}).get("license_wallet")
+    if not w:
+        return None
+    exp_dt = _parse_iso_dt(w.get("expiry_date"))
+    if exp_dt and exp_dt.date() < datetime.now(timezone.utc).date():
+        return None  # expired
+    return w
+
+
+@api_router.get("/bookings/{booking_id}/wallet-license-preview")
+async def wallet_license_preview(booking_id: str, t: str):
+    """Public: if the guest for this booking already has an approved license on
+    file (from a previous rental), return a preview so we can offer them a
+    "Reuse my saved license?" button on the upload page."""
+    b = await _get_booking_by_token(booking_id, t)
+    wallet = await _lookup_wallet_license(b.get("customer_email", ""))
+    if not wallet:
+        return {"has_wallet": False}
+    return {
+        "has_wallet": True,
+        "name_on_license": wallet.get("name_on_license", ""),
+        "license_number_masked": (wallet.get("license_number", "")[:3] + "•••" + wallet.get("license_number", "")[-2:]) if wallet.get("license_number") else "",
+        "expiry_date": wallet.get("expiry_date", ""),
+        "state_or_country": wallet.get("state_or_country", ""),
+        "approved_at": wallet.get("approved_at"),
+    }
+
+
+@api_router.post("/bookings/{booking_id}/reuse-wallet-license")
+async def reuse_wallet_license(booking_id: str, t: str = Form(...)):
+    """Public: apply the guest's saved wallet license to this booking as a new
+    pending upload (admin still one-tap approves)."""
+    b = await _get_booking_by_token(booking_id, t)
+    wallet = await _lookup_wallet_license(b.get("customer_email", ""))
+    if not wallet:
+        raise HTTPException(404, "No saved license on file.")
+    lic = {
+        "front_url": wallet.get("front_url"),
+        "back_url": wallet.get("back_url"),
+        "selfie_url": wallet.get("selfie_url"),
+        "name_on_license": wallet.get("name_on_license", ""),
+        "license_number": wallet.get("license_number", ""),
+        "expiry_date": wallet.get("expiry_date", ""),
+        "status": "pending",
+        "uploaded_at": now_iso(),
+        "from_wallet": True,
+    }
+    admin_approve_token = b.get("admin_approve_token") or _secrets_lib.token_urlsafe(16)
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"license": lic, "admin_approve_token": admin_approve_token, "updated_at": now_iso()}},
+    )
+    # Notify admin (SMS + email) — same one-tap approve flow.
+    try:
+        from notifications import send_email as _send_email, send_sms as _send_sms
+        base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
+        approve_url = f"{base}/api/admin/licenses/quick-approve/{booking_id}?token={admin_approve_token}"
+        review_url = f"{base}/admin/manage?tab=licenses"
+        summary = f"Returning guest reused saved license.\nBooking : {b['id']}\nGuest   : {b.get('customer_name','')}\nApprove : {approve_url}"
+        if ADMIN_EMAIL:
+            _send_email(ADMIN_EMAIL, f"Wallet license reused · {b['id']}", f"<pre>{summary}</pre>", summary, category="info")
+        admin_sms = (secrets_store.get_secret("ADMIN_SMS_NUMBER") or WHATSAPP_NUMBER or "").strip()
+        if admin_sms:
+            _send_sms(admin_sms, f"♻ Wallet license reused · {b['id']} · {b.get('customer_name','')}\nApprove: {approve_url}")
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("wallet reuse notify err: %s", e)
+    return {"ok": True, "status": "pending", "from_wallet": True}
+
+
 @api_router.get("/admin/licenses")
 async def admin_list_licenses(status: Optional[str] = None, _admin: str = Depends(require_admin)):
     query: Dict[str, Any] = {"service_type": "rental"}
@@ -1182,6 +1349,13 @@ async def admin_approve_license(booking_id: str, admin_email: str = Depends(requ
             )
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("license approve notify err: %s", e)
+    # Persist to the customer's wallet so returning guests can reuse it.
+    try:
+        fresh = await db.bookings.find_one({"id": booking_id})
+        if fresh:
+            await _save_wallet_license(fresh)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("wallet save err (admin approve): %s", e)
     return {"ok": True, "status": "approved"}
 
 

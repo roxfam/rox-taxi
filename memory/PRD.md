@@ -27,7 +27,17 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **Referral card timeout fix** — `MyBookings.jsx` now renders the `[data-testid="referral-card"]` wrapper unconditionally for logged-in users, with a skeleton state while `/referrals/summary` is loading. Playwright selectors no longer time out.
 - **Image Health panel (NEW)** — `GET /api/admin/images/scan` HEAD-checks every image URL across home slides, tours, rentals, taxi services, and approved guest photos concurrently (semaphore=16). New "Image Health" tab in `/admin/manage` shows total scanned / broken / healthy counts, per-item error, copy-URL, open, and one-tap "Fix" link to the matching catalog tab. Verified: 63/63 healthy on current catalog.
 
-### ✅ Shipped Feb 2026 (License polish v2: SMS one-tap approve + selfie + 14-day retention)
+### ✅ Shipped Feb 2026 (License v3: AI OCR + face-match + Guest Wallet)
+- **AI license verification via Claude Sonnet 4.5 vision** — background task after every upload calls Claude with front + back + selfie images and returns structured JSON. Populates `license.ai_name`, `ai_license_number`, `ai_expiry_date`, `ai_state_or_country`, `ai_selfie_match` (0-100), `ai_notes`. Any guest-blank field is auto-filled with the OCR result. New module `/app/backend/license_ai.py` keeps the LLM integration isolated. Verified with a synthetic Bahamas license image: OCR nailed number `BS2026-98765`, expiry `2030-05-15`, country `BAHAMAS`.
+- **Admin panel chips** — selfie face-match chip (green ≥75, amber 60-74, red <60), state chip, AI note warning, and `♻ Guest wallet` badge for reused licenses.
+- **Guest Wallet** — `_save_wallet_license` copies an approved license snapshot to the user's profile on both admin-approve and SMS one-tap-approve; upserts by email so guest-only checkouts still get a wallet. `GET /bookings/{id}/wallet-license-preview` + `POST /bookings/{id}/reuse-wallet-license` power a "Reuse my saved license?" card on the upload page (indigo gradient, one-tap). Reuse creates a fresh pending license on the new booking; admin still one-tap approves via SMS (per user's safety preference). Wallet is valid forever until `expiry_date` passes.
+
+### ✅ Shipped earlier this session
+- One-tap SMS approve, optional selfie, 14-day retention.
+- Elegant upload page + guide overlay.
+- Retention purge + expiry-before-pickup alerts.
+- Per-category email senders + SEO overhaul + JSON-LD.
+- Namecheap VPS deploy readiness pass.
 - **One-tap SMS approve** — every "license pending" SMS + email now includes a secure per-booking approve link (`/api/admin/licenses/quick-approve/{id}?token=<16-byte>`). Tapping it approves the license, sends the guest their approval email, invalidates the token, and shows a styled confirmation page. Verified: first tap ⇒ approved, second tap ⇒ "Link invalid or expired".
 - **Optional selfie photo** — third drop-zone on the upload page (labelled "Selfie next to your license (recommended)") with a face-silhouette guide. Stored as `license.selfie_url`, shown in the admin panel next to front + back (3-column grid), and included in the retention purge.
 - **Retention shortened** to 14 days (`LICENSE_RETENTION_DAYS = 14`).

@@ -108,6 +108,36 @@ export default function LicensesPanel() {
                     )}
                     {lic.purged_at && <div className="text-[11px] text-[#94856A] mt-1">Files purged {lic.purged_at.slice(0,10)} (retention)</div>}
                     {lic.rejection_reason && <div className="text-xs text-[#B91C1C] mt-1">Last rejection: {lic.rejection_reason}</div>}
+                    {lic.ai_analyzed_at && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {typeof lic.ai_selfie_match === "number" && lic.selfie_url && (
+                          <span
+                            data-testid={`license-match-chip-${b.id}`}
+                            className={`text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full border ${
+                              lic.ai_selfie_match >= 75 ? "bg-[#F0FDF4] text-[#166534] border-[#BBF7D0]"
+                              : lic.ai_selfie_match >= 60 ? "bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]"
+                              : "bg-[#FEF2F2] text-[#991B1B] border-[#FECACA]"
+                            }`}
+                            title="Claude Sonnet 4.5 selfie ↔ license face-match"
+                          >
+                            Match {lic.ai_selfie_match}%
+                          </span>
+                        )}
+                        {lic.ai_state_or_country && (
+                          <span className="text-[10px] uppercase tracking-widest text-[#5F6875] bg-[#F1EFE7] px-2 py-0.5 rounded-full">
+                            {lic.ai_state_or_country}
+                          </span>
+                        )}
+                        {lic.ai_notes && (
+                          <span className="text-[10px] text-[#B91C1C] italic">⚠ {lic.ai_notes}</span>
+                        )}
+                        {lic.from_wallet && (
+                          <span data-testid={`license-wallet-badge-${b.id}`} className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#EEF2FF] text-[#3730A3] border border-[#C7D2FE]">
+                            ♻ Guest wallet
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
                     <StatusChip status={lic.status || "not_uploaded"} />

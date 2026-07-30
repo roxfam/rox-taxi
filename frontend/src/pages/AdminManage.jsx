@@ -86,6 +86,7 @@ export default function AdminManage() {
           : tab === "images" ? <ImagesPanel />
           : tab === "image_health" ? <BrokenImagesPanel />
           : tab === "gallery" ? <GalleryPanel />
+          : tab === "licenses" ? <LicensesPanel />
           : tab === "promotions" ? <PromotionsPanel />
           : tab === "messages" ? <MessagesPanel />
           : tab === "home_slides" ? <HomeSlidesPanel />
