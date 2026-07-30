@@ -241,3 +241,69 @@ function ImageCell({ label, url, testid }) {
     </a>
   );
 }
+
+/**
+ * Inline OCR-correction row — lets admin fix a wrong AI read in one keystroke
+ * and save via PATCH /admin/bookings/{id}/license/fields.
+ */
+function OcrFields({ booking, onSaved }) {
+  const lic = booking.license || {};
+  const [name, setName] = useState(lic.name_on_license || lic.ai_name || "");
+  const [num,  setNum]  = useState(lic.license_number || lic.ai_license_number || "");
+  const [exp,  setExp]  = useState(lic.expiry_date || lic.ai_expiry_date || "");
+  const [state, setState] = useState(lic.state_or_country || lic.ai_state_or_country || "");
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const dirtyFn = (setter) => (v) => { setter(v); setDirty(true); };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.patch(`/admin/bookings/${booking.id}/license/fields`, {
+        name_on_license: name, license_number: num, expiry_date: exp, state_or_country: state,
+      });
+      toast.success("License fields updated");
+      setDirty(false); onSaved?.();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Save failed"); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="mt-4 rounded-xl border border-[#EAE4D2] bg-[#FAF7EF] p-3" data-testid={`license-ocr-${booking.id}`}>
+      <div className="text-[10px] tracking-[0.22em] uppercase text-[#94856A] font-semibold mb-2 flex items-center justify-between gap-2">
+        <span>OCR fields (edit to fix)</span>
+        {lic.ai_analyzed_at && <span className="normal-case tracking-normal text-[10px] text-[#94856A]">AI-read {lic.ai_analyzed_at.slice(0,10)}</span>}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+        <MiniField label="Name"   value={name}  onChange={dirtyFn(setName)}   testid={`ocr-name-${booking.id}`} />
+        <MiniField label="Number" value={num}   onChange={dirtyFn(setNum)}    testid={`ocr-number-${booking.id}`} />
+        <MiniField label="Expiry" value={exp}   onChange={dirtyFn(setExp)}    testid={`ocr-expiry-${booking.id}`} />
+        <MiniField label="Region" value={state} onChange={dirtyFn(setState)}  testid={`ocr-state-${booking.id}`} />
+      </div>
+      {dirty && (
+        <div className="mt-2 flex justify-end">
+          <button
+            onClick={save}
+            disabled={saving}
+            data-testid={`ocr-save-${booking.id}`}
+            className="rounded-full bg-[#0B3B5C] hover:bg-[#0B192C] disabled:opacity-60 text-white text-xs font-semibold px-4 py-1.5"
+          >{saving ? "Saving…" : "Save fields"}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MiniField({ label, value, onChange, testid }) {
+  return (
+    <label className="block">
+      <div className="text-[10px] tracking-[0.18em] uppercase text-[#94856A]">{label}</div>
+      <input
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        data-testid={testid}
+        className="mt-1 w-full rounded-lg border border-[#E2DBC5] bg-white px-2.5 py-1.5 text-xs text-[#0B3B5C] focus:border-[#D4A94A] focus:outline-none"
+      />
+    </label>
+  );
+}

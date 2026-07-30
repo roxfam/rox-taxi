@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API, money, STATUS_STEPS, STATUS_INDEX, BACKEND_URL } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { Ticket, MapPin, ArrowRight, LogOut, XCircle, Download, CreditCard, Clock, Shield, CalendarPlus, Gift, Copy, Sparkles } from "lucide-react";
+import { Ticket, MapPin, ArrowRight, LogOut, XCircle, Download, CreditCard, Clock, Shield, CalendarPlus, Gift, Copy, Sparkles, IdCard, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import ExtendRentalModal from "./ExtendRentalModal";
 
@@ -13,6 +13,8 @@ export default function MyBookings() {
   const [cancelling, setCancelling] = useState(null);
   const [extending, setExtending] = useState(null);
   const [referral, setReferral] = useState(null);
+  const [wallet, setWallet] = useState(null);
+  const [walletBusy, setWalletBusy] = useState(false);
 
   const loadBookings = async () => {
     setFetching(true);
@@ -29,11 +31,32 @@ export default function MyBookings() {
     } catch { /* silent */ }
   };
 
+  const loadWallet = async () => {
+    try {
+      const r = await fetch(`${API}/my/license-wallet`, { credentials: "include" });
+      if (r.ok) {
+        const d = await r.json();
+        setWallet(d.has_wallet ? d : null);
+      }
+    } catch { /* silent */ }
+  };
+
+  const clearWallet = async () => {
+    if (!window.confirm("Remove your saved driver's license from Rox? You can always upload again on your next booking.")) return;
+    setWalletBusy(true);
+    try {
+      const r = await fetch(`${API}/my/license-wallet`, { method: "DELETE", credentials: "include" });
+      if (r.ok) { toast.success("Saved license removed."); setWallet(null); }
+    } catch (e) { toast.error("Couldn't remove — please try again."); }
+    finally { setWalletBusy(false); }
+  };
+
   useEffect(() => {
     if (loading) return;
     if (!user) { setFetching(false); return; }
     loadBookings();
     loadReferral();
+    loadWallet();
     // Post-checkout success toast
     const q = new URLSearchParams(window.location.search);
     if (q.get("extended")) {
@@ -205,6 +228,41 @@ export default function MyBookings() {
       </div>
 
       <h2 className="serif text-3xl text-[#0B3B5C] mt-12">Your bookings</h2>
+
+      {/* ── License Wallet ─────────────────────────────────── */}
+      {wallet && (
+        <div className="mt-4 rounded-2xl border border-[#C7D2FE] bg-gradient-to-br from-[#EEF2FF] via-white to-[#F5F3FF] p-5 flex flex-col sm:flex-row items-start gap-4" data-testid="wallet-card">
+          <div className="w-12 h-12 rounded-2xl bg-[#3730A3] text-white flex items-center justify-center flex-shrink-0">
+            <IdCard className="w-6 h-6" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="text-[10px] tracking-[0.22em] uppercase text-[#3730A3] font-semibold">Saved license · Guest wallet</div>
+              {wallet.expired && <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA]">Expired</span>}
+            </div>
+            <div className="text-sm font-semibold text-[#312E81] mt-0.5">{wallet.name_on_license || "On file"} <span className="text-[#4C4B95] font-normal">· {wallet.state_or_country || "License"}</span></div>
+            <div className="text-xs text-[#4C4B95]">
+              {wallet.license_number_masked && <>Number <span className="mono">{wallet.license_number_masked}</span> · </>}
+              {wallet.expiry_date && <>Expires {wallet.expiry_date} · </>}
+              Approved {wallet.approved_at?.slice(0,10)}
+            </div>
+            <div className="text-xs text-[#64748B] mt-2">
+              Your next Rox rental can reuse this license — one tap, no re-upload.
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 items-end">
+            {wallet.front_url && <a href={wallet.front_url} target="_blank" rel="noreferrer" data-testid="wallet-view-front" className="text-xs text-[#3730A3] font-semibold hover:underline">View saved photo →</a>}
+            <button
+              onClick={clearWallet}
+              disabled={walletBusy}
+              data-testid="wallet-clear"
+              className="inline-flex items-center gap-1 rounded-full border border-[#E2E8F0] bg-white text-[#B91C1C] text-xs font-semibold px-3 py-1.5 hover:bg-[#FEF2F2]"
+            >
+              <Trash2 className="w-3 h-3" /> {walletBusy ? "Removing…" : "Forget it"}
+            </button>
+          </div>
+        </div>
+      )}
       {bookings.length === 0 ? (
         <div className="mt-6 rounded-2xl border border-dashed border-[#E2E8F0] p-10 text-center text-[#64748B]">
           You haven't made a booking yet. <Link to="/taxi" className="text-[#D4A94A] hover:underline">Book a taxi →</Link>

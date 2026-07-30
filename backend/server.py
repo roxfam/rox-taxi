@@ -1299,6 +1299,64 @@ async def reuse_wallet_license(booking_id: str, t: str = Form(...)):
     return {"ok": True, "status": "pending", "from_wallet": True}
 
 
+class LicenseFieldsPatch(BaseModel):
+    name_on_license: Optional[str] = Field(None, max_length=80)
+    license_number: Optional[str] = Field(None, max_length=40)
+    expiry_date: Optional[str] = Field(None, max_length=20)
+    state_or_country: Optional[str] = Field(None, max_length=60)
+
+
+@api_router.patch("/admin/bookings/{booking_id}/license/fields")
+async def admin_edit_license_fields(booking_id: str, patch: LicenseFieldsPatch, _admin: str = Depends(require_admin)):
+    """Admin inline-edit of the OCR/guest-entered fields (fixes wrong OCR)."""
+    b = await db.bookings.find_one({"id": booking_id, "service_type": "rental"})
+    if not b or not b.get("license"):
+        raise HTTPException(404, "License not on this booking")
+    clean_patch: Dict[str, Any] = {}
+    for f in ("name_on_license", "license_number", "expiry_date", "state_or_country"):
+        v = getattr(patch, f, None)
+        if v is not None:
+            clean_patch[f"license.{f}"] = str(v).strip()
+    if not clean_patch:
+        return {"ok": True, "noop": True}
+    clean_patch["license.edited_at"] = now_iso()
+    await db.bookings.update_one({"id": booking_id}, {"$set": clean_patch})
+    fresh = await db.bookings.find_one({"id": booking_id})
+    return {"ok": True, "license": (fresh or {}).get("license", {})}
+
+
+@api_router.get("/my/license-wallet")
+async def my_license_wallet(user: Dict[str, Any] = Depends(get_current_user)):
+    """Signed-in customer's saved license wallet (for the My Bookings page)."""
+    email = (user.get("email") or "").strip().lower()
+    u = await db.users.find_one({"email": email})
+    w = (u or {}).get("license_wallet")
+    if not w:
+        return {"has_wallet": False}
+    exp = _parse_iso_dt(w.get("expiry_date"))
+    expired = bool(exp and exp.date() < datetime.now(timezone.utc).date())
+    return {
+        "has_wallet": True,
+        "expired": expired,
+        "name_on_license": w.get("name_on_license", ""),
+        "license_number_masked": (w.get("license_number", "")[:3] + "•••" + w.get("license_number", "")[-2:]) if w.get("license_number") else "",
+        "expiry_date": w.get("expiry_date", ""),
+        "state_or_country": w.get("state_or_country", ""),
+        "approved_at": w.get("approved_at"),
+        "front_url": w.get("front_url"),
+        "selfie_url": w.get("selfie_url"),
+        "updated_at": (u or {}).get("license_wallet_updated_at"),
+    }
+
+
+@api_router.delete("/my/license-wallet")
+async def my_license_wallet_clear(user: Dict[str, Any] = Depends(get_current_user)):
+    """Guest removes their saved license from the wallet (privacy control)."""
+    email = (user.get("email") or "").strip().lower()
+    await db.users.update_one({"email": email}, {"$unset": {"license_wallet": "", "license_wallet_updated_at": ""}})
+    return {"ok": True}
+
+
 @api_router.get("/admin/licenses")
 async def admin_list_licenses(status: Optional[str] = None, _admin: str = Depends(require_admin)):
     query: Dict[str, Any] = {"service_type": "rental"}
