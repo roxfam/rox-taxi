@@ -1,0 +1,33 @@
+{
+  "summary": "Rental extension end-to-end backend testing complete on PREVIEW backend (test Stripe key). All 12 pytest cases pass covering quote math, tier discount crossings, blackout dates, ownership/state guards, Pydantic validation, and live Stripe checkout session creation. Booking seeded directly in Mongo (per E1 instructions), auth via cookie/Bearer session from POST /api/auth/register. Tests use lowercase email (register lowercases). No backend code was modified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rental_extension.py",
+    "/app/test_reports/pytest/iter25_rental_ext.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 2925 lines — well beyond the 700-line guideline; consider splitting extension/rentals/auth into separate routers.",
+    "In rental_extend_checkout (server.py:861), status 'active' is not part of the eligibility guard — anything not in {cancelled, completed} passes. Consider explicit allow-list to be safer.",
+    "_compute_extension_amount uses booking['price'] as the daily price. If any booking historically stored total-instead-of-daily in `price`, the extension math would be wrong. All current create paths look correct, but a Pydantic model on read would harden this.",
+    "extend/quote does not enforce a max new_days ceiling. Combined with additional_days<=30 this is fine, but there is no check against reasonable business ceiling (e.g. 60 days rental)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rental_extension.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "N/A (backend-only per request)"},
+  "test_credentials": "Ephemeral customer created via POST /api/auth/register (test_ext_<uuid>@example.com / TestPass123!). Auth uses session_token cookie / Bearer header. All test data cleaned up via module-scoped fixture teardown.",
+  "seed_data_creation": "Bookings inserted directly into Mongo db.bookings with payment_status='paid', service_type='rental', item_id=<real /api/rentals id>, days>=2, price=<vehicle daily>, booking_date=today+7d (skipping Saturdays and existing site blackouts). Blackout test temporarily adds a date to db.rentals[vehicle].blackout_dates and restores it in a finally block.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Rental extension endpoints (quote + checkout) verified end-to-end on preview. Live-key verification will be done by user on production Namecheap VPS. If retesting: use lowercase email when seeding customer_email (server lowercases on register) and skip Saturday pickup days (weekly closed day validation is on other endpoints, not extend, but keeps seed sane).",
+  "rca of the issue": "N/A — no bugs found. Initial test failures were due to test fixture using mixed-case email while /api/auth/register normalizes to lowercase before storage; fixed by lowercasing email in fixture."
+}
