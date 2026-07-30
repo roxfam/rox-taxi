@@ -1,141 +1,120 @@
 #!/usr/bin/env bash
-# ─── Rox Taxi — one-shot VPS bootstrap ──────────────────────────────────
-# Installs EVERY piece of software this app needs onto a fresh Ubuntu VPS.
-# Run this ONCE after your first SSH login to a brand-new Namecheap Pulsar.
+# ─────────────────────────────────────────────────────────────────────
+# Rox Taxi — VPS bootstrap (2GB Namecheap Pulsar Ubuntu 22.04+)
 #
-#   curl -fsSL https://raw.githubusercontent.com/<you>/rox-taxi/main/scripts/bootstrap-vps.sh | sudo bash
-#   OR (safer):
-#   ssh root@<VPS_IP>
-#   cd /root && wget https://raw.githubusercontent.com/<you>/rox-taxi/main/scripts/bootstrap-vps.sh
-#   chmod +x bootstrap-vps.sh
-#   sudo ./bootstrap-vps.sh
+# Usage on a blank server:
+#   ssh rox@<VPS_IP>
+#   curl -fsSL https://raw.githubusercontent.com/<you>/rox-taxi/main/scripts/bootstrap-vps.sh | bash
 #
-# After this finishes, follow DEPLOYMENT.md from section 4 onwards.
-
+# What it does (idempotent — safe to re-run):
+#   1. Adds 2GB swap (yarn build OOMs on 2GB RAM without it)
+#   2. Sets swappiness=10 so Mongo doesn't get paged out
+#   3. Installs Node 20, Python 3.11, Nginx, certbot, MongoDB 7, yarn, git, ufw, fail2ban
+#   4. Caps MongoDB WiredTiger cache at 512MB (default is too much for 2GB VPS)
+#   5. Configures UFW to allow SSH + Nginx only
+#
+# After this finishes, continue with QUICKSTART_NAMECHEAP_2GB.md step 5 (DNS).
+# ─────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-if [[ $EUID -ne 0 ]]; then
-   echo "Please run as root:  sudo ./bootstrap-vps.sh"
-   exit 1
+log() { echo -e "\033[1;34m▶\033[0m $*"; }
+ok()  { echo -e "\033[1;32m✔\033[0m $*"; }
+
+if [[ $EUID -eq 0 ]]; then
+  echo "❌ Do not run as root. Run as a normal sudo user (rox) — the script uses sudo where needed."
+  exit 1
+fi
+if ! command -v sudo >/dev/null; then
+  echo "❌ sudo not installed. Log in as root once: apt install -y sudo && usermod -aG sudo $(whoami)"
+  exit 1
 fi
 
-echo ""
-echo "═══════════════════════════════════════════════════════════════"
-echo "  Rox Taxi VPS bootstrap — this will install:"
-echo ""
-echo "    • Node 20 LTS         (for the frontend build)"
-echo "    • Python 3.11 + venv  (for the FastAPI backend)"
-echo "    • MongoDB 7           (production database)"
-echo "    • Nginx               (reverse proxy + static server)"
-echo "    • Certbot             (Let's Encrypt HTTPS)"
-echo "    • UFW firewall        (port 22/80/443 only)"
-echo "    • fail2ban            (SSH brute-force protection)"
-echo "    • yarn                (frontend package manager)"
-echo "    • git + build tools   (compile + version control)"
-echo "    • 2 GB swap file      (for yarn build on 2GB RAM Pulsar)"
-echo ""
-echo "  Estimated time: 8-15 minutes."
-echo "═══════════════════════════════════════════════════════════════"
-echo ""
-read -p "Continue? [y/N] " ok
-[[ "$ok" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
-
-# ── 1. System update ────────────────────────────────────────────────
-echo ""; echo "▶ [1/9] Updating apt package index …"
-apt update
-apt upgrade -y
-
-# ── 2. Base tools ──────────────────────────────────────────────────
-echo ""; echo "▶ [2/9] Installing base tools (git, build-essential, curl, gnupg, ufw, fail2ban, htop) …"
-apt install -y git build-essential curl gnupg lsb-release ca-certificates ufw fail2ban htop
-
-# ── 3. Node 20 LTS ─────────────────────────────────────────────────
-echo ""; echo "▶ [3/9] Installing Node 20 LTS + yarn …"
-if ! command -v node >/dev/null || ! node -v | grep -q "v20"; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt install -y nodejs
-fi
-npm install -g yarn --force
-echo "   node $(node -v),  yarn $(yarn -v)"
-
-# ── 4. Python 3.11 ─────────────────────────────────────────────────
-echo ""; echo "▶ [4/9] Installing Python 3.11 …"
-apt install -y python3.11 python3.11-venv python3.11-dev python3-pip
-python3.11 --version
-
-# ── 5. MongoDB 7 ───────────────────────────────────────────────────
-echo ""; echo "▶ [5/9] Installing MongoDB 7 …"
-if ! command -v mongod >/dev/null; then
-    curl -fsSL https://pgp.mongodb.com/server-7.0.asc | gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor --yes
-    echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -sc)/mongodb-org/7.0 multiverse" \
-        > /etc/apt/sources.list.d/mongodb-org-7.0.list
-    apt update
-    apt install -y mongodb-org
-fi
-systemctl enable --now mongod
-sleep 3
-systemctl is-active --quiet mongod && echo "   MongoDB running ✓" || { echo "   MongoDB failed to start"; journalctl -u mongod -n 30; exit 1; }
-
-# ── 6. Nginx + Certbot ─────────────────────────────────────────────
-echo ""; echo "▶ [6/9] Installing Nginx + certbot …"
-apt install -y nginx certbot python3-certbot-nginx
-systemctl enable --now nginx
-
-# ── 7. UFW firewall ────────────────────────────────────────────────
-echo ""; echo "▶ [7/9] Configuring UFW firewall …"
-ufw allow OpenSSH
-ufw allow "Nginx Full"
-ufw --force enable
-ufw status verbose
-
-# ── 8. fail2ban SSH protection ─────────────────────────────────────
-echo ""; echo "▶ [8/9] Enabling fail2ban …"
-systemctl enable --now fail2ban
-
-# ── 9. 2 GB swap file (Pulsar has 2 GB RAM — yarn build needs it) ──
-echo ""; echo "▶ [9/9] Adding 2 GB swap file …"
-if ! swapon --show | grep -q "/swapfile"; then
-    fallocate -l 2G /swapfile
-    chmod 600 /swapfile
-    mkswap /swapfile
-    swapon /swapfile
-    echo '/swapfile none swap sw 0 0' >> /etc/fstab
-    echo "   Swap active ✓"
+# 1 · Swap (critical for 2GB RAM)
+if ! swapon --show 2>/dev/null | grep -q /swapfile; then
+  log "Creating 2GB swap file (critical for yarn build on 2GB RAM)..."
+  sudo fallocate -l 2G /swapfile
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile
+  sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+  ok "Swap active ($(free -h | awk '/Swap:/ {print $2}'))"
 else
-    echo "   Swap already active."
+  ok "Swap already active"
+fi
+if ! grep -q 'vm.swappiness=10' /etc/sysctl.conf; then
+  echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf >/dev/null
+  sudo sysctl -p >/dev/null
+  ok "swappiness=10 applied"
 fi
 
-# ── done ───────────────────────────────────────────────────────────
-echo ""
-echo "═══════════════════════════════════════════════════════════════"
-echo "  ✓ Bootstrap complete."
-echo ""
-echo "  Installed versions:"
-echo "    node    $(node -v 2>/dev/null || echo missing)"
-echo "    yarn    $(yarn -v 2>/dev/null || echo missing)"
-echo "    python  $(python3.11 --version 2>/dev/null || echo missing)"
-echo "    mongod  $(mongod --version 2>/dev/null | head -1 | awk '{print $3}' || echo missing)"
-echo "    nginx   $(nginx -v 2>&1 | awk -F/ '{print $2}')"
-echo "    certbot $(certbot --version 2>&1 | awk '{print $2}')"
-echo ""
-echo "  Next steps (see DEPLOYMENT.md for full detail):"
-echo ""
-echo "    1. Create the non-root 'rox' user:"
-echo "         adduser rox && usermod -aG sudo rox"
-echo ""
-echo "    2. Clone the repo into /home/rox/app:"
-echo "         su - rox"
-echo "         git clone https://github.com/<you>/rox-taxi.git app"
-echo ""
-echo "    3. Fill in backend/.env and frontend/.env from the *.example files."
-echo ""
-echo "    4. Install app dependencies:"
-echo "         cd ~/app/backend && python3.11 -m venv venv"
-echo "         source venv/bin/activate && pip install -r requirements.txt"
-echo "         pip install emergentintegrations --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/"
-echo "         cd ~/app/frontend && yarn install --frozen-lockfile && yarn build"
-echo ""
-echo "    5. Install the systemd service (see DEPLOYMENT.md § 8),"
-echo "       configure Nginx (§ 9), and run certbot (§ 10)."
-echo ""
-echo "═══════════════════════════════════════════════════════════════"
+# 2 · Apt update
+log "Updating apt cache..."
+sudo apt update -q
+sudo apt upgrade -y -q
+
+# 3 · Node 20 LTS
+if ! command -v node >/dev/null || [[ $(node -v | sed 's/v//' | cut -d. -f1) -lt 20 ]]; then
+  log "Installing Node 20 LTS..."
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+  sudo apt install -y nodejs
+fi
+ok "Node $(node -v)"
+
+# 4 · System packages
+log "Installing Python 3.11, Nginx, certbot, git, ufw, fail2ban..."
+sudo apt install -y python3.11 python3.11-venv python3.11-dev build-essential \
+                    git ufw fail2ban nginx certbot python3-certbot-nginx htop
+
+# 5 · yarn
+if ! command -v yarn >/dev/null; then
+  log "Installing yarn..."
+  sudo npm install -g yarn
+fi
+ok "yarn $(yarn --version)"
+
+# 6 · MongoDB 7
+if ! command -v mongod >/dev/null; then
+  log "Installing MongoDB 7..."
+  curl -fsSL https://pgp.mongodb.com/server-7.0.asc | \
+       sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+  echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -sc)/mongodb-org/7.0 multiverse" | \
+       sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list >/dev/null
+  sudo apt update -q
+  sudo apt install -y mongodb-org
+fi
+sudo systemctl enable --now mongod
+
+# 7 · Cap Mongo cache at 512MB (default = half RAM = too much on 2GB VPS)
+if ! grep -q 'cacheSizeGB' /etc/mongod.conf; then
+  log "Capping MongoDB WiredTiger cache at 512MB..."
+  sudo sed -i '/^storage:/a\  wiredTiger:\n    engineConfig:\n      cacheSizeGB: 0.5' /etc/mongod.conf
+  sudo systemctl restart mongod
+fi
+ok "MongoDB running with 512MB cache"
+
+# 8 · Firewall
+log "Configuring UFW firewall (SSH + Nginx only)..."
+sudo ufw allow OpenSSH >/dev/null
+sudo ufw allow "Nginx Full" >/dev/null
+sudo ufw --force enable >/dev/null
+ok "UFW active — ports 22, 80, 443 open"
+
+# 9 · fail2ban
+sudo systemctl enable --now fail2ban >/dev/null 2>&1 || true
+ok "fail2ban active (SSH brute-force protection)"
+
+echo
+echo -e "\033[1;32m═══════════════════════════════════════════════════════════════\033[0m"
+echo -e "\033[1;32m  ✅  System ready. Continue with QUICKSTART step 5 (DNS).\033[0m"
+echo -e "\033[1;32m═══════════════════════════════════════════════════════════════\033[0m"
+echo
+echo "  Node:     $(node -v)"
+echo "  Python:   $(python3.11 --version)"
+echo "  yarn:     $(yarn --version)"
+echo "  Swap:     $(free -h | awk '/Swap:/ {print $2}')"
+echo
+echo "  Next steps:"
+echo "    1) Point roxtaxi.com A records at $(curl -s ifconfig.me 2>/dev/null || echo '<this VPS IP>')"
+echo "    2) git clone <your-repo> /home/$(whoami)/app"
+echo "    3) Follow QUICKSTART_NAMECHEAP_2GB.md from step 7 (env vars)"
+echo

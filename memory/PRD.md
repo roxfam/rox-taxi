@@ -18,6 +18,13 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (VPS bootstrap script + deployment docs suite)
+- **`scripts/bootstrap-vps.sh`** — one-command installer for a blank Namecheap 2GB Ubuntu server. Runs QUICKSTART steps 2-4 (2GB swap + swappiness tune + Node 20 + Python 3.11 + Nginx + certbot + yarn + MongoDB 7 with 512MB WiredTiger cap + UFW + fail2ban) in ~5 min. Idempotent (safe to re-run). Prints Node/Python/yarn/Mongo versions + your VPS IP + the next steps at the end.
+- **`QUICKSTART_NAMECHEAP_2GB.md`** — 12-step blank-server-to-live-HTTPS guide with the 2GB-specific tuning (NODE_OPTIONS heap cap, Mongo cache cap, swap).
+- **`DEPLOYMENT.md`** — full reference: two-tier secrets model, per-key "where to get it" appendix, troubleshooting matrix, backups.
+- **`DEPLOY_VISITORS_TAB.md`** — targeted upgrade guide for pulling just the analytics feature onto an already-live server.
+
+
 ### ✅ Shipped Feb 2026 (visitor analytics + admin reports panel)
 - **`routes/analytics.py`** — new module with 3 endpoints: `POST /visitors/log` (public beacon), `GET /admin/visitors` (sortable/filterable/paginated log), `GET /admin/visitors/summary` (top pages / countries / referrers / devices). Registered BEFORE admin so its specific `/admin/visitors*` routes beat admin's `/admin/{kind}` catch-all.
 - **`frontend/src/hooks/useVisitorBeacon.js`** — fires `navigator.sendBeacon` on every React-Router path change, session-scoped ID in `sessionStorage`, excludes `/admin/*` so owner activity doesn't pollute the report.
