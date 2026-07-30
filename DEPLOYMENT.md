@@ -150,6 +150,10 @@ JWT_SECRET_KEY="<run: openssl rand -hex 32>"
 ADMIN_EMAIL="roxfam2509@gmail.com"
 ADMIN_PASSWORD="<pick a strong one>"
 
+# Domain — must match every host that will load the frontend
+PUBLIC_SITE_URL="https://roxtaxi.com"
+CORS_ORIGINS="https://roxtaxi.com,https://www.roxtaxi.com"
+
 # Payments (get from stripe.com / paypal.com dashboards)
 STRIPE_API_KEY="sk_live_..."
 PAYPAL_CLIENT_ID="..."

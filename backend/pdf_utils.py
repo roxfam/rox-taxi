@@ -22,10 +22,20 @@ GREY = colors.HexColor("#64748B")
 SAND = colors.HexColor("#FBF7EF")
 INK = colors.HexColor("#0B192C")
 
-# Cached Rox Taxi logo — fetched once, converted to PNG for reportlab
-# (which handles webp poorly on some builds), and reused on every PDF.
+# Cached Rox Taxi logo — read from the local frontend build (portable
+# after VPS deploy), converted to PNG for reportlab (which handles webp
+# poorly on some builds), and reused on every PDF.
 _LOGO_CACHE = "/tmp/rox_logo.png"
-_LOGO_URL = "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/slneek3g_Color%20logo%20-%20no%20background.webp"
+_LOCAL_LOGO_CANDIDATES = [
+    "/app/frontend/public/logo-gold.webp",
+    "/app/frontend/build/logo-gold.webp",
+    "/app/frontend/public/logo-mark.png",
+]
+# Optional remote fallback (overridable via env for future CDN moves)
+_LOGO_URL = os.environ.get(
+    "PDF_LOGO_URL",
+    "https://roxtaxi.com/logo-gold.webp",
+)
 
 
 def _load_logo():
@@ -33,8 +43,17 @@ def _load_logo():
     We prefer a hard failure to render *without* a logo over a broken PDF."""
     try:
         if not os.path.exists(_LOGO_CACHE):
-            raw = urllib.request.urlopen(_LOGO_URL, timeout=8).read()
-            # Convert webp → PNG via PIL for maximum reportlab compat.
+            raw = None
+            # 1) Prefer a bundled local file — always available on the VPS.
+            for path in _LOCAL_LOGO_CANDIDATES:
+                if os.path.exists(path):
+                    with open(path, "rb") as fh:
+                        raw = fh.read()
+                    break
+            # 2) Fall back to the public URL only if no local file found.
+            if raw is None:
+                raw = urllib.request.urlopen(_LOGO_URL, timeout=8).read()
+            # Convert webp/png → PNG via PIL for maximum reportlab compat.
             from PIL import Image as PILImage
             im = PILImage.open(BytesIO(raw)).convert("RGBA")
             im.save(_LOGO_CACHE, "PNG")

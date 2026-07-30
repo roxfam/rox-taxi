@@ -142,7 +142,7 @@ export default function ChatWidget() {
             <X className="w-6 h-6 text-white" />
           ) : (
             <img
-              src="https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/slneek3g_Color%20logo%20-%20no%20background.webp"
+              src="/logo-gold.webp"
               alt="Chat with Rox Taxi"
               className="w-11 h-11 object-contain drop-shadow-[0_2px_6px_rgba(212,169,74,0.5)]"
             />
@@ -165,7 +165,7 @@ export default function ChatWidget() {
           <div className="absolute inset-0 opacity-30 pointer-events-none" style={{ background: "radial-gradient(circle at 15% 20%, rgba(212,169,74,0.4), transparent 55%)" }} />
           <div className="relative w-12 h-12 rounded-full bg-white/5 ring-1 ring-[#D4A94A]/50 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
             <img
-              src="https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/slneek3g_Color%20logo%20-%20no%20background.webp"
+              src="/logo-gold.webp"
               alt="Rox Taxi Service"
               className="w-10 h-10 object-contain"
             />

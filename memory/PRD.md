@@ -18,6 +18,13 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (namecheap-vps deploy hardening)
+- **Removed "Multi Island / Coming Soon" city switcher** from header (Freeport/Exuma/Andros hidden from UI). Backend `/cities` + `/cities/:slug` route retained.
+- **CORS hardened for production** — `backend/server.py` no longer sends `allow_credentials=True` with wildcard origins (silently killed auth in prod). New behavior: when `CORS_ORIGINS` env is set, credentials + explicit origins; blank → wildcard + no credentials.
+- **`CORS_ORIGINS` documented** in `.env.example` + `DEPLOYMENT.md` step 6a.
+- **ChatWidget FAB & panel logo** switched from Emergent CDN → local `/logo-gold.webp` (portable after VPS deploy).
+- **PDF receipts logo** — `pdf_utils.py` now reads from `frontend/public/logo-gold.webp` first, falls back to `PDF_LOGO_URL` env (defaults to `https://roxtaxi.com/logo-gold.webp`).
+
 ### ✅ Shipped this session
 - **Round-trip taxi discount** — 10% off both legs, toggle in booking modal, computed server-side (base doubles, 10% off both legs, bridge toll applies once), shown on receipt.
 - **Multi-day rental discount tiers** — 3% at 5+ days, 7% at 7+ days, 12% at 14+ days. Auto-applied server-side.

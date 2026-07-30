@@ -2779,13 +2779,30 @@ api_router.include_router(admin_module.router)
 
 app.include_router(api_router)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ── CORS ────────────────────────────────────────────────────────────
+# In production, set CORS_ORIGINS to a comma-separated list of the
+# origins that host the frontend (e.g. "https://roxtaxi.com,https://www.roxtaxi.com").
+# When left blank we fall back to "*" but DROP credentials — browsers
+# refuse "*" with credentials, and using credentials with a wildcard
+# silently kills every authenticated request.
+_cors_env = (os.environ.get('CORS_ORIGINS') or '').strip()
+if _cors_env:
+    _origins = [o.strip() for o in _cors_env.split(',') if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_credentials=True,
+        allow_origins=_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_credentials=False,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
