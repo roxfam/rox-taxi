@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API, money, STATUS_STEPS, STATUS_INDEX, BACKEND_URL } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { Ticket, MapPin, ArrowRight, LogOut, XCircle, Download, CreditCard, Clock, Shield, CalendarPlus, Gift, Copy } from "lucide-react";
+import { Ticket, MapPin, ArrowRight, LogOut, XCircle, Download, CreditCard, Clock, Shield, CalendarPlus, Gift, Copy, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import ExtendRentalModal from "./ExtendRentalModal";
 
@@ -114,6 +114,34 @@ export default function MyBookings() {
       <div className="mt-4 inline-flex items-center gap-2 text-[11px] text-[#64748B] bg-white/60 backdrop-blur rounded-full border border-white/70 px-3 py-1.5" data-testid="mybookings-idle-notice">
         <Shield className="w-3.5 h-3.5 text-[#D4A94A]" /> You'll be signed out automatically after 1 hour of inactivity.
       </div>
+
+      {/* Nudge banner — only when the guest is 1-2 conversions from a $25 unlock AND has already converted ≥ 1.
+          A brand-new user with 0 conversions sees the education card only; this banner is for fence-sitters. */}
+      {referral && referral.total_converted > 0 && referral.next_reward_at > 0 && referral.next_reward_at <= 2 && (
+        <div
+          className="mt-6 rounded-2xl bg-gradient-to-r from-[#D4A94A] to-[#A88235] text-white p-4 shadow-[0_10px_30px_rgba(212,169,74,0.30)] flex items-center gap-4 flex-wrap"
+          data-testid="referral-nudge-banner"
+        >
+          <span className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] tracking-[0.3em] uppercase font-bold text-white/80">Almost there</div>
+            <div className="text-base sm:text-lg font-semibold" data-testid="referral-nudge-text">
+              Your <span className="mono">${referral.reward_per_unlock_usd}</span> credit unlocks in
+              &nbsp;<span className="text-white bg-white/20 rounded-md px-2 py-0.5 mono">{referral.next_reward_at}</span>&nbsp;
+              more referral{referral.next_reward_at > 1 ? "s" : ""} — send one last invite.
+            </div>
+          </div>
+          <button
+            onClick={() => { navigator.clipboard?.writeText(referral.referral_link).then(() => toast.success("Invite link copied — go send it!")); }}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white text-[#A88235] hover:bg-[#0B3B5C] hover:text-white text-xs font-bold px-4 py-2 transition-colors"
+            data-testid="referral-nudge-copy-cta"
+          >
+            <Copy className="w-3.5 h-3.5" /> Copy invite link
+          </button>
+        </div>
+      )}
 
       {referral && referral.code && (
         <div
