@@ -258,8 +258,8 @@ export default function Tours() {
       <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-24 grid md:grid-cols-2 lg:grid-cols-3 gap-8">
         {sortedTours.map((t) => (
           <div key={t.id} className="group rounded-2xl overflow-hidden bg-white border border-[#E2E8F0] hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(212,169,74,0.15)] transition-transform" data-testid={`tour-card-${t.id}`}>
-            <div className="aspect-[4/3] overflow-hidden relative">
-              <img src={t.image_url} alt={t.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            <div className={`aspect-[4/3] overflow-hidden relative ${t.id === "junkanoo-party-bus" ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C]" : ""}`}>
+              <img src={t.image_url} alt={t.name} className={`w-full h-full ${t.id === "junkanoo-party-bus" ? "object-contain p-2" : "object-cover"} group-hover:scale-105 transition-transform duration-500`} />
               <div className="absolute bottom-3 left-3 glass rounded-full px-3 py-1 text-xs text-[#0B3B5C] font-semibold flex items-center gap-1">
                 <Clock className="w-3 h-3" /> {t.duration}
               </div>

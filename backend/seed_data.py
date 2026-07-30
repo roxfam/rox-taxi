@@ -53,7 +53,7 @@ TOURS_SEED: List[Dict] = [
     {"id": "junkanoo-party-bus", "name": "Junkanoo Party Bus — Rum, Beach & Vibes", "price": 57.0, "duration": "3 hours",
      "location": "Departs Nassau — pickup from cruise port or hotel", "featured": True,
      "description": "Roll through Nassau on the iconic Junkanoo party bus — rum punch on tap, reggae + soca, stops at Fort Fincastle, Queen's Staircase, John Watling's rum distillery + a beach break. The most-loved shore excursion for cruise groups. Official operator, book direct.",
-     "image_url": "https://images.pexels.com/photos/1387174/pexels-photo-1387174.jpeg?auto=compress&cs=tinysrgb&w=1920",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/dsgqvbvj_junkanoo%20party%20bus%20%281%29.jpg",
      "category": "tour", "active": True,
      "external_booking_url": "https://www.coolbahamas.com/activity/new-providence-island/junkanoo-bus-tour/"},
 ]
