@@ -648,12 +648,34 @@ def _new_referral_code() -> str:
 
 async def _apply_referral_conversion_if_paid(booking_id: str) -> Optional[dict]:
     """Called by payments._mark_paid after a booking transitions to paid.
-    If the customer was referred and this is their first paid booking, mark
-    the referral converted and (every Nth) credit the referrer.
+    Two responsibilities:
+      1. Referral conversion — mark first-paid + credit referrer every Nth
+      2. Deduct any `referral_credit` pending on this booking from the
+         referee's own credit_balance (so cancelled/failed checkouts never
+         burn credits).
     Idempotent — safe to call multiple times per booking.
     """
     booking = await db.bookings.find_one({"id": booking_id})
-    if not booking or booking.get("referral_applied"):
+    if not booking:
+        return None
+
+    # ── (2) Deduct pending referral credit that was applied at booking time
+    if booking.get("referral_credit_pending") and float(booking.get("referral_credit") or 0.0) > 0:
+        email = (booking.get("customer_email") or "").lower()
+        amt = round(float(booking["referral_credit"]), 2)
+        if email:
+            r = await db.users.update_one(
+                {"email": email, "credit_balance": {"$gte": amt}},
+                {"$inc": {"credit_balance": -amt}},
+            )
+            if r.modified_count:
+                await db.bookings.update_one(
+                    {"id": booking_id},
+                    {"$set": {"referral_credit_pending": False, "referral_credit_deducted_at": now_iso()}},
+                )
+
+    # ── (1) Referral conversion — only once per referee
+    if booking.get("referral_applied"):
         return None
     email = (booking.get("customer_email") or "").lower()
     if not email:
@@ -1974,7 +1996,23 @@ async def create_booking(req: BookingCreate):
              "$push": {"redemptions": {"booking_id": booking["id"], "amount": gift_credit, "at": now_iso()}}},
         )
 
-    booking["total"] = round(max(0.0, computed_total - gift_credit), 2)
+    # ── Referral-reward credit auto-apply ────────────────────────────────
+    # If the customer email maps to a user with a `credit_balance > 0`, apply
+    # up to the remaining total (after promo + gift). The balance is only
+    # deducted from the user record when the booking actually pays (see
+    # payments._mark_paid → deduct_referral_credit_if_paid), so cancellations
+    # / failed checkouts don't burn credits.
+    referral_credit = 0.0
+    remaining = round(max(0.0, computed_total - gift_credit), 2)
+    if remaining > 0 and req.customer_email:
+        user_doc = await db.users.find_one({"email": req.customer_email.lower()})
+        avail = round(float((user_doc or {}).get("credit_balance") or 0.0), 2)
+        if avail > 0:
+            referral_credit = round(min(avail, remaining), 2)
+            booking["referral_credit"] = referral_credit
+            booking["referral_credit_pending"] = True   # deducted on payment
+
+    booking["total"] = round(max(0.0, computed_total - gift_credit - referral_credit), 2)
 
     await db.bookings.insert_one(booking)
     # Admin push — never let a push failure block the response
