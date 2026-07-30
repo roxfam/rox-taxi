@@ -75,7 +75,7 @@ const HUB_ATTRACTIONS = [
     slug: "atlantis",
     name: "Atlantis Paradise Island",
     tagline: "141 acres of waterpark, aquarium, 11 pools and a casino — the icon.",
-    hero_image: "https://images.unsplash.com/photo-1540541338287-41700207dee6?w=1920&q=80&auto=format&fit=crop",
+    hero_image: "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/u2ec81xe_Atlantis%20%281%29.jpg",
     kicker: "Paradise Island · Icon",
     cheapest_taxi_route_id: "downtown-paradise",
   },
