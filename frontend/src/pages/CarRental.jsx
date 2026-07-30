@@ -55,6 +55,12 @@ export default function CarRental() {
                 <span className="font-semibold">$150 refundable security deposit</span> is added automatically at checkout, and released back once your vehicle is returned undamaged with a full tank.
               </span>
             </div>
+            <div className="mt-3 inline-flex items-start gap-2 rounded-2xl border border-[#0B3B5C]/25 bg-[#0B3B5C]/[0.06] px-4 py-3 text-xs text-[#0B3B5C]" data-testid="rental-age-policy">
+              <Info className="w-4 h-4 text-[#0B3B5C] shrink-0 mt-0.5" />
+              <span>
+                <span className="font-semibold">Driver must be 25 years or older.</span> Valid driver's licence required at pickup. This applies to every vehicle in our fleet.
+              </span>
+            </div>
           </div>
         </div>
       </section>
@@ -157,6 +163,10 @@ export default function CarRental() {
               <div className="text-xs text-[#64748B] flex items-center gap-1.5" data-testid="rental-min-days-note">
                 <Info className="w-3.5 h-3.5 text-[#D4A94A]" />
                 <span><strong className="text-[#0B3B5C]">2-day minimum</strong> on all car rentals.</span>
+              </div>
+              <div className="text-xs text-[#64748B] flex items-center gap-1.5" data-testid="rental-age-note">
+                <Info className="w-3.5 h-3.5 text-[#0B3B5C]" />
+                <span><strong className="text-[#0B3B5C]">Driver must be 25+.</strong> Valid licence required at pickup.</span>
               </div>
             </div>
           )}
