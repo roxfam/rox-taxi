@@ -226,7 +226,7 @@ HOME_SLIDES_SEED: List[Dict[str, Any]] = [
     {"id": "hero-exuma",      "title": "Exuma swimming pigs.",        "subtitle": "The famous day-trip, curated by local captains.",
      "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Vorobek_Bahamas_-_swimming_pigs.jpg/1920px-Vorobek_Bahamas_-_swimming_pigs.jpg", "order": 6, "active": True},
     {"id": "hero-straw",      "title": "Straw Market & Bay Street.",  "subtitle": "Colonial architecture, hand-woven souvenirs, hot patties.",
-     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/h2o8hwf0_straw-market-uai-777x582.jpg", "order": 7, "active": True},
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/lxszeb49_straw-market-uai-777x582.jpg", "order": 7, "active": True},
     {"id": "hero-fort-charlotte", "title": "Fort Charlotte.",         "subtitle": "200-year-old British fortress overlooking Nassau Harbour — cannons, dungeons, panoramic views.",
      "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Fort_Charlotte%2C_Nassau%2C_The_Bahamas.jpg/1920px-Fort_Charlotte%2C_Nassau%2C_The_Bahamas.jpg", "order": 8, "active": True},
     {"id": "hero-baha-mar",   "title": "Baha Mar Resort.",            "subtitle": "Cable Beach — casino, Rosewood, SLS + a Jack Nicklaus golf course.",
