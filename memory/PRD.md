@@ -18,6 +18,9 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (SMTP domain-mismatch fix)
+- **`notifications.send_email()` now auto-handles domain mismatch between `EMAIL_FROM_*` / `SMTP_FROM` and `SMTP_USER`.** Namecheap Private Email (+ most self-hosted SMTP hosts) reject any `From:` header at a domain the authenticated mailbox doesn't own. When a mismatch is detected, the mailbox is used as the `From:` (with `"Rox Taxi Service & Tours"` display name) and the branded address is preserved as `Reply-To:` so guests replying still land in the right inbox. Verified: emails now deliver via `mail.privateemail.com` even when `EMAIL_FROM_CONFIRMATION=confirmation@roxtaxi.com` but the mailbox is `confirmation@roxtaxi242.com`.
+
 ### ✅ Shipped Feb 2026 (booking fundamentals hardening)
 - **`pickup_location` required for taxi bookings** — `POST /api/bookings` now returns HTTP 400 `"Pickup location is required for taxi bookings."` when a taxi booking is submitted without one. Frontend already required it via location selector; backend now matches so hand-crafted API calls can't slip through.
 - **Immediate booking-received acknowledgment email** — new `notify_booking_received()` helper in `notifications.py` fires on booking creation whenever `status == "pending_payment"` (Stripe / PayPal paths). Shows pickup, dropoff, date & time, passengers, total, status badge, and a "Complete payment →" CTA. Full confirmation still fires from the payment webhook via `notify_booking_confirmed()`. Result stored on the booking doc as `acknowledgment_status` + `acknowledged_at` for admin visibility.

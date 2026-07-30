@@ -81,11 +81,37 @@ def send_email(to_email: str, subject: str, html: str, text: Optional[str] = Non
     port = int(get_secret("SMTP_PORT", "587") or 587)
     user = get_secret("SMTP_USER", "").strip()
     pw = get_secret("SMTP_PASSWORD", "").strip()
-    sender = _sender_for_category(category) or get_secret("SMTP_FROM", "").strip() or user
+    desired_from = _sender_for_category(category) or get_secret("SMTP_FROM", "").strip() or user
     use_tls = (get_secret("SMTP_USE_TLS", "true") or "true").lower() == "true"
-    if not (host and user and pw and sender):
+    if not (host and user and pw and desired_from):
         logger.info("Neither SendGrid nor SMTP configured; skipping email to %s", to_email)
         return {"sent": False, "provider": "none", "error": sendgrid_err or "Email not configured"}
+
+    # ── Domain-mismatch guard ────────────────────────────────────────
+    # Namecheap Private Email + most self-hosted SMTP servers reject any From:
+    # header whose domain isn't owned by the authenticated mailbox. When the
+    # admin has set a branded EMAIL_FROM_* / SMTP_FROM at a different domain
+    # than SMTP_USER (e.g. From=confirmation@roxtaxi.com but the mailbox is
+    # confirmation@roxtaxi242.com), we auto-fall back to sending FROM the
+    # mailbox and set Reply-To to the branded address so guests replying
+    # still land in the right inbox. Also adds a friendly display name.
+    def _domain(a: str) -> str:
+        return a.rsplit("@", 1)[-1].lower().strip(">").strip() if "@" in a else ""
+
+    reply_to = None
+    envelope_from = user  # what MAIL FROM sends at the SMTP protocol level
+    header_from = desired_from
+    if _domain(desired_from) != _domain(user):
+        # branded sender lives on a different domain than the mailbox →
+        # keep it as Reply-To, use the mailbox as the From header instead.
+        reply_to = desired_from
+        header_from = f"Rox Taxi Service & Tours <{user}>"
+        envelope_from = user
+        logger.info(
+            "SMTP sender domain mismatch — sending FROM %s (mailbox), Reply-To %s",
+            user, reply_to,
+        )
+
     try:
         import smtplib, ssl
         from email.mime.multipart import MIMEMultipart
@@ -93,8 +119,10 @@ def send_email(to_email: str, subject: str, html: str, text: Optional[str] = Non
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = sender
+        msg["From"] = header_from
         msg["To"] = to_email
+        if reply_to:
+            msg["Reply-To"] = reply_to
         if text:
             msg.attach(MIMEText(text, "plain"))
         msg.attach(MIMEText(html, "html"))
@@ -103,7 +131,7 @@ def send_email(to_email: str, subject: str, html: str, text: Optional[str] = Non
             ctx = ssl.create_default_context()
             with smtplib.SMTP_SSL(host, port, context=ctx, timeout=15) as server:
                 server.login(user, pw)
-                server.sendmail(sender, [to_email], msg.as_string())
+                server.sendmail(envelope_from, [to_email], msg.as_string())
         else:
             with smtplib.SMTP(host, port, timeout=15) as server:
                 server.ehlo()
@@ -111,7 +139,7 @@ def send_email(to_email: str, subject: str, html: str, text: Optional[str] = Non
                     server.starttls(context=ssl.create_default_context())
                     server.ehlo()
                 server.login(user, pw)
-                server.sendmail(sender, [to_email], msg.as_string())
+                server.sendmail(envelope_from, [to_email], msg.as_string())
         logger.info("SMTP email sent to %s via %s", to_email, host)
         return {"sent": True, "provider": "smtp", "error": None}
     except Exception as e:  # noqa: BLE001
