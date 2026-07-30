@@ -80,7 +80,13 @@ export default function BahamasSlider() {
             transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-0"
           >
-            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${cur.img})` }} />
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{
+                backgroundImage: `url(${cur.img})`,
+                filter: "brightness(1.12) contrast(1.20) saturate(1.18)",
+              }}
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/50 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 max-w-7xl mx-auto px-6 lg:px-10 pb-16">
               <motion.div
@@ -144,7 +150,7 @@ export default function BahamasSlider() {
                 src={s.img}
                 alt={s.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                style={{ filter: "brightness(1.08) contrast(1.12) saturate(1.1)" }}
+                style={{ filter: "brightness(1.14) contrast(1.20) saturate(1.18)" }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
               <div className="absolute bottom-2 left-2 right-2 text-left">
