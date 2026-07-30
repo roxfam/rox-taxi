@@ -36,6 +36,8 @@ import UploadLicense from "./pages/UploadLicense";
 import { AuthProvider } from "./lib/auth";
 import { useEffect } from "react";
 
+import { useVisitorBeacon } from "./hooks/useVisitorBeacon";
+
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
@@ -48,6 +50,7 @@ function CustomerShell({ children }) {
 
 function AppRouter() {
   const location = useLocation();
+  useVisitorBeacon();
   // Handle OAuth callback: session_id in URL fragment
   if (location.hash?.includes("session_id=")) return <AuthCallback />;
   return (

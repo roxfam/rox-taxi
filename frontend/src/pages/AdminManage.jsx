@@ -12,6 +12,7 @@ import PromotionsPanel from "./admin/PromotionsPanel";
 import TokensPanel from "./admin/TokensPanel";
 import BrokenImagesPanel from "./admin/BrokenImagesPanel";
 import LicensesPanel from "./admin/LicensesPanel";
+import VisitorsPanel from "./admin/VisitorsPanel";
 
 const TABS = [
   { key: "home_slides", label: "Home Slides" },
@@ -19,6 +20,7 @@ const TABS = [
   { key: "taxi_services", label: "Taxi Services" },
   { key: "rentals", label: "Rentals" },
   { key: "licenses", label: "Licenses" },
+  { key: "visitors", label: "Visitors" },
   { key: "promotions", label: "Promotions" },
   { key: "images", label: "Images" },
   { key: "image_health", label: "Image Health" },
@@ -87,6 +89,7 @@ export default function AdminManage() {
           : tab === "image_health" ? <BrokenImagesPanel />
           : tab === "gallery" ? <GalleryPanel />
           : tab === "licenses" ? <LicensesPanel />
+          : tab === "visitors" ? <VisitorsPanel />
           : tab === "promotions" ? <PromotionsPanel />
           : tab === "messages" ? <MessagesPanel />
           : tab === "home_slides" ? <HomeSlidesPanel />

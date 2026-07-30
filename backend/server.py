@@ -31,6 +31,8 @@ from routes import chat as chat_module
 from routes import gallery as gallery_module
 from routes import licenses as licenses_module
 from routes import auth as auth_module
+from routes import customer as customer_module
+from routes import analytics as analytics_module
 import secrets_store
 
 ROOT_DIR = Path(__file__).parent
@@ -469,11 +471,7 @@ async def get_current_user(request: Request):
 # /auth/session, /auth/register, /auth/login-email, /auth/me, /auth/heartbeat, /auth/logout
 # all moved to routes/auth.py
 
-@api_router.get("/my/bookings")
-async def my_bookings(user: dict = Depends(get_current_user)):
-    docs = await db.bookings.find({"customer_email": user["email"]}).sort("created_at", -1).to_list(200)
-    return [clean(d) for d in docs]
-
+# /my/bookings moved to routes/customer.py
 
 # ─── Referral rewards ────────────────────────────────────────────────
 # One code per user (auto-generated on signup, format ROX-XXXX). A referral
@@ -566,29 +564,7 @@ async def _apply_referral_conversion_if_paid(booking_id: str) -> Optional[dict]:
     return {"referrer_id": referrer_id, "conv_count": conv_count, "credit_awarded": credit_awarded}
 
 
-@api_router.get("/referrals/summary")
-async def referral_summary(user: dict = Depends(get_current_user)):
-    doc = await db.users.find_one({"user_id": user["user_id"]}) or {}
-    code = doc.get("referral_code")
-    if not code:
-        code = _new_referral_code()
-        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"referral_code": code}})
-    total_referred = await db.users.count_documents({"referred_by": user["user_id"]})
-    total_converted = await db.referrals.count_documents({"referrer_id": user["user_id"]})
-    credits_earned = round(REFERRAL_REWARD_USD * (total_converted // REFERRAL_REWARD_EVERY), 2)
-    next_reward_at = REFERRAL_REWARD_EVERY - (total_converted % REFERRAL_REWARD_EVERY) if total_converted else REFERRAL_REWARD_EVERY
-    return {
-        "code": code,
-        "referral_link": f"https://roxtaxi.com/signup?ref={code}",
-        "total_referred": total_referred,
-        "total_converted": total_converted,
-        "credits_earned": credits_earned,
-        "credit_balance": round(float(doc.get("credit_balance") or 0.0), 2),
-        "next_reward_at": next_reward_at,
-        "reward_per_unlock_usd": REFERRAL_REWARD_USD,
-        "unlock_every": REFERRAL_REWARD_EVERY,
-    }
-
+# /referrals/summary moved to routes/customer.py
 
 # ─── Multi-city foundation ────────────────────────────────────────────
 # Nassau is the flagship (active + inventoried). Other cities show a
@@ -684,69 +660,9 @@ async def _check_extension_blackouts(booking: dict, additional_days: int):
         raise HTTPException(400, f"Extension blocked — vehicle unavailable on {', '.join(clashes)}.")
 
 
-@api_router.post("/my/bookings/{booking_id}/extend/quote")
-async def rental_extend_quote(booking_id: str, req: RentalExtendQuote, user: dict = Depends(get_current_user)):
-    booking = await db.bookings.find_one({"id": booking_id, "customer_email": user["email"]})
-    if not booking:
-        raise HTTPException(404, "Booking not found")
-    if booking.get("service_type") != "rental":
-        raise HTTPException(400, "Only rentals can be extended")
-    if booking.get("status") in {"cancelled", "completed"}:
-        raise HTTPException(400, f"Cannot extend a {booking['status']} booking")
-    if booking.get("payment_status") != "paid":
-        raise HTTPException(400, "Pay the original booking first, then extend.")
-    await _check_extension_blackouts(booking, req.additional_days)
-    quote = _compute_extension_amount(booking, req.additional_days)
-    quote["deposit_note"] = "Your existing security deposit stays held on the original booking — no new deposit charged."
-    return quote
-
-
-class RentalExtendCheckout(BaseModel):
-    additional_days: int = Field(..., ge=1, le=30)
-    origin_url: str
-
-
-@api_router.post("/my/bookings/{booking_id}/extend/checkout")
-async def rental_extend_checkout(booking_id: str, req: RentalExtendCheckout, request: Request, user: dict = Depends(get_current_user)):
-    booking = await db.bookings.find_one({"id": booking_id, "customer_email": user["email"]})
-    if not booking:
-        raise HTTPException(404, "Booking not found")
-    if booking.get("service_type") != "rental" or booking.get("status") in {"cancelled", "completed"} or booking.get("payment_status") != "paid":
-        raise HTTPException(400, "Booking is not eligible for extension.")
-    await _check_extension_blackouts(booking, req.additional_days)
-    quote = _compute_extension_amount(booking, req.additional_days)
-    if quote["extra_cost"] <= 0:
-        raise HTTPException(400, "Extension amount must be > $0")
-
-    host_url = str(request.base_url).rstrip("/")
-    webhook_url = f"{host_url}/api/webhook/stripe"
-    stripe_key = secrets_store.get_secret("STRIPE_API_KEY", "")
-    sc = StripeCheckout(api_key=stripe_key, webhook_url=webhook_url)
-    ext_id = f"ext_{uuid.uuid4().hex[:10]}"
-    success_url = f"{req.origin_url.rstrip('/')}/my-bookings?extended={booking_id}&session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{req.origin_url.rstrip('/')}/my-bookings?extend_cancelled={booking_id}"
-    checkout_req = CheckoutSessionRequest(
-        amount=float(quote["extra_cost"]), currency="usd",
-        success_url=success_url, cancel_url=cancel_url,
-        metadata={"booking_id": booking_id, "extension_id": ext_id, "kind": "rental_extension"},
-    )
-    session = await sc.create_checkout_session(checkout_req)
-    await db.rental_extensions.insert_one({
-        "id": ext_id, "booking_id": booking_id, "customer_email": user["email"],
-        "additional_days": req.additional_days, "extra_cost": quote["extra_cost"],
-        "quote": quote, "session_id": session.session_id,
-        "status": "pending", "created_at": now_iso(),
-    })
-    await db.payment_transactions.insert_one({
-        "session_id": session.session_id, "booking_id": booking_id,
-        "kind": "rental_extension", "extension_id": ext_id,
-        "amount": float(quote["extra_cost"]), "currency": "usd",
-        "status": "initiated", "payment_status": "pending",
-        "created_at": now_iso(), "updated_at": now_iso(),
-    })
-    return {"checkout_url": session.url, "session_id": session.session_id, "extension_id": ext_id, "quote": quote}
-
-
+# /my/bookings/{id}/extend/quote and /my/bookings/{id}/extend/checkout moved to routes/customer.py
+# apply_rental_extension_if_paid + RentalExtendQuote/Checkout models moved too (only the payment
+# webhook helper stays here since it's called from payments module).
 async def apply_rental_extension_if_paid(session_id: str) -> bool:
     """Called by _mark_paid when the session belongs to a rental extension.
     Extends the parent booking's `days`, records the extension, keeps the
@@ -3013,6 +2929,17 @@ gallery_module.configure(
 )
 api_router.include_router(gallery_module.router)
 
+# Wire up the analytics router (public /visitors/log beacon + admin visitor
+# reports with sort/filter). Registered BEFORE admin so its /admin/visitors*
+# specific routes beat admin's /admin/{kind} catch-all.
+analytics_module.configure(
+    db=db,
+    now_iso=now_iso,
+    clean=clean,
+    require_admin=require_admin,
+)
+api_router.include_router(analytics_module.router)
+
 # Wire up the admin router (booking mgmt, catalog CRUD, deposits, notifications).
 # Registered AFTER licenses + gallery so its /admin/{kind} catch-all doesn't
 # swallow their specific /admin/licenses and /admin/gallery/* routes.
@@ -3061,6 +2988,23 @@ auth_module.configure(
     idle_timeout_minutes=IDLE_TIMEOUT_MINUTES,
 )
 api_router.include_router(auth_module.router)
+
+# Wire up the customer router (/my/bookings, /referrals/summary, /my/bookings/{id}/extend/*)
+customer_module.configure(
+    db=db,
+    now_iso=now_iso,
+    clean=clean,
+    get_current_user=get_current_user,
+    new_referral_code=_new_referral_code,
+    compute_extension_amount=_compute_extension_amount,
+    check_extension_blackouts=_check_extension_blackouts,
+    secrets_store=secrets_store,
+    referral_reward_usd=REFERRAL_REWARD_USD,
+    referral_reward_every=REFERRAL_REWARD_EVERY,
+)
+api_router.include_router(customer_module.router)
+
+app.include_router(api_router)
 
 app.include_router(api_router)
 

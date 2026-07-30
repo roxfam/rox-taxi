@@ -18,6 +18,15 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (visitor analytics + admin reports panel)
+- **`routes/analytics.py`** — new module with 3 endpoints: `POST /visitors/log` (public beacon), `GET /admin/visitors` (sortable/filterable/paginated log), `GET /admin/visitors/summary` (top pages / countries / referrers / devices). Registered BEFORE admin so its specific `/admin/visitors*` routes beat admin's `/admin/{kind}` catch-all.
+- **`frontend/src/hooks/useVisitorBeacon.js`** — fires `navigator.sendBeacon` on every React-Router path change, session-scoped ID in `sessionStorage`, excludes `/admin/*` so owner activity doesn't pollute the report.
+- **`frontend/src/pages/admin/VisitorsPanel.jsx`** — full admin tab: 4 stat cards (total, unique sessions, unique IPs, top device), 3 top-lists (pages, countries, referrers), sortable table (Time/Path/Country/City/Device — click column headers), filters (1h/24h/7d/30d, country substring, path substring), pagination, CSV export.
+- **Geo lookup** via ip-api.com (free, no key, 45 req/min). Cached 7 days per IP in `visitor_geo_cache`. Background — never blocks the beacon.
+- **Verified live**: POST /visitors/log → 200; admin GET → 401 no token / 200 with bearer; summary aggregations return top paths, sessions, devices. Two new Mongo collections auto-create: `visitor_events` + `visitor_geo_cache`.
+- **Deploy guide**: `/app/DEPLOY_VISITORS_TAB.md` — 5-step pull-and-restart for Namecheap VPS.
+
+
 ### ✅ Shipped Feb 2026 (server modularization — round 3: AUTH + late-binding security fix)
 - **`routes/auth.py`** (291 lines) — extracted all 7 auth endpoints: `/auth/login` (admin JWT), `/auth/session` (Emergent Google OAuth), `/auth/register`, `/auth/login-email`, `/auth/me`, `/auth/heartbeat`, `/auth/logout`. All auth-only helpers (`make_admin_token`, `_hash_password`, `_verify_password`, `_create_customer_session`, `_set_session_cookie`) moved with the routes. `get_current_user` + `require_admin` stay in `server.py` (used by dozens of other protected routes).
 - **🔒 Critical late-binding security fix** — `routes/gallery.py`, `routes/licenses.py`, `routes/auth.py` were using naive `Depends(_require_admin)` / `Depends(_get_current_user)` that captured the initial `lambda: None` at MODULE LOAD time — meaning **all admin routes in those modules bypassed auth entirely** (verified: `/admin/gallery/pending` returned pending photos with no token). Fixed by wrapping in late-binding `_require_admin_dep()` / `_current_user_dep()` functions that resolve the current global at REQUEST time. Same pattern as `routes/admin.py`. **Post-fix verification**: every `/admin/*` route returns 401 without a bearer token, 200 with a valid one; `/auth/me` returns 401 without a session cookie.
