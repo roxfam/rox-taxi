@@ -28,6 +28,8 @@ from routes import payments as payments_module
 from routes import admin as admin_module
 from routes import catalog as catalog_module
 from routes import chat as chat_module
+from routes import gallery as gallery_module
+from routes import licenses as licenses_module
 import secrets_store
 
 ROOT_DIR = Path(__file__).parent
@@ -965,25 +967,7 @@ async def _get_booking_by_token(booking_id: str, token: str) -> dict:
     return b
 
 
-@api_router.get("/bookings/{booking_id}/license/status")
-async def license_status(booking_id: str, t: str):
-    b = await _get_booking_by_token(booking_id, t)
-    lic = b.get("license") or {}
-    return {
-        "booking_id": b["id"],
-        "customer_name": b.get("customer_name"),
-        "item_name": b.get("item_name"),
-        "booking_date": b.get("booking_date"),
-        "has_license": bool(lic.get("front_url") or lic.get("back_url") or lic.get("selfie_url")),
-        "status": lic.get("status") or "not_uploaded",
-        "rejection_reason": lic.get("rejection_reason"),
-        "uploaded_at": lic.get("uploaded_at"),
-        "reviewed_at": lic.get("reviewed_at"),
-        "expiry_date": lic.get("expiry_date"),
-        "license_number": lic.get("license_number"),
-        "name_on_license": lic.get("name_on_license"),
-    }
-
+# License endpoints extracted to routes/licenses.py
 
 def _save_license_image(booking_id: str, side: str, file: UploadFile, contents: bytes) -> str:
     ext = (file.filename or "license.jpg").rsplit(".", 1)[-1].lower()
@@ -994,100 +978,7 @@ def _save_license_image(booking_id: str, side: str, file: UploadFile, contents: 
     return f"/api/uploads/{filename}"
 
 
-@api_router.post("/bookings/{booking_id}/license")
-async def upload_license(
-    booking_id: str,
-    t: str = Form(...),
-    front: Optional[UploadFile] = File(None),
-    back: Optional[UploadFile] = File(None),
-    selfie: Optional[UploadFile] = File(None),
-    name_on_license: str = Form(""),
-    license_number: str = Form(""),
-    expiry_date: str = Form(""),
-):
-    b = await _get_booking_by_token(booking_id, t)
-    if not (front or back or selfie):
-        raise HTTPException(400, "Upload at least one photo (front, back, or selfie).")
-
-    lic = dict(b.get("license") or {})
-    for side, f in (("front", front), ("back", back), ("selfie", selfie)):
-        if not f:
-            continue
-        if not (f.content_type or "").startswith("image/"):
-            raise HTTPException(400, f"{side.title()} must be an image file")
-        contents = await f.read()
-        if len(contents) > 8 * 1024 * 1024:
-            raise HTTPException(400, f"{side.title()} image too large (max 8MB)")
-        lic[f"{side}_url"] = _save_license_image(booking_id, side, f, contents)
-
-    lic["status"] = "pending"
-    lic["uploaded_at"] = now_iso()
-    lic["name_on_license"] = (name_on_license or "").strip()[:80]
-    lic["license_number"] = (license_number or "").strip()[:40]
-    lic["expiry_date"] = (expiry_date or "").strip()[:20]
-    lic.pop("rejection_reason", None)
-
-    # Generate a per-booking admin quick-approve token so we can drop a one-tap
-    # link inside the admin's "license pending" SMS. Idempotent: reused if set.
-    admin_approve_token = b.get("admin_approve_token") or _secrets_lib.token_urlsafe(16)
-
-    await db.bookings.update_one(
-        {"id": booking_id},
-        {"$set": {"license": lic, "admin_approve_token": admin_approve_token, "updated_at": now_iso()}},
-    )
-
-    try:
-        from notifications import send_email as _send_email, send_sms as _send_sms
-        base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
-        review_url = f"{base}/admin/manage?tab=licenses"
-        approve_url = f"{base}/api/admin/licenses/quick-approve/{booking_id}?token={admin_approve_token}"
-        summary = (
-            f"Driver's license pending review.\n\n"
-            f"Booking : {b['id']}\n"
-            f"Guest   : {b.get('customer_name','')} <{b.get('customer_email','')}>\n"
-            f"Phone   : {b.get('customer_phone','')}\n"
-            f"Vehicle : {b.get('item_name','')}\n"
-            f"Pickup  : {b.get('booking_date','')}\n"
-            f"Review  : {review_url}\n"
-            f"One-tap approve: {approve_url}"
-        )
-        html = (
-            f"<p><strong>Driver's license pending review.</strong></p>"
-            f"<pre style='background:#f8f5ee;padding:12px;border-radius:8px;'>{summary}</pre>"
-            f"<p style='margin-top:16px;'>"
-            f"<a href='{approve_url}' style='display:inline-block;background:#059669;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;margin-right:8px;'>One-tap approve →</a>"
-            f"<a href='{review_url}' style='display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;'>Open admin review</a>"
-            f"</p>"
-        )
-        if ADMIN_EMAIL:
-            _send_email(ADMIN_EMAIL, f"Driver's license pending review · {b['id']}", html, summary, category="info")
-        admin_sms_number = (secrets_store.get_secret("ADMIN_SMS_NUMBER") or WHATSAPP_NUMBER or "").strip()
-        if admin_sms_number:
-            _send_sms(
-                admin_sms_number,
-                f"🪪 License uploaded · {b['id']} · {b.get('customer_name','')}\nApprove: {approve_url}\nReview: {review_url}",
-            )
-    except Exception as e:  # noqa: BLE001
-        logging.getLogger(__name__).warning("license admin notify err: %s", e)
-
-    try:
-        await _send_admin_push(
-            title="Driver's license pending review",
-            body=f"{b.get('customer_name','A guest')} uploaded their license for {b['id']}.",
-            url="/admin/manage?tab=licenses",
-            tag=f"license-{booking_id}",
-        )
-    except Exception:  # noqa: BLE001
-        pass
-
-    # Kick off AI OCR + selfie face-match in the background — never blocks the
-    # upload response. Fields land on `license.ai_*` when Claude replies.
-    try:
-        asyncio.create_task(_run_license_ai(booking_id, lic))
-    except Exception as e:  # noqa: BLE001
-        logging.getLogger(__name__).warning("license ai schedule err: %s", e)
-
-    return {"ok": True, "status": "pending", "message": "Thanks — we'll review your license and confirm within a few hours."}
+# upload_license endpoint extracted to routes/licenses.py — _save_license_image + _run_license_ai kept below.
 
 
 async def _run_license_ai(booking_id: str, lic: dict) -> None:
@@ -1140,51 +1031,7 @@ async def _run_license_ai(booking_id: str, lic: dict) -> None:
     )
 
 
-# One-tap admin approve from the SMS/email link. Token-guarded GET so the
-# admin can approve straight from their phone without logging in.
-@api_router.get("/admin/licenses/quick-approve/{booking_id}", response_class=HTMLResponse)
-async def admin_quick_approve_license(booking_id: str, token: str = ""):
-    b = await db.bookings.find_one({"id": booking_id, "service_type": "rental"})
-    if not b or not b.get("admin_approve_token") or b["admin_approve_token"] != token:
-        return HTMLResponse(_license_action_page("Link invalid or expired", "This one-tap approve link has already been used or was tampered with. Open the admin panel to review manually.", danger=True), status_code=401)
-    lic = b.get("license") or {}
-    if not (lic.get("front_url") or lic.get("back_url") or lic.get("selfie_url")):
-        return HTMLResponse(_license_action_page("Nothing uploaded yet", "This booking has no license images yet.", danger=True), status_code=404)
-    if lic.get("status") == "approved":
-        return HTMLResponse(_license_action_page("Already approved", f"Booking {booking_id} was already approved. No action taken."))
-    ts = now_iso()
-    await db.bookings.update_one(
-        {"id": booking_id},
-        {"$set": {
-            "license.status": "approved",
-            "license.reviewed_at": ts,
-            "license.reviewed_by": "sms-quick-approve",
-            "license.rejection_reason": None,
-        }, "$unset": {"admin_approve_token": ""}},
-    )
-    try:
-        from notifications import send_email as _send_email
-        if b.get("customer_email"):
-            _send_email(
-                b["customer_email"],
-                f"Driver's license approved · Rox rental {booking_id}",
-                f"<p>Hi {b.get('customer_name','')},</p><p>Your driver's license has been approved. You're all set for pickup on <b>{b.get('booking_date','')}</b>.</p><p>— Rox Taxi Service &amp; Tours</p>",
-                f"Hi {b.get('customer_name','')}, your driver's license has been approved. — Rox",
-                category="confirmation",
-            )
-    except Exception as e:  # noqa: BLE001
-        logging.getLogger(__name__).warning("quick-approve notify err: %s", e)
-    # Persist to the customer's wallet so returning guests can reuse it.
-    try:
-        fresh = await db.bookings.find_one({"id": booking_id})
-        if fresh:
-            await _save_wallet_license(fresh)
-    except Exception as e:  # noqa: BLE001
-        logging.getLogger(__name__).warning("wallet save err (quick approve): %s", e)
-    return HTMLResponse(_license_action_page(
-        f"License approved · {booking_id}",
-        f"You approved {b.get('customer_name','the guest')}'s driver's license for {b.get('item_name','their rental')} on {b.get('booking_date','')}. A confirmation email has been sent.",
-    ))
+# admin quick-approve extracted to routes/licenses.py
 
 
 def _license_action_page(title: str, body: str, danger: bool = False) -> str:
@@ -1281,295 +1128,7 @@ async def _is_trusted_traveller(email: str) -> bool:
     return await _approved_rental_count(email) >= TRUSTED_MIN_RENTALS
 
 
-@api_router.get("/bookings/{booking_id}/wallet-license-preview")
-async def wallet_license_preview(booking_id: str, t: str):
-    """Public: if the guest for this booking already has an approved license on
-    file (from a previous rental), return a preview so we can offer them a
-    "Reuse my saved license?" button on the upload page."""
-    b = await _get_booking_by_token(booking_id, t)
-    email = b.get("customer_email", "")
-    wallet = await _lookup_wallet_license(email)
-    trusted = await _is_trusted_traveller(email)
-    if not wallet:
-        return {"has_wallet": False, "is_trusted": trusted, "approved_rentals": await _approved_rental_count(email)}
-    return {
-        "has_wallet": True,
-        "is_trusted": trusted,
-        "approved_rentals": await _approved_rental_count(email),
-        "name_on_license": wallet.get("name_on_license", ""),
-        "license_number_masked": (wallet.get("license_number", "")[:3] + "•••" + wallet.get("license_number", "")[-2:]) if wallet.get("license_number") else "",
-        "expiry_date": wallet.get("expiry_date", ""),
-        "state_or_country": wallet.get("state_or_country", ""),
-        "approved_at": wallet.get("approved_at"),
-    }
-
-
-@api_router.post("/bookings/{booking_id}/reuse-wallet-license")
-async def reuse_wallet_license(booking_id: str, t: str = Form(...)):
-    """Public: apply the guest's saved wallet license to this booking as a new
-    pending upload (admin still one-tap approves)."""
-    b = await _get_booking_by_token(booking_id, t)
-    wallet = await _lookup_wallet_license(b.get("customer_email", ""))
-    if not wallet:
-        raise HTTPException(404, "No saved license on file.")
-    lic = {
-        "front_url": wallet.get("front_url"),
-        "back_url": wallet.get("back_url"),
-        "selfie_url": wallet.get("selfie_url"),
-        "name_on_license": wallet.get("name_on_license", ""),
-        "license_number": wallet.get("license_number", ""),
-        "expiry_date": wallet.get("expiry_date", ""),
-        "status": "pending",
-        "uploaded_at": now_iso(),
-        "from_wallet": True,
-    }
-    admin_approve_token = b.get("admin_approve_token") or _secrets_lib.token_urlsafe(16)
-    await db.bookings.update_one(
-        {"id": booking_id},
-        {"$set": {"license": lic, "admin_approve_token": admin_approve_token, "updated_at": now_iso()}},
-    )
-    # Notify admin (SMS + email) — same one-tap approve flow.
-    try:
-        from notifications import send_email as _send_email, send_sms as _send_sms
-        base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
-        approve_url = f"{base}/api/admin/licenses/quick-approve/{booking_id}?token={admin_approve_token}"
-        review_url = f"{base}/admin/manage?tab=licenses"
-        summary = f"Returning guest reused saved license.\nBooking : {b['id']}\nGuest   : {b.get('customer_name','')}\nApprove : {approve_url}"
-        if ADMIN_EMAIL:
-            _send_email(ADMIN_EMAIL, f"Wallet license reused · {b['id']}", f"<pre>{summary}</pre>", summary, category="info")
-        admin_sms = (secrets_store.get_secret("ADMIN_SMS_NUMBER") or WHATSAPP_NUMBER or "").strip()
-        if admin_sms:
-            _send_sms(admin_sms, f"♻ Wallet license reused · {b['id']} · {b.get('customer_name','')}\nApprove: {approve_url}")
-    except Exception as e:  # noqa: BLE001
-        logging.getLogger(__name__).warning("wallet reuse notify err: %s", e)
-    return {"ok": True, "status": "pending", "from_wallet": True}
-
-
-class LicenseFieldsPatch(BaseModel):
-    name_on_license: Optional[str] = Field(None, max_length=80)
-    license_number: Optional[str] = Field(None, max_length=40)
-    expiry_date: Optional[str] = Field(None, max_length=20)
-    state_or_country: Optional[str] = Field(None, max_length=60)
-
-
-@api_router.patch("/admin/bookings/{booking_id}/license/fields")
-async def admin_edit_license_fields(booking_id: str, patch: LicenseFieldsPatch, _admin: str = Depends(require_admin)):
-    """Admin inline-edit of the OCR/guest-entered fields (fixes wrong OCR)."""
-    b = await db.bookings.find_one({"id": booking_id, "service_type": "rental"})
-    if not b or not b.get("license"):
-        raise HTTPException(404, "License not on this booking")
-    clean_patch: Dict[str, Any] = {}
-    for f in ("name_on_license", "license_number", "expiry_date", "state_or_country"):
-        v = getattr(patch, f, None)
-        if v is not None:
-            clean_patch[f"license.{f}"] = str(v).strip()
-    if not clean_patch:
-        return {"ok": True, "noop": True}
-    clean_patch["license.edited_at"] = now_iso()
-    await db.bookings.update_one({"id": booking_id}, {"$set": clean_patch})
-    fresh = await db.bookings.find_one({"id": booking_id})
-    return {"ok": True, "license": (fresh or {}).get("license", {})}
-
-
-@api_router.get("/my/license-wallet")
-async def my_license_wallet(user: Dict[str, Any] = Depends(get_current_user)):
-    """Signed-in customer's saved license wallet (for the My Bookings page)."""
-    email = (user.get("email") or "").strip().lower()
-    u = await db.users.find_one({"email": email})
-    w = (u or {}).get("license_wallet")
-    if not w:
-        return {"has_wallet": False}
-    exp = _parse_iso_dt(w.get("expiry_date"))
-    now_d = datetime.now(timezone.utc).date()
-    expired = bool(exp and exp.date() < now_d)
-    days_to_expiry = int((exp.date() - now_d).days) if exp else None
-    return {
-        "has_wallet": True,
-        "expired": expired,
-        "days_to_expiry": days_to_expiry,
-        "expires_soon": bool(exp and not expired and (exp.date() - now_d).days <= 30),
-        "name_on_license": w.get("name_on_license", ""),
-        "license_number_masked": (w.get("license_number", "")[:3] + "•••" + w.get("license_number", "")[-2:]) if w.get("license_number") else "",
-        "expiry_date": w.get("expiry_date", ""),
-        "state_or_country": w.get("state_or_country", ""),
-        "approved_at": w.get("approved_at"),
-        "front_url": w.get("front_url"),
-        "selfie_url": w.get("selfie_url"),
-        "updated_at": (u or {}).get("license_wallet_updated_at"),
-    }
-
-
-@api_router.post("/my/license-wallet/rotate")
-async def my_license_wallet_rotate(
-    front: Optional[UploadFile] = File(None),
-    back: Optional[UploadFile] = File(None),
-    selfie: Optional[UploadFile] = File(None),
-    name_on_license: str = Form(""),
-    license_number: str = Form(""),
-    expiry_date: str = Form(""),
-    user: Dict[str, Any] = Depends(get_current_user),
-):
-    """Signed-in guest uploads a fresh license without needing a booking.
-    Saves directly into their wallet as `pending_admin_review` (safe default —
-    the previous approved snapshot stays live until an admin re-approves via
-    the admin panel or the next booking's SMS one-tap flow)."""
-    if not (front or back or selfie):
-        raise HTTPException(400, "Upload at least one photo (front, back, or selfie).")
-    email = (user.get("email") or "").strip().lower()
-    if not email:
-        raise HTTPException(401, "Missing email on session")
-
-    stub_id = f"rotate-{uuid.uuid4().hex[:8].upper()}"
-    urls: Dict[str, str] = {}
-    for side, f in (("front", front), ("back", back), ("selfie", selfie)):
-        if not f:
-            continue
-        if not (f.content_type or "").startswith("image/"):
-            raise HTTPException(400, f"{side.title()} must be an image file")
-        contents = await f.read()
-        if len(contents) > 8 * 1024 * 1024:
-            raise HTTPException(400, f"{side.title()} image too large (max 8MB)")
-        urls[f"{side}_url"] = _save_license_image(stub_id, side, f, contents)
-
-    ts = now_iso()
-    new_wallet = {
-        "front_url": urls.get("front_url"),
-        "back_url": urls.get("back_url"),
-        "selfie_url": urls.get("selfie_url"),
-        "name_on_license": (name_on_license or "").strip()[:80],
-        "license_number": (license_number or "").strip()[:40],
-        "expiry_date": (expiry_date or "").strip()[:20],
-        "state_or_country": "",
-        "approved_at": ts,   # kept trusted since the guest owns their profile
-        "source_booking_id": stub_id,
-        "rotated_at": ts,
-    }
-    # Preserve any prior fields the guest didn't re-upload — allows partial rotations.
-    u = await db.users.find_one({"email": email})
-    prior = (u or {}).get("license_wallet") or {}
-    for k, v in list(new_wallet.items()):
-        if v in (None, ""):
-            new_wallet[k] = prior.get(k, v)
-    await db.users.update_one(
-        {"email": email},
-        {"$set": {"license_wallet": new_wallet, "license_wallet_updated_at": ts, "email": email}},
-        upsert=True,
-    )
-    # Notify admin — a rotation warrants a fresh review too.
-    try:
-        from notifications import send_email as _send_email, send_sms as _send_sms
-        base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
-        review_url = f"{base}/admin/manage?tab=licenses"
-        if ADMIN_EMAIL:
-            _send_email(ADMIN_EMAIL, f"Wallet license rotated · {email}", f"<p>{user.get('name','')} ({email}) rotated their saved license. Review at their next booking: {review_url}</p>", f"{email} rotated their saved license.", category="info")
-        admin_sms = (secrets_store.get_secret("ADMIN_SMS_NUMBER") or WHATSAPP_NUMBER or "").strip()
-        if admin_sms:
-            _send_sms(admin_sms, f"♻ Wallet rotated · {email} — review at next booking: {review_url}")
-    except Exception as e:  # noqa: BLE001
-        logging.getLogger(__name__).warning("wallet rotate notify err: %s", e)
-    return {"ok": True, "rotated_at": ts}
-
-
-@api_router.delete("/my/license-wallet")
-async def my_license_wallet_clear(user: Dict[str, Any] = Depends(get_current_user)):
-    """Guest removes their saved license from the wallet (privacy control)."""
-    email = (user.get("email") or "").strip().lower()
-    await db.users.update_one({"email": email}, {"$unset": {"license_wallet": "", "license_wallet_updated_at": ""}})
-    return {"ok": True}
-
-
-@api_router.get("/admin/licenses")
-async def admin_list_licenses(status: Optional[str] = None, _admin: str = Depends(require_admin)):
-    query: Dict[str, Any] = {"service_type": "rental"}
-    if status in {"pending", "approved", "rejected"}:
-        query["license.status"] = status
-    elif status == "not_uploaded":
-        query["$or"] = [{"license": {"$exists": False}}, {"license.status": {"$exists": False}}]
-    docs = await db.bookings.find(query).sort("created_at", -1).to_list(300)
-    out = []
-    for d in docs:
-        c = clean(d)
-        # Convenience flag for the admin UI — highlights approved licenses whose
-        # expiry_date is earlier than the booking pickup date.
-        c["license_expires_before_pickup"] = _license_expires_before_pickup(d)
-        out.append(c)
-    return out
-
-
-class LicenseReview(BaseModel):
-    reason: Optional[str] = Field(None, max_length=280)
-
-
-@api_router.post("/admin/bookings/{booking_id}/license/approve")
-async def admin_approve_license(booking_id: str, admin_email: str = Depends(require_admin)):
-    b = await db.bookings.find_one({"id": booking_id, "service_type": "rental"})
-    lic = (b or {}).get("license") or {}
-    if not b or (not lic.get("front_url") and not lic.get("back_url") and not lic.get("selfie_url")):
-        raise HTTPException(404, "License not uploaded for this booking")
-    ts = now_iso()
-    await db.bookings.update_one(
-        {"id": booking_id},
-        {"$set": {
-            "license.status": "approved",
-            "license.reviewed_at": ts,
-            "license.reviewed_by": admin_email,
-            "license.rejection_reason": None,
-        }},
-    )
-    try:
-        from notifications import send_email as _send_email
-        if b.get("customer_email"):
-            _send_email(
-                b["customer_email"],
-                f"Driver's license approved · Rox rental {booking_id}",
-                f"<p>Hi {b.get('customer_name','')},</p><p>Your driver's license has been approved. You're all set for pickup on <b>{b.get('booking_date','')}</b>.</p><p>— Rox Taxi Service &amp; Tours</p>",
-                f"Hi {b.get('customer_name','')}, your driver's license has been approved for rental {booking_id}. — Rox",
-                category="confirmation",
-            )
-    except Exception as e:  # noqa: BLE001
-        logging.getLogger(__name__).warning("license approve notify err: %s", e)
-    # Persist to the customer's wallet so returning guests can reuse it.
-    try:
-        fresh = await db.bookings.find_one({"id": booking_id})
-        if fresh:
-            await _save_wallet_license(fresh)
-    except Exception as e:  # noqa: BLE001
-        logging.getLogger(__name__).warning("wallet save err (admin approve): %s", e)
-    return {"ok": True, "status": "approved"}
-
-
-@api_router.post("/admin/bookings/{booking_id}/license/reject")
-async def admin_reject_license(booking_id: str, req: LicenseReview, admin_email: str = Depends(require_admin)):
-    b = await db.bookings.find_one({"id": booking_id, "service_type": "rental"})
-    if not b:
-        raise HTTPException(404, "Booking not found")
-    ts = now_iso()
-    reason = (req.reason or "").strip() or "License image unclear or invalid — please re-upload a clearer photo."
-    await db.bookings.update_one(
-        {"id": booking_id},
-        {"$set": {
-            "license.status": "rejected",
-            "license.reviewed_at": ts,
-            "license.reviewed_by": admin_email,
-            "license.rejection_reason": reason,
-        }},
-    )
-    try:
-        from notifications import send_email as _send_email, send_sms as _send_sms
-        link = _license_upload_link(booking_id, b.get("license_upload_token") or "")
-        if b.get("customer_email"):
-            _send_email(
-                b["customer_email"],
-                f"Please re-upload your driver's license · Rox rental {booking_id}",
-                f"<p>Hi {b.get('customer_name','')},</p><p>We couldn't approve your license: <em>{reason}</em></p><p><a href='{link}' style='display:inline-block;background:#D4A94A;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;'>Re-upload license →</a></p><p>— Rox Taxi Service &amp; Tours</p>",
-                f"Hi {b.get('customer_name','')}, we couldn't approve your license: {reason}\nRe-upload: {link}\n— Rox",
-                category="confirmation",
-            )
-        if b.get("customer_phone"):
-            _send_sms(b["customer_phone"], f"Rox rental {booking_id}: We need a clearer license photo. Re-upload: {link}")
-    except Exception as e:  # noqa: BLE001
-        logging.getLogger(__name__).warning("license reject notify err: %s", e)
-    return {"ok": True, "status": "rejected", "reason": reason}
+# All remaining license endpoints extracted to routes/licenses.py
 
 
 
@@ -2296,7 +1855,7 @@ async def taxi_custom_quote_request(req: TaxiCustomQuoteRequest):
     return clean(doc)
 
 
-@api_router.get("/rentals/{rental_id}/availability")
+@api_router.get("/gallery")
 async def list_gallery():
     """Aggregated public photo feed — home carousel + catalog images + admin
     uploads + APPROVED customer-submitted photos.
@@ -2376,167 +1935,7 @@ async def _send_admin_push(*, title: str, body: str, url: str = "/admin", tag: O
 
 
 # ── Customer gallery submissions ─────────────────────────────────────────
-@api_router.post("/gallery/submit")
-async def submit_gallery_photo(
-    file: UploadFile = File(...),
-    submitter_name: str = Form(""),
-    submitter_email: str = Form(""),
-    caption: str = Form(""),
-):
-    """Public: guests upload their trip photos. Goes into `pending` queue awaiting admin approval."""
-    if not (file.content_type or "").startswith("image/"):
-        raise HTTPException(400, "Only image files are allowed")
-    contents = await file.read()
-    if len(contents) > 8 * 1024 * 1024:
-        raise HTTPException(400, "Image too large (max 8MB)")
-    ext = (file.filename or "photo.jpg").rsplit(".", 1)[-1].lower()
-    if ext not in ("jpg", "jpeg", "png", "webp", "heic", "heif"):
-        ext = "jpg"
-    sub_id = uuid.uuid4().hex[:12]
-    filename = f"guest_{sub_id}.{ext}"
-    (UPLOAD_DIR / filename).write_bytes(contents)
-    doc = {
-        "id": sub_id,
-        "url": f"/api/uploads/{filename}",
-        "filename": filename,
-        "submitter_name": (submitter_name or "").strip()[:80] or "Anonymous guest",
-        "submitter_email": (submitter_email or "").strip().lower()[:120],
-        "caption": (caption or "").strip()[:200],
-        "status": "pending",
-        "created_at": now_iso(),
-    }
-    await db.gallery_submissions.insert_one(doc)
-    # Fire-and-forget admin push — never let a push failure block the response
-    try:
-        await _send_admin_push(
-            title="New guest photo submitted",
-            body=f"{doc['submitter_name']} sent a photo — review it in the admin panel.",
-            url="/admin/manage?tab=gallery",
-            tag=f"gallery-{sub_id}",
-        )
-    except Exception:  # noqa: BLE001
-        pass
-    return {"id": sub_id, "status": "pending", "message": "Thanks — we'll review your photo and post it soon."}
-
-
-@api_router.get("/admin/gallery/pending")
-async def admin_list_pending(_admin: str = Depends(require_admin)):
-    docs = await db.gallery_submissions.find({"status": "pending"}).sort("created_at", 1).to_list(200)
-    return [clean(d) for d in docs]
-
-
-@api_router.post("/admin/gallery/{sub_id}/approve")
-async def admin_approve_submission(sub_id: str, _admin: str = Depends(require_admin)):
-    r = await db.gallery_submissions.update_one(
-        {"id": sub_id, "status": "pending"},
-        {"$set": {"status": "approved", "approved_at": now_iso()}},
-    )
-    if r.matched_count == 0:
-        raise HTTPException(404, "Submission not found or not pending")
-    # Auto-post to Facebook (best-effort — approval succeeds either way)
-    doc = await db.gallery_submissions.find_one({"id": sub_id})
-    fb_result = {"ok": False, "post_id": None, "error": "not_attempted"}
-    try:
-        fb_result = await post_gallery_photo_to_facebook(
-            image_url=doc.get("url", ""),
-            submitter_name=doc.get("submitter_name", ""),
-            guest_caption=doc.get("caption", ""),
-        )
-        await db.gallery_submissions.update_one(
-            {"id": sub_id},
-            {"$set": {
-                "facebook_posted": fb_result.get("ok", False),
-                "facebook_post_id": fb_result.get("post_id"),
-                "facebook_error": fb_result.get("error"),
-                "facebook_attempted_at": now_iso(),
-            }},
-        )
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f"facebook autopost failed: {e}")
-        fb_result = {"ok": False, "post_id": None, "error": f"exception:{e}"}
-    # Push notify the admin about the outcome
-    try:
-        if fb_result.get("ok"):
-            await _send_admin_push(
-                title="Guest photo published ✓",
-                body=f"Posted to Facebook — {doc.get('submitter_name','guest')}'s photo is live.",
-                url="/admin/manage?tab=gallery",
-                tag=f"fb-{sub_id}",
-            )
-        else:
-            reason = fb_result.get("error", "unknown")
-            if reason not in ("not_configured", "disabled"):
-                await _send_admin_push(
-                    title="Facebook post failed",
-                    body=f"Photo approved locally, but Facebook returned: {reason}",
-                    url="/admin/manage?tab=gallery",
-                    tag=f"fb-fail-{sub_id}",
-                )
-    except Exception:  # noqa: BLE001
-        pass
-    return {"id": sub_id, "status": "approved", "facebook": fb_result}
-
-
-@api_router.get("/admin/integrations/facebook/status")
-async def admin_facebook_status(_admin: str = Depends(require_admin)):
-    """Diagnostics — is the Facebook page token still valid and reachable?"""
-    return await facebook_status()
-
-
-@api_router.get("/admin/gallery/approved")
-async def admin_list_approved(_admin: str = Depends(require_admin)):
-    """Approved submissions with Facebook post-status for the admin panel repost UI."""
-    docs = await db.gallery_submissions.find({"status": "approved"}).sort("approved_at", -1).to_list(200)
-    return [clean(d) for d in docs]
-
-
-@api_router.post("/admin/gallery/{sub_id}/repost-facebook")
-async def admin_repost_facebook(sub_id: str, _admin: str = Depends(require_admin)):
-    """Manually retry the Facebook post for an already-approved submission.
-    Works whether the previous post attempt succeeded or failed."""
-    doc = await db.gallery_submissions.find_one({"id": sub_id, "status": "approved"})
-    if not doc:
-        raise HTTPException(404, "Approved submission not found")
-    result = await post_gallery_photo_to_facebook(
-        image_url=doc.get("url", ""),
-        submitter_name=doc.get("submitter_name", ""),
-        guest_caption=doc.get("caption", ""),
-    )
-    await db.gallery_submissions.update_one(
-        {"id": sub_id},
-        {"$set": {
-            "facebook_posted": result.get("ok", False),
-            "facebook_post_id": result.get("post_id"),
-            "facebook_error": result.get("error"),
-            "facebook_attempted_at": now_iso(),
-        }},
-    )
-    try:
-        if result.get("ok"):
-            await _send_admin_push(
-                title="Guest photo re-posted ✓",
-                body=f"{doc.get('submitter_name','guest')}'s photo is now live on Facebook.",
-                url="/admin/manage?tab=gallery",
-                tag=f"fb-repost-{sub_id}",
-            )
-    except Exception:  # noqa: BLE001
-        pass
-    return {"id": sub_id, "facebook": result}
-
-
-@api_router.post("/admin/gallery/{sub_id}/reject")
-async def admin_reject_submission(sub_id: str, _admin: str = Depends(require_admin)):
-    doc = await db.gallery_submissions.find_one({"id": sub_id})
-    if not doc:
-        raise HTTPException(404, "Submission not found")
-    # Delete file from disk + mark rejected
-    try:
-        (UPLOAD_DIR / doc["filename"]).unlink(missing_ok=True)
-    except Exception:  # noqa: BLE001
-        pass
-    await db.gallery_submissions.update_one({"id": sub_id}, {"$set": {"status": "rejected", "rejected_at": now_iso()}})
-    return {"id": sub_id, "status": "rejected"}
-
+# Gallery endpoints extracted to routes/gallery.py
 
 # ── Broken-image detector ──────────────────────────────────────────────
 # Scans every user-facing image URL across home slides, tours, taxi
@@ -3722,6 +3121,32 @@ async def live_stats():
     }
 
 
+# Wire up the licenses router FIRST — has specific /admin/licenses/* routes
+# that must beat routes/admin.py's catch-all /admin/{kind} pattern.
+licenses_module.configure(
+    db=db,
+    now_iso=now_iso,
+    clean=clean,
+    require_admin=require_admin,
+    get_current_user=get_current_user,
+    get_booking_by_token=_get_booking_by_token,
+    save_wallet_license=_save_wallet_license,
+    lookup_wallet_license=_lookup_wallet_license,
+    approved_rental_count=_approved_rental_count,
+    is_trusted_traveller=_is_trusted_traveller,
+    save_license_image=_save_license_image,
+    run_license_ai=_run_license_ai,
+    license_action_page=_license_action_page,
+    license_upload_link=_license_upload_link,
+    license_expires_before_pickup=_license_expires_before_pickup,
+    parse_iso_dt=_parse_iso_dt,
+    send_admin_push=_send_admin_push,
+    secrets_store=secrets_store,
+    admin_email=ADMIN_EMAIL,
+    whatsapp_number=WHATSAPP_NUMBER,
+)
+api_router.include_router(licenses_module.router)
+
 # Wire up the payments router (Stripe / PayPal / webhooks / refunds).
 payments_module.configure(
     db=db,
@@ -3732,7 +3157,24 @@ payments_module.configure(
 )
 api_router.include_router(payments_module.router)
 
+# Wire up the gallery router — has specific /admin/gallery/* routes that must
+# also beat routes/admin.py's catch-all /admin/{kind} pattern.
+gallery_module.configure(
+    db=db,
+    clean=clean,
+    now_iso=now_iso,
+    require_admin=require_admin,
+    send_admin_push=_send_admin_push,
+    post_gallery_to_fb=post_gallery_photo_to_facebook,
+    facebook_status=facebook_status,
+    upload_dir=UPLOAD_DIR,
+    logger=logging.getLogger("gallery"),
+)
+api_router.include_router(gallery_module.router)
+
 # Wire up the admin router (booking mgmt, catalog CRUD, deposits, notifications).
+# Registered AFTER licenses + gallery so its /admin/{kind} catch-all doesn't
+# swallow their specific /admin/licenses and /admin/gallery/* routes.
 admin_module.configure(
     db=db,
     now_iso=now_iso,
@@ -3798,3 +3240,4 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+

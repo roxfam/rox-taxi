@@ -18,6 +18,15 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (server modularization — round 2, big wins)
+- **`routes/licenses.py`** (518 lines) — extracted all 13 driver-license + wallet endpoints via factory-configured router with 19 helpers injected: `/bookings/{id}/license/status`, `/bookings/{id}/license` (upload), `/admin/licenses/quick-approve/{id}` (HTML), `/bookings/{id}/wallet-license-preview`, `/bookings/{id}/reuse-wallet-license`, `/admin/bookings/{id}/license/fields` (PATCH), `/my/license-wallet` (GET/POST rotate/DELETE), `/admin/licenses` (list), `/admin/bookings/{id}/license/approve`, `/admin/bookings/{id}/license/reject`. Verified: `GET /admin/licenses` returns 26 items, filter by status works.
+- **`routes/gallery.py`** (217 lines) — extracted 7 gallery endpoints including Facebook auto-post trigger: `/gallery/submit`, `/admin/gallery/pending`, `/admin/gallery/{id}/approve`, `/admin/gallery/{id}/reject`, `/admin/gallery/approved`, `/admin/gallery/{id}/repost-facebook`, `/admin/integrations/facebook/status`. Verified: 200 on all.
+- **Router registration ordering fix** — specific routes (licenses, gallery, payments) now registered BEFORE admin router so admin's `/admin/{kind}` catch-all catalog CRUD doesn't swallow `/admin/licenses` or `/admin/gallery/*`. Documented in the comment inline.
+- **server.py: 3894 → 3243 lines (-651, -17%)**, 76 → 49 endpoints (-35%). Total modular code across routes/*.py now 2278 lines. All previously-working endpoints verified: tours, taxi-services, rentals, home-slides, reviews, packages, live-stats, chat/history, admin catalog CRUD.
+
+### 🔜 Deferred (needs its own session)
+- **`routes/auth.py`** — 7 endpoints (`/auth/login`, `/auth/session`, `/auth/register`, `/auth/login-email`, `/auth/me`, `/auth/heartbeat`, `/auth/logout`) — deferred. Auth touches JWT + bcrypt + Emergent Google OAuth + `get_current_user` + `require_admin` — all of which are also consumed by licenses/gallery/admin routes. Extracting requires either moving the shared helpers to a `deps.py` or wiring a very large configure() surface, and the risk of breaking user sessions or admin access mid-refactor makes it worth a dedicated session with dry-run session-token verification.
+
 ### ✅ Shipped Feb 2026 (server modularization — round 1)
 - **`routes/catalog.py`** — extracted 6 public read-only endpoints (`/tours`, `/taxi-services`, `/rentals`, `/home-slides`, `/reviews`, `/packages`) into a factory-configured router. All verified live: 14 tours, 26 taxi services, 6 rentals, 10 home slides, 2 packages, reviews dict.
 - **`routes/chat.py`** — extracted Claude Sonnet 4.6 SSE live-chat concierge (`/chat/stream`, `/chat/history/{session_id}`) into its own router. Verified live: real SSE stream from Claude ("Hey there, friend!") + history endpoint returning empty array for new sessions.
