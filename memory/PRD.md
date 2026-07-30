@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (server modularization — round 1)
+- **`routes/catalog.py`** — extracted 6 public read-only endpoints (`/tours`, `/taxi-services`, `/rentals`, `/home-slides`, `/reviews`, `/packages`) into a factory-configured router. All verified live: 14 tours, 26 taxi services, 6 rentals, 10 home slides, 2 packages, reviews dict.
+- **`routes/chat.py`** — extracted Claude Sonnet 4.6 SSE live-chat concierge (`/chat/stream`, `/chat/history/{session_id}`) into its own router. Verified live: real SSE stream from Claude ("Hey there, friend!") + history endpoint returning empty array for new sessions.
+- **server.py: 3894 → 3800 lines (-94), 76 → 68 endpoints.** All new routes follow the same `configure()` + `include_router()` pattern already used by `admin.py` and `payments.py` — future extractions (auth, gallery, licenses) plug in the same way.
+
 ### ✅ Shipped Feb 2026 (SMTP domain-mismatch fix)
 - **`notifications.send_email()` now auto-handles domain mismatch between `EMAIL_FROM_*` / `SMTP_FROM` and `SMTP_USER`.** Namecheap Private Email (+ most self-hosted SMTP hosts) reject any `From:` header at a domain the authenticated mailbox doesn't own. When a mismatch is detected, the mailbox is used as the `From:` (with `"Rox Taxi Service & Tours"` display name) and the branded address is preserved as `Reply-To:` so guests replying still land in the right inbox. Verified: emails now deliver via `mail.privateemail.com` even when `EMAIL_FROM_CONFIRMATION=confirmation@roxtaxi.com` but the mailbox is `confirmation@roxtaxi242.com`.
 

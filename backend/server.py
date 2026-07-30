@@ -26,6 +26,8 @@ from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_ID
 from pdf_utils import build_wedding_pdf, build_receipt_pdf
 from routes import payments as payments_module
 from routes import admin as admin_module
+from routes import catalog as catalog_module
+from routes import chat as chat_module
 import secrets_store
 
 ROOT_DIR = Path(__file__).parent
@@ -2082,52 +2084,6 @@ async def seed_db():
 
 # ---------------- Public catalog ----------------
 
-@api_router.get("/tours")
-async def list_tours():
-    docs = await db.tours.find({"active": True}).to_list(200)
-    return [annotate_promo(clean(d)) for d in docs]
-
-
-@api_router.get("/taxi-services")
-async def list_taxi_services():
-    """Public fixed-fare taxi routes for the /taxi page grid."""
-    docs = await db.taxi_services.find({"active": {"$ne": False}}).to_list(200)
-    return [annotate_promo(clean(d)) for d in docs]
-
-
-@api_router.get("/packages")
-async def list_packages():
-    """Public curated bundles. Each: {id, name, description, items:[{service_type,item_name}], subtotal, package_price, savings}."""
-    docs = await db.packages.find({"active": {"$ne": False}}).to_list(50)
-    if not docs:
-        # Seed default packages if empty (idempotent — inserted once)
-        seeds = [
-            {"id": "airport-atlantis-airport", "active": True, "featured": True,
-             "name": "LPIA → Atlantis → LPIA", "kicker": "Airport round-trip",
-             "description": "Airport pickup, Atlantis drop-off, then return airport pickup on your departure day. Bridge tolls both ways included.",
-             "items": [
-                 {"service_type": "taxi", "item_name": "LPIA → Atlantis / Paradise Island", "price": 47.0},
-                 {"service_type": "taxi", "item_name": "Atlantis / Paradise Island → LPIA", "price": 47.0},
-             ],
-             "subtotal": 94.0, "package_price": 84.0, "savings": 10.0,
-             "image_url": "https://images.unsplash.com/photo-1509233725247-49e657c54213?crop=entropy&cs=srgb&fm=jpg&q=85"},
-            {"id": "airport-tour-airport", "active": True, "featured": True,
-             "name": "LPIA → Blue Lagoon → LPIA", "kicker": "Cruise-week bundle",
-             "description": "LPIA transfer, full-day Blue Lagoon Island tour, plus return LPIA transfer for your flight home.",
-             "items": [
-                 {"service_type": "taxi", "item_name": "LPIA → Downtown Nassau", "price": 40.0},
-                 {"service_type": "tour", "item_name": "Blue Lagoon Island Day Pass", "price": 109.0},
-                 {"service_type": "taxi", "item_name": "Downtown Nassau → LPIA", "price": 40.0},
-             ],
-             "subtotal": 189.0, "package_price": 169.0, "savings": 20.0,
-             "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/ou78camd_Photo-Caption-2-Airport-stakeholders-gear-up-for-busy-Thanksgiving-weekend-at-LPIA-002.webp"},
-        ]
-        for s in seeds:
-            s["created_at"] = now_iso()
-            await db.packages.update_one({"id": s["id"]}, {"$setOnInsert": s}, upsert=True)
-        docs = await db.packages.find({"active": {"$ne": False}}).to_list(50)
-    return [clean(d) for d in docs]
-
 
 # ── Gift cards ────────────────────────────────────────────────────────────
 def _new_gift_code() -> str:
@@ -2340,20 +2296,7 @@ async def taxi_custom_quote_request(req: TaxiCustomQuoteRequest):
     return clean(doc)
 
 
-@api_router.get("/rentals")
-async def list_rentals():
-    docs = await db.rentals.find({"active": True}).to_list(200)
-    return [annotate_promo(clean(d)) for d in docs]
-
-
-@api_router.get("/home-slides")
-async def list_home_slides():
-    """Public feed for the home page hero carousel — sorted by admin-set order."""
-    docs = await db.home_slides.find({"active": True}).sort("order", 1).to_list(50)
-    return [clean(d) for d in docs]
-
-
-@api_router.get("/gallery")
+@api_router.get("/rentals/{rental_id}/availability")
 async def list_gallery():
     """Aggregated public photo feed — home carousel + catalog images + admin
     uploads + APPROVED customer-submitted photos.
@@ -3333,17 +3276,6 @@ REVIEWS_SEED = [
 ]
 
 
-@api_router.get("/reviews")
-async def list_reviews():
-    return {
-        "place": "Rox Taxi Service & Tours",
-        "rating": 4.9,
-        "total": 187,
-        "source": "Google",
-        "reviews": REVIEWS_SEED,
-    }
-
-
 @api_router.get("/bookings/{booking_id}")
 async def get_booking(booking_id: str):
     doc = await db.bookings.find_one({"id": booking_id.upper()})
@@ -3573,55 +3505,10 @@ async def get_upload(name: str):
 # `api_router.include_router(payments_module.router)` below at bootstrap.
 
 
-# ---------------- Live Chat (SSE) ----------------
-
-class ChatIn(BaseModel):
-    session_id: str
-    message: str
+# ---------------- Live Chat (SSE) — extracted to routes/chat.py ----------------
 
 
-@api_router.post("/chat/stream")
-async def chat_stream(req: ChatIn):
-    if not EMERGENT_LLM_KEY:
-        raise HTTPException(500, "LLM key not configured")
 
-    await db.chat_messages.insert_one({
-        "session_id": req.session_id, "role": "user", "text": req.message, "ts": now_iso(),
-    })
-
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY, session_id=req.session_id, system_message=CHAT_SYSTEM,
-    ).with_model("anthropic", "claude-sonnet-4-6")
-
-    full_text: list[str] = []
-
-    async def gen():
-        try:
-            async for ev in chat.stream_message(UserMessage(text=req.message)):
-                if isinstance(ev, TextDelta):
-                    full_text.append(ev.content)
-                    yield f"data: {ev.content}\n\n"
-                elif isinstance(ev, StreamDone):
-                    break
-        except Exception as e:  # noqa: BLE001
-            yield f"event: error\ndata: {str(e)}\n\n"
-        finally:
-            await db.chat_messages.insert_one({
-                "session_id": req.session_id, "role": "assistant",
-                "text": "".join(full_text), "ts": now_iso(),
-            })
-            yield "event: done\ndata: [DONE]\n\n"
-
-    return StreamingResponse(
-        gen(), media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
-    )
-
-
-@api_router.get("/chat/history/{session_id}")
-async def chat_history(session_id: str):
-    docs = await db.chat_messages.find({"session_id": session_id}).sort("ts", 1).to_list(200)
-    return [{"role": d["role"], "text": d["text"], "ts": d["ts"]} for d in docs]
 
 
 @api_router.get("/")
@@ -3856,6 +3743,26 @@ admin_module.configure(
     upload_dir=UPLOAD_DIR,
 )
 api_router.include_router(admin_module.router)
+
+# Wire up the public catalog router (tours, rentals, taxi-services, packages,
+# home-slides, reviews). Pure read-only routes — safe to extract.
+catalog_module.configure(
+    db=db,
+    clean=clean,
+    annotate_promo=annotate_promo,
+    now_iso=now_iso,
+    reviews_seed=REVIEWS_SEED,
+)
+api_router.include_router(catalog_module.router)
+
+# Wire up the chat router (Claude concierge SSE stream + history).
+chat_module.configure(
+    db=db,
+    now_iso=now_iso,
+    llm_key=EMERGENT_LLM_KEY,
+    system_message=CHAT_SYSTEM,
+)
+api_router.include_router(chat_module.router)
 
 app.include_router(api_router)
 
