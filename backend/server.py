@@ -703,6 +703,14 @@ async def _apply_referral_conversion_if_paid(booking_id: str) -> Optional[dict]:
     # Count total conversions for the referrer and award every Nth.
     conv_count = await db.referrals.count_documents({"referrer_id": referrer_id})
     credit_awarded = REFERRAL_REWARD_USD if conv_count > 0 and conv_count % REFERRAL_REWARD_EVERY == 0 else 0.0
+    # Rox Trusted referrers earn double credit on every unlocked conversion.
+    if credit_awarded > 0:
+        try:
+            referrer_doc = await db.users.find_one({"user_id": referrer_id})
+            if referrer_doc and await _is_trusted_traveller(referrer_doc.get("email", "")):
+                credit_awarded = round(credit_awarded * TRUSTED_REFERRAL_MULTIPLIER, 2)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("trusted referral 2x check err: %s", e)
     if credit_awarded > 0:
         await db.users.update_one({"user_id": referrer_id}, {"$inc": {"credit_balance": credit_awarded}})
         await db.referrals.update_one(
@@ -1241,7 +1249,13 @@ async def _lookup_wallet_license(email: str) -> Optional[dict]:
 
 # Trusted-traveller threshold — how many prior approved rentals a guest needs
 # before we skip the license flow entirely on their next booking.
-TRUSTED_MIN_RENTALS = 3
+TRUSTED_MIN_RENTALS = 5
+# Anniversary perk — % off applied one year after a Rox Trusted guest's very
+# first approved rental. Emailed automatically as a personal promo code.
+ANNIVERSARY_PERK_PCT = 15
+ANNIVERSARY_PERK_WINDOW_DAYS = 30
+# Trusted guests get double referral credit when they refer a new customer.
+TRUSTED_REFERRAL_MULTIPLIER = 2
 
 
 async def _approved_rental_count(email: str) -> int:
@@ -1714,7 +1728,7 @@ async def _license_maintenance_tick() -> Dict[str, int]:
     """One sweep: purge old license files + alert on approved-but-expired IDs.
     Returns a small stat dict for logging."""
     log = logging.getLogger("rox.licenses")
-    stats = {"purged": 0, "expiry_alerts": 0, "renewal_nudges": 0}
+    stats = {"purged": 0, "expiry_alerts": 0, "renewal_nudges": 0, "anniversary_perks": 0}
     now = datetime.now(timezone.utc)
 
     # ── 1) Retention purge ────────────────────────────────────────────
@@ -1831,6 +1845,64 @@ async def _license_maintenance_tick() -> Dict[str, int]:
                 log.warning("renewal nudge send err %s: %s", u.get("email"), e)
         except Exception as e:  # noqa: BLE001
             log.warning("renewal nudge err: %s", e)
+
+    # ── 4) Rox Trusted anniversary perk (once, ~1 year after first rental) ─
+    cur = db.users.find({"anniversary_perk_sent_at": {"$exists": False}})
+    async for u in cur:
+        email = (u or {}).get("email", "").strip().lower()
+        if not email:
+            continue
+        try:
+            trusted = await _is_trusted_traveller(email)
+            if not trusted:
+                continue
+            first = await db.bookings.find_one(
+                {"customer_email": email, "service_type": "rental", "license.status": "approved"},
+                sort=[("created_at", 1)],
+            )
+            first_dt = _parse_iso_dt((first or {}).get("created_at"))
+            if not first_dt:
+                continue
+            # Wait until at least 365 days have passed.
+            days_since = (now - first_dt).days
+            if days_since < 365:
+                continue
+            code = f"ROXY1-{_secrets_lib.token_urlsafe(4).upper().replace('-','')[:6]}"
+            expires = (now + timedelta(days=ANNIVERSARY_PERK_WINDOW_DAYS)).isoformat()
+            perk = {
+                "code": code,
+                "discount_pct": ANNIVERSARY_PERK_PCT,
+                "expires_at": expires,
+                "redeemed": False,
+                "issued_at": now.isoformat(),
+            }
+            try:
+                base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
+                subject = f"A year with Rox — enjoy {ANNIVERSARY_PERK_PCT}% off your next rental"
+                html = (
+                    f"<div style=\"font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;\">"
+                    f"<h1 style=\"font-family:Georgia,serif;color:#0B3B5C;margin:0 0 8px;\">Happy Rox anniversary.</h1>"
+                    f"<p style=\"color:#64748B;\">It's been a year since your first Rox rental — thanks for coming back. Enjoy <strong>{ANNIVERSARY_PERK_PCT}% off</strong> your next Nassau rental, on us.</p>"
+                    f"<div style=\"background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:24px;margin-top:20px;text-align:center;\">"
+                    f"<div style=\"font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:#94856A;font-weight:600;\">Your personal code</div>"
+                    f"<div style=\"font-family:'JetBrains Mono',monospace;font-size:26px;color:#D4A94A;margin-top:6px;font-weight:700;letter-spacing:.06em;\">{code}</div>"
+                    f"<div style=\"color:#5F6875;font-size:12px;margin-top:10px;\">Valid {ANNIVERSARY_PERK_WINDOW_DAYS} days · rentals only · Rox Trusted guests</div>"
+                    f"</div>"
+                    f"<a href=\"{base}/rentals\" style=\"display:inline-block;background:#D4A94A;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;margin-top:20px;font-size:14px;\">Book my next Rox rental →</a>"
+                    f"</div>"
+                )
+                text = f"Happy Rox anniversary — enjoy {ANNIVERSARY_PERK_PCT}% off your next rental with code {code} (valid {ANNIVERSARY_PERK_WINDOW_DAYS} days). {base}/rentals"
+                from notifications import send_email as _send_email
+                _send_email(email, subject, html, text, category="confirmation")
+                await db.users.update_one(
+                    {"email": email},
+                    {"$set": {"anniversary_perk_sent_at": now.isoformat(), "anniversary_perk": perk}},
+                )
+                stats["anniversary_perks"] = stats.get("anniversary_perks", 0) + 1
+            except Exception as e:  # noqa: BLE001
+                log.warning("anniversary perk send err %s: %s", email, e)
+        except Exception as e:  # noqa: BLE001
+            log.warning("anniversary loop err: %s", e)
 
     return stats
 

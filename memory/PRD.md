@@ -27,7 +27,17 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **Referral card timeout fix** — `MyBookings.jsx` now renders the `[data-testid="referral-card"]` wrapper unconditionally for logged-in users, with a skeleton state while `/referrals/summary` is loading. Playwright selectors no longer time out.
 - **Image Health panel (NEW)** — `GET /api/admin/images/scan` HEAD-checks every image URL across home slides, tours, rentals, taxi services, and approved guest photos concurrently (semaphore=16). New "Image Health" tab in `/admin/manage` shows total scanned / broken / healthy counts, per-item error, copy-URL, open, and one-tap "Fix" link to the matching catalog tab. Verified: 63/63 healthy on current catalog.
 
-### ✅ Shipped Feb 2026 (License v6: Renewal Nudge + Trusted Traveller Tier)
+### ✅ Shipped Feb 2026 (License v7: Trusted-tier tuning + Anniversary Perk + 2x Referral Boost)
+- **`TRUSTED_MIN_RENTALS` raised to 5** — Rox Trusted badge now earned over a full vacation season.
+- **Anniversary Perk** — added `ANNIVERSARY_PERK_PCT = 15` / `ANNIVERSARY_PERK_WINDOW_DAYS = 30`. Daily branch in `_license_maintenance_loop` finds Rox Trusted guests whose first approved rental was ≥ 365 days ago, generates a personal code (`ROXY1-XXXXXX`), emails an anniversary offer, and stores `anniversary_perk` on the user doc + `anniversary_perk_sent_at` flag (idempotent).
+- **Trusted Referral Boost** — `TRUSTED_REFERRAL_MULTIPLIER = 2` doubles the credit awarded in `_award_referral_credit` whenever the referrer is Rox Trusted.
+
+### ✅ Shipped earlier this session
+- Rox Trusted Traveller Tier + License Renewal Nudge.
+- Expiry countdown + Rotate license from My Bookings + Admin OCR correction + Guest Wallet.
+- AI OCR + selfie face-match via Claude Sonnet 4.5 vision + One-tap SMS approve.
+- Elegant upload page with guide overlays, 14-day retention, expiry alerts.
+- Per-category email senders, SEO overhaul, VPS deploy readiness pass.
 - **License Renewal Nudge** — new branch in `_license_maintenance_loop` scans user wallets daily and emails guests when their saved license is 45 days or fewer from expiry. Idempotent via `users.license_wallet_nudged_at`. Email routes via `confirmation@roxtaxi.com` and links straight to `/my/bookings` with the elegant Rotate flow.
 - **Rox Trusted Traveller Tier** — helpers `_approved_rental_count(email)` + `_is_trusted_traveller(email)` (≥ `TRUSTED_MIN_RENTALS = 3` prior approved rentals). New rental bookings for trusted guests with a valid wallet get an **auto-approved license** (`from_trusted_tier: true`, `reviewed_by: rox-trusted-auto`) — no upload SMS/email sent, no admin action needed. Guests still see a golden "Rox Trusted Traveller" card on the upload page if they land there.
 - **Admin panel & upload page badges** — `★ Rox Trusted` chip in the admin licenses row (gold on cream), and a large gold hero card on `/upload-license` for trusted guests.
