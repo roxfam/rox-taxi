@@ -50,6 +50,12 @@ TOURS_SEED: List[Dict] = [
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/w7ff6nbv_IMG-20250212-WA0083-1-scaled.webp",
      "category": "adventure", "active": True,
      "external_booking_url": "https://www.bowcarbahamas.com/tour/atv-tour/"},
+    {"id": "junkanoo-party-bus", "name": "Junkanoo Party Bus — Rum, Beach & Vibes", "price": 57.0, "duration": "3 hours",
+     "location": "Departs Nassau — pickup from cruise port or hotel", "featured": True,
+     "description": "Roll through Nassau on the iconic Junkanoo party bus — rum punch on tap, reggae + soca, stops at Fort Fincastle, Queen's Staircase, John Watling's rum distillery + a beach break. The most-loved shore excursion for cruise groups. Official operator, book direct.",
+     "image_url": "https://images.pexels.com/photos/1387174/pexels-photo-1387174.jpeg?auto=compress&cs=tinysrgb&w=1920",
+     "category": "tour", "active": True,
+     "external_booking_url": "https://www.coolbahamas.com/activity/new-providence-island/junkanoo-bus-tour/"},
 ]
 
 # Nassau / New Providence official taxi tariff (posted at LPIA taxi rank + Ministry table).
@@ -213,7 +219,7 @@ HOME_SLIDES_SEED: List[Dict[str, Any]] = [
     {"id": "hero-rose-island","title": "Rose Island reefs.",          "subtitle": "Snorkel gardens twenty minutes off Nassau.",
      "image_url": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?crop=entropy&cs=srgb&fm=jpg&q=90&w=3200&sharp=15&sat=15&auto=format", "order": 3, "active": True},
     {"id": "hero-junkanoo",   "title": "Junkanoo golden hour.",       "subtitle": "Cable Beach, Cabbage Beach, hidden coves — you pick.",
-     "image_url": "https://images.unsplash.com/photo-1573843981267-be1999ff37cd?crop=entropy&cs=srgb&fm=jpg&q=90&w=3200&sharp=15&sat=15&auto=format", "order": 4, "active": True},
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/dt530i4j_public-beaches-in-nassau-junkanoo-beach.webp", "order": 4, "active": True},
     {"id": "hero-fish-fry",   "title": "Fish Fry, Arawak Cay.",       "subtitle": "Conch salad, cracked lobster, sky-blue punch.",
      "image_url": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?crop=entropy&cs=srgb&fm=jpg&q=90&w=3200&sharp=15&sat=15&auto=format", "order": 5, "active": True},
     {"id": "hero-exuma",      "title": "Exuma swimming pigs.",        "subtitle": "The famous day-trip, curated by local captains.",
