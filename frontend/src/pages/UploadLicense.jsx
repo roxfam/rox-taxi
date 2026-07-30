@@ -29,8 +29,10 @@ export default function UploadLicense() {
 
   const [front, setFront] = useState(null);
   const [back, setBack] = useState(null);
+  const [selfie, setSelfie] = useState(null);
   const [frontUrl, setFrontUrl] = useState("");
   const [backUrl, setBackUrl] = useState("");
+  const [selfieUrl, setSelfieUrl] = useState("");
   const [name, setName] = useState("");
   const [num, setNum] = useState("");
   const [exp, setExp] = useState("");
@@ -58,15 +60,20 @@ export default function UploadLicense() {
     if (!back) { setBackUrl(""); return; }
     const u = URL.createObjectURL(back); setBackUrl(u); return () => URL.revokeObjectURL(u);
   }, [back]);
+  useEffect(() => {
+    if (!selfie) { setSelfieUrl(""); return; }
+    const u = URL.createObjectURL(selfie); setSelfieUrl(u); return () => URL.revokeObjectURL(u);
+  }, [selfie]);
 
   const submit = async () => {
-    if (!front && !back) { toast.error("Add at least the front photo."); return; }
+    if (!front && !back && !selfie) { toast.error("Add at least one photo."); return; }
     setBusy(true);
     try {
       const fd = new FormData();
       fd.append("t", token);
       if (front) fd.append("front", front);
       if (back) fd.append("back", back);
+      if (selfie) fd.append("selfie", selfie);
       if (name) fd.append("name_on_license", name);
       if (num) fd.append("license_number", num);
       if (exp) fd.append("expiry_date", exp);
@@ -76,7 +83,7 @@ export default function UploadLicense() {
       toast.success("Uploaded — we'll email you the moment it's approved.");
       const r2 = await fetch(`${API}/api/bookings/${bookingId}/license/status?t=${encodeURIComponent(token)}`);
       setStatus(await r2.json());
-      setFront(null); setBack(null);
+      setFront(null); setBack(null); setSelfie(null);
     } catch (e) { toast.error(e.message || "Upload failed"); }
     finally { setBusy(false); }
   };
@@ -85,7 +92,7 @@ export default function UploadLicense() {
   if (err)     return <Shell><ErrorCard message={err} /></Shell>;
 
   const st = status?.status || "not_uploaded";
-  const canSubmit = !busy && (front || back);
+  const canSubmit = !busy && (front || back || selfie);
 
   return (
     <Shell>
@@ -129,6 +136,18 @@ export default function UploadLicense() {
             file={back}
             previewUrl={backUrl}
             onSelect={setBack}
+          />
+        </div>
+
+        {/* ── Selfie card (optional — pickup ID match) ────────── */}
+        <div className="mt-4">
+          <DropCard
+            side="selfie"
+            label="Selfie next to your license (recommended)"
+            hint="Helps us verify the driver at pickup — 3 seconds, no filter needed"
+            file={selfie}
+            previewUrl={selfieUrl}
+            onSelect={setSelfie}
           />
         </div>
 
@@ -228,6 +247,13 @@ function GuideFrame({ side }) {
             <span className="absolute left-[8%] top-[46%] w-[80%] h-[3%] rounded bg-[#0B3B5C]/12" />
             <span className="absolute left-[8%] top-[54%] w-[70%] h-[3%] rounded bg-[#0B3B5C]/12" />
             <span className="absolute left-[8%] top-[62%] w-[55%] h-[3%] rounded bg-[#0B3B5C]/12" />
+          </>
+        )}
+        {side === "selfie" && (
+          <>
+            {/* Face silhouette outline */}
+            <span className="absolute left-[35%] top-[15%] w-[30%] h-[45%] rounded-[45%] border-2 border-dashed border-[#0B3B5C]/25" />
+            <span className="absolute left-[42%] top-[62%] w-[16%] h-[12%] rounded-t-full border-2 border-dashed border-[#0B3B5C]/25 border-b-0" />
           </>
         )}
       </div>

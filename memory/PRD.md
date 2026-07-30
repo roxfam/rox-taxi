@@ -27,7 +27,20 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **Referral card timeout fix** — `MyBookings.jsx` now renders the `[data-testid="referral-card"]` wrapper unconditionally for logged-in users, with a skeleton state while `/referrals/summary` is loading. Playwright selectors no longer time out.
 - **Image Health panel (NEW)** — `GET /api/admin/images/scan` HEAD-checks every image URL across home slides, tours, rentals, taxi services, and approved guest photos concurrently (semaphore=16). New "Image Health" tab in `/admin/manage` shows total scanned / broken / healthy counts, per-item error, copy-URL, open, and one-tap "Fix" link to the matching catalog tab. Verified: 63/63 healthy on current catalog.
 
-### ✅ Shipped Feb 2026 (License polish + retention + expiry alerts + elegant upload page)
+### ✅ Shipped Feb 2026 (License polish v2: SMS one-tap approve + selfie + 14-day retention)
+- **One-tap SMS approve** — every "license pending" SMS + email now includes a secure per-booking approve link (`/api/admin/licenses/quick-approve/{id}?token=<16-byte>`). Tapping it approves the license, sends the guest their approval email, invalidates the token, and shows a styled confirmation page. Verified: first tap ⇒ approved, second tap ⇒ "Link invalid or expired".
+- **Optional selfie photo** — third drop-zone on the upload page (labelled "Selfie next to your license (recommended)") with a face-silhouette guide. Stored as `license.selfie_url`, shown in the admin panel next to front + back (3-column grid), and included in the retention purge.
+- **Retention shortened** to 14 days (`LICENSE_RETENTION_DAYS = 14`).
+
+### ✅ Shipped earlier in this session
+- Elegant driver's-license upload page with guide overlay, trust chips, animated status.
+- License retention purge loop + expiry-before-pickup alerts.
+- PUBLIC_SITE_URL registered in Admin → Tokens → Site.
+- Full license CRUD + admin review queue.
+- Per-category email senders (`confirmation@`/`quotes@`/`info@`).
+- SEO overhaul + JSON-LD + sitemap.
+- Rental extension e2e test 12/12.
+- Namecheap VPS deploy readiness pass + `scripts/vps-smoke-test.sh`.
 - **Elegant driver's-license upload page** (`/upload-license/:bookingId?t=…`) — serif hero, warm cream background with soft radial glow, drop-zone cards with **guide overlay** (corner brackets + placeholder mockups for front & back), live image previews, optional metadata drawer, trust chips (encrypted / staff only / auto-delete), WhatsApp fallback link, animated status banners for pending / approved / rejected.
 - **License retention (auto-delete)** — new `_license_maintenance_loop` runs every 12 h, deletes license image files from disk `LICENSE_RETENTION_DAYS=30` days after rental end date, keeps the metadata + sets `license.purged_at` for audit. Admin panel shows a "Files purged (retention)" hint on old rows.
 - **License expiry alerts** — helper `_license_expires_before_pickup(booking)` flags approved licenses whose `expiry_date` is earlier than pickup. Fires one-time admin SMS + email (`license.expiry_alerted_at` for idempotency), and shows a red **"Expires before pickup"** chip in the admin panel row (with red expiry-date text).

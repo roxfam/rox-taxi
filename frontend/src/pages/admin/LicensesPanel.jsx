@@ -119,9 +119,10 @@ export default function LicensesPanel() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <ImageCell label="Front" url={lic.front_url} testid={`license-front-${b.id}`} />
-                  <ImageCell label="Back"  url={lic.back_url}  testid={`license-back-${b.id}`} />
+                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <ImageCell label="Front"  url={lic.front_url}  testid={`license-front-${b.id}`} />
+                  <ImageCell label="Back"   url={lic.back_url}   testid={`license-back-${b.id}`} />
+                  <ImageCell label="Selfie" url={lic.selfie_url} testid={`license-selfie-${b.id}`} />
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">

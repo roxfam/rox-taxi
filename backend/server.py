@@ -18,7 +18,7 @@ from emergentintegrations.payments.stripe.checkout import (
     StripeCheckout, CheckoutSessionRequest,
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
 from notifications import notify_booking_confirmed, notify_owner_booking_created, send_booking_reminder, send_rental_return_reminder
 from facebook import post_gallery_photo_to_facebook, facebook_status
 import paypal_client
@@ -964,7 +964,7 @@ async def license_status(booking_id: str, t: str):
         "customer_name": b.get("customer_name"),
         "item_name": b.get("item_name"),
         "booking_date": b.get("booking_date"),
-        "has_license": bool(lic.get("front_url") or lic.get("back_url")),
+        "has_license": bool(lic.get("front_url") or lic.get("back_url") or lic.get("selfie_url")),
         "status": lic.get("status") or "not_uploaded",
         "rejection_reason": lic.get("rejection_reason"),
         "uploaded_at": lic.get("uploaded_at"),
@@ -990,16 +990,17 @@ async def upload_license(
     t: str = Form(...),
     front: Optional[UploadFile] = File(None),
     back: Optional[UploadFile] = File(None),
+    selfie: Optional[UploadFile] = File(None),
     name_on_license: str = Form(""),
     license_number: str = Form(""),
     expiry_date: str = Form(""),
 ):
     b = await _get_booking_by_token(booking_id, t)
-    if not (front or back):
-        raise HTTPException(400, "Upload the front and/or back of your license.")
+    if not (front or back or selfie):
+        raise HTTPException(400, "Upload at least one photo (front, back, or selfie).")
 
     lic = dict(b.get("license") or {})
-    for side, f in (("front", front), ("back", back)):
+    for side, f in (("front", front), ("back", back), ("selfie", selfie)):
         if not f:
             continue
         if not (f.content_type or "").startswith("image/"):
@@ -1016,15 +1017,20 @@ async def upload_license(
     lic["expiry_date"] = (expiry_date or "").strip()[:20]
     lic.pop("rejection_reason", None)
 
+    # Generate a per-booking admin quick-approve token so we can drop a one-tap
+    # link inside the admin's "license pending" SMS. Idempotent: reused if set.
+    admin_approve_token = b.get("admin_approve_token") or _secrets_lib.token_urlsafe(16)
+
     await db.bookings.update_one(
         {"id": booking_id},
-        {"$set": {"license": lic, "updated_at": now_iso()}},
+        {"$set": {"license": lic, "admin_approve_token": admin_approve_token, "updated_at": now_iso()}},
     )
 
     try:
         from notifications import send_email as _send_email, send_sms as _send_sms
         base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
         review_url = f"{base}/admin/manage?tab=licenses"
+        approve_url = f"{base}/api/admin/licenses/quick-approve/{booking_id}?token={admin_approve_token}"
         summary = (
             f"Driver's license pending review.\n\n"
             f"Booking : {b['id']}\n"
@@ -1032,14 +1038,25 @@ async def upload_license(
             f"Phone   : {b.get('customer_phone','')}\n"
             f"Vehicle : {b.get('item_name','')}\n"
             f"Pickup  : {b.get('booking_date','')}\n"
-            f"Review  : {review_url}"
+            f"Review  : {review_url}\n"
+            f"One-tap approve: {approve_url}"
         )
-        html = f"<p><strong>Driver's license pending review.</strong></p><pre style='background:#f8f5ee;padding:12px;border-radius:8px;'>{summary}</pre><p><a href='{review_url}'>Open admin review →</a></p>"
+        html = (
+            f"<p><strong>Driver's license pending review.</strong></p>"
+            f"<pre style='background:#f8f5ee;padding:12px;border-radius:8px;'>{summary}</pre>"
+            f"<p style='margin-top:16px;'>"
+            f"<a href='{approve_url}' style='display:inline-block;background:#059669;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;margin-right:8px;'>One-tap approve →</a>"
+            f"<a href='{review_url}' style='display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;'>Open admin review</a>"
+            f"</p>"
+        )
         if ADMIN_EMAIL:
             _send_email(ADMIN_EMAIL, f"Driver's license pending review · {b['id']}", html, summary, category="info")
         admin_sms_number = (secrets_store.get_secret("ADMIN_SMS_NUMBER") or WHATSAPP_NUMBER or "").strip()
         if admin_sms_number:
-            _send_sms(admin_sms_number, f"🪪 License uploaded · {b['id']} · {b.get('customer_name','')} — review: {review_url}")
+            _send_sms(
+                admin_sms_number,
+                f"🪪 License uploaded · {b['id']} · {b.get('customer_name','')}\nApprove: {approve_url}\nReview: {review_url}",
+            )
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("license admin notify err: %s", e)
 
@@ -1054,6 +1071,64 @@ async def upload_license(
         pass
 
     return {"ok": True, "status": "pending", "message": "Thanks — we'll review your license and confirm within a few hours."}
+
+
+# One-tap admin approve from the SMS/email link. Token-guarded GET so the
+# admin can approve straight from their phone without logging in.
+@api_router.get("/admin/licenses/quick-approve/{booking_id}", response_class=HTMLResponse)
+async def admin_quick_approve_license(booking_id: str, token: str = ""):
+    b = await db.bookings.find_one({"id": booking_id, "service_type": "rental"})
+    if not b or not b.get("admin_approve_token") or b["admin_approve_token"] != token:
+        return HTMLResponse(_license_action_page("Link invalid or expired", "This one-tap approve link has already been used or was tampered with. Open the admin panel to review manually.", danger=True), status_code=401)
+    lic = b.get("license") or {}
+    if not (lic.get("front_url") or lic.get("back_url") or lic.get("selfie_url")):
+        return HTMLResponse(_license_action_page("Nothing uploaded yet", "This booking has no license images yet.", danger=True), status_code=404)
+    if lic.get("status") == "approved":
+        return HTMLResponse(_license_action_page("Already approved", f"Booking {booking_id} was already approved. No action taken."))
+    ts = now_iso()
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {
+            "license.status": "approved",
+            "license.reviewed_at": ts,
+            "license.reviewed_by": "sms-quick-approve",
+            "license.rejection_reason": None,
+        }, "$unset": {"admin_approve_token": ""}},
+    )
+    try:
+        from notifications import send_email as _send_email
+        if b.get("customer_email"):
+            _send_email(
+                b["customer_email"],
+                f"Driver's license approved · Rox rental {booking_id}",
+                f"<p>Hi {b.get('customer_name','')},</p><p>Your driver's license has been approved. You're all set for pickup on <b>{b.get('booking_date','')}</b>.</p><p>— Rox Taxi Service &amp; Tours</p>",
+                f"Hi {b.get('customer_name','')}, your driver's license has been approved. — Rox",
+                category="confirmation",
+            )
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("quick-approve notify err: %s", e)
+    return HTMLResponse(_license_action_page(
+        f"License approved · {booking_id}",
+        f"You approved {b.get('customer_name','the guest')}'s driver's license for {b.get('item_name','their rental')} on {b.get('booking_date','')}. A confirmation email has been sent.",
+    ))
+
+
+def _license_action_page(title: str, body: str, danger: bool = False) -> str:
+    """Renders the one-tap approve response as a self-contained styled page."""
+    accent = "#B91C1C" if danger else "#059669"
+    icon = "✕" if danger else "✓"
+    return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title} · Rox Taxi</title>
+<style>
+  body{{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#FAF7EF;color:#0B3B5C;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}}
+  .card{{background:#fff;border:1px solid #EAE4D2;border-radius:24px;box-shadow:0 30px 80px rgba(11,59,92,.08);padding:36px 32px;max-width:440px;text-align:center;}}
+  .ico{{width:64px;height:64px;border-radius:50%;background:{accent};color:#fff;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 16px;font-weight:700;}}
+  h1{{font-family:'Cormorant Garamond',Georgia,serif;font-size:30px;line-height:1.1;margin:0 0 10px;}}
+  p{{color:#5F6875;font-size:15px;line-height:1.5;margin:0 0 20px;}}
+  a{{color:#D4A94A;text-decoration:none;font-weight:600;border-bottom:2px solid #D4A94A;padding-bottom:1px;}}
+  .kicker{{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#94856A;margin-bottom:12px;font-weight:600;}}
+</style></head>
+<body><div class="card"><div class="kicker">Rox Taxi · Nassau, Bahamas</div><div class="ico">{icon}</div><h1>{title}</h1><p>{body}</p><a href="/admin/manage?tab=licenses">Open admin panel →</a></div></body></html>
+"""
 
 
 # ── Admin: driver's-license review queue ────────────────────────────────
@@ -1083,7 +1158,7 @@ class LicenseReview(BaseModel):
 async def admin_approve_license(booking_id: str, admin_email: str = Depends(require_admin)):
     b = await db.bookings.find_one({"id": booking_id, "service_type": "rental"})
     lic = (b or {}).get("license") or {}
-    if not b or (not lic.get("front_url") and not lic.get("back_url")):
+    if not b or (not lic.get("front_url") and not lic.get("back_url") and not lic.get("selfie_url")):
         raise HTTPException(404, "License not uploaded for this booking")
     ts = now_iso()
     await db.bookings.update_one(
@@ -1270,7 +1345,7 @@ async def _run_reminder_tick() -> int:
 #   2) Alerts the admin (SMS + email) once per booking when an APPROVED
 #      license's `expiry_date` falls before the pickup date — the guest's
 #      ID would be expired at pickup and needs a re-upload.
-LICENSE_RETENTION_DAYS = 30
+LICENSE_RETENTION_DAYS = 14
 
 
 def _parse_iso_dt(iso: Optional[str]) -> Optional[datetime]:
@@ -1324,7 +1399,7 @@ async def _license_maintenance_tick() -> Dict[str, int]:
         if end_dt + timedelta(days=LICENSE_RETENTION_DAYS) > now:
             continue  # not old enough yet
         lic = b.get("license") or {}
-        for side in ("front_url", "back_url"):
+        for side in ("front_url", "back_url", "selfie_url"):
             url = lic.get(side)
             if not url or not url.startswith("/api/uploads/"):
                 continue
@@ -3334,4 +3409,3 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
-
