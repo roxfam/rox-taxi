@@ -1438,7 +1438,7 @@ async def taxi_custom_quote_request(req: TaxiCustomQuoteRequest):
             f"Notes: {req.notes or '—'}"
         )
         if ADMIN_EMAIL:
-            send_email(ADMIN_EMAIL, f"Custom quote request {doc['id']}", f"<pre>{summary}</pre>", summary)
+            send_email(ADMIN_EMAIL, f"Custom quote request {doc['id']}", f"<pre>{summary}</pre>", summary, category="quotes")
         admin_sms = os.environ.get("ADMIN_SMS_NUMBER", "").strip()
         if admin_sms:
             send_sms(admin_sms, f"Rox custom quote {doc['id']}: {req.from_location} → {req.to_location} · {req.passengers}pax · {req.customer_name} {req.customer_phone}")
@@ -1447,6 +1447,7 @@ async def taxi_custom_quote_request(req: TaxiCustomQuoteRequest):
             f"We got your quote request — Rox Taxi ({doc['id']})",
             f"<p>Hi {req.customer_name},</p><p>Thanks for reaching out. We'll reply within the hour with a price for <b>{req.from_location} → {req.to_location}</b>.</p>",
             f"Hi {req.customer_name}, thanks — we'll reply within the hour with a price for {req.from_location} → {req.to_location}.",
+            category="quotes",
         )
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("quote-request notify err: %s", e)
@@ -2409,13 +2410,14 @@ async def create_contact_message(req: ContactMessage):
             f"{req.message}"
         )
         if ADMIN_EMAIL:
-            send_email(ADMIN_EMAIL, f"Contact form: {req.subject} — {doc['id']}", f"<pre>{summary}</pre>", summary)
+            send_email(ADMIN_EMAIL, f"Contact form: {req.subject} — {doc['id']}", f"<pre>{summary}</pre>", summary, category="info")
         # Ack to the submitter
         send_email(
             req.email,
             "We received your message — Rox Taxi Service & Tours",
             f"<p>Hi {req.name},</p><p>Thanks for reaching out — we'll reply within the hour.</p><p><b>Your message ({doc['id']}):</b></p><pre>{req.message}</pre>",
             f"Hi {req.name},\n\nThanks for reaching out — we'll reply within the hour.\n\nYour message ({doc['id']}):\n{req.message}",
+            category="info",
         )
         # Admin SMS ping (best-effort, no phone from ADMIN_EMAIL context)
         admin_sms_number = os.environ.get("ADMIN_SMS_NUMBER", "").strip()

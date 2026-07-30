@@ -28,14 +28,37 @@ def _booking_summary_text(b: dict) -> str:
     )
 
 
-def send_email(to_email: str, subject: str, html: str, text: Optional[str] = None) -> dict:
+def _sender_for_category(category: Optional[str]) -> Optional[str]:
+    """Resolve the From: address for a given email category.
+
+    Categories:
+      - "confirmation" — booking confirmations, reminders, paid receipts
+      - "quotes"       — custom quote requests + replies
+      - "info"         — contact form, group inquiries, general info
+
+    Each maps to EMAIL_FROM_<CATEGORY> (via secrets_store). Returns None when
+    unset so callers fall back to SENDGRID_FROM_EMAIL / SMTP_FROM.
+    """
+    if not category:
+        return None
+    val = (get_secret(f"EMAIL_FROM_{category.strip().upper()}", "") or "").strip()
+    return val or None
+
+
+def send_email(to_email: str, subject: str, html: str, text: Optional[str] = None,
+               category: Optional[str] = None) -> dict:
     """Send email via SendGrid if configured, otherwise fall back to plain SMTP
     (Namecheap Private Email, Gmail SMTP, or any generic SMTP host).
+
+    Args:
+        category: optional routing hint — "confirmation", "quotes", "info".
+            When set, the From: address is resolved from EMAIL_FROM_<CATEGORY>
+            for both SendGrid and SMTP paths.
 
     Returns a status dict: {sent, provider, error}.
     """
     api_key = get_secret("SENDGRID_API_KEY", "").strip()
-    sender_sg = get_secret("SENDGRID_FROM_EMAIL", "").strip()
+    sender_sg = _sender_for_category(category) or get_secret("SENDGRID_FROM_EMAIL", "").strip()
 
     # 1) SendGrid path
     if api_key and sender_sg:
@@ -58,7 +81,7 @@ def send_email(to_email: str, subject: str, html: str, text: Optional[str] = Non
     port = int(get_secret("SMTP_PORT", "587") or 587)
     user = get_secret("SMTP_USER", "").strip()
     pw = get_secret("SMTP_PASSWORD", "").strip()
-    sender = get_secret("SMTP_FROM", "").strip() or user
+    sender = _sender_for_category(category) or get_secret("SMTP_FROM", "").strip() or user
     use_tls = (get_secret("SMTP_USE_TLS", "true") or "true").lower() == "true"
     if not (host and user and pw and sender):
         logger.info("Neither SendGrid nor SMTP configured; skipping email to %s", to_email)
@@ -224,7 +247,7 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
     """
 
     if email_enabled and booking.get("customer_email"):
-        result = send_email(booking["customer_email"], subject, html, body_text)
+        result = send_email(booking["customer_email"], subject, html, body_text, category="confirmation")
         report["email"].update(result)
     else:
         report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
@@ -302,7 +325,7 @@ def send_booking_reminder(booking: dict, prefs: Optional[dict] = None, driver_nu
     """
 
     if email_enabled and booking.get("customer_email"):
-        result = send_email(booking["customer_email"], subject, html, text)
+        result = send_email(booking["customer_email"], subject, html, text, category="confirmation")
         report["email"].update(result)
     else:
         report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
@@ -411,7 +434,7 @@ def send_rental_return_reminder(
     """
 
     if email_enabled and booking.get("customer_email"):
-        result = send_email(booking["customer_email"], subject, html, text)
+        result = send_email(booking["customer_email"], subject, html, text, category="confirmation")
         report["email"].update(result)
     else:
         report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"

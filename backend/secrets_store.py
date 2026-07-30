@@ -49,6 +49,9 @@ TOKEN_REGISTRY: list[dict] = [
     {"key": "SMTP_PASSWORD",         "group": "Email",       "label": "SMTP Password",        "sensitive": True,  "help": "SMTP mailbox password."},
     {"key": "SMTP_FROM",             "group": "Email",       "label": "SMTP From",            "sensitive": False, "help": "Defaults to SMTP_USER if empty."},
     {"key": "SMTP_USE_TLS",          "group": "Email",       "label": "SMTP Use TLS",         "sensitive": False, "help": "'true' or 'false'. Ignored on port 465."},
+    {"key": "EMAIL_FROM_CONFIRMATION","group": "Email",      "label": "From: Confirmations",  "sensitive": False, "help": "Sender for booking confirmations, reminders, paid receipts. e.g. confirmation@roxtaxi.com"},
+    {"key": "EMAIL_FROM_QUOTES",     "group": "Email",       "label": "From: Quotes",         "sensitive": False, "help": "Sender for custom-quote request replies. e.g. quotes@roxtaxi.com"},
+    {"key": "EMAIL_FROM_INFO",       "group": "Email",       "label": "From: Info / Contact", "sensitive": False, "help": "Sender for contact-form + group-inquiry replies. e.g. info@roxtaxi.com"},
 
     # Stripe
     {"key": "STRIPE_API_KEY",        "group": "Stripe",      "label": "Stripe Secret Key",    "sensitive": True,  "help": "sk_live_… or sk_test_…"},
