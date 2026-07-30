@@ -1,0 +1,200 @@
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { api } from "../../lib/api";
+import { Check, X, ShieldCheck, ExternalLink, Copy, Loader2, RefreshCw } from "lucide-react";
+
+const FILTERS = [
+  { key: "pending",      label: "Pending review" },
+  { key: "approved",     label: "Approved" },
+  { key: "rejected",     label: "Rejected" },
+  { key: "not_uploaded", label: "Not uploaded" },
+];
+
+/**
+ * Admin: driver's-license review queue for car-rental bookings.
+ * - Filter by status
+ * - Approve / reject with reason
+ * - Copy the guest's upload link (for a re-upload nudge)
+ */
+export default function LicensesPanel() {
+  const [tab, setTab] = useState("pending");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [rejecting, setRejecting] = useState(null);
+  const [reason, setReason] = useState("");
+  const [busyId, setBusyId] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get(`/admin/licenses?status=${tab}`);
+      setRows(data);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't load licenses");
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [tab]);
+
+  const approve = async (b) => {
+    setBusyId(b.id);
+    try {
+      await api.post(`/admin/bookings/${b.id}/license/approve`);
+      toast.success("License approved — guest notified.");
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Approve failed"); }
+    finally { setBusyId(""); }
+  };
+
+  const reject = async () => {
+    if (!rejecting) return;
+    setBusyId(rejecting.id);
+    try {
+      await api.post(`/admin/bookings/${rejecting.id}/license/reject`, { reason });
+      toast.success("Rejected — re-upload link sent to guest.");
+      setRejecting(null); setReason(""); load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Reject failed"); }
+    finally { setBusyId(""); }
+  };
+
+  const copyLink = (b) => {
+    const link = `${window.location.origin}/upload-license/${b.id}?t=${encodeURIComponent(b.license_upload_token || "")}`;
+    navigator.clipboard.writeText(link);
+    toast.success("Upload link copied to clipboard");
+  };
+
+  return (
+    <div className="space-y-5" data-testid="licenses-panel">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setTab(f.key)}
+              data-testid={`licenses-tab-${f.key}`}
+              className={`px-3 py-1.5 rounded-full text-sm border ${tab === f.key ? "bg-[#0B3B5C] text-white border-[#0B3B5C]" : "bg-white text-[#0B3B5C] border-[#E2E8F0] hover:border-[#0B3B5C]"}`}
+            >{f.label}</button>
+          ))}
+        </div>
+        <button onClick={load} className="text-xs text-[#64748B] hover:text-[#0B3B5C] inline-flex items-center gap-1" data-testid="licenses-reload">
+          <RefreshCw className="w-3 h-3" /> Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="p-8 flex items-center justify-center text-[#64748B]"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading…</div>
+      ) : rows.length === 0 ? (
+        <div className="bg-white border border-dashed border-[#E2E8F0] rounded-2xl p-10 text-center text-sm text-[#64748B]">
+          No licenses in the <strong>{tab}</strong> queue.
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {rows.map((b) => {
+            const lic = b.license || {};
+            return (
+              <div key={b.id} className="bg-white border border-[#E2E8F0] rounded-2xl p-5" data-testid={`license-row-${b.id}`}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="mono text-sm text-[#0B3B5C]">{b.id}</div>
+                    <div className="text-sm font-semibold text-[#0B3B5C] mt-0.5">{b.customer_name} <span className="text-[#64748B] font-normal">· {b.item_name}</span></div>
+                    <div className="text-xs text-[#64748B]">Pickup {b.booking_date} · {b.days || 1} day{b.days === 1 ? "" : "s"}</div>
+                    <div className="text-xs text-[#64748B]">📧 {b.customer_email} · 📱 {b.customer_phone}</div>
+                    {lic.name_on_license && <div className="text-xs text-[#0B3B5C] mt-1">Name: <strong>{lic.name_on_license}</strong></div>}
+                    {lic.license_number && <div className="text-xs text-[#0B3B5C]">Number: <span className="mono">{lic.license_number}</span></div>}
+                    {lic.expiry_date && <div className="text-xs text-[#0B3B5C]">Expires: {lic.expiry_date}</div>}
+                    {lic.rejection_reason && <div className="text-xs text-[#B91C1C] mt-1">Last rejection: {lic.rejection_reason}</div>}
+                  </div>
+                  <StatusChip status={lic.status || "not_uploaded"} />
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <ImageCell label="Front" url={lic.front_url} testid={`license-front-${b.id}`} />
+                  <ImageCell label="Back"  url={lic.back_url}  testid={`license-back-${b.id}`} />
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {(lic.status === "pending" || lic.status === "rejected") && (
+                    <button
+                      onClick={() => approve(b)}
+                      disabled={busyId === b.id}
+                      data-testid={`license-approve-${b.id}`}
+                      className="rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-semibold px-4 py-1.5 inline-flex items-center gap-1"
+                    >
+                      {busyId === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Approve
+                    </button>
+                  )}
+                  {(lic.status === "pending" || lic.status === "approved") && (
+                    <button
+                      onClick={() => { setRejecting(b); setReason(""); }}
+                      data-testid={`license-reject-${b.id}`}
+                      className="rounded-full bg-[#B91C1C] hover:bg-[#991B1B] text-white text-xs font-semibold px-4 py-1.5 inline-flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Reject
+                    </button>
+                  )}
+                  <button onClick={() => copyLink(b)} data-testid={`license-copy-link-${b.id}`} className="rounded-full border border-[#E2E8F0] text-[#0B3B5C] text-xs font-semibold px-4 py-1.5 inline-flex items-center gap-1 hover:border-[#D4A94A]">
+                    <Copy className="w-3 h-3" /> Copy upload link
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {rejecting && (
+        <div className="fixed inset-0 z-[100] bg-black/45 flex items-center justify-center p-4" data-testid="license-reject-modal">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-[#B91C1C]" />
+              <h3 className="serif text-xl text-[#0B3B5C]">Reject license · {rejecting.id}</h3>
+            </div>
+            <p className="text-xs text-[#64748B] mt-1">The guest gets an email + SMS with the reason and a fresh upload link.</p>
+            <textarea
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Reason (e.g. image blurry, expired, name doesn't match booking)"
+              data-testid="license-reject-reason"
+              className="mt-3 w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm focus:border-[#D4A94A] focus:outline-none"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => { setRejecting(null); setReason(""); }} className="rounded-full border border-[#E2E8F0] px-4 py-1.5 text-sm text-[#0B3B5C]" data-testid="license-reject-cancel">Cancel</button>
+              <button onClick={reject} disabled={busyId === rejecting.id} className="rounded-full bg-[#B91C1C] hover:bg-[#991B1B] text-white text-sm font-semibold px-4 py-1.5" data-testid="license-reject-confirm">
+                {busyId === rejecting.id ? "Rejecting…" : "Send rejection"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusChip({ status }) {
+  const map = {
+    pending:      { bg: "bg-[#FFFBEB]", tx: "text-[#92400E]", brd: "border-[#FDE68A]", label: "Pending" },
+    approved:     { bg: "bg-[#F0FDF4]", tx: "text-[#166534]", brd: "border-[#BBF7D0]", label: "Approved" },
+    rejected:     { bg: "bg-[#FEF2F2]", tx: "text-[#991B1B]", brd: "border-[#FECACA]", label: "Rejected" },
+    not_uploaded: { bg: "bg-white",      tx: "text-[#64748B]", brd: "border-[#E2E8F0]", label: "Not uploaded" },
+  };
+  const s = map[status] || map.not_uploaded;
+  return <span className={`text-[11px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full border ${s.bg} ${s.tx} ${s.brd}`}>{s.label}</span>;
+}
+
+function ImageCell({ label, url, testid }) {
+  if (!url) return (
+    <div className="rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC] p-6 text-center text-xs text-[#94a3b8]" data-testid={testid}>
+      {label} — not uploaded
+    </div>
+  );
+  return (
+    <a href={url} target="_blank" rel="noreferrer" data-testid={testid} className="block rounded-xl overflow-hidden border border-[#E2E8F0] bg-[#F1F5F9] group relative">
+      <img src={url} alt={label} className="w-full h-40 object-cover" loading="lazy" />
+      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
+        <ExternalLink className="w-3.5 h-3.5 mr-1" /> Open full size
+      </div>
+      <div className="absolute top-1.5 left-1.5 text-[10px] uppercase tracking-widest font-bold text-white/95 bg-[#0B3B5C]/80 rounded-full px-2 py-0.5">{label}</div>
+    </a>
+  );
+}

@@ -32,6 +32,7 @@ import Signup from "./pages/Signup";
 import AuthCallback from "./pages/AuthCallback";
 import PrintReceipt from "./pages/PrintReceipt";
 import GiftCards from "./pages/GiftCards";
+import UploadLicense from "./pages/UploadLicense";
 import { AuthProvider } from "./lib/auth";
 import { useEffect } from "react";
 
@@ -75,6 +76,7 @@ function AppRouter() {
       <Route path="/signup" element={<CustomerShell><Signup /></CustomerShell>} />
       <Route path="/payment/success" element={<CustomerShell><PaymentSuccess /></CustomerShell>} />
       <Route path="/payment/cancel" element={<CustomerShell><PaymentCancel /></CustomerShell>} />
+      <Route path="/upload-license/:bookingId" element={<UploadLicense />} />
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/admin/manage" element={<AdminManage />} />

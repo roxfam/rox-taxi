@@ -11,12 +11,14 @@ import GalleryPanel from "./admin/GalleryPanel";
 import PromotionsPanel from "./admin/PromotionsPanel";
 import TokensPanel from "./admin/TokensPanel";
 import BrokenImagesPanel from "./admin/BrokenImagesPanel";
+import LicensesPanel from "./admin/LicensesPanel";
 
 const TABS = [
   { key: "home_slides", label: "Home Slides" },
   { key: "tours", label: "Tours" },
   { key: "taxi_services", label: "Taxi Services" },
   { key: "rentals", label: "Rentals" },
+  { key: "licenses", label: "Licenses" },
   { key: "promotions", label: "Promotions" },
   { key: "images", label: "Images" },
   { key: "image_health", label: "Image Health" },

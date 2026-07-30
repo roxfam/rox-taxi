@@ -925,6 +925,221 @@ async def apply_rental_extension_if_paid(session_id: str) -> bool:
     return True
 
 
+# ─── Driver's-license upload (car rental only) ────────────────────────────
+# After a rental booking is created we generate a short random `license_upload_token`
+# stored on the booking. A public upload link `/upload-license/{booking_id}?t=<token>`
+# is sent by email + SMS to the customer. The upload endpoint accepts optional
+# front + back images, records `license: {front_url, back_url, status: "pending", ...}`
+# on the booking, and alerts the admin via SMS + email so they can review and
+# approve/reject it from the admin panel.
+
+import secrets as _secrets_lib
+
+
+def _new_license_upload_token() -> str:
+    return _secrets_lib.token_urlsafe(18)
+
+
+def _license_upload_link(booking_id: str, token: str) -> str:
+    base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
+    return f"{base}/upload-license/{booking_id}?t={token}"
+
+
+async def _get_booking_by_token(booking_id: str, token: str) -> dict:
+    """Public helper: resolve a rental booking from booking_id + upload token."""
+    b = await db.bookings.find_one({"id": booking_id, "service_type": "rental"})
+    if not b:
+        raise HTTPException(404, "Rental booking not found")
+    if not b.get("license_upload_token") or b["license_upload_token"] != token:
+        raise HTTPException(401, "Invalid or expired upload link")
+    return b
+
+
+@api_router.get("/bookings/{booking_id}/license/status")
+async def license_status(booking_id: str, t: str):
+    b = await _get_booking_by_token(booking_id, t)
+    lic = b.get("license") or {}
+    return {
+        "booking_id": b["id"],
+        "customer_name": b.get("customer_name"),
+        "item_name": b.get("item_name"),
+        "booking_date": b.get("booking_date"),
+        "has_license": bool(lic.get("front_url") or lic.get("back_url")),
+        "status": lic.get("status") or "not_uploaded",
+        "rejection_reason": lic.get("rejection_reason"),
+        "uploaded_at": lic.get("uploaded_at"),
+        "reviewed_at": lic.get("reviewed_at"),
+        "expiry_date": lic.get("expiry_date"),
+        "license_number": lic.get("license_number"),
+        "name_on_license": lic.get("name_on_license"),
+    }
+
+
+def _save_license_image(booking_id: str, side: str, file: UploadFile, contents: bytes) -> str:
+    ext = (file.filename or "license.jpg").rsplit(".", 1)[-1].lower()
+    if ext not in ("jpg", "jpeg", "png", "webp", "heic", "heif"):
+        ext = "jpg"
+    filename = f"license_{booking_id}_{side}_{uuid.uuid4().hex[:6]}.{ext}"
+    (UPLOAD_DIR / filename).write_bytes(contents)
+    return f"/api/uploads/{filename}"
+
+
+@api_router.post("/bookings/{booking_id}/license")
+async def upload_license(
+    booking_id: str,
+    t: str = Form(...),
+    front: Optional[UploadFile] = File(None),
+    back: Optional[UploadFile] = File(None),
+    name_on_license: str = Form(""),
+    license_number: str = Form(""),
+    expiry_date: str = Form(""),
+):
+    b = await _get_booking_by_token(booking_id, t)
+    if not (front or back):
+        raise HTTPException(400, "Upload the front and/or back of your license.")
+
+    lic = dict(b.get("license") or {})
+    for side, f in (("front", front), ("back", back)):
+        if not f:
+            continue
+        if not (f.content_type or "").startswith("image/"):
+            raise HTTPException(400, f"{side.title()} must be an image file")
+        contents = await f.read()
+        if len(contents) > 8 * 1024 * 1024:
+            raise HTTPException(400, f"{side.title()} image too large (max 8MB)")
+        lic[f"{side}_url"] = _save_license_image(booking_id, side, f, contents)
+
+    lic["status"] = "pending"
+    lic["uploaded_at"] = now_iso()
+    lic["name_on_license"] = (name_on_license or "").strip()[:80]
+    lic["license_number"] = (license_number or "").strip()[:40]
+    lic["expiry_date"] = (expiry_date or "").strip()[:20]
+    lic.pop("rejection_reason", None)
+
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"license": lic, "updated_at": now_iso()}},
+    )
+
+    try:
+        from notifications import send_email as _send_email, send_sms as _send_sms
+        base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
+        review_url = f"{base}/admin/manage?tab=licenses"
+        summary = (
+            f"Driver's license pending review.\n\n"
+            f"Booking : {b['id']}\n"
+            f"Guest   : {b.get('customer_name','')} <{b.get('customer_email','')}>\n"
+            f"Phone   : {b.get('customer_phone','')}\n"
+            f"Vehicle : {b.get('item_name','')}\n"
+            f"Pickup  : {b.get('booking_date','')}\n"
+            f"Review  : {review_url}"
+        )
+        html = f"<p><strong>Driver's license pending review.</strong></p><pre style='background:#f8f5ee;padding:12px;border-radius:8px;'>{summary}</pre><p><a href='{review_url}'>Open admin review →</a></p>"
+        if ADMIN_EMAIL:
+            _send_email(ADMIN_EMAIL, f"Driver's license pending review · {b['id']}", html, summary, category="info")
+        admin_sms_number = (secrets_store.get_secret("ADMIN_SMS_NUMBER") or WHATSAPP_NUMBER or "").strip()
+        if admin_sms_number:
+            _send_sms(admin_sms_number, f"🪪 License uploaded · {b['id']} · {b.get('customer_name','')} — review: {review_url}")
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("license admin notify err: %s", e)
+
+    try:
+        await _send_admin_push(
+            title="Driver's license pending review",
+            body=f"{b.get('customer_name','A guest')} uploaded their license for {b['id']}.",
+            url="/admin/manage?tab=licenses",
+            tag=f"license-{booking_id}",
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {"ok": True, "status": "pending", "message": "Thanks — we'll review your license and confirm within a few hours."}
+
+
+# ── Admin: driver's-license review queue ────────────────────────────────
+@api_router.get("/admin/licenses")
+async def admin_list_licenses(status: Optional[str] = None, _admin: str = Depends(require_admin)):
+    query: Dict[str, Any] = {"service_type": "rental"}
+    if status in {"pending", "approved", "rejected"}:
+        query["license.status"] = status
+    elif status == "not_uploaded":
+        query["$or"] = [{"license": {"$exists": False}}, {"license.status": {"$exists": False}}]
+    docs = await db.bookings.find(query).sort("created_at", -1).to_list(300)
+    return [clean(d) for d in docs]
+
+
+class LicenseReview(BaseModel):
+    reason: Optional[str] = Field(None, max_length=280)
+
+
+@api_router.post("/admin/bookings/{booking_id}/license/approve")
+async def admin_approve_license(booking_id: str, admin_email: str = Depends(require_admin)):
+    b = await db.bookings.find_one({"id": booking_id, "service_type": "rental"})
+    lic = (b or {}).get("license") or {}
+    if not b or (not lic.get("front_url") and not lic.get("back_url")):
+        raise HTTPException(404, "License not uploaded for this booking")
+    ts = now_iso()
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {
+            "license.status": "approved",
+            "license.reviewed_at": ts,
+            "license.reviewed_by": admin_email,
+            "license.rejection_reason": None,
+        }},
+    )
+    try:
+        from notifications import send_email as _send_email
+        if b.get("customer_email"):
+            _send_email(
+                b["customer_email"],
+                f"Driver's license approved · Rox rental {booking_id}",
+                f"<p>Hi {b.get('customer_name','')},</p><p>Your driver's license has been approved. You're all set for pickup on <b>{b.get('booking_date','')}</b>.</p><p>— Rox Taxi Service &amp; Tours</p>",
+                f"Hi {b.get('customer_name','')}, your driver's license has been approved for rental {booking_id}. — Rox",
+                category="confirmation",
+            )
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("license approve notify err: %s", e)
+    return {"ok": True, "status": "approved"}
+
+
+@api_router.post("/admin/bookings/{booking_id}/license/reject")
+async def admin_reject_license(booking_id: str, req: LicenseReview, admin_email: str = Depends(require_admin)):
+    b = await db.bookings.find_one({"id": booking_id, "service_type": "rental"})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    ts = now_iso()
+    reason = (req.reason or "").strip() or "License image unclear or invalid — please re-upload a clearer photo."
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {
+            "license.status": "rejected",
+            "license.reviewed_at": ts,
+            "license.reviewed_by": admin_email,
+            "license.rejection_reason": reason,
+        }},
+    )
+    try:
+        from notifications import send_email as _send_email, send_sms as _send_sms
+        link = _license_upload_link(booking_id, b.get("license_upload_token") or "")
+        if b.get("customer_email"):
+            _send_email(
+                b["customer_email"],
+                f"Please re-upload your driver's license · Rox rental {booking_id}",
+                f"<p>Hi {b.get('customer_name','')},</p><p>We couldn't approve your license: <em>{reason}</em></p><p><a href='{link}' style='display:inline-block;background:#D4A94A;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;'>Re-upload license →</a></p><p>— Rox Taxi Service &amp; Tours</p>",
+                f"Hi {b.get('customer_name','')}, we couldn't approve your license: {reason}\nRe-upload: {link}\n— Rox",
+                category="confirmation",
+            )
+        if b.get("customer_phone"):
+            _send_sms(b["customer_phone"], f"Rox rental {booking_id}: We need a clearer license photo. Re-upload: {link}")
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("license reject notify err: %s", e)
+    return {"ok": True, "status": "rejected", "reason": reason}
+
+
+
+
+
 # ---------------- Seed content (Nassau / Paradise Island focus) ----------------
 # Catalog seed data lives in seed_data.py to keep this file lean.
 
@@ -2036,6 +2251,9 @@ async def create_booking(req: BookingCreate):
         deposit_amount = RENTAL_DEPOSIT_USD
         booking["deposit_amount"] = deposit_amount
         booking["deposit_status"] = "held"  # released back to customer after vehicle return
+        # Generate a public single-use upload token so we can email + SMS the
+        # guest a link to upload their driver's license (front + back, optional).
+        booking["license_upload_token"] = _new_license_upload_token()
         extra_drivers = max(0, min(int(req.additional_drivers or 0), ADDITIONAL_DRIVER_MAX))
         additional_driver_fee = extra_drivers * ADDITIONAL_DRIVER_FEE_USD
         booking["additional_drivers"] = extra_drivers
@@ -2145,6 +2363,41 @@ async def create_booking(req: BookingCreate):
             logging.info("owner alert sent for booking %s", booking["id"])
     except Exception as e:  # noqa: BLE001
         logging.warning("owner alert err: %s", e)
+
+    # ── License upload link — rentals only ────────────────────────────
+    # Send an email + SMS with a short public link for the guest to upload
+    # their driver's license (front + back). Best-effort; never block booking.
+    if req.service_type == "rental" and booking.get("license_upload_token"):
+        try:
+            from notifications import send_email as _send_email, send_sms as _send_sms
+            link = _license_upload_link(booking["id"], booking["license_upload_token"])
+            if booking.get("customer_email"):
+                subject = f"Upload your driver's license · Rox rental {booking['id']}"
+                html = (
+                    f"<div style=\"font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;\">"
+                    f"<h1 style=\"font-family:Georgia,serif;color:#0B3B5C;margin:0 0 8px;\">One quick step, {booking.get('customer_name','')}.</h1>"
+                    f"<p style=\"color:#64748B;\">Please upload the <strong>front and back</strong> of your driver's license so we can verify it before pickup on <strong>{booking.get('booking_date','')}</strong>.</p>"
+                    f"<div style=\"background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:24px;margin-top:20px;\">"
+                    f"<div style=\"font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#64748B;\">Booking</div>"
+                    f"<div style=\"font-family:'JetBrains Mono',monospace;font-size:22px;color:#0B3B5C;margin-top:4px;\">{booking['id']}</div>"
+                    f"<hr style=\"border:none;border-top:1px solid #E2E8F0;margin:16px 0;\"><div style=\"color:#0B3B5C;\"><strong>{booking.get('item_name','')}</strong></div>"
+                    f"<div style=\"color:#64748B;font-size:14px;margin-top:2px;\">Pickup: {booking.get('booking_date','')}</div>"
+                    f"<a href=\"{link}\" style=\"display:inline-block;background:#D4A94A;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;margin-top:16px;font-size:14px;\">Upload license →</a>"
+                    f"</div><p style=\"color:#94a3b8;font-size:11px;margin-top:24px;\">Uploads are private and only reviewed by Rox Taxi staff. Optional but recommended — speeds up pickup.</p></div>"
+                )
+                text = (
+                    f"Hi {booking.get('customer_name','')}, please upload your driver's license (front + back) for Rox rental {booking['id']} before pickup on {booking.get('booking_date','')}.\n"
+                    f"Upload link: {link}\n"
+                    f"— Rox Taxi Service & Tours"
+                )
+                _send_email(booking["customer_email"], subject, html, text, category="confirmation")
+            if booking.get("customer_phone"):
+                _send_sms(
+                    booking["customer_phone"],
+                    f"Rox rental {booking['id']}: please upload your driver's license (front+back) before pickup: {link}",
+                )
+        except Exception as e:  # noqa: BLE001
+            logging.warning("license link notify err: %s", e)
     if req.payment_method == "zelle":
         try:
             prefs = await db.site_config.find_one({"_id": "main"}) or {}
@@ -2924,3 +3177,4 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
