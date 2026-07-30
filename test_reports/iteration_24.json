@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 27 — PRE-DEPLOY regression gate for roxtaxi.com. Ran 30 pytest cases across all 8 features + core regression: 30/30 passed (100%). Frontend Playwright sweep covered tours hub, attraction heroes, gallery, /cities coming-soon pages, Tokens Panel, and Rentals bulk-blackout UI. One P1 gap found: Signup page does NOT auto-fill referral_code from ?ref=CODE query param (feature spec item under REFERRALS).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Signup.jsx",
+        "issue": "?ref=CODE URL param is NOT auto-filled into the referral_code field. `form.referral_code` is never initialized in useState (only name/email/password/confirm) and there is no useEffect reading URLSearchParams. Also causes React controlled/uncontrolled warning (value goes from undefined to string on first keystroke).",
+        "selector": "[data-testid=\"signup-referral\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration27_predeploy.py",
+    "/app/test_reports/pytest/iter27_results.xml"
+  ],
+  "action_items": [
+    "Fix Signup.jsx: (1) add `referral_code: ''` to initial useState, (2) add useEffect that reads new URLSearchParams(location.search).get('ref') and pre-fills form.referral_code (uppercase). Verify by loading /signup?ref=ROX-ABC123 → the referral input should contain ROX-ABC123."
+  ],
+  "critical_code_review_comments": [
+    "Signup.jsx: `form.referral_code` starts as undefined, making the input uncontrolled on first render — set initial state to empty string.",
+    "server.py grows to 2758 lines — consider splitting referral/cities/waitlist/extension domains into routes/ modules (matches admin.py/payments.py pattern already in use).",
+    "PUT /api/admin/rentals/{id} requires the full ItemUpsert body (name, description, price mandatory) even when caller only wants to update blackout_dates. Consider a lightweight PATCH endpoint or make ItemUpsert fields Optional so partial admin updates from EditModal are less error-prone.",
+    "Extension checkout uses env STRIPE_API_KEY via secrets_store — good; make sure production key rotation via Tokens Panel is exercised before switching to Stripe live mode."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration27_predeploy.py (new — 30 regression tests)"
+  ],
+  "success_rate": {"backend": "100% (30/30)", "frontend": "≈92% — Tokens Panel, Tours Hub, Attraction heroes, Gallery (0 broken responses / 0 broken natural images out of 44 imgs), Cities coming-soon pages (email input present on freeport/exuma/andros), CitySwitcher visible, Bulk-blackout button present — only ?ref auto-fill broken."},
+  "test_credentials": "Admin roxfam2509@gmail.com / admin123 verified login OK. Customer test users created via /auth/register with test_iter27_* prefix (safe to leave; upsert on future runs).",
+  "seed_data_creation": "Tests create TEST-prefixed users, waitlist entries (freeport/exuma/andros), one unpaid rental booking for the extension-quote test, and temporarily flip FB_SITE_URL / FB_GRAPH_VERSION / GOOGLE_CLIENT_ID tokens (all reverted in the same test). Bulk-blackout window (days +200/+201 out) is added then removed; no lingering blackouts left on rentals.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite is stable at 30/30 — reuse /app/backend/tests/test_iteration27_predeploy.py as the pre-deploy gate. If the main agent fixes the Signup ?ref auto-fill, re-run the small Playwright block that visits /signup?ref=ROX-ABC123 and reads the value of [data-testid=\"signup-referral\"]. All other features (tokens panel, cities, waitlist, referrals API, per-vehicle blackouts, bulk blackout, extension quote guards, fleet cleanup, tours hub, gallery cleanliness) are green.",
+  "rca of the issue": "Signup.jsx never reads window.location.search or useSearchParams(). The `referral_code` key is set only via the input's onChange handler, so guests arriving via https://roxtaxi.com/signup?ref=ROX-XXX see an empty referral field and the referrer never gets credited. Fix: import { useSearchParams } from 'react-router-dom', add `const [sp] = useSearchParams();` and a `useEffect(() => { const r = sp.get('ref'); if (r) setForm(f => ({ ...f, referral_code: r.toUpperCase() })); }, [sp]);` — also initialise `referral_code: ''` in useState to avoid the uncontrolled-input warning."
+}
