@@ -27,7 +27,12 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **Referral card timeout fix** — `MyBookings.jsx` now renders the `[data-testid="referral-card"]` wrapper unconditionally for logged-in users, with a skeleton state while `/referrals/summary` is loading. Playwright selectors no longer time out.
 - **Image Health panel (NEW)** — `GET /api/admin/images/scan` HEAD-checks every image URL across home slides, tours, rentals, taxi services, and approved guest photos concurrently (semaphore=16). New "Image Health" tab in `/admin/manage` shows total scanned / broken / healthy counts, per-item error, copy-URL, open, and one-tap "Fix" link to the matching catalog tab. Verified: 63/63 healthy on current catalog.
 
-### ✅ Shipped this session
+### ✅ Shipped Feb 2026 (Tour destination photos + deploy prep)
+- **Baha Mar destination photo** — swapped to Grand Hyatt Baha Mar aerial hotel exterior in `Tours.jsx` (HUB_ATTRACTIONS).
+- **Blue Lagoon destination photo** — swapped to Blue Lagoon Island private-beach aerial in `Tours.jsx` (HUB_ATTRACTIONS).
+- **Namecheap VPS deploy readiness check — PASS.** Static scan (deployment_agent) confirmed: no hardcoded secrets, no preview URLs in runtime code, CORS/`allow_credentials` combo safe, `.env.example`s complete, `DEPLOYMENT.md` + `bootstrap-vps.sh` current. Ready to ship to `roxtaxi.com` on Namecheap Pulsar.
+
+### ✅ Shipped earlier this session
 - **Round-trip taxi discount** — 10% off both legs, toggle in booking modal, computed server-side (base doubles, 10% off both legs, bridge toll applies once), shown on receipt.
 - **Multi-day rental discount tiers** — 3% at 5+ days, 7% at 7+ days, 12% at 14+ days. Auto-applied server-side.
 - **Tip field on booking** (`tip_amount` on model, accepted at booking-create time).
