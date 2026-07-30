@@ -66,6 +66,16 @@ export default function Signup() {
               <Field icon={<Lock className="w-4 h-4" />} label="Confirm password">
                 <input required type="password" autoComplete="new-password" value={form.confirm} onChange={update("confirm")} placeholder="••••••••" data-testid="signup-confirm" className="input-line" />
               </Field>
+              <Field icon={<UserPlus className="w-4 h-4" />} label="Referral code (optional)">
+                <input
+                  type="text" maxLength={20} autoComplete="off"
+                  value={form.referral_code}
+                  onChange={(e) => setForm({ ...form, referral_code: e.target.value.toUpperCase() })}
+                  placeholder="ROX-XXXXXX"
+                  data-testid="signup-referral"
+                  className="input-line mono"
+                />
+              </Field>
 
               {err && (
                 <div className="flex items-start gap-2 text-sm text-[#B91C1C] bg-[#FEF2F2] border border-[#FECACA] rounded-xl px-3 py-2" data-testid="signup-error">

@@ -260,6 +260,7 @@ class CustomerRegisterRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=80)
     email: EmailStr
     password: str = Field(..., min_length=6, max_length=200)
+    referral_code: Optional[str] = Field(None, max_length=20)
 
 
 class CustomerLoginRequest(BaseModel):
@@ -1170,33 +1171,6 @@ async def seed_db():
                 {"_id": "main"},
                 {"$set": {"headline": "The team behind", "headline_accent": "your ride"}},
             )
-@api_router.get("/fleet")
-async def get_fleet():
-    doc = await db.fleet.find_one({"_id": "main"})
-    if not doc:
-        return {"drivers": [], "vehicles": [], "headline": "", "subheadline": "", "trust_notes": []}
-    doc.pop("_id", None)
-    return doc
-
-
-class FleetUpdate(BaseModel):
-    headline: Optional[str] = None
-    headline_accent: Optional[str] = None
-    subheadline: Optional[str] = None
-    drivers: Optional[List[Dict[str, Any]]] = None
-    vehicles: Optional[List[Dict[str, Any]]] = None
-    trust_notes: Optional[List[str]] = None
-
-
-@api_router.put("/admin/fleet")
-async def admin_update_fleet(patch: FleetUpdate, _admin: str = Depends(require_admin)):
-    payload = {k: v for k, v in patch.model_dump().items() if v is not None}
-    if not payload:
-        return {"ok": True, "noop": True}
-    await db.fleet.update_one({"_id": "main"}, {"$set": payload}, upsert=True)
-    doc = await db.fleet.find_one({"_id": "main"})
-    doc.pop("_id", None)
-    return doc
 
 
 # ---------------- Public catalog ----------------

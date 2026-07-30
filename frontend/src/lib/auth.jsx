@@ -49,11 +49,11 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  const register = useCallback(async (name, email, password) => {
+  const register = useCallback(async (name, email, password, referral_code = null) => {
     const r = await fetch(`${API}/auth/register`, {
       method: "POST", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, referral_code }),
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
