@@ -20,9 +20,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ### ✅ Shipped Feb 2026 (VPS bootstrap script + deployment docs suite)
 - **`scripts/bootstrap-vps.sh`** — one-command installer for a blank Namecheap 2GB Ubuntu server. Runs QUICKSTART steps 2-4 (2GB swap + swappiness tune + Node 20 + Python 3.11 + Nginx + certbot + yarn + MongoDB 7 with 512MB WiredTiger cap + UFW + fail2ban) in ~5 min. Idempotent (safe to re-run). Prints Node/Python/yarn/Mongo versions + your VPS IP + the next steps at the end.
-- **`QUICKSTART_NAMECHEAP_2GB.md`** — 12-step blank-server-to-live-HTTPS guide with the 2GB-specific tuning (NODE_OPTIONS heap cap, Mongo cache cap, swap).
+- **`scripts/deploy-app.sh`** — companion one-command deployer. Takes `<repo-url> <domain>` as args and does: git clone → generate JWT secret → prompt for admin creds → write backend/frontend .env → pip install → yarn build (with 1.5GB heap cap) → install systemd service → write Nginx site → request Let's Encrypt cert. Full blank-server-to-live-HTTPS is now 3 shell commands total.
+- **`QUICKSTART_NAMECHEAP_2GB.md`** — 12-step manual blank-server-to-live-HTTPS guide with the 2GB-specific tuning.
 - **`DEPLOYMENT.md`** — full reference: two-tier secrets model, per-key "where to get it" appendix, troubleshooting matrix, backups.
 - **`DEPLOY_VISITORS_TAB.md`** — targeted upgrade guide for pulling just the analytics feature onto an already-live server.
+
 
 
 ### ✅ Shipped Feb 2026 (visitor analytics + admin reports panel)
