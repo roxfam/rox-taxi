@@ -27,7 +27,20 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **Referral card timeout fix** — `MyBookings.jsx` now renders the `[data-testid="referral-card"]` wrapper unconditionally for logged-in users, with a skeleton state while `/referrals/summary` is loading. Playwright selectors no longer time out.
 - **Image Health panel (NEW)** — `GET /api/admin/images/scan` HEAD-checks every image URL across home slides, tours, rentals, taxi services, and approved guest photos concurrently (semaphore=16). New "Image Health" tab in `/admin/manage` shows total scanned / broken / healthy counts, per-item error, copy-URL, open, and one-tap "Fix" link to the matching catalog tab. Verified: 63/63 healthy on current catalog.
 
-### ✅ Shipped Feb 2026 (License v5: Expiry Countdown + Rotate license from My Bookings)
+### ✅ Shipped Feb 2026 (License v6: Renewal Nudge + Trusted Traveller Tier)
+- **License Renewal Nudge** — new branch in `_license_maintenance_loop` scans user wallets daily and emails guests when their saved license is 45 days or fewer from expiry. Idempotent via `users.license_wallet_nudged_at`. Email routes via `confirmation@roxtaxi.com` and links straight to `/my/bookings` with the elegant Rotate flow.
+- **Rox Trusted Traveller Tier** — helpers `_approved_rental_count(email)` + `_is_trusted_traveller(email)` (≥ `TRUSTED_MIN_RENTALS = 3` prior approved rentals). New rental bookings for trusted guests with a valid wallet get an **auto-approved license** (`from_trusted_tier: true`, `reviewed_by: rox-trusted-auto`) — no upload SMS/email sent, no admin action needed. Guests still see a golden "Rox Trusted Traveller" card on the upload page if they land there.
+- **Admin panel & upload page badges** — `★ Rox Trusted` chip in the admin licenses row (gold on cream), and a large gold hero card on `/upload-license` for trusted guests.
+- Verified end-to-end: seeded 3 approved rentals for `trusted-qa@example.com`, 4th booking auto-applied wallet with `status:approved, from_trusted_tier:True, reviewed_by:rox-trusted-auto`.
+
+### ✅ Shipped earlier this session
+- Expiry countdown + Rotate saved license from My Bookings.
+- Admin inline OCR correction + Guest Wallet card in My Bookings.
+- AI OCR + selfie face-match via Claude Sonnet 4.5 vision.
+- Guest wallet auto-save on approve + reuse card + one-tap SMS approve.
+- Elegant upload page with guide overlays.
+- 14-day retention, expiry-before-pickup alerts.
+- Per-category email senders, SEO overhaul, VPS deploy readiness pass.
 - **Expiry countdown on wallet card** — `GET /my/license-wallet` now returns `days_to_expiry` and `expires_soon` (≤30d). The wallet card in `/my/bookings` cross-fades between three tiers: **green "Ready to reuse"**, **amber "Nd to expiry"** (with warning line), **red "Expired"** — so returning guests refresh before their trip.
 - **Rotate saved license from My Bookings** — new authenticated endpoint `POST /api/my/license-wallet/rotate` accepts front + back + selfie + optional metadata. Partial rotations preserve untouched fields. Admin gets an email + SMS heads-up that the wallet was rotated. Frontend: "Rotate license" button opens a compact modal (`WalletCard.jsx`) with three file pickers and 3 metadata inputs. No new booking required.
 

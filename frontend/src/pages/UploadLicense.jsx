@@ -146,7 +146,17 @@ export default function UploadLicense() {
         </div>
 
         {/* ── Wallet reuse (returning guests) ─────────────────── */}
-        {wallet && st === "not_uploaded" && (
+        {wallet?.is_trusted && st === "not_uploaded" && (
+          <div className="mb-6 rounded-2xl border border-[#D4A94A] bg-gradient-to-br from-[#FFFAF0] via-white to-[#FEF3C7] p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 shadow-lg" data-testid="trusted-card">
+            <div className="w-11 h-11 rounded-2xl bg-[#D4A94A] text-white flex items-center justify-center flex-shrink-0 font-bold text-xl">★</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] tracking-[0.22em] uppercase text-[#B45309] font-semibold">Rox Trusted Traveller</div>
+              <div className="text-sm font-semibold text-[#0B3B5C] mt-0.5">You're a repeat guest — no license upload needed.</div>
+              <div className="text-[13px] text-[#5F6875]">We've already verified your license across {wallet?.approved_rentals ?? 3}+ Rox rentals. Your booking is set.</div>
+            </div>
+          </div>
+        )}
+        {wallet && !wallet.is_trusted && st === "not_uploaded" && (
           <div className="mb-6 rounded-2xl border border-[#C7D2FE] bg-gradient-to-br from-[#EEF2FF] to-white p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3" data-testid="wallet-reuse-card">
             <div className="w-11 h-11 rounded-2xl bg-[#3730A3] text-white flex items-center justify-center flex-shrink-0 font-bold">♻</div>
             <div className="flex-1 min-w-0">

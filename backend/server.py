@@ -1239,17 +1239,47 @@ async def _lookup_wallet_license(email: str) -> Optional[dict]:
     return w
 
 
+# Trusted-traveller threshold — how many prior approved rentals a guest needs
+# before we skip the license flow entirely on their next booking.
+TRUSTED_MIN_RENTALS = 3
+
+
+async def _approved_rental_count(email: str) -> int:
+    """Number of past rental bookings where this guest's license was approved."""
+    email = (email or "").strip().lower()
+    if not email:
+        return 0
+    return await db.bookings.count_documents({
+        "customer_email": email,
+        "service_type": "rental",
+        "license.status": "approved",
+    })
+
+
+async def _is_trusted_traveller(email: str) -> bool:
+    """True when this guest has {TRUSTED_MIN_RENTALS}+ approved rental
+    licenses on file. Trusted guests skip the license flow on future bookings
+    provided their wallet hasn't expired."""
+    if not email:
+        return False
+    return await _approved_rental_count(email) >= TRUSTED_MIN_RENTALS
+
+
 @api_router.get("/bookings/{booking_id}/wallet-license-preview")
 async def wallet_license_preview(booking_id: str, t: str):
     """Public: if the guest for this booking already has an approved license on
     file (from a previous rental), return a preview so we can offer them a
     "Reuse my saved license?" button on the upload page."""
     b = await _get_booking_by_token(booking_id, t)
-    wallet = await _lookup_wallet_license(b.get("customer_email", ""))
+    email = b.get("customer_email", "")
+    wallet = await _lookup_wallet_license(email)
+    trusted = await _is_trusted_traveller(email)
     if not wallet:
-        return {"has_wallet": False}
+        return {"has_wallet": False, "is_trusted": trusted, "approved_rentals": await _approved_rental_count(email)}
     return {
         "has_wallet": True,
+        "is_trusted": trusted,
+        "approved_rentals": await _approved_rental_count(email),
         "name_on_license": wallet.get("name_on_license", ""),
         "license_number_masked": (wallet.get("license_number", "")[:3] + "•••" + wallet.get("license_number", "")[-2:]) if wallet.get("license_number") else "",
         "expiry_date": wallet.get("expiry_date", ""),
@@ -1684,7 +1714,7 @@ async def _license_maintenance_tick() -> Dict[str, int]:
     """One sweep: purge old license files + alert on approved-but-expired IDs.
     Returns a small stat dict for logging."""
     log = logging.getLogger("rox.licenses")
-    stats = {"purged": 0, "expiry_alerts": 0}
+    stats = {"purged": 0, "expiry_alerts": 0, "renewal_nudges": 0}
     now = datetime.now(timezone.utc)
 
     # ── 1) Retention purge ────────────────────────────────────────────
@@ -1767,11 +1797,40 @@ async def _license_maintenance_tick() -> Dict[str, int]:
                 _send_sms(admin_sms, f"⚠ Rox {b['id']}: license expires before pickup ({(b.get('license') or {}).get('expiry_date','')}). Review: {review_url}")
         except Exception as e:  # noqa: BLE001
             log.warning("license expiry alert fail %s: %s", b.get("id"), e)
-        await db.bookings.update_one(
-            {"id": b["id"]},
-            {"$set": {"license.expiry_alerted_at": now.isoformat()}},
-        )
-        stats["expiry_alerts"] += 1
+    # ── 3) License-renewal nudge (email 45 days before expiry) ────────
+    cur = db.users.find({
+        "license_wallet.expiry_date": {"$exists": True, "$ne": ""},
+        "license_wallet_nudged_at": {"$exists": False},
+    })
+    async for u in cur:
+        w = u.get("license_wallet") or {}
+        exp = _parse_iso_dt(w.get("expiry_date"))
+        if not exp:
+            continue
+        days_left = (exp.date() - now.date()).days
+        if days_left < 0 or days_left > 45:
+            continue
+        try:
+            base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
+            rotate_url = f"{base}/my/bookings"
+            subject = f"Your Rox saved license expires in {days_left} days"
+            html = (
+                f"<div style=\"font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;\">"
+                f"<h1 style=\"font-family:Georgia,serif;color:#0B3B5C;margin:0 0 8px;\">Time to refresh your license.</h1>"
+                f"<p style=\"color:#64748B;\">Your saved Rox license expires on <strong>{w.get('expiry_date','')}</strong> — {days_left} day{'' if days_left == 1 else 's'} from now. Rotate it now and it's ready for your next Nassau rental.</p>"
+                f"<a href=\"{rotate_url}\" style=\"display:inline-block;background:#3730A3;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;margin-top:12px;font-size:14px;\">Rotate saved license →</a>"
+                f"<p style=\"color:#94a3b8;font-size:11px;margin-top:24px;\">You can also let it lapse — we'll just ask for a fresh photo on your next booking.</p></div>"
+            )
+            text = f"Your saved Rox license expires on {w.get('expiry_date','')} ({days_left} days). Rotate at: {rotate_url}"
+            try:
+                from notifications import send_email as _send_email
+                _send_email(u["email"], subject, html, text, category="confirmation")
+                await db.users.update_one({"email": u["email"]}, {"$set": {"license_wallet_nudged_at": now.isoformat()}})
+                stats["renewal_nudges"] = stats.get("renewal_nudges", 0) + 1
+            except Exception as e:  # noqa: BLE001
+                log.warning("renewal nudge send err %s: %s", u.get("email"), e)
+        except Exception as e:  # noqa: BLE001
+            log.warning("renewal nudge err: %s", e)
 
     return stats
 
@@ -2793,6 +2852,31 @@ async def create_booking(req: BookingCreate):
         # Generate a public single-use upload token so we can email + SMS the
         # guest a link to upload their driver's license (front + back, optional).
         booking["license_upload_token"] = _new_license_upload_token()
+        # Trusted-traveller auto-apply: if this guest has 3+ prior approved
+        # rentals AND a still-valid wallet license, apply it straight away so
+        # they skip the upload flow entirely. Admin can still override in the
+        # licenses panel.
+        try:
+            _wallet = await _lookup_wallet_license(req.customer_email)
+            _trusted = await _is_trusted_traveller((req.customer_email or "").strip().lower())
+            if _trusted and _wallet:
+                booking["license"] = {
+                    "front_url": _wallet.get("front_url"),
+                    "back_url": _wallet.get("back_url"),
+                    "selfie_url": _wallet.get("selfie_url"),
+                    "name_on_license": _wallet.get("name_on_license", ""),
+                    "license_number": _wallet.get("license_number", ""),
+                    "expiry_date": _wallet.get("expiry_date", ""),
+                    "state_or_country": _wallet.get("state_or_country", ""),
+                    "status": "approved",
+                    "uploaded_at": now_iso(),
+                    "reviewed_at": now_iso(),
+                    "reviewed_by": "rox-trusted-auto",
+                    "from_wallet": True,
+                    "from_trusted_tier": True,
+                }
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("trusted auto-apply err: %s", e)
         extra_drivers = max(0, min(int(req.additional_drivers or 0), ADDITIONAL_DRIVER_MAX))
         additional_driver_fee = extra_drivers * ADDITIONAL_DRIVER_FEE_USD
         booking["additional_drivers"] = extra_drivers
@@ -2906,7 +2990,7 @@ async def create_booking(req: BookingCreate):
     # ── License upload link — rentals only ────────────────────────────
     # Send an email + SMS with a short public link for the guest to upload
     # their driver's license (front + back). Best-effort; never block booking.
-    if req.service_type == "rental" and booking.get("license_upload_token"):
+    if req.service_type == "rental" and booking.get("license_upload_token") and not (booking.get("license") or {}).get("from_trusted_tier"):
         try:
             from notifications import send_email as _send_email, send_sms as _send_sms
             link = _license_upload_link(booking["id"], booking["license_upload_token"])

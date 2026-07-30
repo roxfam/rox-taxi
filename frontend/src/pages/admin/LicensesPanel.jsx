@@ -136,6 +136,11 @@ export default function LicensesPanel() {
                             ♻ Guest wallet
                           </span>
                         )}
+                        {lic.from_trusted_tier && (
+                          <span data-testid={`license-trusted-badge-${b.id}`} className="text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#B45309] border border-[#D4A94A]">
+                            ★ Rox Trusted
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
