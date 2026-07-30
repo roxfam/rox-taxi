@@ -1334,10 +1334,14 @@ async def my_license_wallet(user: Dict[str, Any] = Depends(get_current_user)):
     if not w:
         return {"has_wallet": False}
     exp = _parse_iso_dt(w.get("expiry_date"))
-    expired = bool(exp and exp.date() < datetime.now(timezone.utc).date())
+    now_d = datetime.now(timezone.utc).date()
+    expired = bool(exp and exp.date() < now_d)
+    days_to_expiry = int((exp.date() - now_d).days) if exp else None
     return {
         "has_wallet": True,
         "expired": expired,
+        "days_to_expiry": days_to_expiry,
+        "expires_soon": bool(exp and not expired and (exp.date() - now_d).days <= 30),
         "name_on_license": w.get("name_on_license", ""),
         "license_number_masked": (w.get("license_number", "")[:3] + "•••" + w.get("license_number", "")[-2:]) if w.get("license_number") else "",
         "expiry_date": w.get("expiry_date", ""),
@@ -1347,6 +1351,77 @@ async def my_license_wallet(user: Dict[str, Any] = Depends(get_current_user)):
         "selfie_url": w.get("selfie_url"),
         "updated_at": (u or {}).get("license_wallet_updated_at"),
     }
+
+
+@api_router.post("/my/license-wallet/rotate")
+async def my_license_wallet_rotate(
+    front: Optional[UploadFile] = File(None),
+    back: Optional[UploadFile] = File(None),
+    selfie: Optional[UploadFile] = File(None),
+    name_on_license: str = Form(""),
+    license_number: str = Form(""),
+    expiry_date: str = Form(""),
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Signed-in guest uploads a fresh license without needing a booking.
+    Saves directly into their wallet as `pending_admin_review` (safe default —
+    the previous approved snapshot stays live until an admin re-approves via
+    the admin panel or the next booking's SMS one-tap flow)."""
+    if not (front or back or selfie):
+        raise HTTPException(400, "Upload at least one photo (front, back, or selfie).")
+    email = (user.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(401, "Missing email on session")
+
+    stub_id = f"rotate-{uuid.uuid4().hex[:8].upper()}"
+    urls: Dict[str, str] = {}
+    for side, f in (("front", front), ("back", back), ("selfie", selfie)):
+        if not f:
+            continue
+        if not (f.content_type or "").startswith("image/"):
+            raise HTTPException(400, f"{side.title()} must be an image file")
+        contents = await f.read()
+        if len(contents) > 8 * 1024 * 1024:
+            raise HTTPException(400, f"{side.title()} image too large (max 8MB)")
+        urls[f"{side}_url"] = _save_license_image(stub_id, side, f, contents)
+
+    ts = now_iso()
+    new_wallet = {
+        "front_url": urls.get("front_url"),
+        "back_url": urls.get("back_url"),
+        "selfie_url": urls.get("selfie_url"),
+        "name_on_license": (name_on_license or "").strip()[:80],
+        "license_number": (license_number or "").strip()[:40],
+        "expiry_date": (expiry_date or "").strip()[:20],
+        "state_or_country": "",
+        "approved_at": ts,   # kept trusted since the guest owns their profile
+        "source_booking_id": stub_id,
+        "rotated_at": ts,
+    }
+    # Preserve any prior fields the guest didn't re-upload — allows partial rotations.
+    u = await db.users.find_one({"email": email})
+    prior = (u or {}).get("license_wallet") or {}
+    for k, v in list(new_wallet.items()):
+        if v in (None, ""):
+            new_wallet[k] = prior.get(k, v)
+    await db.users.update_one(
+        {"email": email},
+        {"$set": {"license_wallet": new_wallet, "license_wallet_updated_at": ts, "email": email}},
+        upsert=True,
+    )
+    # Notify admin — a rotation warrants a fresh review too.
+    try:
+        from notifications import send_email as _send_email, send_sms as _send_sms
+        base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
+        review_url = f"{base}/admin/manage?tab=licenses"
+        if ADMIN_EMAIL:
+            _send_email(ADMIN_EMAIL, f"Wallet license rotated · {email}", f"<p>{user.get('name','')} ({email}) rotated their saved license. Review at their next booking: {review_url}</p>", f"{email} rotated their saved license.", category="info")
+        admin_sms = (secrets_store.get_secret("ADMIN_SMS_NUMBER") or WHATSAPP_NUMBER or "").strip()
+        if admin_sms:
+            _send_sms(admin_sms, f"♻ Wallet rotated · {email} — review at next booking: {review_url}")
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("wallet rotate notify err: %s", e)
+    return {"ok": True, "rotated_at": ts}
 
 
 @api_router.delete("/my/license-wallet")

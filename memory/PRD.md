@@ -27,7 +27,20 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **Referral card timeout fix** — `MyBookings.jsx` now renders the `[data-testid="referral-card"]` wrapper unconditionally for logged-in users, with a skeleton state while `/referrals/summary` is loading. Playwright selectors no longer time out.
 - **Image Health panel (NEW)** — `GET /api/admin/images/scan` HEAD-checks every image URL across home slides, tours, rentals, taxi services, and approved guest photos concurrently (semaphore=16). New "Image Health" tab in `/admin/manage` shows total scanned / broken / healthy counts, per-item error, copy-URL, open, and one-tap "Fix" link to the matching catalog tab. Verified: 63/63 healthy on current catalog.
 
-### ✅ Shipped Feb 2026 (License v4: OCR correction + Guest Wallet in My Bookings)
+### ✅ Shipped Feb 2026 (License v5: Expiry Countdown + Rotate license from My Bookings)
+- **Expiry countdown on wallet card** — `GET /my/license-wallet` now returns `days_to_expiry` and `expires_soon` (≤30d). The wallet card in `/my/bookings` cross-fades between three tiers: **green "Ready to reuse"**, **amber "Nd to expiry"** (with warning line), **red "Expired"** — so returning guests refresh before their trip.
+- **Rotate saved license from My Bookings** — new authenticated endpoint `POST /api/my/license-wallet/rotate` accepts front + back + selfie + optional metadata. Partial rotations preserve untouched fields. Admin gets an email + SMS heads-up that the wallet was rotated. Frontend: "Rotate license" button opens a compact modal (`WalletCard.jsx`) with three file pickers and 3 metadata inputs. No new booking required.
+
+### ✅ Shipped earlier this session
+- Admin inline OCR correction + Guest Wallet card in My Bookings.
+- AI OCR + selfie face-match via Claude Sonnet 4.5 vision (background task).
+- Guest wallet auto-save on approve + reuse card on upload page.
+- One-tap SMS approve, optional selfie, 14-day retention, expiry-before-pickup alerts.
+- Elegant upload page with guide overlays + trust chips.
+- Per-category email senders (`confirmation@`/`quotes@`/`info@`).
+- SEO overhaul, JSON-LD, sitemap.
+- Namecheap VPS deploy readiness pass + smoke-test script.
+- Rental extension e2e test 12/12.
 - **Admin OCR correction** — new `PATCH /api/admin/bookings/{id}/license/fields` endpoint + inline **"OCR fields (edit to fix)"** row in the admin licenses panel (Name / Number / Expiry / Region). One keystroke away from fixing a wrong AI-read; Save button appears only when dirty.
 - **Guest Wallet in My Bookings** — signed-in customers see a new indigo **"Saved license · Guest wallet"** card at the top of `/my/bookings` with masked number, expiry, "View saved photo →" and a **"Forget it"** button. Powered by `GET/DELETE /api/my/license-wallet`. Shows an "Expired" chip when the license expiry has passed.
 
