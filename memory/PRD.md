@@ -27,7 +27,18 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **Referral card timeout fix** — `MyBookings.jsx` now renders the `[data-testid="referral-card"]` wrapper unconditionally for logged-in users, with a skeleton state while `/referrals/summary` is loading. Playwright selectors no longer time out.
 - **Image Health panel (NEW)** — `GET /api/admin/images/scan` HEAD-checks every image URL across home slides, tours, rentals, taxi services, and approved guest photos concurrently (semaphore=16). New "Image Health" tab in `/admin/manage` shows total scanned / broken / healthy counts, per-item error, copy-URL, open, and one-tap "Fix" link to the matching catalog tab. Verified: 63/63 healthy on current catalog.
 
-### ✅ Shipped Feb 2026 (Driver's license upload flow + Category email routing + SEO boost + tour photos + deploy prep)
+### ✅ Shipped Feb 2026 (License polish + retention + expiry alerts + elegant upload page)
+- **Elegant driver's-license upload page** (`/upload-license/:bookingId?t=…`) — serif hero, warm cream background with soft radial glow, drop-zone cards with **guide overlay** (corner brackets + placeholder mockups for front & back), live image previews, optional metadata drawer, trust chips (encrypted / staff only / auto-delete), WhatsApp fallback link, animated status banners for pending / approved / rejected.
+- **License retention (auto-delete)** — new `_license_maintenance_loop` runs every 12 h, deletes license image files from disk `LICENSE_RETENTION_DAYS=30` days after rental end date, keeps the metadata + sets `license.purged_at` for audit. Admin panel shows a "Files purged (retention)" hint on old rows.
+- **License expiry alerts** — helper `_license_expires_before_pickup(booking)` flags approved licenses whose `expiry_date` is earlier than pickup. Fires one-time admin SMS + email (`license.expiry_alerted_at` for idempotency), and shows a red **"Expires before pickup"** chip in the admin panel row (with red expiry-date text).
+- **PUBLIC_SITE_URL registered** in Admin → Tokens → Site so links can be updated live without a redeploy; falls back to `https://roxtaxi.com`.
+- **Driver's license capture for car rentals** (previously shipped) — full flow: `POST /bookings/{id}/license`, `GET /license/status`, admin `GET /admin/licenses`, `/license/approve` and `/license/reject`.
+
+### ✅ Shipped earlier this session
+- Per-category email senders (`confirmation@`/`quotes@`/`info@`).
+- SEO overhaul for "Nassau taxi service Bahamas" (title, meta, JSON-LD, sitemap).
+- Namecheap VPS deploy readiness check + `/app/scripts/vps-smoke-test.sh`.
+- Rental extension e2e test passed 12/12.
 - **Driver's license capture for car rentals** —
   - Backend: `POST /api/bookings/{id}/license` (public, token-guarded), `GET /api/bookings/{id}/license/status?t=…`, admin `GET /api/admin/licenses?status=…`, `POST /api/admin/bookings/{id}/license/approve` and `/reject`. Booking doc gets `license_upload_token` (random 24-char) on creation and a nested `license: {front_url, back_url, status: pending|approved|rejected, name_on_license, license_number, expiry_date, rejection_reason, reviewed_at, reviewed_by}`.
   - Guest flow: after a rental booking is created we email + SMS the guest a short link `/upload-license/{id}?t=<token>` (front + back, both optional, 8MB max, jpg/png/webp/heic).

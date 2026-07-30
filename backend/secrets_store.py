@@ -34,6 +34,9 @@ TOKEN_REGISTRY: list[dict] = [
     {"key": "FB_AUTOPOST_ENABLED",   "group": "Facebook",    "label": "Auto-Post Enabled",    "sensitive": False, "help": "Set to 'true' or 'false'."},
     {"key": "FB_SITE_URL",           "group": "Facebook",    "label": "Site URL (for captions)", "sensitive": False, "help": "Appears in every auto-generated caption."},
 
+    # Public site
+    {"key": "PUBLIC_SITE_URL",       "group": "Site",        "label": "Public site URL",      "sensitive": False, "help": "Absolute base URL used in email + SMS links (e.g. https://roxtaxi.com). Falls back to https://roxtaxi.com if empty."},
+
     # Twilio SMS
     {"key": "TWILIO_ACCOUNT_SID",    "group": "Twilio SMS",  "label": "Account SID",          "sensitive": True,  "help": "Starts with AC…"},
     {"key": "TWILIO_AUTH_TOKEN",     "group": "Twilio SMS",  "label": "Auth Token",           "sensitive": True,  "help": "Twilio API auth token."},

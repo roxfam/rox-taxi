@@ -101,10 +101,22 @@ export default function LicensesPanel() {
                     <div className="text-xs text-[#64748B]">📧 {b.customer_email} · 📱 {b.customer_phone}</div>
                     {lic.name_on_license && <div className="text-xs text-[#0B3B5C] mt-1">Name: <strong>{lic.name_on_license}</strong></div>}
                     {lic.license_number && <div className="text-xs text-[#0B3B5C]">Number: <span className="mono">{lic.license_number}</span></div>}
-                    {lic.expiry_date && <div className="text-xs text-[#0B3B5C]">Expires: {lic.expiry_date}</div>}
+                    {lic.expiry_date && (
+                      <div className={`text-xs mt-0.5 ${b.license_expires_before_pickup ? "text-[#B91C1C] font-semibold" : "text-[#0B3B5C]"}`}>
+                        Expires: {lic.expiry_date}{b.license_expires_before_pickup && " · before pickup ⚠"}
+                      </div>
+                    )}
+                    {lic.purged_at && <div className="text-[11px] text-[#94856A] mt-1">Files purged {lic.purged_at.slice(0,10)} (retention)</div>}
                     {lic.rejection_reason && <div className="text-xs text-[#B91C1C] mt-1">Last rejection: {lic.rejection_reason}</div>}
                   </div>
-                  <StatusChip status={lic.status || "not_uploaded"} />
+                  <div className="flex flex-col items-end gap-1.5">
+                    <StatusChip status={lic.status || "not_uploaded"} />
+                    {b.license_expires_before_pickup && (
+                      <span data-testid={`license-expired-badge-${b.id}`} className="text-[10px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full border bg-[#FEF2F2] text-[#991B1B] border-[#FECACA]">
+                        Expires before pickup
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-3">

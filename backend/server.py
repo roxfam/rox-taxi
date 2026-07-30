@@ -1065,7 +1065,14 @@ async def admin_list_licenses(status: Optional[str] = None, _admin: str = Depend
     elif status == "not_uploaded":
         query["$or"] = [{"license": {"$exists": False}}, {"license.status": {"$exists": False}}]
     docs = await db.bookings.find(query).sort("created_at", -1).to_list(300)
-    return [clean(d) for d in docs]
+    out = []
+    for d in docs:
+        c = clean(d)
+        # Convenience flag for the admin UI — highlights approved licenses whose
+        # expiry_date is earlier than the booking pickup date.
+        c["license_expires_before_pickup"] = _license_expires_before_pickup(d)
+        out.append(c)
+    return out
 
 
 class LicenseReview(BaseModel):
@@ -1255,6 +1262,151 @@ async def _run_reminder_tick() -> int:
     return sent
 
 
+# ─── License maintenance (retention purge + expiry alerts) ─────────────
+# Runs a light daily sweep that:
+#   1) Deletes license images from disk 30 days after a rental completes
+#      (booking_date + days). The license doc is kept minus the file URLs
+#      so we can still audit that a license was on file.
+#   2) Alerts the admin (SMS + email) once per booking when an APPROVED
+#      license's `expiry_date` falls before the pickup date — the guest's
+#      ID would be expired at pickup and needs a re-upload.
+LICENSE_RETENTION_DAYS = 30
+
+
+def _parse_iso_dt(iso: Optional[str]) -> Optional[datetime]:
+    if not iso:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _license_expires_before_pickup(booking: dict) -> bool:
+    """True when license.expiry_date < booking pickup date."""
+    lic = (booking or {}).get("license") or {}
+    exp_raw = (lic.get("expiry_date") or "").strip()
+    if not exp_raw:
+        return False
+    exp = _parse_iso_dt(exp_raw)
+    pickup = _parse_iso_dt((booking or {}).get("booking_date"))
+    if not exp or not pickup:
+        return False
+    return exp.date() < pickup.date()
+
+
+async def _license_maintenance_tick() -> Dict[str, int]:
+    """One sweep: purge old license files + alert on approved-but-expired IDs.
+    Returns a small stat dict for logging."""
+    log = logging.getLogger("rox.licenses")
+    stats = {"purged": 0, "expiry_alerts": 0}
+    now = datetime.now(timezone.utc)
+
+    # ── 1) Retention purge ────────────────────────────────────────────
+    cur = db.bookings.find({
+        "service_type": "rental",
+        "license.status": {"$in": ["approved", "rejected"]},
+        "license.purged_at": {"$exists": False},
+        "$or": [
+            {"license.front_url": {"$exists": True, "$ne": None}},
+            {"license.back_url":  {"$exists": True, "$ne": None}},
+        ],
+    })
+    async for b in cur:
+        pickup = _parse_iso_dt(b.get("booking_date"))
+        if not pickup:
+            continue
+        days = int(b.get("days") or 1)
+        end_dt = pickup + timedelta(days=days)
+        if end_dt + timedelta(days=LICENSE_RETENTION_DAYS) > now:
+            continue  # not old enough yet
+        lic = b.get("license") or {}
+        for side in ("front_url", "back_url"):
+            url = lic.get(side)
+            if not url or not url.startswith("/api/uploads/"):
+                continue
+            fname = url.rsplit("/", 1)[-1]
+            path = UPLOAD_DIR / fname
+            try:
+                if path.exists():
+                    path.unlink()
+            except Exception as e:  # noqa: BLE001
+                log.warning("license purge unlink fail %s: %s", path, e)
+        await db.bookings.update_one(
+            {"id": b["id"]},
+            {"$set": {
+                "license.purged_at": now.isoformat(),
+                "license.front_url": None,
+                "license.back_url": None,
+            }},
+        )
+        stats["purged"] += 1
+        log.info("license images purged for %s (retention %sd)", b["id"], LICENSE_RETENTION_DAYS)
+
+    # ── 2) Expiry alerts (approved license expires before pickup) ─────
+    cur = db.bookings.find({
+        "service_type": "rental",
+        "license.status": "approved",
+        "license.expiry_alerted_at": {"$exists": False},
+        "status": {"$nin": ["cancelled", "completed"]},
+        "license.expiry_date": {"$exists": True, "$ne": None},
+    })
+    async for b in cur:
+        if not _license_expires_before_pickup(b):
+            continue
+        pickup = _parse_iso_dt(b.get("booking_date"))
+        if pickup and pickup < now:
+            continue  # already picked up, nothing to warn
+        try:
+            base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
+            review_url = f"{base}/admin/manage?tab=licenses"
+            body = (
+                f"License EXPIRES before pickup — {b['id']}\n"
+                f"Guest  : {b.get('customer_name','')}\n"
+                f"Pickup : {b.get('booking_date','')}\n"
+                f"Expiry : {(b.get('license') or {}).get('expiry_date','')}\n"
+                f"Review : {review_url}"
+            )
+            if ADMIN_EMAIL:
+                from notifications import send_email as _send_email
+                _send_email(
+                    ADMIN_EMAIL,
+                    f"⚠ Expired ID before pickup · {b['id']}",
+                    f"<p><strong>Approved license expires before pickup.</strong></p><pre style='background:#fef2f2;padding:12px;border-radius:8px;'>{body}</pre>",
+                    body,
+                    category="info",
+                )
+            admin_sms = (secrets_store.get_secret("ADMIN_SMS_NUMBER") or WHATSAPP_NUMBER or "").strip()
+            if admin_sms:
+                from notifications import send_sms as _send_sms
+                _send_sms(admin_sms, f"⚠ Rox {b['id']}: license expires before pickup ({(b.get('license') or {}).get('expiry_date','')}). Review: {review_url}")
+        except Exception as e:  # noqa: BLE001
+            log.warning("license expiry alert fail %s: %s", b.get("id"), e)
+        await db.bookings.update_one(
+            {"id": b["id"]},
+            {"$set": {"license.expiry_alerted_at": now.isoformat()}},
+        )
+        stats["expiry_alerts"] += 1
+
+    return stats
+
+
+async def _license_maintenance_loop() -> None:
+    """Runs the maintenance tick every 12 hours. First run 60 s after startup."""
+    await asyncio.sleep(60)
+    while True:
+        try:
+            stats = await _license_maintenance_tick()
+            if stats.get("purged") or stats.get("expiry_alerts"):
+                logging.getLogger("rox.licenses").info("maintenance tick: %s", stats)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("rox.licenses").warning("maintenance tick err: %s", e)
+        await asyncio.sleep(60 * 60 * 12)
+
+
 @app.on_event("startup")
 async def seed_db():
     # Prime the DB-backed secrets store so get_secret() returns admin-managed
@@ -1269,6 +1421,11 @@ async def seed_db():
         asyncio.create_task(_booking_reminder_loop())
     except Exception as e:  # noqa: BLE001
         logging.warning("reminder loop start warn: %s", e)
+    # License retention purge + expired-before-pickup alerts.
+    try:
+        asyncio.create_task(_license_maintenance_loop())
+    except Exception as e:  # noqa: BLE001
+        logging.warning("license maintenance loop start warn: %s", e)
     # Ensure customer auth indexes exist
     try:
         await db.users.create_index("email", unique=True)
