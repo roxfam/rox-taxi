@@ -27,10 +27,13 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 - **Referral card timeout fix** — `MyBookings.jsx` now renders the `[data-testid="referral-card"]` wrapper unconditionally for logged-in users, with a skeleton state while `/referrals/summary` is loading. Playwright selectors no longer time out.
 - **Image Health panel (NEW)** — `GET /api/admin/images/scan` HEAD-checks every image URL across home slides, tours, rentals, taxi services, and approved guest photos concurrently (semaphore=16). New "Image Health" tab in `/admin/manage` shows total scanned / broken / healthy counts, per-item error, copy-URL, open, and one-tap "Fix" link to the matching catalog tab. Verified: 63/63 healthy on current catalog.
 
-### ✅ Shipped Feb 2026 (Tour destination photos + deploy prep)
+### ✅ Shipped Feb 2026 (SEO boost + tour photos + deploy prep)
+- **SEO overhaul for "Nassau taxi service Bahamas"** — new keyword-focused `<title>` + meta description, expanded meta keywords (45+ long-tail terms), enhanced Open Graph + Twitter Card, and much richer JSON-LD (LocalBusiness with `keywords`/`slogan`/`knowsAbout`/`makesOffer`/`review`, new dedicated TaxiService node, BreadcrumbList, 11-question FAQ, ItemList of tours). Sitemap rebuilt with `lastmod` + image sitemap + per-attraction pages. Manifest updated. All JSON-LD validated.
 - **Baha Mar destination photo** — swapped to Grand Hyatt Baha Mar aerial hotel exterior in `Tours.jsx` (HUB_ATTRACTIONS).
 - **Blue Lagoon destination photo** — swapped to Blue Lagoon Island private-beach aerial in `Tours.jsx` (HUB_ATTRACTIONS).
-- **Namecheap VPS deploy readiness check — PASS.** Static scan (deployment_agent) confirmed: no hardcoded secrets, no preview URLs in runtime code, CORS/`allow_credentials` combo safe, `.env.example`s complete, `DEPLOYMENT.md` + `bootstrap-vps.sh` current. Ready to ship to `roxtaxi.com` on Namecheap Pulsar.
+- **Namecheap VPS deploy readiness check — PASS.** Static scan confirmed: no hardcoded secrets, no preview URLs in runtime code, CORS/`allow_credentials` combo safe, `.env.example`s complete, `DEPLOYMENT.md` + `bootstrap-vps.sh` current.
+- **VPS smoke-test script** — `/app/scripts/vps-smoke-test.sh` (7 automated checks: HTML, catalog APIs, admin login, TLS, HTTPS redirect).
+- **Rental extension end-to-end test — 12/12 PASSED** on preview (`/app/backend/tests/test_rental_extension.py`). Live-key run to happen on production.
 
 ### ✅ Shipped earlier this session
 - **Round-trip taxi discount** — 10% off both legs, toggle in booking modal, computed server-side (base doubles, 10% off both legs, bridge toll applies once), shown on receipt.
