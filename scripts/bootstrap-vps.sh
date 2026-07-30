@@ -47,10 +47,21 @@ if ! grep -q 'vm.swappiness=10' /etc/sysctl.conf; then
   ok "swappiness=10 applied"
 fi
 
-# 2 · Apt update
+# 2 · Apt update — wait for cloud-init / unattended-upgrades to release the lock
+log "Waiting for any apt lock from cloud-init / unattended-upgrades..."
+while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done
 log "Updating apt cache..."
 sudo apt update -q
 sudo apt upgrade -y -q
+
+# 2b · Add deadsnakes PPA (Python 3.11 is not in default Ubuntu repos)
+if ! grep -qr "deadsnakes" /etc/apt/sources.list.d/ 2>/dev/null; then
+  log "Adding deadsnakes PPA for Python 3.11..."
+  sudo apt install -y software-properties-common
+  sudo add-apt-repository -y ppa:deadsnakes/ppa
+  sudo apt update -q
+fi
+ok "Ready to install Python 3.11"
 
 # 3 · Node 20 LTS
 if ! command -v node >/dev/null || [[ $(node -v | sed 's/v//' | cut -d. -f1) -lt 20 ]]; then
@@ -62,8 +73,16 @@ ok "Node $(node -v)"
 
 # 4 · System packages
 log "Installing Python 3.11, Nginx, certbot, git, ufw, fail2ban..."
-sudo apt install -y python3.11 python3.11-venv python3.11-dev build-essential \
-                    git ufw fail2ban nginx certbot python3-certbot-nginx htop
+# If Python 3.11 isn't available (deadsnakes failed), fall back to 3.10 (default on 22.04)
+if apt-cache show python3.11 >/dev/null 2>&1; then
+  sudo apt install -y python3.11 python3.11-venv python3.11-dev
+else
+  warn "python3.11 not available in apt — falling back to python3.10"
+  sudo apt install -y python3.10 python3.10-venv python3.10-dev
+  # Alias so downstream scripts (deploy-app.sh) that call python3.11 still work
+  sudo ln -sf "$(which python3.10)" /usr/local/bin/python3.11
+fi
+sudo apt install -y build-essential git ufw fail2ban nginx certbot python3-certbot-nginx htop
 
 # 5 · yarn
 if ! command -v yarn >/dev/null; then
