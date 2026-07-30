@@ -13,10 +13,10 @@ All Facebook auto-post triggers live here now. Wired up by server.py via
 `configure()` + `include_router()`.
 """
 import uuid
-from typing import Callable, Awaitable
+from typing import Callable, Awaitable, Optional
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 
 
 _db = None
@@ -47,6 +47,17 @@ def configure(*, db, clean, now_iso, require_admin, send_admin_push,
 
 
 router = APIRouter()
+
+
+# Late-binding Depends wrapper — calls the current global _require_admin
+# at REQUEST time. Naive Depends(_require_admin) captures the initial
+# `lambda: None` at module-load time and bypasses auth.
+def _require_admin_dep(authorization: Optional[str] = Header(None)):
+    return _require_admin(authorization) if callable(_require_admin) else None
+
+
+def _require():
+    return Depends(_require_admin_dep)
 
 
 @router.post("/gallery/submit")
@@ -90,10 +101,6 @@ async def submit_gallery_photo(
     except Exception:  # noqa: BLE001
         pass
     return {"id": sub_id, "status": "pending", "message": "Thanks — we'll review your photo and post it soon."}
-
-
-def _require():
-    return Depends(_require_admin)
 
 
 @router.get("/admin/gallery/pending")

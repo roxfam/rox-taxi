@@ -30,6 +30,7 @@ from routes import catalog as catalog_module
 from routes import chat as chat_module
 from routes import gallery as gallery_module
 from routes import licenses as licenses_module
+from routes import auth as auth_module
 import secrets_store
 
 ROOT_DIR = Path(__file__).parent
@@ -358,14 +359,9 @@ def require_admin(authorization: Optional[str] = Header(None)) -> str:
     return payload["sub"]
 
 
-@api_router.post("/auth/login")
-async def admin_login(req: LoginRequest):
-    if req.email.lower() != ADMIN_EMAIL.lower():
-        raise HTTPException(401, "Invalid credentials")
-    if not bcrypt.checkpw(req.password.encode(), ADMIN_PASSWORD_HASH.encode()):
-        raise HTTPException(401, "Invalid credentials")
-    return {"token": make_admin_token(req.email), "email": req.email}
-
+# Admin login moved to routes/auth.py — make_admin_token stays here (used inline).
+# The bcrypt helpers, _create_customer_session, _set_session_cookie all moved
+# to routes/auth.py as well. get_current_user + require_admin stay here below.
 
 # ---------------- Customer Google Auth (Emergent Managed) ----------------
 # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
@@ -470,163 +466,8 @@ async def get_current_user(request: Request):
     return user
 
 
-@api_router.post("/auth/session")
-async def process_google_session(request: Request, response: Response):
-    """Exchange Emergent session_id (from URL fragment) for a session_token cookie."""
-    session_id = request.headers.get("X-Session-ID")
-    if not session_id:
-        raise HTTPException(400, "Missing session id")
-
-    async with httpx.AsyncClient(timeout=15.0) as ac:
-        r = await ac.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": session_id},
-        )
-    if r.status_code != 200:
-        raise HTTPException(401, "Invalid session")
-    data = r.json()
-    email = data["email"].lower()
-    name = data.get("name", "")
-    picture = data.get("picture", "")
-    session_token = data["session_token"]
-    ts = now_iso()
-
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"name": name, "picture": picture, "updated_at": ts, "last_login_at": ts, "last_login_method": "google"}},
-        )
-    else:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
-            "user_id": user_id, "email": email, "name": name, "picture": picture,
-            "provider": "google", "created_at": ts,
-            "last_login_at": ts, "last_login_method": "google",
-        })
-
-    await db.user_sessions.insert_one({
-        "user_id": user_id, "session_token": session_token, "auth_method": "google",
-        "expires_at": (now_utc() + timedelta(days=7)).isoformat(),
-        "last_activity_at": ts, "created_at": ts,
-    })
-    await db.login_events.insert_one({
-        "user_id": user_id, "action": "login", "method": "google", "at": ts,
-    })
-
-    _set_session_cookie(response, session_token)
-
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    return {"user": user, "session_token": session_token}
-
-
-@api_router.post("/auth/register")
-async def customer_register(req: CustomerRegisterRequest, response: Response):
-    """Customer email/password signup. Auto-links past bookings by email.
-
-    Referral: an optional `referral_code` in the payload links this new
-    account back to the referrer. The credit unlocks after this user's
-    FIRST paid booking (see `_apply_referral_conversion_if_paid`).
-    """
-    email = req.email.lower()
-    existing = await db.users.find_one({"email": email})
-    if existing and existing.get("password_hash"):
-        raise HTTPException(400, "An account with this email already exists. Please sign in.")
-
-    ts = now_iso()
-    # Look up referrer if a code was supplied — MUST resolve before we create
-    # the user record so we can store `referred_by` from day one.
-    referred_by: Optional[str] = None
-    if req.referral_code:
-        rc = req.referral_code.strip().upper()
-        if rc:
-            ref = await db.users.find_one({"referral_code": rc})
-            if ref and ref["email"] != email:
-                referred_by = ref["user_id"]
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"password_hash": _hash_password(req.password), "name": req.name,
-                      "provider": "email" if not existing.get("provider") else "both",
-                      "updated_at": ts}},
-        )
-        # Retro-fit referral_code + referred_by if never set.
-        if not existing.get("referral_code"):
-            await db.users.update_one(
-                {"user_id": user_id},
-                {"$set": {"referral_code": _new_referral_code()}},
-            )
-        if referred_by and not existing.get("referred_by"):
-            await db.users.update_one({"user_id": user_id}, {"$set": {"referred_by": referred_by}})
-    else:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        insert_doc = {
-            "user_id": user_id, "email": email, "name": req.name, "picture": "",
-            "password_hash": _hash_password(req.password), "provider": "email",
-            "referral_code": _new_referral_code(),
-            "credit_balance": 0.0,
-            "created_at": ts,
-        }
-        if referred_by:
-            insert_doc["referred_by"] = referred_by
-        await db.users.insert_one(insert_doc)
-
-    token = await _create_customer_session(user_id, "email")
-    _set_session_cookie(response, token)
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    user.pop("password_hash", None)
-    return {"user": user}
-
-
-@api_router.post("/auth/login-email")
-async def customer_login_email(req: CustomerLoginRequest, response: Response):
-    """Customer email/password login."""
-    email = req.email.lower()
-    user = await db.users.find_one({"email": email})
-    if not user or not user.get("password_hash"):
-        raise HTTPException(401, "Invalid email or password")
-    if not _verify_password(req.password, user["password_hash"]):
-        raise HTTPException(401, "Invalid email or password")
-
-    token = await _create_customer_session(user["user_id"], "email")
-    _set_session_cookie(response, token)
-    user.pop("_id", None)
-    user.pop("password_hash", None)
-    return {"user": user}
-
-
-@api_router.get("/auth/me")
-async def me(user: dict = Depends(get_current_user)):
-    return user
-
-
-@api_router.post("/auth/heartbeat")
-async def heartbeat(user: dict = Depends(get_current_user)):
-    """Called by frontend on activity to keep session alive within idle window.
-    The get_current_user dep already refreshes last_activity_at."""
-    return {"ok": True, "idle_timeout_minutes": IDLE_TIMEOUT_MINUTES}
-
-
-@api_router.post("/auth/logout")
-async def logout(request: Request, response: Response):
-    token = request.cookies.get("session_token")
-    if token:
-        session = await db.user_sessions.find_one({"session_token": token})
-        if session:
-            await db.login_events.insert_one({
-                "user_id": session["user_id"], "action": "logout",
-                "method": session.get("auth_method"), "at": now_iso(),
-            })
-            await db.users.update_one(
-                {"user_id": session["user_id"]},
-                {"$set": {"last_logout_at": now_iso()}},
-            )
-        await db.user_sessions.delete_one({"session_token": token})
-    response.delete_cookie("session_token", path="/", samesite="none", secure=True)
-    return {"ok": True}
-
+# /auth/session, /auth/register, /auth/login-email, /auth/me, /auth/heartbeat, /auth/logout
+# all moved to routes/auth.py
 
 @api_router.get("/my/bookings")
 async def my_bookings(user: dict = Depends(get_current_user)):
@@ -3206,6 +3047,21 @@ chat_module.configure(
 )
 api_router.include_router(chat_module.router)
 
+# Wire up the auth router (admin JWT + customer sessions).
+# get_current_user + require_admin stay in server.py — they're shared by many routes.
+auth_module.configure(
+    db=db,
+    now_iso=now_iso,
+    now_utc=now_utc,
+    get_current_user=get_current_user,
+    new_referral_code=_new_referral_code,
+    jwt_secret=JWT_SECRET,
+    admin_email=ADMIN_EMAIL,
+    admin_password_hash=ADMIN_PASSWORD_HASH,
+    idle_timeout_minutes=IDLE_TIMEOUT_MINUTES,
+)
+api_router.include_router(auth_module.router)
+
 app.include_router(api_router)
 
 # ── CORS ────────────────────────────────────────────────────────────
@@ -3240,4 +3096,26 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+_cors_env = (os.environ.get('CORS_ORIGINS') or '').strip()
+if _cors_env:
+    _origins = [o.strip() for o in _cors_env.split(',') if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_credentials=True,
+        allow_origins=_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_credentials=False,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 

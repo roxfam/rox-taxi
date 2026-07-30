@@ -25,7 +25,7 @@ import secrets as _secrets_lib
 import uuid
 from typing import Any, Callable, Dict, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -65,12 +65,25 @@ def configure(**kw):
 router = APIRouter()
 
 
+# Late-binding Depends wrappers — call the current global refs at REQUEST
+# time. Naive Depends(_require_admin) / Depends(_get_current_user) capture
+# the initial `lambda: None` at module-load time and bypass auth.
+def _require_admin_dep(authorization: Optional[str] = Header(None)):
+    return _require_admin(authorization) if callable(_require_admin) else None
+
+
+async def _current_user_dep(request):
+    if _get_current_user is None or _get_current_user is (lambda: None):
+        return None
+    return await _get_current_user(request)
+
+
 def _require():
-    return Depends(_require_admin)
+    return Depends(_require_admin_dep)
 
 
 def _current_user():
-    return Depends(_get_current_user)
+    return Depends(_current_user_dep)
 
 
 # ─── Public: license status + upload ─────────────────────────────────
