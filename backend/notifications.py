@@ -206,6 +206,67 @@ def notify_owner_payment_received(booking: dict, provider: str = "stripe") -> di
     return send_sms(owner, body)
 
 
+def notify_booking_received(booking: dict, prefs: Optional[dict] = None) -> dict:
+    """Immediate acknowledgment email for bookings in `pending_payment` state.
+
+    Sent as soon as the booking is created (before Stripe/PayPal completes) so
+    the guest has proof we captured their request — including pickup location,
+    date/time, and current status. Once payment settles the guest also gets
+    the full confirmation email from notify_booking_confirmed().
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    report = {"email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled}}
+
+    if not (email_enabled and booking.get("customer_email")):
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+        return report
+
+    pickup = booking.get("pickup_location") or "—"
+    dropoff = booking.get("dropoff_location") or "—"
+    status_label = (booking.get("status") or "pending").replace("_", " ").title()
+    subject = f"We've got your booking {booking['id']} — awaiting payment"
+    text = (
+        f"Hi {booking.get('customer_name','')},\n\n"
+        f"Thanks for booking with Rox Taxi — we've captured your request and it's now awaiting payment.\n\n"
+        f"  Confirmation: {booking['id']}\n"
+        f"  Status: {status_label}\n"
+        f"  Service: {booking.get('item_name','')}\n"
+        f"  Date & time: {booking.get('booking_date','')}\n"
+        f"  Pickup: {pickup}\n"
+        f"  Dropoff: {dropoff}\n"
+        f"  Passengers: {booking.get('passengers', 1)}\n"
+        f"  Total: {_fmt_money(booking.get('total', 0))}\n\n"
+        f"Once payment is complete you'll receive a full confirmation. You can also finish paying anytime at\n"
+        f"https://roxtaxi.com/pay?id={booking['id']}\n\n"
+        f"Questions? WhatsApp us: https://wa.me/12424322587\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:0 0 8px;">Got it, {booking.get('customer_name','')} — awaiting payment.</h1>
+      <p style="color:#64748B;">We've captured your booking request. Complete payment to lock it in.</p>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:24px;margin-top:20px;">
+        <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#64748B;">Confirmation</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:26px;color:#0B3B5C;margin-top:4px;">{booking['id']}</div>
+        <div style="display:inline-block;margin-top:8px;padding:4px 10px;border-radius:999px;background:#FEF3C7;color:#92400E;font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;">{status_label}</div>
+        <hr style="border:none;border-top:1px solid #E2E8F0;margin:20px 0;">
+        <div><strong style="color:#0B3B5C;">{booking.get('item_name','')}</strong></div>
+        <div style="color:#64748B;font-size:14px;margin-top:6px;">Date &amp; time: <strong>{booking.get('booking_date','')}</strong></div>
+        <div style="color:#64748B;font-size:14px;">Pickup: <strong>{pickup}</strong></div>
+        <div style="color:#64748B;font-size:14px;">Dropoff: {dropoff}</div>
+        <div style="color:#64748B;font-size:14px;">Passengers: {booking.get('passengers', 1)}</div>
+        <div style="color:#64748B;font-size:14px;margin-top:8px;">Total: <span style="color:#E86A3C;font-weight:600;">{_fmt_money(booking.get('total',0))}</span></div>
+        <a href="https://roxtaxi.com/pay?id={booking['id']}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;margin-top:18px;font-size:14px;">Complete payment →</a>
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:24px;">Rox Taxi Service &amp; Tours · Nassau, Bahamas · 24/7 dispatch</p>
+    </div>
+    """
+    result = send_email(booking["customer_email"], subject, html, text, category="confirmation")
+    report["email"].update(result)
+    return report
+
+
 def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dict:
     """Send email + SMS on confirmed booking.
 

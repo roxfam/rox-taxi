@@ -18,6 +18,10 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (booking fundamentals hardening)
+- **`pickup_location` required for taxi bookings** — `POST /api/bookings` now returns HTTP 400 `"Pickup location is required for taxi bookings."` when a taxi booking is submitted without one. Frontend already required it via location selector; backend now matches so hand-crafted API calls can't slip through.
+- **Immediate booking-received acknowledgment email** — new `notify_booking_received()` helper in `notifications.py` fires on booking creation whenever `status == "pending_payment"` (Stripe / PayPal paths). Shows pickup, dropoff, date & time, passengers, total, status badge, and a "Complete payment →" CTA. Full confirmation still fires from the payment webhook via `notify_booking_confirmed()`. Result stored on the booking doc as `acknowledgment_status` + `acknowledged_at` for admin visibility.
+
 ### ✅ Shipped Feb 2026 (namecheap-vps deploy hardening)
 - **Removed "Multi Island / Coming Soon" city switcher** from header (Freeport/Exuma/Andros hidden from UI). Backend `/cities` + `/cities/:slug` route retained.
 - **CORS hardened for production** — `backend/server.py` no longer sends `allow_credentials=True` with wildcard origins (silently killed auth in prod). New behavior: when `CORS_ORIGINS` env is set, credentials + explicit origins; blank → wildcard + no credentials.

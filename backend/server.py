@@ -19,7 +19,7 @@ from emergentintegrations.payments.stripe.checkout import (
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 from fastapi.responses import StreamingResponse, HTMLResponse
-from notifications import notify_booking_confirmed, notify_owner_booking_created, send_booking_reminder, send_rental_return_reminder
+from notifications import notify_booking_confirmed, notify_booking_received, notify_owner_booking_created, send_booking_reminder, send_rental_return_reminder
 from facebook import post_gallery_photo_to_facebook, facebook_status
 import paypal_client
 from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS, HOME_SLIDES_SEED
@@ -2840,6 +2840,9 @@ async def site_config():
 @api_router.post("/bookings")
 async def create_booking(req: BookingCreate):
     _validate_open_day(req.service_type, req.booking_date, req.days or 1)
+    # Taxi bookings must include a pickup location — drivers can't dispatch without it.
+    if req.service_type == "taxi" and not (req.pickup_location or "").strip():
+        raise HTTPException(400, "Pickup location is required for taxi bookings.")
     if req.service_type == "rental" and (req.days or 0) < RENTAL_MIN_DAYS:
         raise HTTPException(
             400,
@@ -3106,6 +3109,22 @@ async def create_booking(req: BookingCreate):
             booking["notified_at"] = notified_at
         except Exception as e:  # noqa: BLE001
             logging.warning("notify err: %s", e)
+    elif booking.get("status") == "pending_payment":
+        # Immediate acknowledgment email — proof we captured the request before
+        # Stripe/PayPal settle. Full confirmation still fires from the payment
+        # webhook via notify_booking_confirmed().
+        try:
+            prefs = await db.site_config.find_one({"_id": "main"}) or {}
+            report = notify_booking_received(clean(dict(booking)), prefs)
+            received_at = now_iso()
+            await db.bookings.update_one(
+                {"id": booking["id"]},
+                {"$set": {"acknowledgment_status": report, "acknowledged_at": received_at}},
+            )
+            booking["acknowledgment_status"] = report
+            booking["acknowledged_at"] = received_at
+        except Exception as e:  # noqa: BLE001
+            logging.warning("acknowledgment notify err: %s", e)
     return clean(booking)
 
 
