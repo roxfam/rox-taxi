@@ -52,11 +52,11 @@ export default function SummerBanner() {
       className="inline-flex items-center gap-3 px-6 shrink-0"
       aria-hidden={ariaHidden || undefined}
     >
-      <span className="text-lg md:text-xl select-none" aria-hidden>☀️</span>
-      <span className="font-semibold text-sm md:text-base whitespace-nowrap">
+      <span className="text-base md:text-lg select-none" aria-hidden>☀️</span>
+      <span className="font-semibold text-[12px] md:text-sm whitespace-nowrap">
         Summer Special · Save 10% on every tour
       </span>
-      <span className="text-xs md:text-sm text-white/90 whitespace-nowrap">
+      <span className="text-[11px] md:text-xs text-white/90 whitespace-nowrap">
         Book by Aug 31 · code{" "}
         <span
           className="font-mono bg-white/20 px-1.5 py-0.5 rounded font-bold"
@@ -89,7 +89,7 @@ export default function SummerBanner() {
         background: "linear-gradient(90deg, #E86A3C 0%, #F4A11C 50%, #E86A3C 100%)",
       }}
     >
-      <div className="relative flex items-center py-2.5 md:py-3">
+      <div className="relative flex items-center py-1.5 md:py-2">
         {/* Scrolling message row */}
         <div className="flex-1 min-w-0 overflow-hidden">
           <div className="promo-marquee-track flex items-center whitespace-nowrap will-change-transform">
@@ -109,7 +109,7 @@ export default function SummerBanner() {
           <button
             onClick={goBook}
             data-testid="summer-banner-cta"
-            className="whitespace-nowrap bg-white text-orange-700 font-bold text-xs md:text-sm px-3 md:px-4 py-1.5 rounded-full hover:bg-orange-50 transition-colors"
+            className="whitespace-nowrap bg-white text-orange-700 font-bold text-[11px] md:text-xs px-3 md:px-3.5 py-1 rounded-full hover:bg-orange-50 transition-colors"
           >
             Book Now →
           </button>
@@ -117,9 +117,9 @@ export default function SummerBanner() {
             onClick={dismiss}
             data-testid="summer-banner-dismiss"
             aria-label="Dismiss banner"
-            className="text-white/80 hover:text-white p-1 -mr-1"
+            className="text-white/80 hover:text-white p-0.5 -mr-1"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
