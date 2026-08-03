@@ -18,7 +18,12 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
-### ✅ Shipped Feb 2026 (Login-method analytics on Admin Dashboard)
+### ✅ Shipped Feb 2026 (Nassau City Tour catalog item — dual-listed)
+- **`backend/seed_data.py`** — new `nassau-city-tour` entry in `TOURS_SEED` (id `nassau-city-tour`) AND `city-tour` entry in `TAXI_SERVICES` so the same 2½-hour city tour surfaces on both `/tours` and `/taxi` pages. Featured on both.
+- Full itinerary in the description: House of Assembly, Bahamas Rum Cake Factory, Atlantis photo stop, Paradise Island, Montague Beach + Fort Montague, residential Nassau, Queen's Staircase, Graycliff estate (wine cellar, chocolate, cigar, moonshine, tea factories), Fish Fry, drive-by American Embassy + Governor's House + Fort Fincastle + Water Tower + Fort Charlotte. Ends at Fish Fry / beach of choice / pickup / anywhere else.
+- Structured child pricing on the doc: `price=45` (adult), `child_price=25` (ages 4-12), `child_free_under=3`. Ready for a future "kids picker" on the booking form to consume programmatically.
+
+
 - **`backend/routes/admin.py::/admin/auth/methods-summary`** — new admin endpoint that aggregates `users` by `provider` (google-only, email-only, both-linked) plus a 30-day active-login split from `user_sessions.auth_method` and a 30-day new-signup count.
 - **`frontend/src/pages/AdminDashboard.jsx`** — `AuthMethodsCard` visualisation below the deposits panel. Three-segment progress bar (Google-only / Both / Email-only) that sums to exactly 100%, separate legend chips with counts + percentages, and a second 30-day active-logins bar for the more useful week-to-week signal. Auto-refreshes with the rest of the dashboard every 30 seconds.
 - Verified live: 41 users, 39 new-30d, 44 active logins in 30d (all email currently — Google integration ready and waiting for demand).

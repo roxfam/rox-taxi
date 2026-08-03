@@ -56,6 +56,12 @@ TOURS_SEED: List[Dict] = [
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/dsgqvbvj_junkanoo%20party%20bus%20%281%29.jpg",
      "category": "tour", "active": True,
      "external_booking_url": "https://www.coolbahamas.com/activity/new-providence-island/junkanoo-bus-tour/"},
+    {"id": "nassau-city-tour", "name": "Nassau City Tour — 2½ Hour Guided Sightseeing", "price": 45.0, "duration": "2.5 hours",
+     "location": "Nassau — cruise-port, hotel or airport pickup", "featured": True,
+     "description": "Two and a half hours of Nassau in one relaxed drive — House of Assembly, Bahamas Rum Cake Factory, Atlantis Paradise Island photo stop, Paradise Island drive-through, Montague Beach + Fort Montague, Nassau residential streets, Queen's Staircase, Graycliff estate (wine cellar, chocolate, cigar, moonshine and tea factories), Fish Fry at Arawak Cay, drive-by the American Embassy, Governor's House, Fort Fincastle, the Water Tower and Fort Charlotte. Choose your ending: Fish Fry, a beach of your choice, back to your pickup point, or anywhere else on the island. Pricing: $45 per adult · $25 per child 4-12 · under 3 free.",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/08y2qvto_684289985_122108121422812605_8912813587859776552_n.jpg",
+     "category": "tour", "active": True,
+     "child_price": 25.0, "child_age_max": 12, "child_free_under": 3},
 ]
 
 # Nassau / New Providence official taxi tariff (posted at LPIA taxi rank + Ministry table).
@@ -170,6 +176,11 @@ TAXI_SERVICES: List[Dict] = [
      "route": "Hotel/Villa ↔ Supermarket (by the hour)", "featured": True,
      "description": "Private driver waits while you shop and helps load groceries. Billed at the standard $55/hr hourly charter rate — 1-hour minimum, then pro-rata after. Popular stops: Solomon's, Super Value, Robin Hood, Family Value, Cost Right (Cable Beach & Baha Mar villas).",
      "image_url": _TAXI_IMG},
+    {"id": "city-tour", "name": "Nassau City Tour — 2½ Hour Guided Sightseeing", "price": 45.0,
+     "route": "Nassau — pickup from cruise port, hotel or LPIA", "featured": True,
+     "description": "Two and a half hours of Nassau in one relaxed drive — House of Assembly, Bahamas Rum Cake Factory, Atlantis Paradise Island photo stop, Paradise Island, Montague Beach + Fort Montague, drive through residential Nassau, Queen's Staircase, Graycliff estate (wine cellar + chocolate, cigar, moonshine and tea factories), Fish Fry at Arawak Cay, drive-by the American Embassy, Governor's House, Fort Fincastle, the Water Tower and Fort Charlotte. Ends wherever you like — Fish Fry, a beach of your choice, back to pickup, or anywhere else on the island. $45 per adult · $25 per child 4-12 · under 3 free.",
+     "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/08y2qvto_684289985_122108121422812605_8912813587859776552_n.jpg",
+     "child_price": 25.0, "child_age_max": 12, "child_free_under": 3, "duration_hours": 2.5},
 ]
 
 RENTALS_SEED: List[Dict] = [
