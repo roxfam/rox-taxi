@@ -56,11 +56,19 @@ trap 'rm -rf "$DUMP_DIR"' EXIT
 log "▶ mongodump start db=$MONGO_DB → $DUMP_DIR"
 mongodump --uri="$MONGO_URI" --db="$MONGO_DB" --out="$DUMP_DIR" --quiet \
   || die "mongodump failed"
-log "✔ mongodump ok"
+# Verify mongodump actually produced something before we try to tar it.
+DUMP_CONTENTS=$(ls "$DUMP_DIR" 2>/dev/null)
+if [[ -z "$DUMP_CONTENTS" ]]; then
+  die "mongodump produced no output — check MONGO_DB='$MONGO_DB' matches an actual database. List DBs with: mongosh --eval 'show dbs'"
+fi
+log "✔ mongodump ok — contents: $DUMP_CONTENTS"
 
 # --- 2. compress -----------------------------------------------------
 log "▶ compress → $ARCHIVE"
-tar -C "$DUMP_DIR" -czf "$ARCHIVE" "$MONGO_DB" \
+# Tar the WHOLE dump dir (`.`) rather than a hard-coded MONGO_DB subfolder —
+# mongodump names its output folder after the DB, and we can't guarantee that
+# matches $MONGO_DB verbatim across environments (case, aliases, etc).
+tar -C "$DUMP_DIR" -czf "$ARCHIVE" . \
   || die "tar failed"
 SIZE=$(du -h "$ARCHIVE" | cut -f1)
 log "✔ archive ready ($SIZE)"

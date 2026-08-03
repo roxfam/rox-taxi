@@ -92,8 +92,8 @@ megals --config /tmp/mega.ini /Root/rox-taxi-backups | tail -n 5
 megaget --config /tmp/mega.ini /Root/rox-taxi-backups/rox-mongo-20260315-031500.tgz
 
 # 4. Restore into the new Mongo
-tar -xzf rox-mongo-20260315-031500.tgz
-mongorestore --uri mongodb://127.0.0.1:27017 --nsInclude 'test_database.*' test_database/
+tar -xzf rox-mongo-20260315-031500.tgz         # extracts whichever DB folder(s) were dumped
+mongorestore --uri mongodb://127.0.0.1:27017 . # restore everything the archive contains
 ```
 
 After that, redeploy the app with `scripts/deploy-app.sh`. Total downtime:
