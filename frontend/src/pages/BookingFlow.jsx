@@ -94,6 +94,14 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     ? (numAdults * singleFare) + (numKids * childPrice)
     : null;
 
+  // Group discount — 10% off the per-person subtotal when 6+ paying passengers
+  // book together on a per-person tour. Toddlers don't count (they ride free).
+  const GROUP_DISCOUNT_PCT = 0.10;
+  const GROUP_DISCOUNT_MIN_PAX = 6;
+  const payingPassengers = hasChildPricing ? (numAdults + numKids) : 0;
+  const groupDiscountActive = hasChildPricing && payingPassengers >= GROUP_DISCOUNT_MIN_PAX;
+  const groupDiscount = groupDiscountActive ? (perPersonBase * GROUP_DISCOUNT_PCT) : 0;
+
   const rawBase = hasChildPricing
     ? perPersonBase
     : serviceType === "rental"
@@ -103,7 +111,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         : singleFare;
   // Round-trip discount doesn't apply to per-person tours — they're not routes.
   const roundTripDiscount = (isRoundTrip && !hasChildPricing) ? rawBase * ROUND_TRIP_DISCOUNT_PCT : 0;
-  const base = rawBase - roundTripDiscount;
+  const base = rawBase - roundTripDiscount - groupDiscount;
   const luggageFee = serviceType === "taxi" && !hasChildPricing ? Number(form.extra_luggage || 0) * LUGGAGE_FEE : 0;
   // The extra-passenger fee (+$5/pax over 2) only applies to fixed-fare
   // taxi routes — per-person tours already price each passenger explicitly.
@@ -116,7 +124,12 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const babySeatCount = serviceType === "rental" ? Number(form.baby_seats || 0) : 0;
   const babySeatFree = serviceType === "rental" && rentalDays >= BABY_SEAT_FREE_AFTER_DAYS;
   const babySeatFee = babySeatFree ? 0 : babySeatCount * BABY_SEAT_FEE * Math.max(1, rentalDays);
-  const total = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee + babySeatFee;
+  // Processing fee — 3% on the whole transaction (base + extras + deposit)
+  // to cover Stripe/PayPal card fees. Shown to the customer as its own line.
+  const PROCESSING_FEE_PCT = 0.03;
+  const subtotal = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee + babySeatFee;
+  const processingFee = subtotal * PROCESSING_FEE_PCT;
+  const total = subtotal + processingFee;
 
   const submit = async () => {
     if (!form.customer_name || !form.customer_email || !form.customer_phone || !form.booking_date) {
@@ -159,6 +172,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         adults: hasChildPricing ? numAdults : undefined,
         kids: hasChildPricing ? numKids : undefined,
         toddlers: hasChildPricing ? numToddlers : undefined,
+        group_discount: groupDiscountActive ? Number(groupDiscount.toFixed(2)) : 0,
+        processing_fee: Number(processingFee.toFixed(2)),
         days: Number(form.days) || 1,
         extra_luggage: Number(form.extra_luggage) || 0,
         additional_drivers: Number(form.additional_drivers) || 0,
@@ -286,6 +301,24 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                           {money(perPersonBase)}
                         </span>
                       </div>
+                      {groupDiscountActive && (
+                        <div
+                          className="rounded-xl bg-[#059669]/10 border border-[#059669]/30 px-3 py-2 text-xs flex items-center justify-between"
+                          data-testid="group-discount-banner"
+                        >
+                          <span className="text-[#065f46] font-semibold">
+                            🎉 Group discount applied — 10% off for {payingPassengers} paying passengers
+                          </span>
+                          <span className="mono font-bold text-[#059669]">
+                            −{money(groupDiscount)}
+                          </span>
+                        </div>
+                      )}
+                      {!groupDiscountActive && payingPassengers >= 4 && (
+                        <div className="text-[10.5px] text-[#64748B] leading-relaxed">
+                          Book {GROUP_DISCOUNT_MIN_PAX - payingPassengers} more paying passenger{GROUP_DISCOUNT_MIN_PAX - payingPassengers === 1 ? "" : "s"} and save 10% with our group discount.
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
@@ -472,6 +505,27 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     <div className="mt-2 text-xs flex justify-between border-t border-[#E2E8F0] pt-2" data-testid="round-trip-summary-line">
                       <span className="text-[#64748B]">Round trip — 2 legs (10% off)</span>
                       <span className="mono font-semibold text-[#D4A94A]">−${roundTripDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Group discount + processing fee — shown for every booking so
+                  customers see the exact total before they hit "Continue to Payment". */}
+              {(groupDiscountActive || processingFee > 0) && (
+                <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 space-y-2 text-xs" data-testid="fees-summary">
+                  {groupDiscountActive && (
+                    <div className="flex justify-between" data-testid="group-discount-line">
+                      <span className="text-[#065f46] font-semibold">
+                        Group discount ({payingPassengers} paying passengers, 10% off)
+                      </span>
+                      <span className="mono font-bold text-[#059669]">−{money(groupDiscount)}</span>
+                    </div>
+                  )}
+                  {processingFee > 0 && (
+                    <div className="flex justify-between" data-testid="processing-fee-line">
+                      <span className="text-[#64748B]">Processing fee (3%)</span>
+                      <span className="mono font-semibold text-[#0B3B5C]">+{money(processingFee)}</span>
                     </div>
                   )}
                 </div>

@@ -18,7 +18,14 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
-### ✅ Shipped Feb 2026 (Kids picker + live per-person price calc on booking form)
+### ✅ Shipped Feb 2026 (3% processing fee + 10% group discount at 6+ paying passengers)
+- **`frontend/src/pages/BookingFlow.jsx`** — every booking now carries a 3% processing fee (applied to base + all extras + rental deposit) shown as its own line in the fees summary panel. Recomputes live as the customer changes any input.
+- **Group discount** — 10% off the per-person subtotal auto-applies when a per-person tour (e.g. Nassau City Tour) has 6+ paying passengers (adults + kids 4-12; toddlers under 3 don't count). Green banner appears inside the passenger picker; separate line in the fees summary confirms the savings. Discount applies BEFORE processing fee.
+- **Progress nudge** — at 4 or 5 paying passengers, a friendly hint appears: "Book N more paying passenger and save 10%".
+- **Booking payload** carries `processing_fee` and `group_discount` fields so admin reports + driver manifests see the breakdown.
+- Verified live: 1 adult = $45 + $1.35 = $46.35 · 6 adults = $270 − $27 + $7.29 = $250.29. Math correct.
+
+
 - **`frontend/src/pages/BookingFlow.jsx`** — booking form now detects any catalog item with `child_price > 0` (currently the Nassau City Tour). When active, replaces the single-passenger picker with a **"Passenger breakdown" panel** — three rows of `+`/`−` steppers for Adults, Kids (4-12), Toddlers (under 3) with a live subtotal that recomputes on every tap: `adults × price + kids × child_price`. Toddlers stay free.
 - The taxi extra-passenger fee (+$5/pax over 2), round-trip discount, and luggage fee are all correctly SKIPPED when per-person pricing is active — a per-person tour is not a fixed-fare route.
 - The booking payload now carries `adults`, `kids`, `toddlers` alongside a computed `passengers = adults + kids + toddlers`, so drivers see the exact breakdown on the manifest (e.g. "3 adults + 2 kids + 1 toddler under 3" for car-seat planning).
