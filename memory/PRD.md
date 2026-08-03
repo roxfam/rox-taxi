@@ -18,7 +18,12 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
-### ✅ Shipped Feb 2026 (Fee disclosure + Groups landing hero)
+### ✅ Shipped Feb 2026 (Group quick-picker + Cruise Groups landing page)
+- **`frontend/src/pages/Tours.jsx`** — replaced the "See group tours" CTA on the groups banner with a **4-button quick-picker** (6 / 10 / 20 / 40+). Clicking a size sets `sessionStorage.rox_group_size`, smooth-scrolls to the Nassau City Tour card, and auto-clicks its Book button. Also added a "Full cruise-group guide →" link routing to the new content page.
+- **`frontend/src/pages/BookingFlow.jsx`** — reads `sessionStorage.rox_group_size` on mount and prefills `adults` accordingly (then clears the key so refreshes don't stick). Verified: banner tap "20" → modal opens with adults=20 already set, group discount + processing fee lines light up live.
+- **`frontend/src/pages/CruiseGroupsNassau.jsx`** — new ~850-word content landing at `/cruise-groups-nassau`. Hero, group-size pricing cards (6/10/20/40+ with real savings math), Prince George Wharf logistics section, "why direct-book" reason cards, 4-step booking process, 6-question FAQ. `Service` + `FAQPage` + `BreadcrumbList` JSON-LD graph. Routed in `App.js`, sitemap entry, and Layout footer link.
+
+
 - **`frontend/src/pages/Taxi.jsx`, `Tours.jsx`, `CarRental.jsx`** — subtle "Prices include a 3% processing fee that covers card + PayPal fees" disclosure line in each page hero, visible before the booking modal opens.
 - **`frontend/src/pages/Tours.jsx`** — new "Groups of 6+ save 10%" hero banner sitting between the amber tours hero and the destination hub. Deep-navy gradient with gold radial glow, pill badge ("Cruise Groups · Reunions · Weddings"), explanatory copy, and two CTAs ("See group tours" and "Ask on WhatsApp" with a pre-filled group message body). Uses lifted -mt-8 for a hero-overlap effect.
 

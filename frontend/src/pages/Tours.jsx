@@ -196,14 +196,48 @@ export default function Tours() {
                 Book any per-person Nassau tour with 6 or more paying passengers and we'll auto-apply a 10% group discount at checkout. Perfect for cruise-ship shore excursions, family reunions, bridal parties and corporate retreats. Kids under 3 always ride free.
               </p>
             </div>
-            <div className="flex flex-col gap-3 md:min-w-[220px]">
-              <Link
-                to="/tours"
-                data-testid="groups-hero-cta-tours"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] font-black text-sm tracking-wide px-5 py-3 shadow-[0_10px_25px_rgba(212,169,74,0.35)] transition-colors"
-              >
-                See group tours <ArrowRight className="w-4 h-4" />
-              </Link>
+            <div className="flex flex-col gap-3 md:min-w-[250px]" data-testid="groups-hero-picker">
+              <div className="text-[10px] uppercase tracking-[0.22em] text-white/60 font-bold">
+                How big is your group?
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[6, 10, 20, 40].map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => {
+                      try { sessionStorage.setItem("rox_group_size", String(size)); } catch { /* ignore */ }
+                      // Find the Nassau City Tour card (any per-person tour with $45 price + "City Tour" name)
+                      // and click its Book button. Fallback: scroll to the tours grid.
+                      const cards = Array.from(document.querySelectorAll("[data-testid='tour-card'], article, .tour-card"));
+                      let target = null;
+                      for (const el of cards) {
+                        const txt = (el.textContent || "").toLowerCase();
+                        if (txt.includes("nassau city tour") || txt.includes("city tour")) { target = el; break; }
+                      }
+                      if (!target) {
+                        // fallback: use generic query
+                        const all = Array.from(document.querySelectorAll("div, article"));
+                        target = all.find((el) => {
+                          const t = (el.textContent || "");
+                          return t.startsWith("Nassau City Tour") && t.includes("$45");
+                        });
+                      }
+                      if (target) {
+                        target.scrollIntoView({ behavior: "smooth", block: "center" });
+                        setTimeout(() => {
+                          const btn = Array.from(target.querySelectorAll("button, a")).find((b) => b.textContent.trim().toLowerCase().startsWith("book"));
+                          if (btn) btn.click();
+                        }, 850);
+                      }
+                    }}
+                    data-testid={`groups-hero-size-${size}`}
+                    className="px-4 py-2 rounded-full bg-white/10 border border-white/30 hover:bg-[#D4A94A] hover:text-[#0B192C] hover:border-[#D4A94A] font-black text-sm tracking-wide transition-colors active:scale-95"
+                  >
+                    {size === 40 ? "40+" : size}
+                  </button>
+                ))}
+              </div>
               <a
                 href="https://wa.me/12424322587?text=Hi%20Rox%2C%20we%27re%20a%20group%20of%20"
                 target="_blank"
@@ -211,8 +245,15 @@ export default function Tours() {
                 data-testid="groups-hero-cta-whatsapp"
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/30 text-white font-bold text-xs tracking-wide px-5 py-2.5 transition-colors"
               >
-                Ask on WhatsApp
+                Or ask on WhatsApp
               </a>
+              <Link
+                to="/cruise-groups-nassau"
+                data-testid="groups-hero-cta-guide"
+                className="text-[11px] text-white/60 hover:text-[#D4A94A] underline underline-offset-4 self-center transition-colors"
+              >
+                Full cruise-group guide →
+              </Link>
             </div>
           </div>
         </div>

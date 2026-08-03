@@ -74,6 +74,17 @@
         </image:image>
     </url>
     <url>
+        <loc>https://roxtaxi.com/cruise-groups-nassau</loc>
+        <lastmod>2026-08-03</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.9</priority>
+        <image:image>
+            <image:loc>https://roxtaxi.com/og-cover.jpg</image:loc>
+            <image:title>Nassau Cruise Excursions for Groups — 10% off for 6+ passengers</image:title>
+            <image:caption>Direct-book Nassau shore excursions for cruise groups, family reunions and bachelorette parties — 10% group discount, Prince George Wharf pickup</image:caption>
+        </image:image>
+    </url>
+    <url>
         <loc>https://roxtaxi.com/gallery</loc>
         <lastmod>2026-08-03</lastmod>
         <changefreq>weekly</changefreq>

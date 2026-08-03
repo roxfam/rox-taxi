@@ -34,6 +34,7 @@ import PrintReceipt from "./pages/PrintReceipt";
 import GiftCards from "./pages/GiftCards";
 import UploadLicense from "./pages/UploadLicense";
 import TravelToNassau from "./pages/TravelToNassau";
+import CruiseGroupsNassau from "./pages/CruiseGroupsNassau";
 import { AuthProvider } from "./lib/auth";
 import { useEffect } from "react";
 
@@ -73,6 +74,7 @@ function AppRouter() {
       <Route path="/wedding-builder" element={<CustomerShell><WeddingBuilder /></CustomerShell>} />
       <Route path="/gallery" element={<CustomerShell><Gallery /></CustomerShell>} />
       <Route path="/travel-to-nassau" element={<CustomerShell><TravelToNassau /></CustomerShell>} />
+      <Route path="/cruise-groups-nassau" element={<CustomerShell><CruiseGroupsNassau /></CustomerShell>} />
       <Route path="/tours/ardastra" element={<CustomerShell><Ardastra /></CustomerShell>} />
       <Route path="/tours/atlantis" element={<CustomerShell><Atlantis /></CustomerShell>} />
       <Route path="/tours/blue-lagoon" element={<CustomerShell><BlueLagoon /></CustomerShell>} />

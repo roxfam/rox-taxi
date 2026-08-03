@@ -598,6 +598,7 @@ export default function Layout({ children }) {
                 <li><Link to="/rentals" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Car Rentals</Link></li>
                 <li><Link to="/track" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Track a Booking</Link></li>
                 <li><Link to="/travel-to-nassau" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Travel to Nassau Guide</Link></li>
+                <li><Link to="/cruise-groups-nassau" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Cruise Groups (10% off)</Link></li>
               </ul>
             </div>
             <div className="md:col-span-1">

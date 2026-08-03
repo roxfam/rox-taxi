@@ -35,6 +35,23 @@ function isClosedDate(dateStr, days = 1) {
  */
 export default function BookingModal({ item, serviceType, extraFields, defaultDays = 1, initialDropoff = "", initialPickup = "", onClose }) {
   const nav = useNavigate();
+  // Prefill adults from a "group size" chosen on the marketing banner (e.g. the
+  // "Groups of 6+ save 10%" quick-picker on /tours). sessionStorage key is set
+  // by the banner before scrolling into the booking modal — we consume + clear
+  // it here so refreshing the page doesn't sticky an inflated group size.
+  const groupPrefill = (() => {
+    if (typeof window === "undefined") return 1;
+    try {
+      const stored = sessionStorage.getItem("rox_group_size");
+      if (stored) {
+        sessionStorage.removeItem("rox_group_size");
+        const n = parseInt(stored, 10);
+        if (Number.isFinite(n) && n > 0) return Math.min(40, n);
+      }
+    } catch { /* ignore private-mode failures */ }
+    return 1;
+  })();
+
   const [form, setForm] = useState({
     customer_name: "",
     customer_email: "",
@@ -42,8 +59,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     booking_date: "",
     pickup_location: initialPickup,
     dropoff_location: initialDropoff,
-    passengers: 1,
-    adults: 1,
+    passengers: groupPrefill,
+    adults: groupPrefill,
     kids: 0,
     toddlers: 0,
     days: defaultDays,
