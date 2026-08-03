@@ -18,7 +18,14 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
-### ✅ Shipped Feb 2026 (Meta Pixel conversion events — Lead + Purchase + InitiateCheckout)
+### ✅ Shipped Feb 2026 (per-page SEO, TravelToNassau guide, ~40 new travel keywords)
+- **`frontend/src/components/Seo.jsx`** — lightweight per-route SEO (title/desc/canonical/OG/JSON-LD) with no external dep.
+- Wired into `Taxi.jsx`, `Tours.jsx`, `CarRental.jsx` — each page now has its own title, meta description, canonical, keywords list + a route-specific JSON-LD block (`TaxiService`, `ItemList` of `TouristTrip`, `AutoRental`).
+- **`frontend/src/pages/TravelToNassau.jsx`** — 1,450-word first-timer travel guide at `/travel-to-nassau`. Structure: hero → 8 H2 sections (why, getting here, getting around, where to stay, things to do, tips, cruise stopover, FAQ). Sticky TOC on desktop, `TravelGuide` + `FAQPage` + `BreadcrumbList` JSON-LD, natural internal links back to `/taxi`, `/tours`, `/rentals`. Wired into `App.js` router, `sitemap.xml`, and Layout footer.
+- **`frontend/public/index.html`** — meta keywords list expanded from ~50 to ~90 phrases (travel intent, vacation types, attractions, practicals). `LocalBusiness` `knowsAbout` expanded with 10 travel-planning terms.
+- **`frontend/public/sitemap.xml`** — 17 `<lastmod>` dates refreshed; new `/travel-to-nassau` entry at priority 0.9.
+
+
 - **`frontend/src/lib/fbpixel.js`** — safe helpers (`trackLead`, `trackPurchase`, `trackInitiateCheckout`) that no-op when `window.fbq` isn't loaded, so callers can fire unconditionally. Every event carries `value` + `currency: "USD"` + `content_name` + `content_category` so Meta reports on real ROAS. Purchase carries `eventID` (booking id) for future server-side CAPI dedupe.
 - **`frontend/src/pages/BookingFlow.jsx`** — fires `Lead` right after `POST /bookings` succeeds (regardless of payment method), fires `InitiateCheckout` before redirecting to Stripe, and fires `Purchase` after PayPal Smart Buttons capture returns `paid`.
 - **`frontend/src/pages/PaymentReturn.jsx`** — fires `Purchase` once, guarded via `useRef`, when Stripe polling flips `payment_status` to `paid`. Guard prevents React StrictMode double-mounts + repeated polls from firing duplicates.
