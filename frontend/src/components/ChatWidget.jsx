@@ -166,28 +166,71 @@ export default function ChatWidget() {
     <>
       {/* Floating button + hover/idle tooltip container */}
       <div className="fixed bottom-5 right-5 z-[85] flex items-end gap-3">
-        {/* Nudge tooltip — sits to the LEFT of the FAB. Visible on hover, or
-            auto-shown once (5s after landing) per session to invite engagement. */}
+        {/* Elegant nudge tooltip — glass card with gold-gradient border, animated
+            avatar, live "online" pulse, and a subtle typing indicator. Visible on
+            hover (desktop) OR once per session ~5s after landing. */}
         <div
           data-testid="chat-fab-tooltip"
           role="tooltip"
           aria-hidden={!showTip}
-          className={`hidden sm:flex items-end pointer-events-none select-none mb-3 transition-all duration-300 ease-out ${
-            showTip ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2"
+          className={`hidden sm:block pointer-events-none select-none mb-2 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            showTip
+              ? "opacity-100 translate-x-0 scale-100"
+              : "opacity-0 translate-x-4 scale-95"
           }`}
         >
-          <div className="relative rounded-2xl bg-white/95 backdrop-blur border border-[#E2E8F0]/70 shadow-[0_12px_30px_rgba(11,25,44,0.18)] px-4 py-2.5 max-w-[240px]">
-            <div className="text-[13px] font-semibold text-[#0B3B5C] leading-snug">
-              {HOVER_TIPS[tipIndex]}
+          {/* Gradient border wrapper — 1px gold→navy ring that catches the eye */}
+          <div
+            className="relative rounded-[22px] p-[1.5px] shadow-[0_20px_50px_-15px_rgba(11,25,44,0.55),0_0_35px_-10px_rgba(212,169,74,0.45)]"
+            style={{ backgroundImage: "linear-gradient(135deg, #D4A94A 0%, rgba(212,169,74,0.15) 45%, #0B3B5C 100%)" }}
+          >
+            <div className="relative rounded-[21px] bg-white/95 backdrop-blur-xl pl-3 pr-5 py-3 flex items-center gap-3 min-w-[248px]">
+              {/* Roxi avatar with animated gold ring */}
+              <div className="relative shrink-0">
+                <span className="absolute inset-0 rounded-full bg-[#D4A94A]/25 animate-ping" />
+                <div className="relative w-11 h-11 rounded-full bg-gradient-to-br from-[#0B192C] to-[#0B3B5C] ring-2 ring-[#D4A94A]/60 flex items-center justify-center overflow-hidden shadow-inner">
+                  <img
+                    src="/logo-gold.webp"
+                    alt=""
+                    className="w-8 h-8 object-contain drop-shadow-[0_1px_3px_rgba(212,169,74,0.6)]"
+                  />
+                </div>
+                {/* Online dot */}
+                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#22c55e] ring-2 ring-white flex items-center justify-center">
+                  <span className="absolute inset-0 rounded-full bg-[#22c55e] animate-ping opacity-70" />
+                </span>
+              </div>
+
+              {/* Copy stack */}
+              <div className="min-w-0 flex-1">
+                <div className="serif text-[15px] text-[#0B192C] leading-tight">
+                  Chat with us
+                </div>
+                <div
+                  key={tipIndex}
+                  className="text-[11.5px] text-[#475569] leading-snug mt-0.5 animate-in fade-in slide-in-from-bottom-1 duration-500"
+                >
+                  {HOVER_TIPS[tipIndex]}
+                </div>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <span className="inline-flex gap-0.5">
+                    <span className="w-1 h-1 rounded-full bg-[#D4A94A] animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1 h-1 rounded-full bg-[#D4A94A] animate-bounce" style={{ animationDelay: "120ms" }} />
+                    <span className="w-1 h-1 rounded-full bg-[#D4A94A] animate-bounce" style={{ animationDelay: "240ms" }} />
+                  </span>
+                  <span className="text-[9.5px] uppercase tracking-[0.14em] font-bold text-[#D4A94A]">
+                    Roxi · replies instantly
+                  </span>
+                </div>
+              </div>
+
+              {/* Arrow pointing right toward the FAB — matches the gradient border */}
+              <span
+                className="absolute top-1/2 -right-[7px] -translate-y-1/2 w-3.5 h-3.5 rotate-45 bg-white/95 border-r border-t"
+                style={{ borderColor: "rgba(212,169,74,0.6)" }}
+                aria-hidden
+              />
             </div>
-            <div className="text-[10px] uppercase tracking-widest text-[#D4A94A] mt-0.5">
-              Roxi · replies in seconds
-            </div>
-            {/* Arrow pointing right toward the FAB */}
-            <span
-              className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-3 rotate-45 bg-white border-r border-t border-[#E2E8F0]/70"
-              aria-hidden
-            />
           </div>
         </div>
 
