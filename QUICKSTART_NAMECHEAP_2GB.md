@@ -154,7 +154,7 @@ DB_NAME="rox_taxi_prod"
 JWT_SECRET="paste-output-of-openssl-rand-hex-32-here"
 
 ADMIN_EMAIL="roxfam2509@gmail.com"
-ADMIN_PASSWORD="pick-a-strong-one"
+ADMIN_PASSWORD_HASH="paste-bcrypt-hash-here"
 
 PUBLIC_SITE_URL="https://roxtaxi.com"
 CORS_ORIGINS="https://roxtaxi.com,https://www.roxtaxi.com"

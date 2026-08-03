@@ -64,7 +64,7 @@ MONGO_URL="mongodb://localhost:27017"
 DB_NAME="rox_taxi_prod"
 JWT_SECRET="${JWT_SECRET_KEY}"
 ADMIN_EMAIL="${ADMIN_EMAIL}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD}"
+ADMIN_PASSWORD_HASH="$(python3 -c "import bcrypt; print(bcrypt.hashpw(b'${ADMIN_PASSWORD}', bcrypt.gensalt()).decode())")"
 PUBLIC_SITE_URL="https://${DOMAIN}"
 CORS_ORIGINS="https://${DOMAIN},https://${WWW_DOMAIN}"
 EOF
