@@ -45,7 +45,7 @@ export default function CarRental() {
         title="Nassau Car Rentals Bahamas | Free Airport & Hotel Delivery — Rox Taxi & Tours"
         description="Rent a car in Nassau Bahamas — economy to luxury, free LPIA airport & hotel delivery, unlimited mileage, full insurance. Compact from $65/day. $150 refundable deposit, 25+ drivers only. Book online with Credit Card, PayPal or Zelle."
         canonical="https://roxtaxi.com/rentals"
-        keywords="Nassau car rental, Bahamas car rental, car rental Nassau airport, LPIA car rental, Nassau van rental, cheap car rental Nassau, Paradise Island car rental, Cable Beach car rental, Baha Mar car rental, rent a car Bahamas, Bahamas rental car deposit, unlimited mileage Nassau, book car rental Nassau online, Rox car rental"
+        keywords="Nassau car rental, Bahamas car rental, car rental Nassau airport, LPIA car rental, Nassau van rental, cheap car rental Nassau, Paradise Island car rental, Cable Beach car rental, Baha Mar car rental, rent a car Bahamas, Bahamas rental car deposit, unlimited mileage Nassau, book car rental Nassau online, Rox car rental, travel to Nassau Bahamas, Nassau road trip, getting around Nassau, Nassau family vacation car, Nassau honeymoon car rental, drive in Bahamas, Bahamas driving license, self drive Nassau, Bahamas vacation car, Nassau week rental, Nassau airport pickup car, Nassau hotel car delivery, plan trip to Nassau, Nassau tourism car hire"
         ogImage="https://roxtaxi.com/og-cover.jpg"
         jsonLd={{
           "@context": "https://schema.org",

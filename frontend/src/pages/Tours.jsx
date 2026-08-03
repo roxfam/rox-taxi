@@ -137,7 +137,7 @@ export default function Tours() {
         title="Nassau Tours & Excursions Bahamas | Blue Lagoon, Atlantis, Jet Ski & ATV — Rox"
         description="Book Nassau Bahamas tours & excursions — Blue Lagoon Island beach day, Atlantis Aquaventure, Rose Island snorkeling, Cabbage Beach jet ski, ATV tours, Paradise Island day trips. Instant confirmation, hotel pickup included."
         canonical="https://roxtaxi.com/tours"
-        keywords="Nassau tours, Bahamas excursions, Blue Lagoon Island tour, Atlantis Nassau day pass, Rose Island snorkeling, Cabbage Beach jet ski, ATV tours Nassau, Paradise Island tours, Nassau shore excursions, cruise excursions Bahamas, Junkanoo party bus, Baha Mar day pass, book Nassau tour online"
+        keywords="Nassau tours, Bahamas excursions, Blue Lagoon Island tour, Atlantis Nassau day pass, Rose Island snorkeling, Cabbage Beach jet ski, ATV tours Nassau, Paradise Island tours, Nassau shore excursions, cruise excursions Bahamas, Junkanoo party bus, Baha Mar day pass, book Nassau tour online, travel to Nassau Bahamas, Nassau travel guide, Nassau attractions, Nassau things to do, one day in Nassau, Nassau itinerary, Nassau layover tour, cruise stopover Nassau, Nassau honeymoon activities, Nassau family activities, Bahamas vacation excursions, Nassau tourism, visit Nassau, plan trip to Nassau, Nassau day trip ideas"
         ogImage="https://roxtaxi.com/og-cover.jpg"
         jsonLd={{
           "@context": "https://schema.org",
