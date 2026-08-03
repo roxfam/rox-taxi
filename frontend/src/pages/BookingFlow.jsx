@@ -5,6 +5,7 @@ import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle } from "lucide
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { api, money } from "../lib/api";
 import { DateTimePicker } from "../components/DateTimePicker";
+import { trackLead, trackPurchase, trackInitiateCheckout } from "../lib/fbpixel";
 
 // Rental 2-day minimum — module-scoped so linters see it inside submit()
 // without stale-scope false-positives.
@@ -142,7 +143,21 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
       const { data: b } = await api.post("/bookings", payload);
       setBooking(b);
 
+      // Meta Pixel — visitor completed the booking form. Fires once per
+      // successful booking (regardless of payment method chosen next).
+      trackLead({
+        value: Number(b.total || total || 0),
+        currency: "USD",
+        contentName: item?.name,
+        contentCategory: serviceType,
+      });
+
       if (payMethod === "stripe") {
+        trackInitiateCheckout({
+          value: Number(b.total || total || 0),
+          currency: "USD",
+          contentName: item?.name,
+        });
         const { data: c } = await api.post("/payments/checkout", {
           booking_id: b.id,
           origin_url: window.location.origin,
@@ -593,6 +608,14 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                         try {
                           const { data: res } = await api.post(`/paypal/capture-order/${data.orderID}`);
                           if (res?.payment_status === "paid") {
+                            // Meta Pixel — actual paid conversion (PayPal path)
+                            trackPurchase({
+                              value: Number(booking.total || total || 0),
+                              currency: "USD",
+                              contentName: item?.name,
+                              contentCategory: serviceType,
+                              orderId: data.orderID,
+                            });
                             toast.success("Payment received! Your booking is confirmed.");
                             nav(`/payment/success?booking_id=${booking.id}&provider=paypal`);
                           } else {

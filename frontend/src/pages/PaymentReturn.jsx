@@ -3,6 +3,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, money } from "../lib/api";
+import { trackPurchase } from "../lib/fbpixel";
 import TourUpsellCard from "../components/TourUpsellCard";
 
 export function PaymentSuccess() {
@@ -11,6 +12,7 @@ export function PaymentSuccess() {
   const [status, setStatus] = useState({ payment_status: "pending" });
   const [booking, setBooking] = useState(null);
   const attempts = useRef(0);
+  const purchaseFired = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,6 +25,18 @@ export function PaymentSuccess() {
         if (data.payment_status === "paid") {
           const { data: b } = await api.get(`/bookings/${data.booking_id}`);
           if (!cancelled) setBooking(b);
+          // Meta Pixel — Stripe payment succeeded. Guarded so React
+          // Strict-Mode double-mounts + repeated polls only fire once.
+          if (!purchaseFired.current && b && !cancelled) {
+            purchaseFired.current = true;
+            trackPurchase({
+              value: Number(b.total || 0),
+              currency: "USD",
+              contentName: b.item_name,
+              contentCategory: b.service_type,
+              orderId: b.id,
+            });
+          }
           return;
         }
         if (attempts.current++ < 20) setTimeout(poll, 2000);

@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Meta Pixel conversion events — Lead + Purchase + InitiateCheckout)
+- **`frontend/src/lib/fbpixel.js`** — safe helpers (`trackLead`, `trackPurchase`, `trackInitiateCheckout`) that no-op when `window.fbq` isn't loaded, so callers can fire unconditionally. Every event carries `value` + `currency: "USD"` + `content_name` + `content_category` so Meta reports on real ROAS. Purchase carries `eventID` (booking id) for future server-side CAPI dedupe.
+- **`frontend/src/pages/BookingFlow.jsx`** — fires `Lead` right after `POST /bookings` succeeds (regardless of payment method), fires `InitiateCheckout` before redirecting to Stripe, and fires `Purchase` after PayPal Smart Buttons capture returns `paid`.
+- **`frontend/src/pages/PaymentReturn.jsx`** — fires `Purchase` once, guarded via `useRef`, when Stripe polling flips `payment_status` to `paid`. Guard prevents React StrictMode double-mounts + repeated polls from firing duplicates.
+
 ### ✅ Shipped Feb 2026 (one-shot VPS updater + scrolling summer banner + fancy chat tooltip + nightly B2 backups)
 - **`scripts/deploy-updates.sh`** — one-command updater for the live VPS. Pulls, conditionally reinstalls pip/yarn deps only when their manifests changed, runs `yarn build` with a 1.5GB Node heap cap, restarts the backend service, validates + reloads Nginx, and finishes with a `/api/site-config` smoke test. Overridable via `ROX_BACKEND_SERVICE=<unit-name>`.
 - **`scripts/backup-mongo-b2.sh` + `scripts/install-backup-cron.sh`** — nightly Mongo → Backblaze B2 backup pipeline. Installer prompts for keyID/applicationKey/bucket, writes `/etc/rox-backup.env` (root:root 0600), runs one backup as a smoke test, then installs a systemd timer that fires every night at 03:15 UTC. Retention default 30 days (local + B2). Full walkthrough in `BACKUP_BACKBLAZE.md`.
