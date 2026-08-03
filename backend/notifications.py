@@ -634,3 +634,67 @@ def send_photo_share_nudge(booking: dict, prefs: Optional[dict] = None) -> dict:
     report["email"].update(result)
     return report
 
+
+def send_featured_notification(submission: dict) -> dict:
+    """Notify a guest that their submitted photo has just been pinned as
+    featured across the site. Free virality — many guests share the link on
+    their own socials once they see themselves featured.
+
+    Email-only, best-effort. Returns delivery-status dict.
+    """
+    email = (submission or {}).get("submitter_email") or ""
+    if not email:
+        return {"sent": False, "provider": "none", "error": "No submitter email"}
+
+    name = (submission.get("submitter_name") or "there").split(" ")[0]
+    caption = (submission.get("caption") or "").strip()
+    subject = "Your photo is now featured on Rox Taxi 🎉"
+
+    groups_url = "https://roxtaxi.com/cruise-groups-nassau#recent-group-tours"
+    gallery_url = "https://roxtaxi.com/gallery"
+
+    text = (
+        f"Hi {name},\n\n"
+        f"Quick note — we just pinned your Nassau photo as a FEATURED shot on\n"
+        f"the Rox Taxi & Tours site. It'll show up on our homepage, in the\n"
+        f"Groups landing 'Recent group tours' strip, and on the main gallery.\n\n"
+        f"See it live:\n"
+        f"  {groups_url}\n\n"
+        f"Feel free to share the link with friends who are planning a Nassau\n"
+        f"trip — nothing sells a Bahamas day out like a real guest photo.\n\n"
+        f"Thanks for sending it in — and if you're ever back on the island,\n"
+        f"reply to this email and we'll set you up with a 10% welcome-back\n"
+        f"discount on any tour.\n\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:700;">You're featured</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:30px;line-height:1.1;">Your photo is now featured 🎉</h1>
+      <p style="color:#64748B;font-size:15px;margin:12px 0 0;">
+        Hi {name} — we just pinned your Nassau shot as a <strong style="color:#0B3B5C;">Featured</strong> photo across the Rox Taxi site: homepage, Groups landing, and the main gallery.
+      </p>
+      {f'<blockquote style="margin:16px 0 0;padding:12px 16px;border-left:3px solid #D4A94A;color:#0B3B5C;font-style:italic;background:#fff;">&ldquo;{caption}&rdquo;</blockquote>' if caption else ''}
+
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:24px;margin-top:22px;">
+        <div style="font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">See it live</div>
+        <p style="color:#0B3B5C;font-size:14px;margin:8px 0 16px;line-height:1.55;">
+          Your photo now leads our <em>Recent group tours</em> strip. Feel free to share the link with friends planning a Nassau trip.
+        </p>
+        <a href="{groups_url}" style="display:inline-block;background:#D4A94A;color:#0B192C;text-decoration:none;font-weight:800;padding:12px 22px;border-radius:999px;font-size:14px;margin-right:8px;">View on Groups page →</a>
+        <a href="{gallery_url}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;font-size:13px;">Full gallery</a>
+      </div>
+
+      <div style="margin-top:22px;background:#FFF7E6;border:1px solid #F5DFA1;border-radius:14px;padding:18px;">
+        <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#A88235;font-weight:700;">Coming back?</div>
+        <p style="color:#0B3B5C;font-size:14px;margin:6px 0 0;">
+          Reply to this email and we'll set you up with a <strong>10% welcome-back discount</strong> on any tour.
+        </p>
+      </div>
+
+      <p style="color:#94a3b8;font-size:11px;margin-top:24px;">Rox Taxi Service &amp; Tours · Nassau, Bahamas · <a href="https://wa.me/12424322587" style="color:#25D366;text-decoration:none;font-weight:600;">WhatsApp</a></p>
+    </div>
+    """
+
+    return send_email(email, subject, html, text, category="confirmation")
+

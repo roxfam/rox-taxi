@@ -18,6 +18,13 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Significance hint + Auto-Feature email)
+- **Statistical significance**: `routes/admin.py::_compute_ab_significance` runs a two-proportion z-test at 95% + minimum-sample-size estimate. `/admin/photo-nudge-stats` now returns an `ab_significance` block with `{is_significant, z_score, leader, needed_per_arm, message}`. Guards small samples (<30/arm) with a "gather more data" hint.
+- **Admin card**: `AdminDashboard.jsx::PhotoNudgeCard` now surfaces the significance verdict as a green "Declare a winner" or a neutral "Not yet significant · Need N more nudges per arm" hint under the variant bars.
+- **Auto-feature email**: `notifications.py::send_featured_notification` sends a "Your photo is now featured 🎉" email to the submitter when admin pins their photo. Links to the Groups page + gallery, includes a 10% welcome-back discount offer. Idempotent via `featured_notified_at` (won't fire on unpin/repin).
+- **Wired in**: `gallery.py::admin_pin_submission` sends the notification best-effort on the pin transition (not on unpin), records `featured_notified_at` + result on success. Response now includes `{guest_notified: bool}`.
+- Regression tests: `backend/tests/test_ab_significance_and_featured.py` (7 tests covering below-min sample, clear winner, close-call, identical arms, missing arm, no-email short-circuit, and full send path).
+
 ### ✅ Shipped Feb 2026 (Guest Photo Wall + A/B Nudge Timing)
 - **Guest Photo Wall — pin/unpin infrastructure**: `POST /api/admin/gallery/{id}/pin` toggles a submission's `is_pinned` + `pinned_at`. `/api/gallery` bumps pinned photos ahead of everything else (sorted by `pinned_at` desc, then `approved_at` desc for the rest). Response now includes `is_pinned` per photo.
 - **Admin Pin UI**: `frontend/src/pages/admin/GalleryPanel.jsx` — approved cards now show a gold "Featured" badge on pinned photos and a Pin/PinOff toggle button next to the Facebook repost button.

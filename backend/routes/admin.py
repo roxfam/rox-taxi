@@ -587,6 +587,13 @@ async def admin_photo_nudge_stats(_: str = Depends(_admin_dep)):
 
     ab = [await _variant_stats("A"), await _variant_stats("B")]
 
+    # ── Statistical significance for the A/B test ─────────────────────
+    # Two-proportion z-test at 95% confidence, plus a sample-size estimate
+    # for 80% power at the currently-observed effect size. Gives the owner a
+    # concrete "wait until you have N more nudges per arm" hint instead of a
+    # vague "keep going".
+    ab_significance = _compute_ab_significance(ab)
+
     return {
         "lifetime": {
             "nudges_sent": lifetime_nudges,
@@ -601,6 +608,83 @@ async def admin_photo_nudge_stats(_: str = Depends(_admin_dep)):
             "attributed_share_pct": _pct(recent_attributed, total_submissions_30d),
         },
         "ab_test": ab,
+        "ab_significance": ab_significance,
+    }
+
+
+def _compute_ab_significance(ab: list[dict]) -> dict:
+    """Two-proportion z-test + minimum-sample-size estimator.
+
+    Returns:
+        {
+          "is_significant": bool,
+          "confidence": 0.95,
+          "z_score": float or None,
+          "leader": "A"|"B"|None,
+          "needed_per_arm": int (extra nudges needed to reach significance at
+                                 the currently-observed effect size),
+          "message": human-readable hint for the owner.
+        }
+    Guards against tiny samples (< 30 per arm) with a "gather more data" msg.
+    """
+    import math
+    if len(ab) != 2:
+        return {"is_significant": False, "message": "Waiting for both variants to record data."}
+    a, b = ab
+    na, xa = int(a.get("nudges_sent", 0)), int(a.get("attributed_submissions", 0))
+    nb, xb = int(b.get("nudges_sent", 0)), int(b.get("attributed_submissions", 0))
+
+    MIN_PER_ARM = 30
+    if na < MIN_PER_ARM or nb < MIN_PER_ARM:
+        needed_min = max(0, MIN_PER_ARM - min(na, nb))
+        return {
+            "is_significant": False,
+            "confidence": 0.95,
+            "z_score": None,
+            "leader": None,
+            "needed_per_arm": needed_min,
+            "message": f"Need {needed_min} more nudges in the smaller arm before we can measure significance.",
+        }
+
+    pa, pb = xa / na, xb / nb
+    # Pooled proportion for the null z-test
+    p_pool = (xa + xb) / (na + nb)
+    denom = math.sqrt(p_pool * (1 - p_pool) * (1 / na + 1 / nb)) if p_pool > 0 else 0
+    z = (pa - pb) / denom if denom > 0 else 0.0
+    is_sig = abs(z) >= 1.96
+    leader = "A" if pa > pb else ("B" if pb > pa else None)
+
+    if is_sig:
+        return {
+            "is_significant": True,
+            "confidence": 0.95,
+            "z_score": round(z, 2),
+            "leader": leader,
+            "needed_per_arm": 0,
+            "message": f"Variant {leader} is a statistically-significant winner at 95% confidence.",
+        }
+
+    # Minimum sample size per arm for 80% power at the observed effect size:
+    # n = (z_a/2 + z_b)^2 * (p1*q1 + p2*q2) / (p1-p2)^2
+    diff = abs(pa - pb)
+    if diff < 0.005:  # < 0.5 pp — practically indistinguishable
+        return {
+            "is_significant": False,
+            "confidence": 0.95,
+            "z_score": round(z, 2),
+            "leader": leader,
+            "needed_per_arm": None,
+            "message": "The two variants are performing near-identically — no meaningful difference to declare.",
+        }
+    needed = math.ceil((2.8 ** 2) * (pa * (1 - pa) + pb * (1 - pb)) / (diff ** 2))
+    extra_per_arm = max(0, needed - min(na, nb))
+    return {
+        "is_significant": False,
+        "confidence": 0.95,
+        "z_score": round(z, 2),
+        "leader": leader,
+        "needed_per_arm": extra_per_arm,
+        "message": f"Need ~{extra_per_arm} more nudges per arm to call Variant {leader} the winner at 95% confidence.",
     }
 
 

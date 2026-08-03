@@ -933,6 +933,29 @@ function PhotoNudgeCard({ data }) {
               );
             })}
           </div>
+
+          {/* Statistical-significance hint — tells the owner exactly when it's
+              safe to call a winner instead of "keep waiting" ambiguity. */}
+          {data.ab_significance && (
+            <div
+              data-testid="nudge-ab-significance"
+              className={`mt-3 rounded-xl px-3 py-2.5 text-xs leading-snug flex items-start gap-2 ${
+                data.ab_significance.is_significant
+                  ? "bg-[#059669]/10 border border-[#059669]/30 text-[#065f46]"
+                  : "bg-[#F1F5F9] border border-[#E2E8F0] text-[#64748B]"
+              }`}
+            >
+              {data.ab_significance.is_significant
+                ? <ShieldCheck className="w-4 h-4 mt-[1px] text-[#059669] shrink-0" />
+                : <Info className="w-4 h-4 mt-[1px] text-[#94a3b8] shrink-0" />}
+              <div>
+                <div className={data.ab_significance.is_significant ? "font-bold" : "font-semibold text-[#0B3B5C]"}>
+                  {data.ab_significance.is_significant ? "Declare a winner" : "Not yet significant"}
+                </div>
+                <div className="mt-0.5">{data.ab_significance.message}</div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

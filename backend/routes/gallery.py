@@ -198,7 +198,8 @@ async def admin_facebook_status(_admin: str = _require()):
 @router.post("/admin/gallery/{sub_id}/pin")
 async def admin_pin_submission(sub_id: str, _admin: str = _require()):
     """Toggle pin state — pinned photos always surface first in /api/gallery
-    (used on home, footer, groups strip). Idempotent."""
+    (used on home, footer, groups strip). Idempotent. On pin (not unpin), the
+    submitter is emailed a "you're featured" note if we have their email."""
     doc = await _db.gallery_submissions.find_one({"id": sub_id, "status": "approved"})
     if not doc:
         raise HTTPException(404, "Approved submission not found")
@@ -209,7 +210,25 @@ async def admin_pin_submission(sub_id: str, _admin: str = _require()):
     else:
         update["pinned_at"] = None
     await _db.gallery_submissions.update_one({"id": sub_id}, {"$set": update})
-    return {"id": sub_id, "is_pinned": new_pinned}
+
+    # On PIN (not unpin), notify the submitter — best-effort, never blocks.
+    # Idempotent via `featured_notified_at` so re-pinning after an unpin
+    # doesn't spam the guest with duplicate emails within 90 days.
+    notify_result = None
+    if new_pinned and doc.get("submitter_email") and not doc.get("featured_notified_at"):
+        try:
+            from notifications import send_featured_notification
+            notify_result = send_featured_notification(doc)
+            if notify_result.get("sent"):
+                await _db.gallery_submissions.update_one(
+                    {"id": sub_id},
+                    {"$set": {"featured_notified_at": _now_iso(), "featured_notify_result": notify_result}},
+                )
+        except Exception as e:  # noqa: BLE001
+            if _logger:
+                _logger.warning(f"featured-notify failed: {e}")
+
+    return {"id": sub_id, "is_pinned": new_pinned, "guest_notified": bool(notify_result and notify_result.get("sent"))}
 
 
 @router.get("/admin/gallery/approved")
