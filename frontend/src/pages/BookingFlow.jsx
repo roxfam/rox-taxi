@@ -43,6 +43,9 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     pickup_location: initialPickup,
     dropoff_location: initialDropoff,
     passengers: 1,
+    adults: 1,
+    kids: 0,
+    toddlers: 0,
     days: defaultDays,
     extra_luggage: 0,
     additional_drivers: 0,
@@ -76,15 +79,35 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const ROUND_TRIP_DISCOUNT_PCT = 0.10;
   const isRoundTrip = serviceType === "taxi" && !!form.round_trip;
   const singleFare = Number(item?.price || 0);
-  const rawBase = serviceType === "rental"
-    ? singleFare * Math.max(1, Number(form.days || 1))
-    : isRoundTrip
-      ? singleFare * 2
-      : singleFare;
-  const roundTripDiscount = isRoundTrip ? rawBase * ROUND_TRIP_DISCOUNT_PCT : 0;
+
+  // Per-person pricing (e.g. Nassau City Tour) — activates only when the
+  // catalog item ships a `child_price`. Adults × fare + Kids × child_price
+  // + toddlers × 0. Falls back to the flat-fare model for everything else.
+  const hasChildPricing = Number(item?.child_price || 0) > 0;
+  const childPrice     = Number(item?.child_price || 0);
+  const childAgeMax    = Number(item?.child_age_max || 12);
+  const childFreeUnder = Number(item?.child_free_under || 3);
+  const numAdults   = Math.max(1, Number(form.adults || 1));
+  const numKids     = Math.max(0, Number(form.kids || 0));
+  const numToddlers = Math.max(0, Number(form.toddlers || 0));
+  const perPersonBase = hasChildPricing
+    ? (numAdults * singleFare) + (numKids * childPrice)
+    : null;
+
+  const rawBase = hasChildPricing
+    ? perPersonBase
+    : serviceType === "rental"
+      ? singleFare * Math.max(1, Number(form.days || 1))
+      : isRoundTrip
+        ? singleFare * 2
+        : singleFare;
+  // Round-trip discount doesn't apply to per-person tours — they're not routes.
+  const roundTripDiscount = (isRoundTrip && !hasChildPricing) ? rawBase * ROUND_TRIP_DISCOUNT_PCT : 0;
   const base = rawBase - roundTripDiscount;
-  const luggageFee = serviceType === "taxi" ? Number(form.extra_luggage || 0) * LUGGAGE_FEE : 0;
-  const passengerFee = serviceType === "taxi" && Number(form.passengers || 0) > PASSENGER_INCLUDED
+  const luggageFee = serviceType === "taxi" && !hasChildPricing ? Number(form.extra_luggage || 0) * LUGGAGE_FEE : 0;
+  // The extra-passenger fee (+$5/pax over 2) only applies to fixed-fare
+  // taxi routes — per-person tours already price each passenger explicitly.
+  const passengerFee = serviceType === "taxi" && !hasChildPricing && Number(form.passengers || 0) > PASSENGER_INCLUDED
     ? (Number(form.passengers) - PASSENGER_INCLUDED) * PASSENGER_FEE
     : 0;
   const rentalDeposit = serviceType === "rental" ? RENTAL_DEPOSIT : 0;
@@ -130,7 +153,12 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         booking_date: form.booking_date,
         pickup_location: form.pickup_location || null,
         dropoff_location: form.dropoff_location || null,
-        passengers: Number(form.passengers) || 1,
+        passengers: hasChildPricing
+          ? (numAdults + numKids + numToddlers)
+          : (Number(form.passengers) || 1),
+        adults: hasChildPricing ? numAdults : undefined,
+        kids: hasChildPricing ? numKids : undefined,
+        toddlers: hasChildPricing ? numToddlers : undefined,
         days: Number(form.days) || 1,
         extra_luggage: Number(form.extra_luggage) || 0,
         additional_drivers: Number(form.additional_drivers) || 0,
@@ -212,15 +240,63 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">Passengers *</label>
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => setForm({ ...form, passengers: Math.max(1, Number(form.passengers) - 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95" data-testid="pax-minus">−</button>
-                    <input type="number" min={1} max={20} required value={form.passengers} onChange={(e) => setForm({ ...form, passengers: Math.max(1, Math.min(20, parseInt(e.target.value || "1"))) })} className="w-20 text-center rounded-xl border border-[#E2E8F0] py-2.5 text-sm mono" data-testid="booking-passengers" />
-                    <button type="button" onClick={() => setForm({ ...form, passengers: Math.min(20, Number(form.passengers) + 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95" data-testid="pax-plus">+</button>
-                    {serviceType === "taxi" && Number(form.passengers) > PASSENGER_INCLUDED && (
-                      <span className="text-xs text-[#E86A3C] font-semibold" data-testid="pax-fee-note">+ ${(Number(form.passengers) - PASSENGER_INCLUDED) * PASSENGER_FEE} · {Number(form.passengers) - PASSENGER_INCLUDED} extra passenger(s) × ${PASSENGER_FEE}</span>
-                    )}
-                  </div>
+                  <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">
+                    {hasChildPricing ? "Passenger breakdown *" : "Passengers *"}
+                  </label>
+                  {hasChildPricing ? (
+                    <div
+                      className="rounded-2xl border border-[#D4A94A]/30 bg-[#FBF7EF] p-4 space-y-3"
+                      data-testid="pax-breakdown-picker"
+                    >
+                      <div className="text-[11px] text-[#64748B] leading-relaxed">
+                        This tour is priced per person. Kids under {childFreeUnder} ride free.
+                      </div>
+                      <PaxRow
+                        label="Adults"
+                        sub={`$${singleFare} each`}
+                        value={numAdults}
+                        min={1}
+                        max={20}
+                        testid="pax-adults"
+                        onChange={(v) => setForm({ ...form, adults: v })}
+                      />
+                      <PaxRow
+                        label={`Kids (${childFreeUnder}-${childAgeMax})`}
+                        sub={`$${childPrice} each`}
+                        value={numKids}
+                        min={0}
+                        max={20}
+                        testid="pax-kids"
+                        onChange={(v) => setForm({ ...form, kids: v })}
+                      />
+                      <PaxRow
+                        label={`Toddlers (under ${childFreeUnder})`}
+                        sub="Free"
+                        value={numToddlers}
+                        min={0}
+                        max={10}
+                        testid="pax-toddlers"
+                        onChange={(v) => setForm({ ...form, toddlers: v })}
+                      />
+                      <div className="pt-3 border-t border-[#D4A94A]/25 flex items-center justify-between text-sm">
+                        <span className="text-[#64748B]">
+                          {numAdults + numKids + numToddlers} {(numAdults + numKids + numToddlers) === 1 ? "passenger" : "passengers"} total
+                        </span>
+                        <span className="mono font-bold text-[#0B3B5C]" data-testid="pax-breakdown-subtotal">
+                          {money(perPersonBase)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setForm({ ...form, passengers: Math.max(1, Number(form.passengers) - 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95" data-testid="pax-minus">−</button>
+                      <input type="number" min={1} max={20} required value={form.passengers} onChange={(e) => setForm({ ...form, passengers: Math.max(1, Math.min(20, parseInt(e.target.value || "1"))) })} className="w-20 text-center rounded-xl border border-[#E2E8F0] py-2.5 text-sm mono" data-testid="booking-passengers" />
+                      <button type="button" onClick={() => setForm({ ...form, passengers: Math.min(20, Number(form.passengers) + 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95" data-testid="pax-plus">+</button>
+                      {serviceType === "taxi" && Number(form.passengers) > PASSENGER_INCLUDED && (
+                        <span className="text-xs text-[#E86A3C] font-semibold" data-testid="pax-fee-note">+ ${(Number(form.passengers) - PASSENGER_INCLUDED) * PASSENGER_FEE} · {Number(form.passengers) - PASSENGER_INCLUDED} extra passenger(s) × ${PASSENGER_FEE}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               {extraFields && extraFields(form, setForm)}
@@ -682,7 +758,7 @@ function PayPalGlyph() {
   );
 }
 
-function Field({ label, val, on, type = "text", testid }) {
+export function Field({ label, val, on, type = "text", testid }) {
   return (
     <div>
       <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">{label}</label>
@@ -696,6 +772,52 @@ function Field({ label, val, on, type = "text", testid }) {
     </div>
   );
 }
+
+/**
+ * PaxRow — single-line +/- picker for a passenger tier (adults, kids, toddlers).
+ * Used inside the "Passenger breakdown" panel that appears when the catalog
+ * item has per-person pricing (child_price > 0).
+ */
+function PaxRow({ label, sub, value, min = 0, max = 20, onChange, testid }) {
+  const clamp = (v) => Math.max(min, Math.min(max, v));
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold text-[#0B3B5C]">{label}</div>
+        {sub && <div className="text-[11px] text-[#64748B]">{sub}</div>}
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <button
+          type="button"
+          onClick={() => onChange(clamp(Number(value) - 1))}
+          className="w-8 h-8 rounded-full border border-[#E2E8F0] text-base hover:border-[#0B3B5C] active:scale-95 disabled:opacity-40"
+          disabled={Number(value) <= min}
+          data-testid={`${testid}-minus`}
+          aria-label={`Decrease ${label}`}
+        >−</button>
+        <input
+          type="number"
+          min={min}
+          max={max}
+          value={Number(value)}
+          onChange={(e) => onChange(clamp(parseInt(e.target.value || String(min))))}
+          className="w-14 text-center rounded-lg border border-[#E2E8F0] py-1.5 text-sm mono"
+          data-testid={`${testid}-input`}
+        />
+        <button
+          type="button"
+          onClick={() => onChange(clamp(Number(value) + 1))}
+          className="w-8 h-8 rounded-full border border-[#E2E8F0] text-base hover:border-[#0B3B5C] active:scale-95 disabled:opacity-40"
+          disabled={Number(value) >= max}
+          data-testid={`${testid}-plus`}
+          aria-label={`Increase ${label}`}
+        >+</button>
+      </div>
+    </div>
+  );
+}
+
+function _FieldLegacy_removed_see_export_above() { return null; }
 
 function PayCard({ active, onClick, icon, title, desc, testid }) {
   return (
@@ -717,5 +839,3 @@ function PayCard({ active, onClick, icon, title, desc, testid }) {
     </button>
   );
 }
-
-export { Field };

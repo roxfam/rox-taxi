@@ -18,7 +18,13 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
-### ✅ Shipped Feb 2026 (Nassau City Tour catalog item — dual-listed)
+### ✅ Shipped Feb 2026 (Kids picker + live per-person price calc on booking form)
+- **`frontend/src/pages/BookingFlow.jsx`** — booking form now detects any catalog item with `child_price > 0` (currently the Nassau City Tour). When active, replaces the single-passenger picker with a **"Passenger breakdown" panel** — three rows of `+`/`−` steppers for Adults, Kids (4-12), Toddlers (under 3) with a live subtotal that recomputes on every tap: `adults × price + kids × child_price`. Toddlers stay free.
+- The taxi extra-passenger fee (+$5/pax over 2), round-trip discount, and luggage fee are all correctly SKIPPED when per-person pricing is active — a per-person tour is not a fixed-fare route.
+- The booking payload now carries `adults`, `kids`, `toddlers` alongside a computed `passengers = adults + kids + toddlers`, so drivers see the exact breakdown on the manifest (e.g. "3 adults + 2 kids + 1 toddler under 3" for car-seat planning).
+- New `PaxRow` helper component keeps the code compact; existing bookings without child pricing are unaffected.
+
+
 - **`backend/seed_data.py`** — new `nassau-city-tour` entry in `TOURS_SEED` (id `nassau-city-tour`) AND `city-tour` entry in `TAXI_SERVICES` so the same 2½-hour city tour surfaces on both `/tours` and `/taxi` pages. Featured on both.
 - Full itinerary in the description: House of Assembly, Bahamas Rum Cake Factory, Atlantis photo stop, Paradise Island, Montague Beach + Fort Montague, residential Nassau, Queen's Staircase, Graycliff estate (wine cellar, chocolate, cigar, moonshine, tea factories), Fish Fry, drive-by American Embassy + Governor's House + Fort Fincastle + Water Tower + Fort Charlotte. Ends at Fish Fry / beach of choice / pickup / anywhere else.
 - Structured child pricing on the doc: `price=45` (adult), `child_price=25` (ages 4-12), `child_free_under=3`. Ready for a future "kids picker" on the booking form to consume programmatically.
