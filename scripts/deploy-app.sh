@@ -86,9 +86,7 @@ fi
 # shellcheck disable=SC1091
 source venv/bin/activate
 pip install --upgrade pip --quiet
-pip install -r requirements.txt --quiet
-pip install emergentintegrations \
-    --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ --quiet
+pip install -r requirements.txt --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ --quiet
 deactivate
 ok "Backend deps installed"
 
