@@ -38,6 +38,7 @@ import { useEffect } from "react";
 
 import { useVisitorBeacon } from "./hooks/useVisitorBeacon";
 import SummerBanner from "./components/SummerBanner";
+import FacebookPixel from "./components/FacebookPixel";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -55,7 +56,9 @@ function AppRouter() {
   // Handle OAuth callback: session_id in URL fragment
   if (location.hash?.includes("session_id=")) return <AuthCallback />;
   return (
-    <Routes>
+    <>
+      <FacebookPixel />
+      <Routes>
       <Route path="/" element={<CustomerShell><Home /></CustomerShell>} />
       <Route path="/taxi" element={<CustomerShell><Taxi /></CustomerShell>} />
       <Route path="/tours" element={<CustomerShell><Tours /></CustomerShell>} />
@@ -86,6 +89,7 @@ function AppRouter() {
       <Route path="/admin/manage" element={<AdminManage />} />
       <Route path="/admin/groups" element={<AdminGroups />} />
     </Routes>
+    </>
   );
 }
 

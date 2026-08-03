@@ -18,6 +18,17 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Chat FAB nudge tooltip)
+- **`frontend/src/components/ChatWidget.jsx`** — added hover + idle nudge tooltip on the floating chat button. Bubble slides in to the left with 5 rotating friendly copies ("Chat with us — ask anything!", "Need airport pickup? Ask Roxi 🌴", etc). Auto-appears once per session 5 seconds after landing (pulsing gold ring for visibility), then disappears after 8s. Hover always shows it fresh. Skipped on mobile (`sm:` gate) so it doesn't fight the FAB for space. Verified live: tooltip visible on hover, correct copy rendered.
+
+### ✅ Shipped Feb 2026 (Facebook Pixel — ad conversion tracking)
+- **`frontend/src/components/FacebookPixel.jsx`** — Meta Pixel loader mounted once at the app root. Reads pixel ID from `site_config.fb_pixel_id` (surfaced by `/api/site-config` from `secrets_store.FB_PIXEL_ID`), injects the standard `fbevents.js` snippet, fires initial `PageView` + re-fires on every SPA route change so Meta Events Manager sees each page. Skips `/admin`, no-ops when unconfigured (safe to mount always).
+- **`backend/secrets_store.py`** — registered `FB_PIXEL_ID` (non-sensitive, Facebook group) so it appears in the Admin → Tokens panel and can be rotated live.
+- **`backend/server.py::/site-config`** — now surfaces `fb_pixel_id` (public data) and strips the private `secrets` blob before returning to prevent token leakage.
+
+### ✅ Shipped Feb 2026 (Summer Banner countdown urgency)
+- **`frontend/src/components/SummerBanner.jsx`** — added live "Ends in Xd" countdown pill that pulses in the banner. Shows when < 60 days remain, switches to "Ends today" on the final day, hidden after Aug 31 (banner auto-hides too). Re-computes every hour so browsers left open overnight tick down. Verified live: "Ends in 29d" rendered.
+
 ### ✅ Shipped Feb 2026 (Summer Special promo banner — visually verified)
 - **`frontend/src/components/SummerBanner.jsx`** — dismissible full-width orange promo strip. "Summer Special · Save 10% on every tour · code SUMMER10". Visible site-wide except `/admin`. Fades in 400ms after mount, remembers dismissal for 7 days via localStorage, auto-hides past Aug 31 2026. CTA copies the code and routes to `/tours`. Verified with screenshot tool: sits cleanly below sticky nav (y=96px, no overlap), dismiss (X) removes the banner without breaking layout.
 

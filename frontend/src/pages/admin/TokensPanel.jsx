@@ -5,7 +5,7 @@ import { api } from "../../lib/api";
 
 // ---- Group meta (icons + subtitles) ------------------------------------
 const GROUP_META = {
-  Facebook:       { subtitle: "Auto-post approved guest photos to your Facebook Page." },
+  Facebook:       { subtitle: "Auto-post approved guest photos + track ad conversions with the Meta Pixel." },
   "Twilio SMS":   { subtitle: "Booking confirmations + owner alerts via SMS." },
   Email:          { subtitle: "Booking confirmations. SendGrid first, SMTP fallback." },
   Stripe:         { subtitle: "Credit-card checkout + auto-refund of deposits." },

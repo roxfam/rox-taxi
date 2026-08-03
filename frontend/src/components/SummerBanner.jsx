@@ -11,8 +11,14 @@ import { X } from "lucide-react";
 const DISMISS_KEY = "rox_summer_banner_dismissed_until";
 const END_DATE = new Date("2026-08-31T23:59:59-04:00");   // Nassau time
 
+function daysUntil(endDate) {
+  const ms = endDate.getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+}
+
 export default function SummerBanner() {
   const [visible, setVisible] = useState(false);
+  const [daysLeft, setDaysLeft] = useState(() => daysUntil(END_DATE));
 
   useEffect(() => {
     // Hide on admin pages
@@ -25,7 +31,9 @@ export default function SummerBanner() {
 
     // Delay 400ms so the hero renders first
     const t = setTimeout(() => setVisible(true), 400);
-    return () => clearTimeout(t);
+    // Re-compute days-left every hour so a browser left open overnight ticks down
+    const tick = setInterval(() => setDaysLeft(daysUntil(END_DATE)), 60 * 60 * 1000);
+    return () => { clearTimeout(t); clearInterval(tick); };
   }, []);
 
   function dismiss() {
@@ -64,6 +72,18 @@ export default function SummerBanner() {
               SUMMER10
             </span>{" "}
             at checkout
+            {daysLeft > 0 && daysLeft <= 60 && (
+              <>
+                {" · "}
+                <span
+                  className="font-bold text-white bg-black/20 px-1.5 py-0.5 rounded animate-pulse"
+                  data-testid="summer-banner-countdown"
+                  aria-live="polite"
+                >
+                  {daysLeft === 1 ? "Ends today" : `Ends in ${daysLeft}d`}
+                </span>
+              </>
+            )}
           </span>
         </div>
         <button

@@ -1931,6 +1931,14 @@ async def site_config():
                 slug = ""
         if slug:
             cfg["messenger_url"] = f"https://m.me/{slug}"
+    # Meta/Facebook Pixel ID — public data (visible in the pixel snippet source
+    # anyway), surfaced here so the FacebookPixel React component can load it
+    # from the admin-managed secrets_store without exposing sensitive tokens.
+    fb_pixel = secrets_store.get_secret("FB_PIXEL_ID", "").strip()
+    if fb_pixel:
+        cfg["fb_pixel_id"] = fb_pixel
+    # Strip the secrets blob before returning — it must never leak to the client.
+    cfg.pop("secrets", None)
     return cfg
 
 

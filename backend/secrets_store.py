@@ -33,6 +33,7 @@ TOKEN_REGISTRY: list[dict] = [
     {"key": "FB_GRAPH_VERSION",      "group": "Facebook",    "label": "Graph API Version",    "sensitive": False, "help": "Defaults to v20.0."},
     {"key": "FB_AUTOPOST_ENABLED",   "group": "Facebook",    "label": "Auto-Post Enabled",    "sensitive": False, "help": "Set to 'true' or 'false'."},
     {"key": "FB_SITE_URL",           "group": "Facebook",    "label": "Site URL (for captions)", "sensitive": False, "help": "Appears in every auto-generated caption."},
+    {"key": "FB_PIXEL_ID",           "group": "Facebook",    "label": "Pixel ID (ad tracking)","sensitive": False, "help": "Numeric Meta/Facebook Pixel ID (Events Manager → Data Sources). Enables ad conversion tracking on the public site."},
 
     # Public site
     {"key": "PUBLIC_SITE_URL",       "group": "Site",        "label": "Public site URL",      "sensitive": False, "help": "Absolute base URL used in email + SMS links (e.g. https://roxtaxi.com). Falls back to https://roxtaxi.com if empty."},

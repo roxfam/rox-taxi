@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send, Waves, MessagesSquare, ExternalLink } from "lucide-react";
+import { X, Send, MessagesSquare, ExternalLink } from "lucide-react";
 import { api, BACKEND_URL } from "../lib/api";
 
 const SUGGESTIONS = [
@@ -7,6 +7,16 @@ const SUGGESTIONS = [
   "Book the Swimming Pigs tour",
   "Do you rent SUVs?",
   "How do I pay with Zelle?",
+];
+
+// Rotating hover/idle tooltips — each one hints at a real capability of the
+// assistant. Kept short so the bubble stays elegant against the FAB.
+const HOVER_TIPS = [
+  "Chat with us — ask anything!",
+  "Need airport pickup? Ask Roxi 🌴",
+  "Curious about tours? We'll help you pick",
+  "Live prices · Instant answers",
+  "Talk to a real human on WhatsApp",
 ];
 
 function getSessionId() {
@@ -27,6 +37,9 @@ export default function ChatWidget() {
   const [busy, setBusy] = useState(false);
   const [unread, setUnread] = useState(false);
   const [waUrl, setWaUrl] = useState("");
+  const [hovered, setHovered] = useState(false);
+  const [nudged, setNudged] = useState(false);  // auto-invite bubble ~5s after page load
+  const [tipIndex, setTipIndex] = useState(() => Math.floor(Math.random() * HOVER_TIPS.length));
   const scrollRef = useRef(null);
   const sessionId = useRef(getSessionId()).current;
 
@@ -43,6 +56,26 @@ export default function ChatWidget() {
       if (num) setWaUrl(`https://wa.me/${num}`);
     }).catch(() => {});
   }, []);
+
+  // Nudge the visitor once per session ~5s after landing — the tooltip bubble
+  // pops in for 8 seconds, then disappears. Skipped if they've already opened
+  // the chat this session (respects the user's attention).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem("rox_chat_nudged") === "1") return;
+    const showT = setTimeout(() => {
+      setNudged(true);
+      sessionStorage.setItem("rox_chat_nudged", "1");
+    }, 5000);
+    const hideT = setTimeout(() => setNudged(false), 13000); // 5s wait + 8s visible
+    return () => { clearTimeout(showT); clearTimeout(hideT); };
+  }, []);
+
+  // Rotate the hover copy each time the user re-enters the FAB so returning
+  // visitors see fresh nudges instead of the same line.
+  useEffect(() => {
+    if (hovered) setTipIndex((i) => (i + 1) % HOVER_TIPS.length);
+  }, [hovered]);
 
   const handoffContext = () => {
     // Compose a short prefill referencing the visitor's latest question(s) so the
@@ -127,31 +160,65 @@ export default function ChatWidget() {
     }
   };
 
+  const showTip = !open && (hovered || nudged);
+
   return (
     <>
-      {/* Floating button — branded, animated ring pulse when there's an unread message */}
-      <button
-        onClick={() => { setOpen((v) => !v); setUnread(false); }}
-        data-testid="chat-fab"
-        aria-label="Open live chat"
-        className="fixed bottom-5 right-5 z-[85] group"
-      >
-        <span className={`absolute inset-0 rounded-full bg-[#D4A94A]/40 ${unread && !open ? "animate-ping" : ""}`} />
-        <span className="relative w-16 h-16 rounded-full bg-gradient-to-br from-[#0B192C] via-[#0B3B5C] to-[#0B192C] ring-2 ring-[#D4A94A]/60 group-hover:ring-[#D4A94A] group-hover:scale-105 active:scale-95 transition-all duration-200 shadow-[0_16px_40px_rgba(11,25,44,0.55)] flex items-center justify-center overflow-hidden">
-          {open ? (
-            <X className="w-6 h-6 text-white" />
-          ) : (
-            <img
-              src="/logo-gold.webp"
-              alt="Chat with Rox Taxi"
-              className="w-11 h-11 object-contain drop-shadow-[0_2px_6px_rgba(212,169,74,0.5)]"
+      {/* Floating button + hover/idle tooltip container */}
+      <div className="fixed bottom-5 right-5 z-[85] flex items-end gap-3">
+        {/* Nudge tooltip — sits to the LEFT of the FAB. Visible on hover, or
+            auto-shown once (5s after landing) per session to invite engagement. */}
+        <div
+          data-testid="chat-fab-tooltip"
+          role="tooltip"
+          aria-hidden={!showTip}
+          className={`hidden sm:flex items-end pointer-events-none select-none mb-3 transition-all duration-300 ease-out ${
+            showTip ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2"
+          }`}
+        >
+          <div className="relative rounded-2xl bg-white/95 backdrop-blur border border-[#E2E8F0]/70 shadow-[0_12px_30px_rgba(11,25,44,0.18)] px-4 py-2.5 max-w-[240px]">
+            <div className="text-[13px] font-semibold text-[#0B3B5C] leading-snug">
+              {HOVER_TIPS[tipIndex]}
+            </div>
+            <div className="text-[10px] uppercase tracking-widest text-[#D4A94A] mt-0.5">
+              Roxi · replies in seconds
+            </div>
+            {/* Arrow pointing right toward the FAB */}
+            <span
+              className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-3 rotate-45 bg-white border-r border-t border-[#E2E8F0]/70"
+              aria-hidden
             />
-          )}
-          {unread && !open && (
-            <span className="absolute top-1 right-1 w-3 h-3 rounded-full bg-[#E86A3C] ring-2 ring-white" />
-          )}
-        </span>
-      </button>
+          </div>
+        </div>
+
+        <button
+          onClick={() => { setOpen((v) => !v); setUnread(false); setNudged(false); }}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          onFocus={() => setHovered(true)}
+          onBlur={() => setHovered(false)}
+          data-testid="chat-fab"
+          aria-label="Chat with us"
+          title="Chat with us"
+          className="group relative"
+        >
+          <span className={`absolute inset-0 rounded-full bg-[#D4A94A]/40 ${(unread || nudged) && !open ? "animate-ping" : ""}`} />
+          <span className="relative w-16 h-16 rounded-full bg-gradient-to-br from-[#0B192C] via-[#0B3B5C] to-[#0B192C] ring-2 ring-[#D4A94A]/60 group-hover:ring-[#D4A94A] group-hover:scale-105 active:scale-95 transition-all duration-200 shadow-[0_16px_40px_rgba(11,25,44,0.55)] flex items-center justify-center overflow-hidden">
+            {open ? (
+              <X className="w-6 h-6 text-white" />
+            ) : (
+              <img
+                src="/logo-gold.webp"
+                alt="Chat with Rox Taxi"
+                className="w-11 h-11 object-contain drop-shadow-[0_2px_6px_rgba(212,169,74,0.5)]"
+              />
+            )}
+            {unread && !open && (
+              <span className="absolute top-1 right-1 w-3 h-3 rounded-full bg-[#E86A3C] ring-2 ring-white" />
+            )}
+          </span>
+        </button>
+      </div>
 
       {/* Chat panel — glass-morphism card with subtle grain overlay */}
       <div
