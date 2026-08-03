@@ -18,7 +18,8 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
-### ✅ Shipped Feb 2026 (Groups landing polish)
+### ✅ Shipped Feb 2026 (Groups landing polish + Guest Photo Push)
+- **`backend/notifications.py` + `backend/server.py`** — new `send_photo_share_nudge()` email fires 22-72h after any non-rental booking's pickup date via the existing reminder tick loop. Email-only (no SMS), idempotent via `photo_nudge_sent_at`. CTA links to `/gallery#submit` + a Google-review CTA. Skips cancellations, refunds, missing emails, and admin-disabled email. Regression: `backend/tests/test_photo_nudge.py`.
 - **`frontend/src/pages/CruiseGroupsNassau.jsx`** — H1 shortened from "Nassau cruise groups save 10% automatically" → **"Groups save 10% automatically"**. Hero eyebrow updated to "For Groups & Coordinators" (Users icon). Added a new **"Recent group tours"** photo strip that fetches `/api/gallery`, prefers approved guest submissions (category `guests`) and falls back to `tours` catalog images, showing the freshest 5 as a 5-up hover-lift grid with a "See full gallery →" link.
 
 ### ✅ Shipped Feb 2026 (Group quick-picker + Cruise Groups landing page)

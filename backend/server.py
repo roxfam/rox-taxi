@@ -19,7 +19,7 @@ from emergentintegrations.payments.stripe.checkout import (
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 from fastapi.responses import StreamingResponse, HTMLResponse
-from notifications import notify_booking_confirmed, notify_booking_received, notify_owner_booking_created, send_booking_reminder, send_rental_return_reminder
+from notifications import notify_booking_confirmed, notify_booking_received, notify_owner_booking_created, send_booking_reminder, send_rental_return_reminder, send_photo_share_nudge
 from facebook import post_gallery_photo_to_facebook, facebook_status
 import paypal_client
 from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS, HOME_SLIDES_SEED
@@ -1003,6 +1003,38 @@ async def _run_reminder_tick() -> int:
             log.info("rental return reminder sent for %s (return=%s)", b["id"], return_dt.date())
         except Exception as e:  # noqa: BLE001
             log.warning("return reminder send fail for %s: %s", b.get("id"), e)
+
+    # ── Post-trip photo-share nudge — fire ~24h after the trip's pickup ──
+    # Non-rental bookings only (rentals have their own return-day flow that
+    # already carries the "rebook" CTA). Idempotent via `photo_nudge_sent_at`.
+    # Window: trip was 22h-72h ago and hasn't been cancelled.
+    nudge_lower = now - timedelta(hours=72)
+    nudge_upper = now - timedelta(hours=22)
+    cur3 = db.bookings.find({
+        "service_type": {"$ne": "rental"},
+        "status": {"$nin": ["cancelled", "refunded"]},
+        "photo_nudge_sent_at": {"$exists": False},
+        "customer_email": {"$exists": True, "$ne": ""},
+    })
+    async for b in cur3:
+        try:
+            dt = _parse_booking_date(b.get("booking_date", ""))
+        except Exception:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if not (nudge_lower <= dt <= nudge_upper):
+            continue
+        try:
+            report = send_photo_share_nudge(b, prefs=prefs)
+            await db.bookings.update_one(
+                {"id": b["id"]},
+                {"$set": {"photo_nudge_sent_at": now.isoformat(), "photo_nudge_result": report}},
+            )
+            sent += 1
+            log.info("photo nudge sent for %s (email=%s)", b["id"], report.get("email", {}).get("sent"))
+        except Exception as e:  # noqa: BLE001
+            log.warning("photo nudge send fail for %s: %s", b.get("id"), e)
     return sent
 
 

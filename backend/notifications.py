@@ -550,3 +550,87 @@ def send_rental_return_reminder(
         report["driver_sms"].update(result)
 
     return report
+
+
+def send_photo_share_nudge(booking: dict, prefs: Optional[dict] = None) -> dict:
+    """Post-trip "share your photos" email nudge — fires ~24h after the trip.
+
+    Goal: fill the /gallery + /cruise-groups-nassau "Recent group tours" strip
+    with real customer photos instead of stock imagery. Email only (no SMS —
+    a photo-upload ask over SMS feels spammy after the trip is done).
+
+    Skips cancellations, missing email addresses, and when the admin has
+    disabled email notifications globally.
+
+    Returns: {"kind": "photo_nudge", "email": {sent, provider, error, enabled}}.
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    report = {
+        "kind": "photo_nudge",
+        "email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+    }
+
+    if not email_enabled:
+        report["email"]["error"] = "Disabled by admin"
+        return report
+    if not booking.get("customer_email"):
+        report["email"]["error"] = "No email address"
+        return report
+
+    first_name = (booking.get("customer_name") or "there").split(" ")[0]
+    trip_name = booking.get("item_name") or "your Rox tour"
+    subject = f"Got any photos from your {trip_name}? — Rox Taxi"
+
+    gallery_url = "https://roxtaxi.com/gallery#submit"
+    review_url = "https://g.page/r/roxtaxi/review"  # placeholder Google review shortlink
+
+    text = (
+        f"Hi {first_name},\n\n"
+        f"Hope you had a great time on your {trip_name} with us.\n\n"
+        f"If you snapped any shots on the tour, we'd love to feature them.\n"
+        f"Send one over here (takes ~10 seconds):\n"
+        f"{gallery_url}\n\n"
+        f"Approved photos land on our public gallery and — if it's a group\n"
+        f"shot — on the 'Recent group tours' strip that other travellers see\n"
+        f"before they book. It's the quickest way to help another family\n"
+        f"pick their perfect Nassau day.\n\n"
+        f"Loved the trip? A quick Google review helps enormously:\n"
+        f"{review_url}\n\n"
+        f"Any questions or a next trip in mind — just reply to this email or\n"
+        f"WhatsApp us at +1 (242) 432-2587.\n\n"
+        f"Cheers,\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Thanks for riding with Rox</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:30px;line-height:1.1;">Got any photos from your trip?</h1>
+      <p style="color:#64748B;font-size:15px;margin:12px 0 0;">Hi {first_name} — hope you had a great time on <strong style="color:#0B3B5C;">{trip_name}</strong>. If you snapped a few shots, we'd love to feature them.</p>
+
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:24px;margin-top:22px;">
+        <div style="font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Share a photo</div>
+        <p style="color:#0B3B5C;font-size:14px;margin:8px 0 16px;line-height:1.55;">
+          Approved photos appear on our public <a href="https://roxtaxi.com/gallery" style="color:#0B3B5C;font-weight:600;">gallery</a>
+          and — if it's a group shot — on the <em>Recent group tours</em> strip other travellers see before they book. Takes about ten seconds.
+        </p>
+        <a href="{gallery_url}" style="display:inline-block;background:#D4A94A;color:#0B192C;text-decoration:none;font-weight:800;padding:12px 22px;border-radius:999px;font-size:14px;">Upload a photo →</a>
+      </div>
+
+      <div style="margin-top:22px;background:#FFF7E6;border:1px solid #F5DFA1;border-radius:14px;padding:18px;">
+        <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#A88235;font-weight:700;">Loved the trip?</div>
+        <p style="color:#0B3B5C;font-size:14px;margin:6px 0 12px;">A quick Google review helps small Bahamian operators like us more than you'd guess.</p>
+        <a href="{review_url}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;font-size:13px;">Leave a Google review</a>
+      </div>
+
+      <p style="color:#64748B;font-size:13px;margin-top:22px;">
+        Questions or a next trip in mind? Just reply to this email or <a style="color:#25D366;font-weight:600;text-decoration:none;" href="https://wa.me/12424322587">WhatsApp us</a>.
+      </p>
+      <p style="color:#94a3b8;font-size:11px;margin-top:24px;">Rox Taxi Service &amp; Tours · Nassau, Bahamas · Booking #{booking.get('id','')}</p>
+    </div>
+    """
+
+    result = send_email(booking["customer_email"], subject, html, text, category="confirmation")
+    report["email"].update(result)
+    return report
+
