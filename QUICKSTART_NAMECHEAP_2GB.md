@@ -151,7 +151,7 @@ are pasted in Admin → Tokens after the server is running):
 ```env
 MONGO_URL="mongodb://localhost:27017"
 DB_NAME="rox_taxi_prod"
-JWT_SECRET_KEY="paste-output-of-openssl-rand-hex-32-here"
+JWT_SECRET="paste-output-of-openssl-rand-hex-32-here"
 
 ADMIN_EMAIL="roxfam2509@gmail.com"
 ADMIN_PASSWORD="pick-a-strong-one"
@@ -160,7 +160,7 @@ PUBLIC_SITE_URL="https://roxtaxi.com"
 CORS_ORIGINS="https://roxtaxi.com,https://www.roxtaxi.com"
 ```
 
-Generate `JWT_SECRET_KEY` with:
+Generate `JWT_SECRET` with:
 
 ```bash
 openssl rand -hex 32                  # copy the 64-char hex string

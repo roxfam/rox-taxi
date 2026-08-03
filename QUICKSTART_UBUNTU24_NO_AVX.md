@@ -217,7 +217,7 @@ Fill in exactly these 7 keys:
 MONGO_URL="mongodb://localhost:27017"          # Path A (Percona)
 # MONGO_URL="mongodb+srv://rox:PASSWORD@cluster0.abc.mongodb.net/?retryWrites=true&w=majority"   # Path B (Atlas)
 DB_NAME="rox_taxi_prod"
-JWT_SECRET_KEY="<paste output of: openssl rand -hex 32>"
+JWT_SECRET="<paste output of: openssl rand -hex 32>"
 ADMIN_EMAIL="roxfam2509@gmail.com"
 ADMIN_PASSWORD="<pick a strong one>"
 PUBLIC_SITE_URL="https://roxtaxi.com"

@@ -62,7 +62,7 @@ log "Writing backend/.env with Tier-1 bootstrap keys..."
 cat > "$APP_DIR/backend/.env" <<EOF
 MONGO_URL="mongodb://localhost:27017"
 DB_NAME="rox_taxi_prod"
-JWT_SECRET_KEY="${JWT_SECRET_KEY}"
+JWT_SECRET="${JWT_SECRET_KEY}"
 ADMIN_EMAIL="${ADMIN_EMAIL}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD}"
 PUBLIC_SITE_URL="https://${DOMAIN}"
