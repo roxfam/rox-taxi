@@ -1004,12 +1004,17 @@ async def _run_reminder_tick() -> int:
         except Exception as e:  # noqa: BLE001
             log.warning("return reminder send fail for %s: %s", b.get("id"), e)
 
-    # ── Post-trip photo-share nudge — fire ~24h after the trip's pickup ──
-    # Non-rental bookings only (rentals have their own return-day flow that
-    # already carries the "rebook" CTA). Idempotent via `photo_nudge_sent_at`.
-    # Window: trip was 22h-72h ago and hasn't been cancelled.
-    nudge_lower = now - timedelta(hours=72)
-    nudge_upper = now - timedelta(hours=22)
+    # ── Post-trip photo-share nudge — A/B split on send window ────────────
+    # Variant A ("24h" / control): fire 22-48h after trip's pickup time.
+    # Variant B ("3d"  / test):    fire 66-96h after trip's pickup time.
+    # Bucket deterministically by booking-id hash so a single booking stays
+    # in one variant forever, and no booking gets nudged twice.
+    # Idempotent via `photo_nudge_sent_at`.
+    import hashlib as _hashlib
+    a_lower = now - timedelta(hours=48)
+    a_upper = now - timedelta(hours=22)
+    b_lower = now - timedelta(hours=96)
+    b_upper = now - timedelta(hours=66)
     cur3 = db.bookings.find({
         "service_type": {"$ne": "rental"},
         "status": {"$nin": ["cancelled", "refunded"]},
@@ -1023,16 +1028,23 @@ async def _run_reminder_tick() -> int:
             continue
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        if not (nudge_lower <= dt <= nudge_upper):
+        bid = str(b.get("id") or "")
+        variant = "A" if (int(_hashlib.md5(bid.encode()).hexdigest(), 16) % 2 == 0) else "B"
+        lower, upper = (a_lower, a_upper) if variant == "A" else (b_lower, b_upper)
+        if not (lower <= dt <= upper):
             continue
         try:
             report = send_photo_share_nudge(b, prefs=prefs)
             await db.bookings.update_one(
                 {"id": b["id"]},
-                {"$set": {"photo_nudge_sent_at": now.isoformat(), "photo_nudge_result": report}},
+                {"$set": {
+                    "photo_nudge_sent_at": now.isoformat(),
+                    "photo_nudge_result": report,
+                    "photo_nudge_variant": variant,
+                }},
             )
             sent += 1
-            log.info("photo nudge sent for %s (email=%s)", b["id"], report.get("email", {}).get("sent"))
+            log.info("photo nudge sent for %s (variant=%s, email=%s)", b["id"], variant, report.get("email", {}).get("sent"))
         except Exception as e:  # noqa: BLE001
             log.warning("photo nudge send fail for %s: %s", b.get("id"), e)
     return sent
@@ -1677,8 +1689,8 @@ async def list_gallery():
         _add(d.get("image_url"), "rentals", d.get("name"))
     for d in await db.taxi_services.find({"active": True}).to_list(200):
         _add(d.get("image_url"), "taxi", d.get("name"))
-    # Approved customer submissions
-    for d in await db.gallery_submissions.find({"status": "approved"}).sort("approved_at", -1).to_list(200):
+    # Approved customer submissions — pinned first, then newest approved.
+    async for d in _sorted_approved_submissions():
         entry_url = _canonicalise(d.get("url") or "")
         if not entry_url or entry_url in seen:
             continue
@@ -1688,9 +1700,24 @@ async def list_gallery():
             "title": d.get("caption") or "Guest moment",
             "submitter": d.get("submitter_name"),
             "approved_at": d.get("approved_at"),
+            "is_pinned": bool(d.get("is_pinned")),
         }
         seen[entry_url] = entry
     return list(seen.values())
+
+
+async def _sorted_approved_submissions():
+    """Yield approved guest submissions with pinned photos ahead of the rest.
+    Pinned photos are always featured on any surface that renders /api/gallery
+    (home, footer, groups strip, gallery page)."""
+    async for d in _db_gs().find({"status": "approved", "is_pinned": True}).sort("pinned_at", -1).limit(50):
+        yield d
+    async for d in _db_gs().find({"status": "approved", "$or": [{"is_pinned": {"$exists": False}}, {"is_pinned": False}]}).sort("approved_at", -1).limit(200):
+        yield d
+
+
+def _db_gs():
+    return db.gallery_submissions
 
 
 # ── Web Push helper (defined before endpoints that call it) ────────────

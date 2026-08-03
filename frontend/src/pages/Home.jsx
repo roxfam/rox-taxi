@@ -218,6 +218,63 @@ export default function Home() {
 
       {/* GOOGLE REVIEWS */}
       <GoogleReviews />
+
+      {/* FEATURED GUEST WALL — pinned guest photos surfaced site-wide */}
+      <FeaturedGuestWall />
     </div>
+  );
+}
+
+function FeaturedGuestWall() {
+  const [pinned, setPinned] = useState([]);
+  useEffect(() => {
+    api.get("/gallery")
+      .then(({ data }) => {
+        if (!Array.isArray(data)) return;
+        setPinned(data.filter((p) => p.is_pinned).slice(0, 6));
+      })
+      .catch(() => setPinned([]));
+  }, []);
+  if (pinned.length === 0) return null;
+  const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${process.env.REACT_APP_BACKEND_URL}${u}`);
+  return (
+    <section className="bg-[#FBF7EF] border-t border-[#E2E8F0]" data-testid="home-featured-guest-wall">
+      <div className="max-w-7xl mx-auto px-6 lg:px-10 py-16">
+        <div className="flex items-end justify-between flex-wrap gap-4 mb-8">
+          <div>
+            <div className="text-xs tracking-[0.3em] uppercase text-[#D4A94A] font-bold">Featured guests</div>
+            <h2 className="serif text-4xl sm:text-5xl text-[#0B3B5C] mt-2 leading-tight">Real moments, hand-picked.</h2>
+          </div>
+          <Link
+            to="/gallery"
+            className="text-sm font-bold text-[#0B3B5C] hover:text-[#D4A94A] transition-colors inline-flex items-center gap-1"
+            data-testid="home-featured-wall-see-all"
+          >
+            See full gallery <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {pinned.map((p, i) => (
+            <div
+              key={p.url + i}
+              data-testid={`home-featured-tile-${i}`}
+              className="relative aspect-square rounded-2xl overflow-hidden border-2 border-[#D4A94A] bg-white shadow-[0_6px_18px_rgba(11,25,44,0.1)] group"
+            >
+              <img
+                src={resolveUrl(p.url)}
+                alt={p.title || "Featured guest photo"}
+                loading="lazy"
+                className="w-full h-full object-cover group-hover:scale-[1.06] transition-transform duration-700"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute bottom-0 left-0 right-0 p-2 text-white translate-y-1 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                <div className="text-[9px] uppercase tracking-[0.25em] text-[#D4A94A]">Guest</div>
+                <div className="text-[11px] font-semibold leading-tight line-clamp-2">{p.title}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }

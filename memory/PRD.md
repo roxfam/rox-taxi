@@ -18,6 +18,15 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Guest Photo Wall + A/B Nudge Timing)
+- **Guest Photo Wall — pin/unpin infrastructure**: `POST /api/admin/gallery/{id}/pin` toggles a submission's `is_pinned` + `pinned_at`. `/api/gallery` bumps pinned photos ahead of everything else (sorted by `pinned_at` desc, then `approved_at` desc for the rest). Response now includes `is_pinned` per photo.
+- **Admin Pin UI**: `frontend/src/pages/admin/GalleryPanel.jsx` — approved cards now show a gold "Featured" badge on pinned photos and a Pin/PinOff toggle button next to the Facebook repost button.
+- **Site-wide surfacing**: `frontend/src/pages/Home.jsx` — new `FeaturedGuestWall` section (6-tile strip with gold borders) renders after the Google Reviews section. `CruiseGroupsNassau.jsx` shows a dark-navy "Featured" badge on pinned photos in the Recent group tours strip. Pinned photos naturally lift on `/gallery` too.
+- **A/B send-window test**: `_run_reminder_tick` in `server.py` now buckets bookings deterministically by md5(id) — Variant A ("24h", control) fires 22-48h post-trip, Variant B ("3-day", test) fires 66-96h post-trip. Booking doc gets `photo_nudge_variant` on send.
+- **Nudge attribution carries variant**: `gallery.py::submit_gallery_photo` now copies `photo_nudge_variant` from the matched booking onto the submission's `attributed_nudge_variant`. `GET /admin/photo-nudge-stats` returns an `ab_test` block with `{variant, label, nudges_sent, attributed_submissions, conversion_pct}` per arm.
+- **Admin A/B panel**: `AdminDashboard.jsx::PhotoNudgeCard` renders a 2-column variant comparison with a green "Winning" badge on the higher-converting arm.
+- Regression tests: `backend/tests/test_photo_wall_ab.py` (variant hash determinism, roughly-balanced split, pinned-first sort).
+
 ### ✅ Shipped Feb 2026 (Groups landing polish + Guest Photo Push + Featured Guest + Nudge Analytics)
 - **Featured Guest badge** — `backend/server.py` `/api/gallery` now exposes `approved_at` on guest submissions. `frontend/src/pages/CruiseGroupsNassau.jsx` flags the newest guest photo (approved within 30 days) with a gold-ring border + pulsing "NEW" pill in the "Recent group tours" strip.
 - **Nudge attribution** — `backend/routes/gallery.py::submit_gallery_photo` now looks up any booking with matching `customer_email` whose `photo_nudge_sent_at` is within the last 7 days and persists `attributed_nudge_booking_id` + `attributed_nudge_sent_at` on the submission doc.

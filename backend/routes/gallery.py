@@ -93,7 +93,8 @@ async def submit_gallery_photo(
 
     # Nudge attribution — if this submitter's email matches a booking that got
     # a post-trip photo nudge in the last 7 days, tag the submission so we can
-    # prove the funnel is working in the admin dashboard.
+    # prove the funnel is working in the admin dashboard. Also copies the
+    # A/B variant assigned to that booking so the stats endpoint can split.
     if doc["submitter_email"]:
         try:
             from datetime import datetime, timedelta, timezone
@@ -111,6 +112,7 @@ async def submit_gallery_photo(
                     {"$set": {
                         "attributed_nudge_booking_id": b["id"],
                         "attributed_nudge_sent_at": b.get("photo_nudge_sent_at"),
+                        "attributed_nudge_variant": b.get("photo_nudge_variant"),
                     }},
                 )
         except Exception:  # noqa: BLE001
@@ -191,6 +193,23 @@ async def admin_approve_submission(sub_id: str, _admin: str = _require()):
 async def admin_facebook_status(_admin: str = _require()):
     """Diagnostics — is the Facebook page token still valid and reachable?"""
     return await _facebook_status()
+
+
+@router.post("/admin/gallery/{sub_id}/pin")
+async def admin_pin_submission(sub_id: str, _admin: str = _require()):
+    """Toggle pin state — pinned photos always surface first in /api/gallery
+    (used on home, footer, groups strip). Idempotent."""
+    doc = await _db.gallery_submissions.find_one({"id": sub_id, "status": "approved"})
+    if not doc:
+        raise HTTPException(404, "Approved submission not found")
+    new_pinned = not bool(doc.get("is_pinned"))
+    update = {"is_pinned": new_pinned}
+    if new_pinned:
+        update["pinned_at"] = _now_iso()
+    else:
+        update["pinned_at"] = None
+    await _db.gallery_submissions.update_one({"id": sub_id}, {"$set": update})
+    return {"id": sub_id, "is_pinned": new_pinned}
 
 
 @router.get("/admin/gallery/approved")

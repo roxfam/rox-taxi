@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Ship, Users, DollarSign, MapPin, Clock, ChevronRight, Sparkles, ShieldCheck, PhoneCall, Camera } from "lucide-react";
+import { Ship, Users, DollarSign, MapPin, Clock, ChevronRight, Sparkles, ShieldCheck, PhoneCall, Camera, Pin } from "lucide-react";
 import Seo from "../components/Seo";
 import { api, BACKEND_URL } from "../lib/api";
 
@@ -194,6 +194,14 @@ export default function CruiseGroupsNassau() {
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-[#0B192C] animate-pulse" />
                     New
+                  </div>
+                )}
+                {p.is_pinned && !p.isFeaturedNew && (
+                  <div
+                    className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 rounded-full bg-[#0B3B5C] text-white px-2.5 py-1 text-[10px] font-black tracking-[0.15em] uppercase shadow-lg"
+                    data-testid={`recent-group-photo-pinned-badge-${i}`}
+                  >
+                    <Pin className="w-3 h-3" /> Featured
                   </div>
                 )}
                 <img

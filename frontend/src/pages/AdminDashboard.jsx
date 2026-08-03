@@ -894,6 +894,48 @@ function PhotoNudgeCard({ data }) {
         <NudgeStat testId="nudge-30d-conv"      label="Conversion"           value={`${recentConv}%`}             tone="#E86A3C" Icon={TrendingUp} />
       </div>
 
+      {/* A/B variant breakdown — 24h send vs 3-day send */}
+      {Array.isArray(data.ab_test) && data.ab_test.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-[#E2E8F0]" data-testid="nudge-ab-block">
+          <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-bold mb-3">
+            A/B send-window test · last 30 days
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {data.ab_test.map((v) => {
+              const isWinning = data.ab_test.length === 2
+                && v.conversion_pct === Math.max(...data.ab_test.map((x) => x.conversion_pct))
+                && v.conversion_pct > 0
+                && data.ab_test[0].conversion_pct !== data.ab_test[1].conversion_pct;
+              return (
+                <div
+                  key={v.variant}
+                  data-testid={`nudge-ab-variant-${v.variant}`}
+                  className={`rounded-xl border p-3 ${isWinning ? "border-[#059669] bg-[#059669]/6" : "border-[#E2E8F0] bg-[#FAF9F6]"}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-bold text-[#0B3B5C]">
+                      Variant {v.variant}
+                      <span className="ml-1 text-[10px] font-normal text-[#64748B]">· {v.label}</span>
+                    </div>
+                    {isWinning && (
+                      <span className="text-[9px] font-black uppercase tracking-widest rounded-full bg-[#059669] text-white px-2 py-0.5" data-testid={`nudge-ab-winner-${v.variant}`}>
+                        Winning
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-3">
+                    <span className="mono text-2xl font-black text-[#0B3B5C]">{v.conversion_pct}%</span>
+                    <span className="text-[11px] text-[#64748B]">
+                      {v.attributed_submissions} / {v.nudges_sent} nudges
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 text-[11px] text-[#64748B] leading-relaxed">
         Attribution: a gallery submission counts as "from a nudge" when the submitter's email matches a booking that received a photo-nudge email in the previous 7 days.
       </div>

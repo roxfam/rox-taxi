@@ -566,6 +566,27 @@ async def admin_photo_nudge_stats(_: str = Depends(_admin_dep)):
     def _pct(part, whole):
         return round((part / whole) * 100, 1) if whole > 0 else 0.0
 
+    # ── A/B variant breakdown (last 30 days) ──────────────────────────
+    # Variant A = 24h send window (control), Variant B = 3-day send window.
+    async def _variant_stats(v: str):
+        nudges = await _db.bookings.count_documents({
+            "photo_nudge_sent_at": {"$gte": cutoff_30d},
+            "photo_nudge_variant": v,
+        })
+        attributed = await _db.gallery_submissions.count_documents({
+            "attributed_nudge_sent_at": {"$gte": cutoff_30d},
+            "attributed_nudge_variant": v,
+        })
+        return {
+            "variant": v,
+            "label": "24h send" if v == "A" else "3-day send",
+            "nudges_sent": nudges,
+            "attributed_submissions": attributed,
+            "conversion_pct": _pct(attributed, nudges),
+        }
+
+    ab = [await _variant_stats("A"), await _variant_stats("B")]
+
     return {
         "lifetime": {
             "nudges_sent": lifetime_nudges,
@@ -579,6 +600,7 @@ async def admin_photo_nudge_stats(_: str = Depends(_admin_dep)):
             "conversion_pct": _pct(recent_attributed, recent_nudges),
             "attributed_share_pct": _pct(recent_attributed, total_submissions_30d),
         },
+        "ab_test": ab,
     }
 
 

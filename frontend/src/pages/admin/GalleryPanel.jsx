@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, X, RefreshCw, Images, Mail, Facebook, RotateCw, ExternalLink, AlertTriangle } from "lucide-react";
+import { Check, X, RefreshCw, Images, Mail, Facebook, RotateCw, ExternalLink, AlertTriangle, Pin, PinOff } from "lucide-react";
 import { api, BACKEND_URL } from "../../lib/api";
 
 // Admin panel for reviewing customer-submitted gallery photos.
@@ -67,6 +67,21 @@ export default function GalleryPanel() {
       setApproved(refreshed);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Repost failed");
+    } finally {
+      setBusy((b) => { const n = { ...b }; delete n[id]; return n; });
+    }
+  };
+
+  // Toggle "featured pin" — pinned photos always surface first in /api/gallery
+  // across home, footer, and the cruise-groups strip.
+  const togglePin = async (id) => {
+    setBusy((b) => ({ ...b, [id]: "pin" }));
+    try {
+      const { data } = await api.post(`/admin/gallery/${id}/pin`);
+      toast.success(data.is_pinned ? "Pinned as featured ✓" : "Unpinned");
+      setApproved((xs) => xs.map((x) => (x.id === id ? { ...x, is_pinned: data.is_pinned } : x)));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Pin failed");
     } finally {
       setBusy((b) => { const n = { ...b }; delete n[id]; return n; });
     }
@@ -193,6 +208,11 @@ export default function GalleryPanel() {
                 <div key={it.id} className="rounded-2xl bg-white border border-[#E2E8F0] overflow-hidden flex flex-col" data-testid={`admin-gallery-approved-item-${it.id}`}>
                   <div className="aspect-[4/3] bg-[#F1F5F9] overflow-hidden relative">
                     <img src={resolveUrl(it.url)} alt={it.caption || "Guest submission"} className="w-full h-full object-cover" loading="lazy" />
+                    {it.is_pinned && (
+                      <span className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-[#D4A94A] text-[#0B192C] text-[10px] font-black px-2 py-1 shadow-sm" data-testid={`admin-gallery-pinned-badge-${it.id}`}>
+                        <Pin className="w-3 h-3" /> Featured
+                      </span>
+                    )}
                     {posted ? (
                       <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-[#1877F2] text-white text-[10px] font-bold px-2 py-1 shadow-sm" data-testid={`admin-gallery-fb-badge-${it.id}`}>
                         <Facebook className="w-3 h-3" /> Posted
@@ -221,6 +241,16 @@ export default function GalleryPanel() {
                       </p>
                     )}
                     <div className="mt-auto flex gap-2 pt-2">
+                      <button
+                        onClick={() => togglePin(it.id)}
+                        disabled={!!b}
+                        className={`inline-flex items-center justify-center gap-1.5 rounded-full text-xs font-semibold py-2 px-3 disabled:opacity-60 active:scale-95 transition-colors ${it.is_pinned ? "bg-[#D4A94A] text-[#0B192C] hover:bg-[#E5BC5A]" : "bg-white border border-[#D4A94A] text-[#D4A94A] hover:bg-[#D4A94A]/10"}`}
+                        data-testid={`admin-gallery-pin-${it.id}`}
+                        title={it.is_pinned ? "Unpin from featured" : "Pin as featured — surfaces first on home + groups + gallery"}
+                      >
+                        {b === "pin" ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : (it.is_pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />)}
+                        {it.is_pinned ? "Pinned" : "Pin"}
+                      </button>
                       <button
                         onClick={() => repost(it.id)}
                         disabled={!!b}
