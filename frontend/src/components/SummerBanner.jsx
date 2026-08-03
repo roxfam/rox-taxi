@@ -1,46 +1,22 @@
 import { useEffect, useState } from "react";
-import { X, Sparkles } from "lucide-react";
+import { X } from "lucide-react";
 
 /**
- * SummerBanner — thin, fancy, scrolling summer-promo strip shown site-wide
- * (except /admin).
- *
- * Design:
- *  - Ultra-thin (h ≈ 32px) so it never fights the hero above the fold.
- *  - Deep navy base with a slow animated gold shimmer overlay.
- *  - The message row scrolls horizontally (marquee) using the existing
- *    `.promo-marquee-track` keyframe in index.css (32s linear loop,
- *    pauses on hover, respects prefers-reduced-motion).
- *  - "Book Now" CTA + dismiss (X) stay pinned to the right with a soft
- *    gradient fade so the scrolling text disappears cleanly behind them.
- *
- * Behaviour:
- *  - Auto-hides after `END_DATE` (Aug 31 2026, Nassau time)
- *  - Remembers dismissal for 7 days in localStorage
- *  - Days-remaining pill in the marquee ticks down hourly
+ * SummerBanner — original orange promo strip, now with a scrolling marquee.
+ * - Auto-hides after `endDate` (Aug 31 2026 by default).
+ * - Remembers dismissal for 7 days in localStorage.
+ * - Message row scrolls horizontally via the shared `.promo-marquee-track`
+ *   keyframe in index.css (32s linear loop, pauses on hover, honours
+ *   prefers-reduced-motion).
+ * - "Book Now" CTA + dismiss (X) stay pinned on the right with a soft
+ *   gradient fade so the scrolling text disappears cleanly behind them.
  */
 const DISMISS_KEY = "rox_summer_banner_dismissed_until";
-const END_DATE = new Date("2026-08-31T23:59:59-04:00");
+const END_DATE = new Date("2026-08-31T23:59:59-04:00");  // Nassau time
 
 function daysUntil(endDate) {
   const ms = endDate.getTime() - Date.now();
   return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
-}
-
-// Marquee content items — kept short + varied so the scroll feels alive.
-// Duplicated inline below to guarantee a seamless -50% loop.
-function messageItems(daysLeft) {
-  const countdown =
-    daysLeft === 0 ? "Ends today" : daysLeft === 1 ? "Ends in 1 day" : `Ends in ${daysLeft} days`;
-  return [
-    { icon: "☀️", text: "Summer Special · Save 10% on every tour" },
-    { icon: "🐚", text: "Use code SUMMER10 at checkout", codePill: "SUMMER10" },
-    { icon: "⏳", text: countdown, urgent: true },
-    { icon: "🏝️", text: "Free cancellation up to 24 hours" },
-    { icon: "🚕", text: "Cruise-port pickups, kids under 3 ride free" },
-    { icon: "⭐", text: "4.9 average from 2,400+ Bahamas guests" },
-    { icon: "🌊", text: "Blue Lagoon · Atlantis · Rose Island reefs" },
-  ];
 }
 
 export default function SummerBanner() {
@@ -69,107 +45,81 @@ export default function SummerBanner() {
 
   if (!visible) return null;
 
-  const items = messageItems(daysLeft);
-  // We render the item list twice back-to-back — the marquee keyframe scrolls
-  // the flex row by -50%, so pass #2 slides in exactly as pass #1 leaves.
-  const looped = [...items, ...items];
+  // One "message unit" — duplicated twice inside the track so the -50%
+  // marquee keyframe produces a perfectly seamless loop.
+  const MessageUnit = ({ ariaHidden = false }) => (
+    <span
+      className="inline-flex items-center gap-3 px-6 shrink-0"
+      aria-hidden={ariaHidden || undefined}
+    >
+      <span className="text-lg md:text-xl select-none" aria-hidden>☀️</span>
+      <span className="font-semibold text-sm md:text-base whitespace-nowrap">
+        Summer Special · Save 10% on every tour
+      </span>
+      <span className="text-xs md:text-sm text-white/90 whitespace-nowrap">
+        Book by Aug 31 · code{" "}
+        <span
+          className="font-mono bg-white/20 px-1.5 py-0.5 rounded font-bold"
+          data-testid={ariaHidden ? undefined : "summer-banner-code"}
+        >
+          SUMMER10
+        </span>{" "}
+        at checkout
+        {daysLeft > 0 && daysLeft <= 60 && (
+          <>
+            {" · "}
+            <span
+              className="font-bold text-white bg-black/20 px-1.5 py-0.5 rounded"
+              data-testid={ariaHidden ? undefined : "summer-banner-countdown"}
+              aria-live={ariaHidden ? undefined : "polite"}
+            >
+              {daysLeft === 1 ? "Ends today" : `Ends in ${daysLeft}d`}
+            </span>
+          </>
+        )}
+      </span>
+    </span>
+  );
 
   return (
     <div
       data-testid="summer-banner"
-      className="promo-marquee relative w-full overflow-hidden text-white animate-in fade-in duration-500"
-      role="region"
-      aria-label="Summer promotion"
+      className="promo-marquee relative w-full overflow-hidden text-white shadow-md animate-in fade-in duration-500"
       style={{
-        background:
-          "linear-gradient(90deg, #0B192C 0%, #0B3B5C 50%, #0B192C 100%)",
-        boxShadow: "0 1px 0 rgba(212,169,74,0.35) inset, 0 -1px 0 rgba(212,169,74,0.35) inset",
+        background: "linear-gradient(90deg, #E86A3C 0%, #F4A11C 50%, #E86A3C 100%)",
       }}
     >
-      {/* Animated gold shimmer overlay — a soft diagonal sheen that drifts
-          across the strip on a 6s loop. Adds fancy without noise. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "linear-gradient(115deg, transparent 30%, rgba(212,169,74,0.18) 45%, rgba(255,255,255,0.14) 50%, rgba(212,169,74,0.18) 55%, transparent 70%)",
-          backgroundSize: "220% 100%",
-          animation: "shimmer-sheen 6s linear infinite",
-        }}
-      />
-      <style
-        // Local keyframe — piggybacks on existing promo-scroll but adds our
-        // own diagonal-sheen loop for the fancy sparkle effect.
-        dangerouslySetInnerHTML={{
-          __html:
-            "@keyframes shimmer-sheen{0%{background-position:200% 0}100%{background-position:-200% 0}}",
-        }}
-      />
-
-      <div className="relative flex items-center h-8 sm:h-9">
-        {/* Scrolling marquee — pauses on hover (from .promo-marquee CSS) */}
+      <div className="relative flex items-center py-2.5 md:py-3">
+        {/* Scrolling message row */}
         <div className="flex-1 min-w-0 overflow-hidden">
-          <div className="promo-marquee-track flex items-center gap-0 whitespace-nowrap will-change-transform">
-            {looped.map((it, i) => (
-              <span
-                key={i}
-                className="inline-flex items-center gap-2 px-5 text-[12px] sm:text-[13px] font-medium tracking-wide"
-              >
-                <span className="text-[13px] sm:text-[14px] select-none" aria-hidden>
-                  {it.icon}
-                </span>
-                <span className={it.urgent ? "text-[#FBE9B1] font-semibold" : "text-white/95"}>
-                  {it.text}
-                </span>
-                {it.codePill && (
-                  <span
-                    className="font-mono font-bold text-[11px] sm:text-[12px] tracking-wider text-[#0B192C] bg-gradient-to-b from-[#F5D57B] to-[#D4A94A] px-2 py-[1px] rounded-full shadow-[0_1px_0_rgba(255,255,255,0.4)_inset,0_2px_6px_rgba(212,169,74,0.35)]"
-                    data-testid={i === 1 ? "summer-banner-code" : undefined}
-                  >
-                    {it.codePill}
-                  </span>
-                )}
-                {/* Sparkle divider between items */}
-                <Sparkles
-                  className="w-3 h-3 ml-3 text-[#D4A94A]/70 shrink-0"
-                  aria-hidden
-                />
-              </span>
-            ))}
+          <div className="promo-marquee-track flex items-center whitespace-nowrap will-change-transform">
+            <MessageUnit />
+            <MessageUnit ariaHidden />
           </div>
         </div>
 
-        {/* Pinned CTA + dismiss cluster — sits above the marquee with a soft
-            navy→transparent gradient fade so text scrolls out cleanly behind it. */}
-        <div className="relative flex items-center gap-1.5 pr-2 sm:pr-3 pl-6 shrink-0"
+        {/* Pinned CTA + dismiss cluster with gradient fade behind it */}
+        <div
+          className="relative flex items-center gap-2 pl-6 pr-3 shrink-0"
           style={{
             background:
-              "linear-gradient(to left, #0B192C 40%, rgba(11,25,44,0.9) 70%, transparent 100%)",
+              "linear-gradient(to left, #E86A3C 40%, rgba(232,106,60,0.85) 70%, transparent 100%)",
           }}
         >
-          <span
-            className="hidden md:inline text-[10px] uppercase tracking-[0.18em] font-bold text-[#D4A94A]"
-            data-testid="summer-banner-countdown"
-            aria-live="polite"
-          >
-            {daysLeft === 0 ? "Ends today" : `${daysLeft}d left`}
-          </span>
           <button
             onClick={goBook}
             data-testid="summer-banner-cta"
-            className="whitespace-nowrap inline-flex items-center gap-1 text-[11px] sm:text-[12px] font-bold tracking-wide text-[#0B192C] bg-gradient-to-b from-[#F5D57B] to-[#D4A94A] hover:from-[#F8DE8E] hover:to-[#E5BC5A] active:scale-95 transition-all px-3 py-[5px] rounded-full shadow-[0_2px_8px_rgba(212,169,74,0.4)]"
+            className="whitespace-nowrap bg-white text-orange-700 font-bold text-xs md:text-sm px-3 md:px-4 py-1.5 rounded-full hover:bg-orange-50 transition-colors"
           >
-            Book Now
-            <span aria-hidden>→</span>
+            Book Now →
           </button>
           <button
             onClick={dismiss}
             data-testid="summer-banner-dismiss"
-            aria-label="Dismiss summer promotion"
-            className="text-white/60 hover:text-white p-1 transition-colors"
+            aria-label="Dismiss banner"
+            className="text-white/80 hover:text-white p-1 -mr-1"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       </div>
