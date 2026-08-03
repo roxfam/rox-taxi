@@ -1700,6 +1700,7 @@ async def list_gallery():
             continue
         entry = {
             "url": entry_url,
+            "id": d.get("id"),
             "category": "guests",
             "title": d.get("caption") or "Guest moment",
             "caption": d.get("caption") or "",

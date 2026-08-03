@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { Images, X, MapPin, Car, ShipWheel, MapPinned, Camera, Upload, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -20,9 +21,27 @@ export default function Gallery() {
   const [photos, setPhotos] = useState([]);
   const [filter, setFilter] = useState("all");
   const [active, setActive] = useState(null);
+  const [params, setParams] = useSearchParams();
+  const deepLinkId = params.get("photo");
+  const submitRef = useRef(null);
 
   useEffect(() => {
     api.get("/gallery").then(({ data }) => setPhotos(data)).catch(() => setPhotos([]));
+  }, []);
+
+  // Deep-link: /gallery?photo=<id> auto-opens the lightbox on that photo
+  // once /gallery has loaded. Silent fallthrough if id doesn't match.
+  useEffect(() => {
+    if (!deepLinkId || photos.length === 0) return;
+    const match = photos.find((p) => p.id === deepLinkId);
+    if (match) setActive(match);
+  }, [deepLinkId, photos]);
+
+  // Honour #submit hash — used by the post-trip photo-nudge email CTA
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#submit" && submitRef.current) {
+      submitRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }, []);
 
   const filtered = useMemo(
@@ -30,12 +49,22 @@ export default function Gallery() {
     [photos, filter],
   );
 
-  // Close lightbox on Escape without wiring up a ref/portal — cheap DX win.
+  // Drop ?photo= when the lightbox closes so back-button doesn't re-open it
+  const closeLightbox = () => {
+    setActive(null);
+    if (params.get("photo")) {
+      const next = new URLSearchParams(params);
+      next.delete("photo");
+      setParams(next, { replace: true });
+    }
+  };
+
   useEffect(() => {
     if (!active) return;
-    const onKey = (e) => e.key === "Escape" && setActive(null);
+    const onKey = (e) => e.key === "Escape" && closeLightbox();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   return (
@@ -126,13 +155,13 @@ export default function Gallery() {
       {active && (
         <div
           className="fixed inset-0 z-[100] bg-[#0B192C]/95 backdrop-blur-sm flex items-center justify-center p-4 lg:p-10"
-          onClick={() => setActive(null)}
+          onClick={closeLightbox}
           data-testid="gallery-lightbox"
         >
           <button
             type="button"
             className="absolute top-4 right-4 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
-            onClick={() => setActive(null)}
+            onClick={closeLightbox}
             data-testid="gallery-lightbox-close"
           >
             <X className="w-5 h-5" />
@@ -151,7 +180,7 @@ export default function Gallery() {
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto px-6 lg:px-10 pb-16">
+      <div className="max-w-6xl mx-auto px-6 lg:px-10 pb-16" ref={submitRef}>
         <GallerySubmitCard />
       </div>
     </div>

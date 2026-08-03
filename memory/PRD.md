@@ -18,6 +18,12 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Deep-Link Photos)
+- **Backend**: `/api/gallery` now exposes `id` on each approved guest photo (using the `gallery_submissions.id`). Enables per-photo deep-linking without leaking DB internals.
+- **`Gallery.jsx`**: reads `?photo=<id>` on mount; when the fetched photo list contains a match, the lightbox auto-opens on that photo. Closing the lightbox (X, Esc, or backdrop click) drops `?photo=` from the URL via `setParams(..., {replace: true})` so back-button doesn't immediately reopen it. Also honours `#submit` hash to smooth-scroll to the guest upload form (used by the photo-nudge email CTA).
+- **`Home.jsx` featured lightbox**: WhatsApp, Facebook, and Copy-link buttons now build URLs of the form `https://roxtaxi.com/gallery?photo=<id>` when the active photo has an id (falls back to plain `/gallery` for legacy photos). Toast copy updated from "Gallery link copied" → "Photo link copied".
+- **Verified**: `/api/gallery` returns `id` on every guest entry; hitting `/gallery?photo=<id>` auto-opens the lightbox; closing removes the query param.
+
 ### ✅ Shipped Feb 2026 (Lightbox Carousel)
 - **`frontend/src/pages/Home.jsx`** — the FeaturedGuestWall lightbox now supports carousel navigation across all pinned photos without closing:
   - **Arrow buttons**: left + right chevron pills anchored to the vertical midpoint (hidden when there's only 1 pinned photo)

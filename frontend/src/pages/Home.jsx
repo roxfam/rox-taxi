@@ -403,7 +403,8 @@ function FeaturedGuestWall() {
                 <div className="flex items-center gap-2">
                   <a
                     href={(() => {
-                      const shareUrl = "https://roxtaxi.com/gallery";
+                      const base = "https://roxtaxi.com/gallery";
+                      const shareUrl = active.id ? `${base}?photo=${active.id}` : base;
                       const bits = [
                         active.submitter ? `${active.submitter}'s Nassau moment` : "A Nassau moment",
                         active.trip_name ? `on the ${active.trip_name}` : null,
@@ -421,7 +422,13 @@ function FeaturedGuestWall() {
                     <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
                   </a>
                   <a
-                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent("https://roxtaxi.com/gallery")}&quote=${encodeURIComponent((active.submitter ? active.submitter + "'s " : "A ") + "Nassau moment with Rox Taxi & Tours" + (active.title ? ` — "${active.title}"` : ""))}`}
+                    href={(() => {
+                      const shareUrl = active.id
+                        ? `https://roxtaxi.com/gallery?photo=${active.id}`
+                        : "https://roxtaxi.com/gallery";
+                      const quote = (active.submitter ? active.submitter + "'s " : "A ") + "Nassau moment with Rox Taxi & Tours" + (active.title ? ` — "${active.title}"` : "");
+                      return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(quote)}`;
+                    })()}
                     target="_blank"
                     rel="noopener noreferrer"
                     data-testid="home-featured-lightbox-share-facebook"
@@ -434,9 +441,12 @@ function FeaturedGuestWall() {
                     type="button"
                     onClick={async () => {
                       try {
-                        await navigator.clipboard.writeText("https://roxtaxi.com/gallery");
+                        const shareUrl = active.id
+                          ? `https://roxtaxi.com/gallery?photo=${active.id}`
+                          : "https://roxtaxi.com/gallery";
+                        await navigator.clipboard.writeText(shareUrl);
                         const { toast } = await import("sonner");
-                        toast.success("Gallery link copied");
+                        toast.success("Photo link copied");
                       } catch {
                         // ignore — old browsers just do nothing
                       }
