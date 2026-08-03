@@ -1,14 +1,19 @@
-# Google Business Profile — 30-Minute Setup for Rox Taxi
+# Google Business Profile — Optimisation Playbook for Rox Taxi
 
 **Why this matters:** For 60% of "Nassau taxi" searches Google shows a 3-listing
 map pack ABOVE the regular results. Businesses in that map pack get ~10× the
 clicks of the #1 organic result below it. A well-optimised Google Business
 Profile (GBP) is the single biggest ranking win still available to Rox Taxi —
-free, one-time setup, ~30 minutes.
+free, one-time setup, ~30 minutes total.
+
+> **Already have a GBP?** Great — skip Section 1 (Claim / verify) and start at
+> Section 2. Most listings out there fill in ~30% of the fields Google offers.
+> Filling the missing 70% is what moves you from "buried in the map pack" to
+> "top 3 for every Nassau taxi search". Do sections 2 → 5 in order.
 
 ---
 
-## 1. Claim / create the listing (10 min)
+## 1. Claim / create the listing (10 min) — skip if you already have one
 
 Go to <https://business.google.com/create>
 
