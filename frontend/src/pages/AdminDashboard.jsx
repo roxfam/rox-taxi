@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money, BACKEND_URL } from "../lib/api";
-import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome } from "lucide-react";
+import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp } from "lucide-react";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -21,6 +21,7 @@ export default function AdminDashboard() {
   const [depositModal, setDepositModal] = useState(null); // { booking, action: 'released'|'forfeited' }
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [authMethods, setAuthMethods] = useState(null);
+  const [nudgeStats, setNudgeStats] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -165,6 +166,11 @@ export default function AdminDashboard() {
         {/* Login-method analytics — how customers actually sign in. Helps
             decide whether to keep the Google tab first or promote email. */}
         <AuthMethodsCard data={authMethods} />
+
+        {/* Post-trip photo-nudge funnel — proves the email nudge is driving
+            submissions to fill the "Recent group tours" strip on
+            /cruise-groups-nassau with real customer photos. */}
+        <PhotoNudgeCard data={nudgeStats} />
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">
@@ -846,5 +852,62 @@ function LegendChip({ testId, Icon, color, label, value, pct }) {
         {value} <span className="text-[11px] text-[#94a3b8]">· {pct}%</span>
       </span>
     </span>
+  );
+}
+
+/**
+ * PhotoNudgeCard — proves the post-trip "share your photos" email nudge is
+ * driving real submissions. Shows lifetime + last-30-day funnel:
+ * nudges sent → attributed submissions → conversion %.
+ */
+function PhotoNudgeCard({ data }) {
+  if (!data) return null;
+  const life = data.lifetime || {};
+  const r = data.last_30d || {};
+  const lifeConv = Number(life.conversion_pct || 0);
+  const recentConv = Number(r.conversion_pct || 0);
+  return (
+    <div className="mt-6 rounded-2xl border border-[#E2E8F0] bg-white p-5" data-testid="admin-photo-nudge-card">
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#D4A94A]/12 flex items-center justify-center text-[#D4A94A]">
+            <Camera className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs uppercase tracking-widest text-[#64748B]">Photo-share nudge funnel</div>
+            <div className="serif text-xl text-[#0B3B5C] mt-0.5">
+              {r.attributed_submissions || 0} submissions from nudges
+              <span className="text-xs font-normal text-[#64748B] ml-2">· last 30 days</span>
+            </div>
+          </div>
+        </div>
+        <div className="hidden sm:block text-right text-[11px] text-[#64748B] leading-tight">
+          <div>Lifetime nudges: <span className="font-semibold text-[#0B3B5C]">{life.nudges_sent || 0}</span></div>
+          <div>Lifetime conversion: <span className="font-semibold text-[#0B3B5C]">{lifeConv}%</span></div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <NudgeStat testId="nudge-30d-sent"      label="Nudges sent"          value={r.nudges_sent || 0}           tone="#0B3B5C" />
+        <NudgeStat testId="nudge-30d-attributed" label="Attributed subs"      value={r.attributed_submissions || 0} tone="#059669" />
+        <NudgeStat testId="nudge-30d-total"     label="Total gallery subs"   value={r.total_submissions || 0}     tone="#D4A94A" />
+        <NudgeStat testId="nudge-30d-conv"      label="Conversion"           value={`${recentConv}%`}             tone="#E86A3C" Icon={TrendingUp} />
+      </div>
+
+      <div className="mt-4 text-[11px] text-[#64748B] leading-relaxed">
+        Attribution: a gallery submission counts as "from a nudge" when the submitter's email matches a booking that received a photo-nudge email in the previous 7 days.
+      </div>
+    </div>
+  );
+}
+
+function NudgeStat({ testId, label, value, tone, Icon }) {
+  return (
+    <div className="rounded-xl border border-[#E2E8F0] bg-[#FAF9F6] p-3" data-testid={testId}>
+      <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-bold flex items-center gap-1">
+        {Icon && <Icon className="w-3 h-3" />} {label}
+      </div>
+      <div className="mono text-2xl mt-1 font-black" style={{ color: tone }}>{value}</div>
+    </div>
   );
 }

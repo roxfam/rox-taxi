@@ -90,6 +90,32 @@ async def submit_gallery_photo(
         "created_at": _now_iso(),
     }
     await _db.gallery_submissions.insert_one(doc)
+
+    # Nudge attribution — if this submitter's email matches a booking that got
+    # a post-trip photo nudge in the last 7 days, tag the submission so we can
+    # prove the funnel is working in the admin dashboard.
+    if doc["submitter_email"]:
+        try:
+            from datetime import datetime, timedelta, timezone
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+            b = await _db.bookings.find_one(
+                {
+                    "customer_email": doc["submitter_email"],
+                    "photo_nudge_sent_at": {"$gte": cutoff},
+                },
+                sort=[("photo_nudge_sent_at", -1)],
+            )
+            if b:
+                await _db.gallery_submissions.update_one(
+                    {"id": sub_id},
+                    {"$set": {
+                        "attributed_nudge_booking_id": b["id"],
+                        "attributed_nudge_sent_at": b.get("photo_nudge_sent_at"),
+                    }},
+                )
+        except Exception:  # noqa: BLE001
+            pass
+
     # Fire-and-forget admin push — never let a push failure block the response
     try:
         await _send_admin_push(

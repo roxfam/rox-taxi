@@ -56,14 +56,20 @@ export default function CruiseGroupsNassau() {
   // Pull the freshest 5 group-relevant shots from the public gallery feed.
   // The endpoint groups approved customer submissions under "guests" (sorted
   // newest first by approved_at); we prefer those, then top up with "tours"
-  // catalog imagery so the strip never looks empty on a fresh install.
+  // catalog imagery so the strip never looks empty on a fresh install. The
+  // very newest guest photo (approved within 30 days) gets a "New" badge.
   useEffect(() => {
     let alive = true;
     api.get("/gallery").then(({ data }) => {
       if (!alive || !Array.isArray(data)) return;
       const guests = data.filter((p) => p.category === "guests");
       const tours = data.filter((p) => p.category === "tours");
-      const picked = [...guests, ...tours].slice(0, 5);
+      const picked = [...guests, ...tours].slice(0, 5).map((p, idx) => {
+        // Flag the top guest photo as "New" iff approved in the last 30 days
+        if (idx !== 0 || p.category !== "guests" || !p.approved_at) return p;
+        const ageDays = (Date.now() - new Date(p.approved_at).getTime()) / 86_400_000;
+        return ageDays <= 30 ? { ...p, isFeaturedNew: true } : p;
+      });
       setRecentPhotos(picked);
     }).catch(() => setRecentPhotos([]));
     return () => { alive = false; };
@@ -179,8 +185,17 @@ export default function CruiseGroupsNassau() {
               <div
                 key={p.url + i}
                 data-testid={`recent-group-photo-${i}`}
-                className="relative aspect-square rounded-2xl overflow-hidden border border-[#E2E8F0] bg-white shadow-[0_6px_18px_rgba(11,25,44,0.08)] group"
+                className={`relative aspect-square rounded-2xl overflow-hidden border bg-white shadow-[0_6px_18px_rgba(11,25,44,0.08)] group ${p.isFeaturedNew ? "border-[#D4A94A] ring-2 ring-[#D4A94A]/40" : "border-[#E2E8F0]"}`}
               >
+                {p.isFeaturedNew && (
+                  <div
+                    className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 rounded-full bg-[#D4A94A] text-[#0B192C] px-2.5 py-1 text-[10px] font-black tracking-[0.15em] uppercase shadow-lg"
+                    data-testid="recent-group-photo-new-badge"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#0B192C] animate-pulse" />
+                    New
+                  </div>
+                )}
                 <img
                   src={resolveUrl(p.url)}
                   alt={p.title || "Recent group tour"}

@@ -540,6 +540,48 @@ async def admin_auth_methods_summary(_: str = Depends(_admin_dep)):
     }
 
 
+@router.get("/admin/photo-nudge-stats")
+async def admin_photo_nudge_stats(_: str = Depends(_admin_dep)):
+    """Post-trip photo-nudge funnel stats.
+
+    Counts how many `photo_nudge_sent_at` timestamps landed on bookings vs
+    how many `gallery_submissions` came back attributed to a nudge (via the
+    submitter_email → booking match window recorded at submit-time).
+
+    Windows:
+      - lifetime: all-time counts + conversion %
+      - last_30d: rolling 30-day counts + conversion %
+    """
+    now = datetime.now(timezone.utc)
+    cutoff_30d = (now - timedelta(days=30)).isoformat()
+
+    lifetime_nudges = await _db.bookings.count_documents({"photo_nudge_sent_at": {"$exists": True}})
+    lifetime_attributed = await _db.gallery_submissions.count_documents({"attributed_nudge_booking_id": {"$exists": True}})
+
+    recent_nudges = await _db.bookings.count_documents({"photo_nudge_sent_at": {"$gte": cutoff_30d}})
+    recent_attributed = await _db.gallery_submissions.count_documents({"attributed_nudge_sent_at": {"$gte": cutoff_30d}})
+
+    total_submissions_30d = await _db.gallery_submissions.count_documents({"created_at": {"$gte": cutoff_30d}})
+
+    def _pct(part, whole):
+        return round((part / whole) * 100, 1) if whole > 0 else 0.0
+
+    return {
+        "lifetime": {
+            "nudges_sent": lifetime_nudges,
+            "attributed_submissions": lifetime_attributed,
+            "conversion_pct": _pct(lifetime_attributed, lifetime_nudges),
+        },
+        "last_30d": {
+            "nudges_sent": recent_nudges,
+            "attributed_submissions": recent_attributed,
+            "total_submissions": total_submissions_30d,
+            "conversion_pct": _pct(recent_attributed, recent_nudges),
+            "attributed_share_pct": _pct(recent_attributed, total_submissions_30d),
+        },
+    }
+
+
 # ============================================================================
 # Group inquiries admin — also literal routes, registered before catch-all
 # ============================================================================

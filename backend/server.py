@@ -1679,7 +1679,17 @@ async def list_gallery():
         _add(d.get("image_url"), "taxi", d.get("name"))
     # Approved customer submissions
     for d in await db.gallery_submissions.find({"status": "approved"}).sort("approved_at", -1).to_list(200):
-        _add(d.get("url"), "guests", d.get("caption") or "Guest moment", submitter=d.get("submitter_name"))
+        entry_url = _canonicalise(d.get("url") or "")
+        if not entry_url or entry_url in seen:
+            continue
+        entry = {
+            "url": entry_url,
+            "category": "guests",
+            "title": d.get("caption") or "Guest moment",
+            "submitter": d.get("submitter_name"),
+            "approved_at": d.get("approved_at"),
+        }
+        seen[entry_url] = entry
     return list(seen.values())
 
 

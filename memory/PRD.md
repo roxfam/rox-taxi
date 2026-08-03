@@ -18,7 +18,10 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
-### ✅ Shipped Feb 2026 (Groups landing polish + Guest Photo Push)
+### ✅ Shipped Feb 2026 (Groups landing polish + Guest Photo Push + Featured Guest + Nudge Analytics)
+- **Featured Guest badge** — `backend/server.py` `/api/gallery` now exposes `approved_at` on guest submissions. `frontend/src/pages/CruiseGroupsNassau.jsx` flags the newest guest photo (approved within 30 days) with a gold-ring border + pulsing "NEW" pill in the "Recent group tours" strip.
+- **Nudge attribution** — `backend/routes/gallery.py::submit_gallery_photo` now looks up any booking with matching `customer_email` whose `photo_nudge_sent_at` is within the last 7 days and persists `attributed_nudge_booking_id` + `attributed_nudge_sent_at` on the submission doc.
+- **Admin funnel report** — new `GET /api/admin/photo-nudge-stats` returns lifetime + last-30-day funnel (nudges sent, attributed submissions, total submissions, conversion %). `frontend/src/pages/AdminDashboard.jsx` renders it as a 4-stat `PhotoNudgeCard` right below the AuthMethodsCard. Regression tests: `backend/tests/test_photo_nudge_attribution.py`.
 - **`backend/notifications.py` + `backend/server.py`** — new `send_photo_share_nudge()` email fires 22-72h after any non-rental booking's pickup date via the existing reminder tick loop. Email-only (no SMS), idempotent via `photo_nudge_sent_at`. CTA links to `/gallery#submit` + a Google-review CTA. Skips cancellations, refunds, missing emails, and admin-disabled email. Regression: `backend/tests/test_photo_nudge.py`.
 - **`frontend/src/pages/CruiseGroupsNassau.jsx`** — H1 shortened from "Nassau cruise groups save 10% automatically" → **"Groups save 10% automatically"**. Hero eyebrow updated to "For Groups & Coordinators" (Users icon). Added a new **"Recent group tours"** photo strip that fetches `/api/gallery`, prefers approved guest submissions (category `guests`) and falls back to `tours` catalog images, showing the freshest 5 as a 5-up hover-lift grid with a "See full gallery →" link.
 
