@@ -18,7 +18,12 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
-### ✅ Shipped Feb 2026 (per-page SEO, TravelToNassau guide, ~40 new travel keywords)
+### ✅ Shipped Feb 2026 (Login-method analytics on Admin Dashboard)
+- **`backend/routes/admin.py::/admin/auth/methods-summary`** — new admin endpoint that aggregates `users` by `provider` (google-only, email-only, both-linked) plus a 30-day active-login split from `user_sessions.auth_method` and a 30-day new-signup count.
+- **`frontend/src/pages/AdminDashboard.jsx`** — `AuthMethodsCard` visualisation below the deposits panel. Three-segment progress bar (Google-only / Both / Email-only) that sums to exactly 100%, separate legend chips with counts + percentages, and a second 30-day active-logins bar for the more useful week-to-week signal. Auto-refreshes with the rest of the dashboard every 30 seconds.
+- Verified live: 41 users, 39 new-30d, 44 active logins in 30d (all email currently — Google integration ready and waiting for demand).
+
+
 - **`frontend/src/components/Seo.jsx`** — lightweight per-route SEO (title/desc/canonical/OG/JSON-LD) with no external dep.
 - Wired into `Taxi.jsx`, `Tours.jsx`, `CarRental.jsx` — each page now has its own title, meta description, canonical, keywords list + a route-specific JSON-LD block (`TaxiService`, `ItemList` of `TouristTrip`, `AutoRental`).
 - **`frontend/src/pages/TravelToNassau.jsx`** — 1,450-word first-timer travel guide at `/travel-to-nassau`. Structure: hero → 8 H2 sections (why, getting here, getting around, where to stay, things to do, tips, cruise stopover, FAQ). Sticky TOC on desktop, `TravelGuide` + `FAQPage` + `BreadcrumbList` JSON-LD, natural internal links back to `/taxi`, `/tours`, `/rentals`. Wired into `App.js` router, `sitemap.xml`, and Layout footer.

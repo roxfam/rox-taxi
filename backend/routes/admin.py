@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
@@ -483,6 +484,59 @@ async def admin_stats(_: str = Depends(_admin_dep)):
         "deposits_released": deposits_released,
         "deposits_forfeited": deposits_forfeited,
         "deposits_held_amount": deposits_held_amount,
+    }
+
+
+@router.get("/admin/auth/methods-summary")
+async def admin_auth_methods_summary(_: str = Depends(_admin_dep)):
+    """
+    Login-method breakdown for the Admin Dashboard.
+
+    Returns lifetime user counts by signup provider (google / email / both)
+    plus a 30-day active-login breakdown from `user_sessions`. This lets the
+    owner see which auth method actually converts and drives return visits —
+    e.g. "60% of my logins this month came via Google, so keep that tab first".
+    """
+    # ── Lifetime signup breakdown by provider on the users doc ────────
+    pipeline_users = [
+        {"$group": {"_id": {"$ifNull": ["$provider", "email"]}, "count": {"$sum": 1}}}
+    ]
+    provider_docs = await _db.users.aggregate(pipeline_users).to_list(None)
+    by_provider = {d["_id"]: d["count"] for d in provider_docs}
+    total_users = sum(by_provider.values())
+    google_only = by_provider.get("google", 0)
+    email_only = by_provider.get("email", 0)
+    both_users = by_provider.get("both", 0)
+    # Anyone who CAN log in via Google (Google-only signups + linked-both accounts)
+    google_users = google_only + both_users
+    email_users = email_only + both_users
+
+    # ── 30-day active login breakdown from user_sessions ──────────────
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    pipeline_sessions = [
+        {"$match": {"created_at": {"$gte": cutoff}}},
+        {"$group": {"_id": {"$ifNull": ["$auth_method", "unknown"]}, "count": {"$sum": 1}}},
+    ]
+    session_docs = await _db.user_sessions.aggregate(pipeline_sessions).to_list(None)
+    sessions_by_method = {d["_id"]: d["count"] for d in session_docs}
+    sessions_30d_total = sum(sessions_by_method.values())
+
+    # ── New signups in the last 30 days (activity trend) ──────────────
+    new_signups_30d = await _db.users.count_documents({"created_at": {"$gte": cutoff}})
+
+    return {
+        "total_users": total_users,
+        "google_users": google_users,
+        "email_users": email_users,
+        "google_only": google_only,
+        "email_only": email_only,
+        "both_users": both_users,
+        "sessions_30d": {
+            "total": sessions_30d_total,
+            "google": sessions_by_method.get("google", 0),
+            "email": sessions_by_method.get("email", 0),
+        },
+        "new_signups_30d": new_signups_30d,
     }
 
 

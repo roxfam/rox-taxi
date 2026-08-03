@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money, BACKEND_URL } from "../lib/api";
-import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route } from "lucide-react";
+import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome } from "lucide-react";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -20,18 +20,21 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [depositModal, setDepositModal] = useState(null); // { booking, action: 'released'|'forfeited' }
   const [pendingPhotos, setPendingPhotos] = useState(0);
+  const [authMethods, setAuthMethods] = useState(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [s, b, g] = await Promise.all([
+      const [s, b, g, a] = await Promise.all([
         api.get("/admin/stats"),
         api.get("/admin/bookings"),
         api.get("/admin/gallery/pending").catch(() => ({ data: [] })),
+        api.get("/admin/auth/methods-summary").catch(() => ({ data: null })),
       ]);
       setStats(s.data);
       setBookings(b.data);
       setPendingPhotos(Array.isArray(g.data) ? g.data.length : 0);
+      setAuthMethods(a.data);
     } catch (e) {
       if (e?.response?.status === 401) {
         localStorage.removeItem("admin_token");
@@ -158,6 +161,10 @@ export default function AdminDashboard() {
             View deposits →
           </button>
         </div>
+
+        {/* Login-method analytics — how customers actually sign in. Helps
+            decide whether to keep the Google tab first or promote email. */}
+        <AuthMethodsCard data={authMethods} />
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">
@@ -706,5 +713,138 @@ function Stat({ icon, label, value, tint }) {
         <div className="serif text-2xl text-[#0B3B5C] mt-0.5">{value}</div>
       </div>
     </div>
+  );
+}
+
+/**
+ * AuthMethodsCard — lifetime signup breakdown by provider (Google vs email)
+ * plus a 30-day active-login split. Helps the owner decide which auth method
+ * actually converts and drives return logins — e.g. "60% of my last-30-day
+ * logins came via Google, so keep that tab first."
+ */
+function AuthMethodsCard({ data }) {
+  if (!data) return null;
+  const {
+    total_users,
+    google_users,
+    email_users,
+    google_only = 0,
+    email_only = 0,
+    both_users = 0,
+    sessions_30d,
+    new_signups_30d,
+  } = data;
+  // Three mutually-exclusive buckets so segments sum to exactly 100%
+  const pct = (n) => (total_users > 0 ? Math.round((n / total_users) * 100) : 0);
+  const googleOnlyPct = pct(google_only);
+  const emailOnlyPct  = pct(email_only);
+  const bothPct       = pct(both_users);
+  const sessGoogle = sessions_30d?.google || 0;
+  const sessEmail = sessions_30d?.email || 0;
+  const sessTotal = sessions_30d?.total || 0;
+  const sessGooglePct = sessTotal > 0 ? Math.round((sessGoogle / sessTotal) * 100) : 0;
+  const sessEmailPct = sessTotal > 0 ? Math.round((sessEmail / sessTotal) * 100) : 0;
+
+  return (
+    <div
+      className="mt-6 rounded-2xl border border-[#E2E8F0] bg-white p-5"
+      data-testid="admin-auth-methods-card"
+    >
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#0B3B5C]/8 flex items-center justify-center text-[#0B3B5C]">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xs uppercase tracking-widest text-[#64748B]">Customer sign-ins</div>
+            <div className="serif text-xl text-[#0B3B5C] mt-0.5">
+              {total_users} {total_users === 1 ? "user" : "users"}
+              <span className="text-xs font-normal text-[#64748B] ml-2">
+                · {new_signups_30d} new in the last 30 days
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="hidden sm:flex text-right text-[11px] text-[#64748B] leading-tight">
+          <div>
+            Can log in with Google: <span className="font-semibold text-[#0B3B5C]">{google_users}</span>
+            <br />
+            Can log in with Email: <span className="font-semibold text-[#0B3B5C]">{email_users}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Lifetime split — 3-segment bar (Google-only / Both / Email-only) */}
+      <div className="mb-4">
+        <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-bold mb-2">
+          Lifetime signup method
+        </div>
+        <div
+          className="flex h-3 rounded-full overflow-hidden bg-[#F1F5F9]"
+          data-testid="admin-auth-methods-lifetime-bar"
+        >
+          {googleOnlyPct > 0 && (
+            <div className="bg-gradient-to-r from-[#4285F4] to-[#3B78E7]" style={{ width: `${googleOnlyPct}%` }} title={`Google only: ${google_only}`} />
+          )}
+          {bothPct > 0 && (
+            <div className="bg-gradient-to-r from-[#7c3aed] to-[#5b21b6]" style={{ width: `${bothPct}%` }} title={`Both methods linked: ${both_users}`} />
+          )}
+          {emailOnlyPct > 0 && (
+            <div className="bg-gradient-to-r from-[#D4A94A] to-[#B8912F]" style={{ width: `${emailOnlyPct}%` }} title={`Email only: ${email_only}`} />
+          )}
+        </div>
+        <div className="flex flex-wrap gap-x-6 gap-y-2 mt-3 text-sm">
+          <LegendChip testId="admin-auth-lifetime-google"   Icon={Chrome} color="#4285F4" label="Google only" value={google_only} pct={googleOnlyPct} />
+          {both_users > 0 && (
+            <LegendChip testId="admin-auth-lifetime-both"   Icon={Users}  color="#7c3aed" label="Both linked" value={both_users}   pct={bothPct} />
+          )}
+          <LegendChip testId="admin-auth-lifetime-email"    Icon={Mail}   color="#D4A94A" label="Email only"  value={email_only}  pct={emailOnlyPct} />
+        </div>
+      </div>
+
+      {/* Last-30-day active logins — the more useful signal week-to-week */}
+      <div className="pt-4 border-t border-[#E2E8F0]">
+        <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-bold mb-2">
+          Active logins · Last 30 days
+        </div>
+        {sessTotal === 0 ? (
+          <div className="text-sm text-[#64748B]">
+            No customer logins recorded in the last 30 days. Fresh sign-ins will appear here as they happen.
+          </div>
+        ) : (
+          <>
+            <div className="flex h-3 rounded-full overflow-hidden bg-[#F1F5F9]" data-testid="admin-auth-methods-30d-bar">
+              {sessGooglePct > 0 && (
+                <div className="bg-gradient-to-r from-[#4285F4] to-[#3B78E7]" style={{ width: `${sessGooglePct}%` }} />
+              )}
+              {sessEmailPct > 0 && (
+                <div className="bg-gradient-to-r from-[#D4A94A] to-[#B8912F]" style={{ width: `${sessEmailPct}%` }} />
+              )}
+            </div>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 mt-3 text-sm">
+              <LegendChip testId="admin-auth-30d-google" Icon={Chrome} color="#4285F4" label="Google" value={sessGoogle} pct={sessGooglePct} />
+              <LegendChip testId="admin-auth-30d-email"  Icon={Mail}   color="#D4A94A" label="Email"  value={sessEmail}  pct={sessEmailPct} />
+              <span className="text-[11px] text-[#94a3b8] ml-auto self-center">
+                {sessTotal} total logins
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LegendChip({ testId, Icon, color, label, value, pct }) {
+  return (
+    <span className="inline-flex items-center gap-2" data-testid={testId}>
+      <span className="inline-flex items-center justify-center w-5 h-5 rounded" style={{ background: `${color}18`, color }}>
+        <Icon className="w-3 h-3" />
+      </span>
+      <span className="text-[#0B3B5C] font-semibold">{label}</span>
+      <span className="text-[#64748B]">
+        {value} <span className="text-[11px] text-[#94a3b8]">· {pct}%</span>
+      </span>
+    </span>
   );
 }
