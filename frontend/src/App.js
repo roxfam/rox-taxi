@@ -37,6 +37,7 @@ import { AuthProvider } from "./lib/auth";
 import { useEffect } from "react";
 
 import { useVisitorBeacon } from "./hooks/useVisitorBeacon";
+import SummerBanner from "./components/SummerBanner";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -45,7 +46,7 @@ function ScrollToTop() {
 }
 
 function CustomerShell({ children }) {
-  return <Layout>{children}</Layout>;
+  return <Layout><SummerBanner />{children}</Layout>;
 }
 
 function AppRouter() {

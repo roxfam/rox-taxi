@@ -18,6 +18,9 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Summer Special promo banner — visually verified)
+- **`frontend/src/components/SummerBanner.jsx`** — dismissible full-width orange promo strip. "Summer Special · Save 10% on every tour · code SUMMER10". Visible site-wide except `/admin`. Fades in 400ms after mount, remembers dismissal for 7 days via localStorage, auto-hides past Aug 31 2026. CTA copies the code and routes to `/tours`. Verified with screenshot tool: sits cleanly below sticky nav (y=96px, no overlap), dismiss (X) removes the banner without breaking layout.
+
 ### ✅ Shipped Feb 2026 (VPS bootstrap script + deployment docs suite)
 - **`scripts/bootstrap-vps.sh`** — one-command installer for a blank Namecheap 2GB Ubuntu server. Runs QUICKSTART steps 2-4 (2GB swap + swappiness tune + Node 20 + Python 3.11 + Nginx + certbot + yarn + MongoDB 7 with 512MB WiredTiger cap + UFW + fail2ban) in ~5 min. Idempotent (safe to re-run). Prints Node/Python/yarn/Mongo versions + your VPS IP + the next steps at the end.
 - **`scripts/deploy-app.sh`** — companion one-command deployer. Takes `<repo-url> <domain>` as args and does: git clone → generate JWT secret → prompt for admin creds → write backend/frontend .env → pip install → yarn build (with 1.5GB heap cap) → install systemd service → write Nginx site → request Let's Encrypt cert. Full blank-server-to-live-HTTPS is now 3 shell commands total.
