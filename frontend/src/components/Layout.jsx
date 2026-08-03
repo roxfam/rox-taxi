@@ -131,7 +131,7 @@ export default function Layout({ children }) {
                 end={n.to === "/"}
                 data-testid={`nav-${n.label.toLowerCase()}`}
                 className={({ isActive }) =>
-                  `relative px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
+                  `relative px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
                     isActive ? "text-white" : "text-[#0B3B5C] hover:text-[#D4A94A]"
                   }`
                 }
