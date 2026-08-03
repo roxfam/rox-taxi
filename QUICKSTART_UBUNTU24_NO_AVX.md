@@ -102,27 +102,34 @@ sudo npm install -g yarn
 
 ## 4 · Database — Pick Path A OR Path B
 
-### 🅰 Path A · Percona Server for MongoDB 7.0 (no AVX needed)
+### 🅰 Path A · MongoDB 4.4 official (pre-AVX version)
 
-100% wire-compatible with the app. Same commands, same clients, same driver.
+Last MongoDB release that doesn't require AVX. Still supported, still uses the
+same wire protocol + driver as this app.
 
 ```bash
-# Add Percona's repo (works on Ubuntu 24.04 "noble")
-curl -O https://repo.percona.com/apt/percona-release_latest.generic_all.deb
-sudo apt install -y ./percona-release_latest.generic_all.deb
-rm percona-release_latest.generic_all.deb
-
-# Enable the psmdb-70 (Percona Server for MongoDB 7.0) repo
-sudo percona-release setup psmdb-70
+# Clean up any failed earlier attempts
+sudo rm -f /etc/apt/sources.list.d/percona*.list /etc/apt/sources.list.d/mongodb-org-*.list
 sudo apt update
 
-# Install
-sudo apt install -y percona-server-mongodb
+# Install libssl1.1 (required by Mongo 4.4, dropped by Ubuntu 24)
+wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
+sudo apt install -y ./libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
+rm libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb
+
+# Add the MongoDB 4.4 repo — use focal codename (jammy/noble aren't in 4.4)
+curl -fsSL https://www.mongodb.org/static/pgp/server-4.4.asc | \
+     sudo gpg -o /usr/share/keyrings/mongodb-server-4.4.gpg --dearmor
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-4.4.gpg ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse" | \
+     sudo tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+
+sudo apt update
+sudo apt install -y mongodb-org
 sudo systemctl enable --now mongod
 
-# Verify it started (no "Illegal instruction" now)
-sudo systemctl status mongod          # should show "active (running)"
-mongosh --eval "db.stats()"           # should connect and print JSON
+# Verify — should show "active (running)" with no "Illegal instruction"
+sudo systemctl status mongod
+mongo --eval "db.stats()"            # note: "mongo" not "mongosh" on 4.4
 ```
 
 **Cap the cache at 512MB for a 2GB VPS:**
