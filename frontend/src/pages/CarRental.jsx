@@ -87,6 +87,9 @@ export default function CarRental() {
                 <span className="font-semibold">Driver must be 25 years or older.</span> Valid driver's licence required at pickup. This applies to every vehicle in our fleet.
               </span>
             </div>
+            <div className="mt-3 text-[11px] text-[#64748B] leading-snug" data-testid="processing-fee-disclosure">
+              Prices include a 3% processing fee that covers card + PayPal fees.
+            </div>
           </div>
         </div>
       </section>

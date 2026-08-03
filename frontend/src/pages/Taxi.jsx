@@ -124,6 +124,9 @@ export default function Taxi() {
           <p className="text-white/80 leading-relaxed max-w-md md:justify-self-end">
             Fixed, transparent pricing for airport transfers, hotel pickups, and hourly charters — driven by
             licensed local operators who know every road.
+            <span className="block mt-3 text-[11px] text-white/55 leading-snug" data-testid="processing-fee-disclosure">
+              Prices include a 3% processing fee that covers card + PayPal fees.
+            </span>
           </p>
         </div>
       </section>

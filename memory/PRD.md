@@ -18,7 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
-### ✅ Shipped Feb 2026 (3% processing fee + 10% group discount at 6+ paying passengers)
+### ✅ Shipped Feb 2026 (Fee disclosure + Groups landing hero)
+- **`frontend/src/pages/Taxi.jsx`, `Tours.jsx`, `CarRental.jsx`** — subtle "Prices include a 3% processing fee that covers card + PayPal fees" disclosure line in each page hero, visible before the booking modal opens.
+- **`frontend/src/pages/Tours.jsx`** — new "Groups of 6+ save 10%" hero banner sitting between the amber tours hero and the destination hub. Deep-navy gradient with gold radial glow, pill badge ("Cruise Groups · Reunions · Weddings"), explanatory copy, and two CTAs ("See group tours" and "Ask on WhatsApp" with a pre-filled group message body). Uses lifted -mt-8 for a hero-overlap effect.
+
+
 - **`frontend/src/pages/BookingFlow.jsx`** — every booking now carries a 3% processing fee (applied to base + all extras + rental deposit) shown as its own line in the fees summary panel. Recomputes live as the customer changes any input.
 - **Group discount** — 10% off the per-person subtotal auto-applies when a per-person tour (e.g. Nassau City Tour) has 6+ paying passengers (adults + kids 4-12; toddlers under 3 don't count). Green banner appears inside the passenger picker; separate line in the fees summary confirms the savings. Discount applies BEFORE processing fee.
 - **Progress nudge** — at 4 or 5 paying passengers, a friendly hint appears: "Book N more paying passenger and save 10%".

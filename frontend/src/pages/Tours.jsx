@@ -3,7 +3,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
 import Seo from "../components/Seo";
-import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown, MapPin, Star } from "lucide-react";
+import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown, MapPin, Star, Users } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
 // Inject an ItemList of Product schemas per tour so Google can pull them
@@ -161,7 +161,60 @@ export default function Tours() {
           <p className="mt-6 text-white/85 max-w-xl leading-relaxed">
             Explore Nassau's must-see attractions — Ardastra, Atlantis, Blue Lagoon and Baha Mar — then pair with a curated
             excursion. Every taxi and tour is priced up-front by local operators.
+            <span className="block mt-3 text-[11px] text-white/70 leading-snug" data-testid="processing-fee-disclosure">
+              Prices include a 3% processing fee that covers card + PayPal fees.
+            </span>
           </p>
+        </div>
+      </section>
+
+      {/* Group discount hero — marketing angle for cruise groups, reunions, weddings.
+          Sits between the amber hero and the destination hub so it's the first thing
+          a 6+ pax visitor sees when they land on /tours. */}
+      <section
+        className="relative -mt-8 mx-4 sm:mx-6 lg:mx-10 rounded-[28px] overflow-hidden shadow-[0_30px_80px_-30px_rgba(11,25,44,0.55)] z-10"
+        data-testid="groups-hero-banner"
+      >
+        <div
+          className="relative bg-gradient-to-br from-[#0B192C] via-[#0B3B5C] to-[#0B192C] text-white px-6 sm:px-10 py-8 md:py-10"
+        >
+          {/* Gold sparkle background glow */}
+          <div
+            aria-hidden
+            className="absolute inset-0 opacity-40 pointer-events-none"
+            style={{ background: "radial-gradient(circle at 15% 30%, rgba(212,169,74,0.5), transparent 60%), radial-gradient(circle at 85% 70%, rgba(212,169,74,0.35), transparent 55%)" }}
+          />
+          <div className="relative grid md:grid-cols-[1fr_auto] gap-6 items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-[#D4A94A]/20 border border-[#D4A94A]/40 px-3 py-1 text-[10px] tracking-[0.25em] uppercase font-bold text-[#F5D57B]">
+                <Users className="w-3.5 h-3.5" /> Cruise Groups · Reunions · Weddings
+              </div>
+              <h2 className="serif text-3xl sm:text-4xl md:text-5xl leading-tight mt-3">
+                Groups of 6+ <em className="italic text-[#F5D57B]">save 10%</em>
+              </h2>
+              <p className="text-white/80 mt-3 max-w-2xl text-sm sm:text-base leading-relaxed">
+                Book any per-person Nassau tour with 6 or more paying passengers and we'll auto-apply a 10% group discount at checkout. Perfect for cruise-ship shore excursions, family reunions, bridal parties and corporate retreats. Kids under 3 always ride free.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 md:min-w-[220px]">
+              <Link
+                to="/tours"
+                data-testid="groups-hero-cta-tours"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] font-black text-sm tracking-wide px-5 py-3 shadow-[0_10px_25px_rgba(212,169,74,0.35)] transition-colors"
+              >
+                See group tours <ArrowRight className="w-4 h-4" />
+              </Link>
+              <a
+                href="https://wa.me/12424322587?text=Hi%20Rox%2C%20we%27re%20a%20group%20of%20"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="groups-hero-cta-whatsapp"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/30 text-white font-bold text-xs tracking-wide px-5 py-2.5 transition-colors"
+              >
+                Ask on WhatsApp
+              </a>
+            </div>
+          </div>
         </div>
       </section>
 
