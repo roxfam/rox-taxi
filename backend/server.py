@@ -1690,6 +1690,10 @@ async def list_gallery():
     for d in await db.taxi_services.find({"active": True}).to_list(200):
         _add(d.get("image_url"), "taxi", d.get("name"))
     # Approved customer submissions — pinned first, then newest approved.
+    # Also enrich each guest entry with the submitter's most-recent booking's
+    # item_name so the Home lightbox can surface the trip name.
+    guest_entries: list[dict] = []
+    emails_seen: set[str] = set()
     async for d in _sorted_approved_submissions():
         entry_url = _canonicalise(d.get("url") or "")
         if not entry_url or entry_url in seen:
@@ -1698,11 +1702,38 @@ async def list_gallery():
             "url": entry_url,
             "category": "guests",
             "title": d.get("caption") or "Guest moment",
+            "caption": d.get("caption") or "",
             "submitter": d.get("submitter_name"),
+            "submitter_email": (d.get("submitter_email") or "").lower(),
             "approved_at": d.get("approved_at"),
             "is_pinned": bool(d.get("is_pinned")),
         }
         seen[entry_url] = entry
+        guest_entries.append(entry)
+        if entry["submitter_email"]:
+            emails_seen.add(entry["submitter_email"])
+
+    # Batch-lookup: {email → most-recent booking's item_name}
+    if emails_seen:
+        pipe = [
+            {"$match": {"customer_email": {"$in": list(emails_seen)}, "item_name": {"$exists": True}}},
+            {"$sort": {"created_at": -1}},
+            {"$group": {"_id": "$customer_email", "item_name": {"$first": "$item_name"}}},
+        ]
+        trip_by_email: dict[str, str] = {}
+        async for r in db.bookings.aggregate(pipe):
+            if r.get("_id") and r.get("item_name"):
+                trip_by_email[r["_id"].lower()] = r["item_name"]
+        for e in guest_entries:
+            tn = trip_by_email.get(e.get("submitter_email") or "")
+            if tn:
+                e["trip_name"] = tn
+            # Drop the raw email — public endpoint should not leak PII.
+            e.pop("submitter_email", None)
+    else:
+        for e in guest_entries:
+            e.pop("submitter_email", None)
+
     return list(seen.values())
 
 

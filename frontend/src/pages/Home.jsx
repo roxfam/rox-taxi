@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Car, MapPinned, ShipWheel, Star, ShieldCheck, Clock, Users } from "lucide-react";
+import { ArrowRight, Car, MapPinned, ShipWheel, Star, ShieldCheck, Clock, Users, X } from "lucide-react";
 import { api, money } from "../lib/api";
 import NassauCarousel from "../components/NassauCarousel";
 import GoogleReviews from "../components/GoogleReviews";
@@ -227,6 +227,7 @@ export default function Home() {
 
 function FeaturedGuestWall() {
   const [pinned, setPinned] = useState([]);
+  const [active, setActive] = useState(null);
   useEffect(() => {
     api.get("/gallery")
       .then(({ data }) => {
@@ -235,6 +236,15 @@ function FeaturedGuestWall() {
       })
       .catch(() => setPinned([]));
   }, []);
+
+  // Escape closes lightbox — matches the /gallery page pattern
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e) => e.key === "Escape" && setActive(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active]);
+
   if (pinned.length === 0) return null;
   const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${process.env.REACT_APP_BACKEND_URL}${u}`);
   return (
@@ -255,10 +265,13 @@ function FeaturedGuestWall() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {pinned.map((p, i) => (
-            <div
+            <button
               key={p.url + i}
+              type="button"
+              onClick={() => setActive(p)}
               data-testid={`home-featured-tile-${i}`}
-              className="relative aspect-square rounded-2xl overflow-hidden border-2 border-[#D4A94A] bg-white shadow-[0_6px_18px_rgba(11,25,44,0.1)] group"
+              className="relative aspect-square rounded-2xl overflow-hidden border-2 border-[#D4A94A] bg-white shadow-[0_6px_18px_rgba(11,25,44,0.1)] group focus:outline-none focus:ring-4 focus:ring-[#D4A94A]/40"
+              aria-label={`Open ${p.title || "featured photo"} in lightbox`}
             >
               <img
                 src={resolveUrl(p.url)}
@@ -267,14 +280,82 @@ function FeaturedGuestWall() {
                 className="w-full h-full object-cover group-hover:scale-[1.06] transition-transform duration-700"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="absolute bottom-0 left-0 right-0 p-2 text-white translate-y-1 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
+              <div className="absolute bottom-0 left-0 right-0 p-2 text-white text-left translate-y-1 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
                 <div className="text-[9px] uppercase tracking-[0.25em] text-[#D4A94A]">Guest</div>
                 <div className="text-[11px] font-semibold leading-tight line-clamp-2">{p.title}</div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
+
+      {/* Lightbox — click backdrop or press Esc to close */}
+      {active && (
+        <div
+          className="fixed inset-0 z-[100] bg-[#0B192C]/95 backdrop-blur-sm flex items-center justify-center p-4 lg:p-10"
+          onClick={() => setActive(null)}
+          data-testid="home-featured-lightbox"
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setActive(null); }}
+            data-testid="home-featured-lightbox-close"
+            className="absolute top-6 right-6 rounded-full bg-white/10 hover:bg-white/20 text-white p-2 transition-colors"
+            aria-label="Close lightbox"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <div
+            className="relative max-w-5xl w-full max-h-[90vh] flex flex-col lg:flex-row gap-6 items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={resolveUrl(active.url)}
+              alt={active.title || "Featured guest photo"}
+              className="max-h-[70vh] lg:max-h-[80vh] w-auto rounded-2xl shadow-2xl object-contain"
+              data-testid="home-featured-lightbox-img"
+            />
+            <div className="text-white max-w-sm w-full lg:w-80 shrink-0">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-[#D4A94A] font-bold mb-2">Featured guest</div>
+              {active.title && (
+                <blockquote
+                  className="serif text-2xl lg:text-3xl leading-tight italic mb-4 text-white/95"
+                  data-testid="home-featured-lightbox-caption"
+                >
+                  &ldquo;{active.title}&rdquo;
+                </blockquote>
+              )}
+              <div className="space-y-2 text-sm text-white/70 border-t border-white/15 pt-4">
+                {active.submitter && (
+                  <div data-testid="home-featured-lightbox-submitter">
+                    <span className="text-[10px] uppercase tracking-widest text-white/50">From</span>
+                    <div className="font-semibold text-white">{active.submitter}</div>
+                  </div>
+                )}
+                {active.trip_name && (
+                  <div data-testid="home-featured-lightbox-trip">
+                    <span className="text-[10px] uppercase tracking-widest text-white/50">Trip</span>
+                    <div className="font-semibold text-white">{active.trip_name}</div>
+                  </div>
+                )}
+                {active.approved_at && (
+                  <div className="text-[11px] text-white/50 pt-1">
+                    Featured on {new Date(active.approved_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+                  </div>
+                )}
+              </div>
+              <Link
+                to="/tours"
+                onClick={() => setActive(null)}
+                className="mt-6 inline-flex items-center gap-2 bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] font-bold text-sm px-5 py-3 rounded-full transition-colors"
+                data-testid="home-featured-lightbox-cta"
+              >
+                Book my Nassau day <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

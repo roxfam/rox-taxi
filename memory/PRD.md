@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Home Featured Lightbox)
+- **Backend enrichment**: `/api/gallery` now joins each approved guest photo to the submitter's most-recent booking's `item_name` and returns it as `trip_name`. Also exposes `caption` explicitly. Raw `submitter_email` is scrubbed from the public payload (PII hygiene).
+- **Lightbox overlay**: `Home.jsx::FeaturedGuestWall` — clicking a featured tile opens a full-screen dark overlay with the full-size photo, an italic serif blockquote of the caption, submitter name, trip name (when known), the featured date, and a gold "Book my Nassau day →" CTA that closes the lightbox and routes to `/tours`. ESC key + backdrop click + close-X all dismiss it.
+- Regression tests: `backend/tests/test_gallery_trip_name.py` (5 tests: match, most-recent-wins, no-match, PII scrub, case-insensitive email).
+
 ### ✅ Shipped Feb 2026 (Significance hint + Auto-Feature email)
 - **Statistical significance**: `routes/admin.py::_compute_ab_significance` runs a two-proportion z-test at 95% + minimum-sample-size estimate. `/admin/photo-nudge-stats` now returns an `ab_significance` block with `{is_significant, z_score, leader, needed_per_arm, message}`. Guards small samples (<30/arm) with a "gather more data" hint.
 - **Admin card**: `AdminDashboard.jsx::PhotoNudgeCard` now surfaces the significance verdict as a green "Declare a winner" or a neutral "Not yet significant · Need N more nudges per arm" hint under the variant bars.
