@@ -3,6 +3,7 @@ import { api, money } from "../lib/api";
 import BookingModal from "./BookingFlow";
 import RouteQuoteWidget from "../components/RouteQuoteWidget";
 import FlightTrackerCard from "../components/FlightTrackerCard";
+import Seo from "../components/Seo";
 import { Car, ArrowRight, Plane, Anchor, ShoppingBag, Utensils, Palmtree, MapPin, Ship, Hotel, ChevronDown } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
@@ -84,6 +85,36 @@ export default function Taxi() {
 
   return (
     <div data-testid="taxi-page">
+      <Seo
+        title="Nassau Taxi Service Bahamas | LPIA Airport, Atlantis & Baha Mar Transfers 24/7"
+        description="Book a licensed Nassau taxi in the Bahamas — LPIA airport transfers from $32, Atlantis & Paradise Island from $45, Cable Beach, Baha Mar, cruise-port pickups. Fixed Bahamian tariff, live GPS tracking, 24/7 dispatch."
+        canonical="https://roxtaxi.com/taxi"
+        keywords="Nassau taxi service, Nassau taxi Bahamas, LPIA airport taxi, taxi Nassau to Atlantis, Nassau to Paradise Island taxi, Baha Mar taxi, Cable Beach taxi, Nassau cruise port taxi, 24 hour Nassau taxi, licensed Bahamas taxi, book Nassau taxi online, Nassau airport shuttle, Rox Taxi Nassau"
+        ogImage="https://roxtaxi.com/og-cover.jpg"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "TaxiService",
+          "@id": "https://roxtaxi.com/taxi#service",
+          "name": "Nassau Taxi Service — LPIA Airport, Atlantis, Baha Mar, Cable Beach & Cruise Port Transfers",
+          "url": "https://roxtaxi.com/taxi",
+          "provider": { "@id": "https://roxtaxi.com/#business" },
+          "areaServed": [
+            { "@type": "City", "name": "Nassau" },
+            { "@type": "AdministrativeArea", "name": "New Providence, Bahamas" },
+            { "@type": "TouristDestination", "name": "Paradise Island" },
+            { "@type": "TouristDestination", "name": "Atlantis Paradise Island" },
+            { "@type": "TouristDestination", "name": "Baha Mar" },
+            { "@type": "TouristDestination", "name": "Cable Beach" }
+          ],
+          "serviceType": ["Airport transfer", "Cruise port transfer", "Hotel transfer", "Private charter", "Group van transfer", "Wedding transportation"],
+          "hoursAvailable": {
+            "@type": "OpeningHoursSpecification",
+            "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+            "opens": "00:00", "closes": "23:59"
+          },
+          "offers": { "@type": "AggregateOffer", "lowPrice": "18", "highPrice": "175", "priceCurrency": "USD" }
+        }}
+      />
       <section className="bg-[#0B3B5C] text-white py-24">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 grid md:grid-cols-2 gap-10 items-end">
           <div>

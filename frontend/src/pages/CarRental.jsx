@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
+import Seo from "../components/Seo";
 import { Users, ArrowRight, CalendarX, Info, ArrowUpDown } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
@@ -40,6 +41,31 @@ export default function CarRental() {
 
   return (
     <div data-testid="rentals-page">
+      <Seo
+        title="Nassau Car Rentals Bahamas | Free Airport & Hotel Delivery — Rox Taxi & Tours"
+        description="Rent a car in Nassau Bahamas — economy to luxury, free LPIA airport & hotel delivery, unlimited mileage, full insurance. Compact from $65/day. $150 refundable deposit, 25+ drivers only. Book online with Credit Card, PayPal or Zelle."
+        canonical="https://roxtaxi.com/rentals"
+        keywords="Nassau car rental, Bahamas car rental, car rental Nassau airport, LPIA car rental, Nassau van rental, cheap car rental Nassau, Paradise Island car rental, Cable Beach car rental, Baha Mar car rental, rent a car Bahamas, Bahamas rental car deposit, unlimited mileage Nassau, book car rental Nassau online, Rox car rental"
+        ogImage="https://roxtaxi.com/og-cover.jpg"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "AutoRental",
+          "@id": "https://roxtaxi.com/rentals#service",
+          "name": "Rox Bahamas Car Rentals — Nassau, LPIA Airport, Cable Beach, Baha Mar, Paradise Island",
+          "url": "https://roxtaxi.com/rentals",
+          "provider": { "@id": "https://roxtaxi.com/#business" },
+          "areaServed": [
+            { "@type": "City", "name": "Nassau" },
+            { "@type": "AdministrativeArea", "name": "New Providence, Bahamas" }
+          ],
+          "priceRange": "$65-$185/day",
+          "currenciesAccepted": "USD",
+          "paymentAccepted": "Credit Card, PayPal, Zelle",
+          "offers": { "@type": "AggregateOffer", "lowPrice": "65", "highPrice": "185", "priceCurrency": "USD" },
+          "termsOfService": "https://roxtaxi.com/rentals",
+          "audience": { "@type": "Audience", "audienceType": "Cruise passengers, resort guests, honeymooners, families 25+" }
+        }}
+      />
       <section className="relative py-24 bg-[#FBF7EF]">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 grid md:grid-cols-12 gap-8 items-end">
           <div className="md:col-span-7">

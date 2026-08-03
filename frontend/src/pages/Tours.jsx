@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
+import Seo from "../components/Seo";
 import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown, MapPin, Star } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
@@ -132,6 +133,27 @@ export default function Tours() {
 
   return (
     <div data-testid="tours-page">
+      <Seo
+        title="Nassau Tours & Excursions Bahamas | Blue Lagoon, Atlantis, Jet Ski & ATV — Rox"
+        description="Book Nassau Bahamas tours & excursions — Blue Lagoon Island beach day, Atlantis Aquaventure, Rose Island snorkeling, Cabbage Beach jet ski, ATV tours, Paradise Island day trips. Instant confirmation, hotel pickup included."
+        canonical="https://roxtaxi.com/tours"
+        keywords="Nassau tours, Bahamas excursions, Blue Lagoon Island tour, Atlantis Nassau day pass, Rose Island snorkeling, Cabbage Beach jet ski, ATV tours Nassau, Paradise Island tours, Nassau shore excursions, cruise excursions Bahamas, Junkanoo party bus, Baha Mar day pass, book Nassau tour online"
+        ogImage="https://roxtaxi.com/og-cover.jpg"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          "@id": "https://roxtaxi.com/tours#catalog",
+          "name": "Nassau Bahamas Tours & Excursions Catalog",
+          "url": "https://roxtaxi.com/tours",
+          "itemListElement": [
+            { "@type": "ListItem", "position": 1, "item": { "@type": "TouristTrip", "name": "Blue Lagoon Island Beach Day Tour", "url": "https://roxtaxi.com/tours/blue-lagoon", "touristType": "family, couples, cruisers", "offers": { "@type": "Offer", "price": "89", "priceCurrency": "USD" } } },
+            { "@type": "ListItem", "position": 2, "item": { "@type": "TouristTrip", "name": "Atlantis Paradise Island Aquaventure Day Pass", "url": "https://roxtaxi.com/tours/atlantis", "touristType": "family, couples", "offers": { "@type": "Offer", "price": "195", "priceCurrency": "USD" } } },
+            { "@type": "ListItem", "position": 3, "item": { "@type": "TouristTrip", "name": "Baha Mar Resort Day Pass", "url": "https://roxtaxi.com/tours/baha-mar", "touristType": "couples, families", "offers": { "@type": "Offer", "price": "150", "priceCurrency": "USD" } } },
+            { "@type": "ListItem", "position": 4, "item": { "@type": "TouristTrip", "name": "Cabbage Beach Jet Ski Rental (1hr)", "touristType": "adventure travellers", "offers": { "@type": "Offer", "price": "120", "priceCurrency": "USD" } } },
+            { "@type": "ListItem", "position": 5, "item": { "@type": "TouristTrip", "name": "ATV Off-Road Tour of Nassau (with Lunch)", "touristType": "adventure travellers", "offers": { "@type": "Offer", "price": "149", "priceCurrency": "USD" } } }
+          ]
+        }}
+      />
       <section className="bg-gradient-to-br from-[#D4A94A] to-[#A88235] text-white py-24 relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 relative z-10">
           <span className="text-xs tracking-[0.3em] uppercase text-white/80">Bahamas Excursions</span>
