@@ -18,6 +18,9 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Groups landing polish)
+- **`frontend/src/pages/CruiseGroupsNassau.jsx`** — H1 shortened from "Nassau cruise groups save 10% automatically" → **"Groups save 10% automatically"**. Hero eyebrow updated to "For Groups & Coordinators" (Users icon). Added a new **"Recent group tours"** photo strip that fetches `/api/gallery`, prefers approved guest submissions (category `guests`) and falls back to `tours` catalog images, showing the freshest 5 as a 5-up hover-lift grid with a "See full gallery →" link.
+
 ### ✅ Shipped Feb 2026 (Group quick-picker + Cruise Groups landing page)
 - **`frontend/src/pages/Tours.jsx`** — replaced the "See group tours" CTA on the groups banner with a **4-button quick-picker** (6 / 10 / 20 / 40+). Clicking a size sets `sessionStorage.rox_group_size`, smooth-scrolls to the Nassau City Tour card, and auto-clicks its Book button. Also added a "Full cruise-group guide →" link routing to the new content page.
 - **`frontend/src/pages/BookingFlow.jsx`** — reads `sessionStorage.rox_group_size` on mount and prefills `adults` accordingly (then clears the key so refreshes don't stick). Verified: banner tap "20" → modal opens with adults=20 already set, group discount + processing fee lines light up live.

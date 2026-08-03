@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Ship, Users, DollarSign, MapPin, Clock, ChevronRight, Sparkles, ShieldCheck, PhoneCall } from "lucide-react";
+import { Ship, Users, DollarSign, MapPin, Clock, ChevronRight, Sparkles, ShieldCheck, PhoneCall, Camera } from "lucide-react";
 import Seo from "../components/Seo";
+import { api, BACKEND_URL } from "../lib/api";
 
 /**
  * CruiseGroupsNassau — long-form landing page targeting the "nassau cruise
@@ -49,6 +51,26 @@ const SIZES = [
 
 export default function CruiseGroupsNassau() {
   const canonical = "https://roxtaxi.com/cruise-groups-nassau";
+  const [recentPhotos, setRecentPhotos] = useState([]);
+
+  // Pull the freshest 5 group-relevant shots from the public gallery feed.
+  // The endpoint groups approved customer submissions under "guests" (sorted
+  // newest first by approved_at); we prefer those, then top up with "tours"
+  // catalog imagery so the strip never looks empty on a fresh install.
+  useEffect(() => {
+    let alive = true;
+    api.get("/gallery").then(({ data }) => {
+      if (!alive || !Array.isArray(data)) return;
+      const guests = data.filter((p) => p.category === "guests");
+      const tours = data.filter((p) => p.category === "tours");
+      const picked = [...guests, ...tours].slice(0, 5);
+      setRecentPhotos(picked);
+    }).catch(() => setRecentPhotos([]));
+    return () => { alive = false; };
+  }, []);
+
+  const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${BACKEND_URL}${u}`);
+
   return (
     <div data-testid="cruise-groups-page" className="bg-[#FBF7EF] min-h-screen">
       <Seo
@@ -91,10 +113,10 @@ export default function CruiseGroupsNassau() {
         <div className="absolute inset-0 opacity-30 pointer-events-none" style={{ background: "radial-gradient(circle at 20% 30%, rgba(212,169,74,0.5), transparent 60%)" }} />
         <div className="relative max-w-6xl mx-auto px-6 lg:px-10">
           <div className="text-xs tracking-[0.3em] uppercase text-[#D4A94A] flex items-center gap-2">
-            <Ship className="w-3.5 h-3.5" /> For Cruise Groups &amp; Coordinators
+            <Users className="w-3.5 h-3.5" /> For Groups &amp; Coordinators
           </div>
           <h1 className="serif text-5xl sm:text-6xl lg:text-7xl mt-3 leading-[0.95]">
-            Nassau cruise groups <br /><em className="italic text-[#F5E1A4]">save 10% automatically</em>.
+            Groups <br /><em className="italic text-[#F5E1A4]">save 10% automatically</em>.
           </h1>
           <p className="mt-6 text-white/85 max-w-2xl leading-relaxed text-lg">
             Book any per-person Nassau tour with 6 or more paying passengers and we'll knock 10% off at checkout — no code, no haggle, no "we'll get back to you." Pickup direct at Prince George Wharf, drop-off wherever you like, licensed local drivers, missed-ship insurance included.
@@ -134,6 +156,47 @@ export default function CruiseGroupsNassau() {
           ))}
         </div>
       </section>
+
+      {/* Recent group tours — social proof strip pulling the 5 freshest
+          approved group shots from /api/gallery */}
+      {recentPhotos.length > 0 && (
+        <section className="max-w-6xl mx-auto px-6 lg:px-10 pb-4" data-testid="recent-group-tours">
+          <div className="flex items-center gap-2 text-xs tracking-[0.25em] uppercase text-[#D4A94A] font-bold">
+            <Camera className="w-3.5 h-3.5" /> Recent group tours
+          </div>
+          <div className="mt-2 flex items-end justify-between gap-4 flex-wrap">
+            <h2 className="serif text-3xl md:text-4xl text-[#0B3B5C]">Straight from the last few van loads.</h2>
+            <Link
+              to="/gallery"
+              className="text-sm font-bold text-[#0B3B5C] hover:text-[#D4A94A] transition-colors inline-flex items-center gap-1"
+              data-testid="recent-group-tours-see-all"
+            >
+              See full gallery <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+          <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {recentPhotos.map((p, i) => (
+              <div
+                key={p.url + i}
+                data-testid={`recent-group-photo-${i}`}
+                className="relative aspect-square rounded-2xl overflow-hidden border border-[#E2E8F0] bg-white shadow-[0_6px_18px_rgba(11,25,44,0.08)] group"
+              >
+                <img
+                  src={resolveUrl(p.url)}
+                  alt={p.title || "Recent group tour"}
+                  loading="lazy"
+                  className="w-full h-full object-cover group-hover:scale-[1.06] transition-transform duration-700"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute bottom-0 left-0 right-0 p-3 text-white translate-y-1 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                  <div className="text-[9px] uppercase tracking-[0.25em] text-[#D4A94A]">{p.submitter ? "Guest" : p.category}</div>
+                  <div className="text-xs font-semibold leading-tight line-clamp-2">{p.title}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Cruise-port logistics */}
       <section className="bg-white py-16">
