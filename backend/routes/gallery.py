@@ -12,11 +12,14 @@ Endpoints:
 All Facebook auto-post triggers live here now. Wired up by server.py via
 `configure()` + `include_router()`.
 """
+import html as _html
+import json as _json
 import uuid
 from typing import Callable, Awaitable, Optional
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi.responses import HTMLResponse
 
 
 _db = None
@@ -286,3 +289,69 @@ async def admin_reject_submission(sub_id: str, _admin: str = _require()):
         {"id": sub_id}, {"$set": {"status": "rejected", "rejected_at": _now_iso()}},
     )
     return {"id": sub_id, "status": "rejected"}
+
+
+
+@router.get("/og/photo/{sub_id}", response_class=HTMLResponse)
+async def og_photo_page(sub_id: str):
+    """Server-rendered Open Graph landing page for a specific guest photo.
+
+    Purpose: social crawlers (facebookexternalhit, WhatsApp, Twitterbot,
+    LinkedInBot) don't execute JavaScript, so a plain `/gallery?photo=<id>`
+    share link shows Rox Taxi's generic OG image in the link preview. This
+    endpoint returns a minimal HTML page whose <meta property="og:image">
+    points at the actual guest photo, giving every share a photo-specific
+    preview card. Humans get an instant meta-refresh + JS redirect to the
+    SPA URL so the UX is unchanged.
+    """
+    doc = await _db.gallery_submissions.find_one({"id": sub_id, "status": "approved"})
+    if not doc:
+        raise HTTPException(404, "Photo not found or not approved")
+
+    raw_url = doc.get("url") or ""
+    if raw_url.startswith("http"):
+        img_url = raw_url
+    else:
+        if raw_url.startswith("/uploads/"):
+            raw_url = "/api" + raw_url
+        img_url = f"https://roxtaxi.com{raw_url}"
+
+    caption = (doc.get("caption") or "A Nassau moment").strip()
+    submitter = (doc.get("submitter_name") or "A Rox Taxi guest").strip()
+    title = _html.escape(f'"{caption}" — {submitter}')
+    description = _html.escape(f"{submitter} shared this moment from their Nassau trip with Rox Taxi & Tours. Book yours today.")
+    canonical = f"https://roxtaxi.com/gallery?photo={sub_id}"
+    img_url_esc = _html.escape(img_url, quote=True)
+    canonical_esc = _html.escape(canonical, quote=True)
+    js_redirect = _json.dumps(canonical)
+
+    body = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{title} — Rox Taxi &amp; Tours</title>
+<link rel="canonical" href="{canonical_esc}">
+<meta name="description" content="{description}">
+
+<meta property="og:type" content="article">
+<meta property="og:url" content="{canonical_esc}">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{description}">
+<meta property="og:image" content="{img_url_esc}">
+<meta property="og:image:alt" content="{title}">
+<meta property="og:site_name" content="Rox Taxi Service &amp; Tours">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{title}">
+<meta name="twitter:description" content="{description}">
+<meta name="twitter:image" content="{img_url_esc}">
+
+<meta http-equiv="refresh" content="0;url={canonical_esc}">
+<script>window.location.replace({js_redirect});</script>
+<style>body{{font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:2rem;color:#0B3B5C;background:#FAF9F6;}}a{{color:#D4A94A;font-weight:600;}}</style>
+</head>
+<body>
+  <p>Loading photo… <a href="{canonical_esc}">Click here if you aren't redirected</a>.</p>
+</body>
+</html>"""
+    return HTMLResponse(content=body)

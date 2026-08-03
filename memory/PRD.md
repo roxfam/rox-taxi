@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (OG Image Per Photo)
+- **`backend/routes/gallery.py::og_photo_page`** — new `GET /api/og/photo/{id}` returns a minimal server-rendered HTML page whose `<meta property="og:image">` points at the actual guest photo URL. Twitter card + canonical + description all reference that photo. Meta-refresh + JS `location.replace` redirect humans to `/gallery?photo=<id>` instantly.
+- **`frontend/src/pages/Home.jsx` share buttons** — WhatsApp / Facebook / Copy-link now build `https://roxtaxi.com/api/og/photo/<id>` when the active photo has an id. Social crawlers scrape the OG endpoint and get a photo-specific link preview; humans still land on the SPA lightbox.
+- **Tested**: `backend/tests/test_og_photo.py` — 4 tests covering HTML content-type, absolute `og:image` URL, canonical + JS/meta redirect, Twitter card meta, and 404 on bad id.
+
 ### ✅ Shipped Feb 2026 (Deep-Link Photos)
 - **Backend**: `/api/gallery` now exposes `id` on each approved guest photo (using the `gallery_submissions.id`). Enables per-photo deep-linking without leaking DB internals.
 - **`Gallery.jsx`**: reads `?photo=<id>` on mount; when the fetched photo list contains a match, the lightbox auto-opens on that photo. Closing the lightbox (X, Esc, or backdrop click) drops `?photo=` from the URL via `setParams(..., {replace: true})` so back-button doesn't immediately reopen it. Also honours `#submit` hash to smooth-scroll to the guest upload form (used by the photo-nudge email CTA).
