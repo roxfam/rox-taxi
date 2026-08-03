@@ -18,6 +18,9 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Lightbox Share)
+- **`frontend/src/pages/Home.jsx`** — the FeaturedGuestWall lightbox now has a "Share this moment" row with three pill buttons: WhatsApp (green, opens `wa.me/?text=...` with a pre-filled "Amit's Nassau moment on the Blue Lagoon Beach Day — "caption". Book yours 👉 roxtaxi.com/gallery" message), Facebook (blue, opens `facebook.com/sharer/sharer.php` with the gallery URL + a smart quote), and Copy Link (writes `roxtaxi.com/gallery` to clipboard, sonner toast confirms). All buttons `target="_blank"` + `rel="noopener noreferrer"`. Verified: WhatsApp href starts with `wa.me`, FB href has `sharer.php`, message contains the URL.
+
 ### ✅ Shipped Feb 2026 (Home Featured Lightbox)
 - **Backend enrichment**: `/api/gallery` now joins each approved guest photo to the submitter's most-recent booking's `item_name` and returns it as `trip_name`. Also exposes `caption` explicitly. Raw `submitter_email` is scrubbed from the public payload (PII hygiene).
 - **Lightbox overlay**: `Home.jsx::FeaturedGuestWall` — clicking a featured tile opens a full-screen dark overlay with the full-size photo, an italic serif blockquote of the caption, submitter name, trip name (when known), the featured date, and a gold "Book my Nassau day →" CTA that closes the lightbox and routes to `/tours`. ESC key + backdrop click + close-X all dismiss it.
