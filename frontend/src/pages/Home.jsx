@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Car, MapPinned, ShipWheel, Star, ShieldCheck, Clock, Users, X, Facebook, MessageCircle } from "lucide-react";
+import { ArrowRight, Car, MapPinned, ShipWheel, Star, ShieldCheck, Clock, Users, X, Facebook, MessageCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { api, money } from "../lib/api";
 import NassauCarousel from "../components/NassauCarousel";
 import GoogleReviews from "../components/GoogleReviews";
@@ -227,7 +227,7 @@ export default function Home() {
 
 function FeaturedGuestWall() {
   const [pinned, setPinned] = useState([]);
-  const [active, setActive] = useState(null);
+  const [activeIdx, setActiveIdx] = useState(null);
   useEffect(() => {
     api.get("/gallery")
       .then(({ data }) => {
@@ -237,13 +237,24 @@ function FeaturedGuestWall() {
       .catch(() => setPinned([]));
   }, []);
 
-  // Escape closes lightbox — matches the /gallery page pattern
+  const total = pinned.length;
+  const active = activeIdx !== null ? pinned[activeIdx] : null;
+  const goNext = () => setActiveIdx((i) => (i === null ? null : (i + 1) % total));
+  const goPrev = () => setActiveIdx((i) => (i === null ? null : (i - 1 + total) % total));
+  const close = () => setActiveIdx(null);
+
+  // Keyboard shortcuts — Escape closes, ← → flip between pinned photos
   useEffect(() => {
-    if (!active) return;
-    const onKey = (e) => e.key === "Escape" && setActive(null);
+    if (activeIdx === null) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") close();
+      else if (e.key === "ArrowRight") goNext();
+      else if (e.key === "ArrowLeft") goPrev();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIdx, total]);
 
   if (pinned.length === 0) return null;
   const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${process.env.REACT_APP_BACKEND_URL}${u}`);
@@ -268,7 +279,7 @@ function FeaturedGuestWall() {
             <button
               key={p.url + i}
               type="button"
-              onClick={() => setActive(p)}
+              onClick={() => setActiveIdx(i)}
               data-testid={`home-featured-tile-${i}`}
               className="relative aspect-square rounded-2xl overflow-hidden border-2 border-[#D4A94A] bg-white shadow-[0_6px_18px_rgba(11,25,44,0.1)] group focus:outline-none focus:ring-4 focus:ring-[#D4A94A]/40"
               aria-label={`Open ${p.title || "featured photo"} in lightbox`}
@@ -289,34 +300,67 @@ function FeaturedGuestWall() {
         </div>
       </div>
 
-      {/* Lightbox — click backdrop or press Esc to close */}
+      {/* Lightbox — click backdrop, press Esc, or arrow-key/nav-buttons to browse */}
       {active && (
         <div
           className="fixed inset-0 z-[100] bg-[#0B192C]/95 backdrop-blur-sm flex items-center justify-center p-4 lg:p-10"
-          onClick={() => setActive(null)}
+          onClick={close}
           data-testid="home-featured-lightbox"
         >
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); setActive(null); }}
+            onClick={(e) => { e.stopPropagation(); close(); }}
             data-testid="home-featured-lightbox-close"
             className="absolute top-6 right-6 rounded-full bg-white/10 hover:bg-white/20 text-white p-2 transition-colors"
             aria-label="Close lightbox"
           >
             <X className="w-5 h-5" />
           </button>
+
+          {/* Prev / Next arrows — hidden when there's only one pinned photo */}
+          {total > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); goPrev(); }}
+                data-testid="home-featured-lightbox-prev"
+                className="absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 text-white p-3 transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4A94A]"
+                aria-label="Previous photo"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); goNext(); }}
+                data-testid="home-featured-lightbox-next"
+                className="absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 text-white p-3 transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4A94A]"
+                aria-label="Next photo"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            </>
+          )}
+
           <div
             className="relative max-w-5xl w-full max-h-[90vh] flex flex-col lg:flex-row gap-6 items-center"
             onClick={(e) => e.stopPropagation()}
           >
             <img
+              key={active.url}
               src={resolveUrl(active.url)}
               alt={active.title || "Featured guest photo"}
-              className="max-h-[70vh] lg:max-h-[80vh] w-auto rounded-2xl shadow-2xl object-contain"
+              className="max-h-[70vh] lg:max-h-[80vh] w-auto rounded-2xl shadow-2xl object-contain animate-in fade-in duration-300"
               data-testid="home-featured-lightbox-img"
             />
             <div className="text-white max-w-sm w-full lg:w-80 shrink-0">
-              <div className="text-[10px] uppercase tracking-[0.3em] text-[#D4A94A] font-bold mb-2">Featured guest</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] uppercase tracking-[0.3em] text-[#D4A94A] font-bold">Featured guest</div>
+                {total > 1 && (
+                  <div className="text-[10px] uppercase tracking-widest text-white/50" data-testid="home-featured-lightbox-counter">
+                    {activeIdx + 1} / {total}
+                  </div>
+                )}
+              </div>
               {active.title && (
                 <blockquote
                   className="serif text-2xl lg:text-3xl leading-tight italic mb-4 text-white/95"
@@ -346,7 +390,7 @@ function FeaturedGuestWall() {
               </div>
               <Link
                 to="/tours"
-                onClick={() => setActive(null)}
+                onClick={close}
                 className="mt-6 inline-flex items-center gap-2 bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] font-bold text-sm px-5 py-3 rounded-full transition-colors"
                 data-testid="home-featured-lightbox-cta"
               >
@@ -391,7 +435,6 @@ function FeaturedGuestWall() {
                     onClick={async () => {
                       try {
                         await navigator.clipboard.writeText("https://roxtaxi.com/gallery");
-                        // Reuse whatever the app already loads for toasts — sonner is global.
                         const { toast } = await import("sonner");
                         toast.success("Gallery link copied");
                       } catch {

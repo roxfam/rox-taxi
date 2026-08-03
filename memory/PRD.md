@@ -18,6 +18,15 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Lightbox Carousel)
+- **`frontend/src/pages/Home.jsx`** — the FeaturedGuestWall lightbox now supports carousel navigation across all pinned photos without closing:
+  - **Arrow buttons**: left + right chevron pills anchored to the vertical midpoint (hidden when there's only 1 pinned photo)
+  - **Keyboard**: `ArrowLeft` / `ArrowRight` flip photos, `Escape` still closes
+  - **Wrap-around**: past the last photo loops to the first, and vice versa
+  - **Counter**: shows `{idx+1} / {total}` in the top-right of the info panel
+  - **Fade transition**: `key={active.url}` on the img element triggers a fresh fade-in on each swap
+  - All caption/submitter/trip/share content updates live for the newly active photo
+
 ### ✅ Shipped Feb 2026 (Lightbox Share)
 - **`frontend/src/pages/Home.jsx`** — the FeaturedGuestWall lightbox now has a "Share this moment" row with three pill buttons: WhatsApp (green, opens `wa.me/?text=...` with a pre-filled "Amit's Nassau moment on the Blue Lagoon Beach Day — "caption". Book yours 👉 roxtaxi.com/gallery" message), Facebook (blue, opens `facebook.com/sharer/sharer.php` with the gallery URL + a smart quote), and Copy Link (writes `roxtaxi.com/gallery` to clipboard, sonner toast confirms). All buttons `target="_blank"` + `rel="noopener noreferrer"`. Verified: WhatsApp href starts with `wa.me`, FB href has `sharer.php`, message contains the URL.
 
