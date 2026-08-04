@@ -104,6 +104,42 @@ function portWindowMinutes(ship) {
 
 const PORT_BUFFER_MIN = 90; // transfer + boarding queue safety net
 
+// ── Cruise Tour Bundles ────────────────────────────────────────────────
+// Ready-made 3-tour packages tuned to fit inside a typical cruise port
+// window. Total duration is deliberately kept below the shortest port
+// window (Princess @ 7am-4pm minus 90 min buffer = ~7.5h). Each bundle
+// bakes in a 10% package discount vs booking the 3 items individually
+// so guests see immediate value in the "book all three" flow.
+const CRUISE_BUNDLES = [
+  {
+    id: "bundle-classic-nassau",
+    name: "Classic Nassau Day",
+    tagline: "Sightseeing → sandbar → sunset drink",
+    total_minutes: 300,          // 5 hours end-to-end
+    tour_ids: ["nassau-city-tour", "snorkel-rose", "junkanoo-party-bus"],
+    hero_id: "snorkel-rose",
+    save_pct: 10,
+  },
+  {
+    id: "bundle-adrenaline",
+    name: "Adrenaline Trio",
+    tagline: "ATV → jet ski → beach cooldown",
+    total_minutes: 360,          // 6 hours
+    tour_ids: ["atv-tour-2hr", "jet-ski-1hr", "blue-lagoon"],
+    hero_id: "atv-tour-2hr",
+    save_pct: 10,
+  },
+  {
+    id: "bundle-paradise-luxe",
+    name: "Paradise Luxe",
+    tagline: "Half-day yacht → beach ride → private dinner drop",
+    total_minutes: 420,          // 7 hours
+    tour_ids: ["yacht-shared-halfday", "horse-trail-beach", "nassau-city-tour"],
+    hero_id: "yacht-shared-halfday",
+    save_pct: 10,
+  },
+];
+
 // The Attraction Discovery Hub — 4 curated micro-landing pages we own.
 // Each card links to /tours/<slug>. `cheapest_taxi_route_id` is used to pull
 // live pricing from GET /api/taxi-services so the "from $XX" chip stays fresh.
@@ -456,6 +492,18 @@ export default function Tours() {
           onPickBestFit={(t) => setSelected(t)}
         />
 
+        {/* Cruise-ship bundles — only surfaces when the guest picked a ship
+            AND at least one bundle fits their port window. Tapping a bundle
+            drops the guest into a booking flow for the highlighted tour;
+            future work: batch-book all three in one transaction. */}
+        {activeShip?.arrive && (
+          <CruiseBundlesStrip
+            tours={tours}
+            activeShip={activeShip}
+            onPick={(bundle, hero) => setSelected(hero)}
+          />
+        )}
+
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="text-sm text-[#64748B]" data-testid="tours-count">
             <span className="font-semibold text-[#0B3B5C]">{filteredTours.length}</span> excursion{filteredTours.length === 1 ? "" : "s"}
@@ -584,6 +632,107 @@ export default function Tours() {
 // ── Cruise Ship Picker ─────────────────────────────────────────────────
 // Standalone so the filter UI can be dropped in above the sort row without
 // bloating the main Tours component. Fully controlled — parent owns state.
+function CruiseBundlesStrip({ tours, activeShip, onPick }) {
+  // Compute the usable port budget in minutes minus buffer.
+  const budget = Math.max(0, portWindowMinutes(activeShip) - PORT_BUFFER_MIN);
+  // For each bundle: resolve tour objects, compute total price, mark whether
+  // it fits the port window, filter out bundles missing any tour.
+  const resolved = useMemo(() => {
+    const byId = Object.fromEntries(tours.map((t) => [t.id, t]));
+    return CRUISE_BUNDLES.map((b) => {
+      const items = b.tour_ids.map((id) => byId[id]).filter(Boolean);
+      if (items.length !== b.tour_ids.length) return null;
+      const raw = items.reduce((s, t) => s + Number(t.price || 0), 0);
+      const bundle_price = Math.round(raw * (1 - b.save_pct / 100));
+      const savings = Math.round(raw - bundle_price);
+      const hero = byId[b.hero_id] || items[0];
+      return {
+        ...b,
+        items,
+        raw,
+        bundle_price,
+        savings,
+        hero,
+        fits: b.total_minutes <= budget,
+      };
+    }).filter(Boolean);
+  }, [tours, budget]);
+
+  if (resolved.length === 0) return null;
+
+  return (
+    <div className="mb-6" data-testid="cruise-bundles-strip">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black">
+          One-tap cruise-day bundles
+        </div>
+        <div className="text-[11px] text-[#64748B]">
+          Save 10% vs booking each tour individually
+        </div>
+      </div>
+      <div className="grid md:grid-cols-3 gap-4">
+        {resolved.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => onPick && onPick(b, b.hero)}
+            disabled={!b.fits}
+            data-testid={`bundle-card-${b.id}`}
+            className={`text-left rounded-2xl overflow-hidden border transition-all group ${
+              b.fits
+                ? "border-[#D4A94A]/40 bg-white hover:border-[#D4A94A] hover:shadow-[0_20px_50px_rgba(212,169,74,0.25)] hover:-translate-y-1"
+                : "border-dashed border-[#E2E8F0] bg-[#FBF7EF] opacity-60 cursor-not-allowed"
+            }`}
+          >
+            <div className="aspect-[16/9] overflow-hidden relative">
+              <img
+                src={cdn(b.hero.image_url, { w: 800 })}
+                alt={b.name}
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              />
+              <div className="absolute top-3 left-3 rounded-full bg-[#D4A94A] text-[#0B192C] text-[10px] font-black uppercase tracking-widest px-2.5 py-1 shadow-md">
+                Bundle · Save ${b.savings}
+              </div>
+              {!b.fits && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <span className="text-white text-xs font-bold uppercase tracking-widest">Too long for {activeShip?.line || 'your ship'}</span>
+                </div>
+              )}
+            </div>
+            <div className="p-4">
+              <div className="serif text-lg text-[#0B3B5C] leading-tight">{b.name}</div>
+              <div className="text-[12px] text-[#64748B] mt-1">{b.tagline}</div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-2xl font-black text-[#0B3B5C]">${b.bundle_price}</span>
+                <span className="text-xs text-[#94a3b8] line-through">${b.raw}</span>
+                <span className="ml-auto text-[10px] tracking-widest uppercase font-bold text-[#D4A94A]">
+                  {(b.total_minutes / 60).toFixed(1)}h total
+                </span>
+              </div>
+              <ul className="mt-3 space-y-1 text-[12px] text-[#0B3B5C]">
+                {b.items.map((t) => (
+                  <li key={t.id} className="flex items-start gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#059669] shrink-0 mt-0.5" />
+                    <span className="line-clamp-1">{t.name}</span>
+                  </li>
+                ))}
+              </ul>
+              {b.fits && (
+                <div className="mt-3 text-[11px] font-bold text-[#D4A94A] inline-flex items-center gap-1">
+                  Start booking <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </div>
+              )}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 // One-tap "share this tour" — pushes the /api/og/tour/<id> URL to the
 // native share sheet (or clipboard) so WhatsApp / Facebook / Twitter link
 // previews render the bespoke OG image + name + price instead of the

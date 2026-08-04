@@ -385,6 +385,26 @@ function HandoffPhotosCell({ booking }) {
                 </a>
                 <button
                   type="button"
+                  onClick={async () => {
+                    if (!window.confirm("Delete this handoff photo? This cannot be undone.")) return;
+                    try {
+                      await api.delete(`/driver/${booking.id}/handoff-photo`, { params: { url: preview.url } });
+                      // Optimistic remove from local view; a page refresh
+                      // will pull the fresh booking with the photo gone.
+                      booking.handoff_photos = (booking.handoff_photos || []).filter((p) => p.url !== preview.url);
+                      toast.success("Photo deleted");
+                      setPreview(null);
+                    } catch (e) {
+                      toast.error(e?.response?.data?.detail || "Delete failed");
+                    }
+                  }}
+                  data-testid={`handoff-delete-${booking.id}`}
+                  className="rounded-full bg-[#DC2626] text-white text-xs font-bold px-3 py-2 hover:bg-[#B91C1C]"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
                   onClick={() => setPreview(null)}
                   className="rounded-full bg-white text-[#0B192C] text-xs font-bold px-3 py-2"
                 >

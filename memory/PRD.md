@@ -18,6 +18,15 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Cruise Tour Bundles · Handoff Photo Delete)
+- **Cruise Tour Bundles** (`/tours` when a ship is selected): 3 ready-made packages surface right below the ship picker — **Classic Nassau Day** (city tour + snorkel + Junkanoo bus), **Adrenaline Trio** (ATV + jet ski + Blue Lagoon), **Paradise Luxe** (shared yacht + horseback + city tour). Each bundle's total duration is checked against the guest's port budget (`port_window − 90-min buffer`); bundles too long for their ship show a dashed card with a "Too long for [line]" overlay and are unclickable. Every bundle bakes in a **10% package discount** vs the sum of individual tours — the strikethrough raw price + savings chip make the value obvious. Tapping a bundle drops the guest into the hero tour's booking modal (future work: single-transaction batch booking for all three items).
+- **Handoff Photo Delete** in admin booking rows: added a red "Delete" button inside the handoff-photo lightbox modal alongside Download / Close. Uses the pre-existing `DELETE /api/driver/{id}/handoff-photo?url=<>` endpoint. Optimistic removal from the local view + toast confirmation.
+- **Existing admin photo deletion — verified**:
+  - **Catalog images** (`ImagesPanel.jsx`): Trash icon per card, `DELETE /admin/images/{name}`, confirm dialog. Already shipped.
+  - **Guest gallery submissions** (`GalleryPanel.jsx`): "Reject" button on pending photos AND approved photos (moves them to rejected, removes the file). Already shipped.
+- **Yacht/Horse photos**: still Unsplash placeholders — swapping to actual partner shots requires the operator's real photos. Admin can upload them via the existing `/admin/images` panel, then paste the copied URL into the tour's `image_url` in the Catalog editor.
+- **Verified**: `/tours` serves HTTP 200, frontend compile clean, delete endpoint reachable.
+
 ### ✅ Shipped Feb 2026 (Yacht + Horse partner tours added — +10% booking fee convention)
 - **Yacht (Blue Water Charters)** — 3 new SKUs seeded and live via `/api/tours`:
   - `yacht-shared-halfday` — Shared 4-hr yacht cruise, **$187** (base $170 + 10%). Featured.
