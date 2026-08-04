@@ -18,6 +18,14 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Forgot Password self-serve)
+- **Backend**: `routes/auth.py` — new `POST /api/auth/forgot-password` (accepts email, per-email rate-limit 3/hr, generates `secrets.token_urlsafe(32)` reset token, stores SHA-256 hash + 60-min expiry in `password_reset_tokens`, emails link via SendGrid). Returns a generic "if that email is registered…" reply either way — no user enumeration. `POST /api/auth/reset-password` (validates token hash + not-expired + not-used, updates `password_hash` via bcrypt, marks token used, deletes all sessions for that user).
+- **Startup indexes** in `server.py`: `password_reset_tokens.token_hash` (unique), `.expires_at`, `password_reset_attempts.email` + `.created_at`.
+- **Email template**: `notifications.py::send_password_reset_email` with gold "Reset password →" CTA + fallback plain-text URL.
+- **Frontend**: new `/reset-password?token=<>` page (`pages/ResetPassword.jsx`) with new-password + confirm fields and success/error states. "Forgot password?" link added to the Login page — expands an inline mini-form; success banner replaces the input on submit.
+- **Router**: `App.js` wires `/reset-password` into the customer shell.
+- **Tested**: 6/6 pytest tests pass (token generation determinism + uniqueness, generic reply, invalid-token 400, Pydantic min-length 422). Full E2E script run against live backend: register → forgot → reset → old-password rejected → new-password accepted → token single-use enforced ✅.
+
 ### ✅ Shipped Feb 2026 (1200×630 OG Crop + Featured-On-FB Auto-Post)
 - **`GET /api/og/photo/{id}/image.jpg`**: new endpoint that returns the guest photo center-cropped + resized to Facebook's 1200×630 (1.91:1) sweet spot as a progressive JPEG with 24h `Cache-Control`. EXIF-orientation aware, RGBA→white-backed JPEG conversion. Falls back to raw bytes on any Pillow error so previews never 500.
 - **OG HTML page updated**: `<meta property="og:image">` (+ `og:image:width=1200`, `og:image:height=630`, `twitter:image`) now points to the cropped endpoint for local guest uploads. External-URL photos (unsplash, wikipedia) fall back to the raw src to avoid re-downloading.

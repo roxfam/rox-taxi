@@ -698,3 +698,40 @@ def send_featured_notification(submission: dict) -> dict:
 
     return send_email(email, subject, html, text, category="confirmation")
 
+
+
+def send_password_reset_email(*, to_email: str, name: str, reset_url: str,
+                              expires_in_minutes: int = 60) -> dict:
+    """Password-reset link email. Category "confirmation" reuses the same
+    transactional From: address as booking confirmations."""
+    first = (name or "there").strip().split(" ")[0] or "there"
+    subject = "Reset your Rox Taxi password"
+    text = (
+        f"Hi {first},\n\n"
+        f"We got a request to reset your Rox Taxi account password.\n"
+        f"Click the link below within the next {expires_in_minutes} minutes to set a new one:\n\n"
+        f"  {reset_url}\n\n"
+        f"If you didn't request this, you can safely ignore this email — your\n"
+        f"current password stays active and no one else can use this link.\n\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Account security</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:28px;line-height:1.15;">Reset your password</h1>
+      <p style="color:#64748B;font-size:15px;margin:14px 0 0;">
+        Hi {first} — we got a request to reset your Rox Taxi account password. Click the button below to choose a new one. This link expires in <strong>{expires_in_minutes} minutes</strong>.
+      </p>
+      <div style="margin:24px 0;">
+        <a href="{reset_url}" style="display:inline-block;background:#D4A94A;color:#0B192C;text-decoration:none;font-weight:800;padding:12px 26px;border-radius:999px;font-size:14px;">Reset password →</a>
+      </div>
+      <p style="color:#64748B;font-size:12px;margin:8px 0 0;">Or paste this link into your browser:</p>
+      <p style="color:#0B3B5C;font-size:12px;word-break:break-all;margin:2px 0 22px;">{reset_url}</p>
+      <div style="border-top:1px solid #E2E8F0;padding-top:18px;color:#94a3b8;font-size:12px;">
+        Didn't request this? You can ignore this email — your current password stays active. If you're worried, reply and we'll look into it.
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:24px;">Rox Taxi Service &amp; Tours · Nassau, Bahamas</p>
+    </div>
+    """
+    return send_email(to_email, subject, html, text, category="confirmation")
+

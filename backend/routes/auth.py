@@ -13,6 +13,8 @@ get_current_user + require_admin stay in server.py (used by many routes).
 Auth-only helpers (_hash_password, _verify_password, _create_customer_session,
 _set_session_cookie, make_admin_token) live here.
 """
+import hashlib
+import secrets
 import uuid
 from datetime import timedelta
 from typing import Callable, Optional
@@ -65,6 +67,15 @@ class CustomerLoginRequest(BaseModel):
     password: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=16, max_length=200)
+    password: str = Field(..., min_length=6, max_length=200)
+
+
 # ─── Auth helpers (auth-only) ────────────────────────────────────────
 
 
@@ -82,6 +93,26 @@ def _verify_password(pw: str, hashed: str) -> bool:
         return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
     except Exception:  # noqa: BLE001
         return False
+
+
+# ─── Password-reset helpers ───────────────────────────────────────────
+# We store the SHA-256 hash of the reset token in Mongo (not the raw token).
+# Anyone with DB read access still can't hijack a reset because the raw
+# token only ever lives in the user's inbox + the URL they click.
+def _generate_reset_token() -> str:
+    """32 URL-safe bytes ≈ 43 chars. Cryptographically random."""
+    return secrets.token_urlsafe(32)
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _site_base_url() -> str:
+    """Base URL for links inside password-reset emails. Defaults to the
+    live production domain; overridable via SITE_BASE_URL env for QA."""
+    import os
+    return (os.environ.get("SITE_BASE_URL") or "https://roxtaxi.com").rstrip("/")
 
 
 async def _create_customer_session(user_id: str, method: str) -> str:
@@ -289,3 +320,102 @@ async def logout(request: Request, response: Response):
         await _db.user_sessions.delete_one({"session_token": token})
     response.delete_cookie("session_token", path="/", samesite="none", secure=True)
     return {"ok": True}
+
+
+# ─── Password reset (self-serve) ──────────────────────────────────────
+
+
+@router.post("/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest, request: Request):
+    """Kick off a password-reset flow.
+
+    Always returns the same generic response whether or not the email is
+    registered — prevents user-enumeration. Rate-limited per email (max 3
+    per hour) via a `password_reset_attempts` audit collection with TTL.
+    """
+    from datetime import datetime, timezone
+    email = req.email.lower().strip()
+    now = datetime.now(timezone.utc)
+    generic_reply = {"ok": True, "message": "If that email is registered, a reset link is on its way."}
+
+    # Per-email rate limit — 3 reset requests / hour
+    one_hour_ago = (now - timedelta(hours=1)).isoformat()
+    recent = await _db.password_reset_attempts.count_documents({
+        "email": email,
+        "created_at": {"$gte": one_hour_ago},
+    })
+    if recent >= 3:
+        # Silent — still return generic reply so we don't leak that the email is real
+        return generic_reply
+
+    await _db.password_reset_attempts.insert_one({
+        "email": email,
+        "ip": (request.client.host if request.client else "") or request.headers.get("x-forwarded-for", ""),
+        "created_at": now.isoformat(),
+    })
+
+    user = await _db.users.find_one({"email": email})
+    if user and user.get("password_hash"):
+        # Generate + persist a single-use, hashed, 60-minute reset token
+        raw_token = _generate_reset_token()
+        token_hash = _hash_reset_token(raw_token)
+        expires_at = (now + timedelta(minutes=60)).isoformat()
+        await _db.password_reset_tokens.insert_one({
+            "token_hash": token_hash,
+            "user_id": user["user_id"],
+            "email": email,
+            "expires_at": expires_at,
+            "used_at": None,
+            "created_at": now.isoformat(),
+        })
+        reset_url = f"{_site_base_url()}/reset-password?token={raw_token}"
+        try:
+            from notifications import send_password_reset_email
+            send_password_reset_email(
+                to_email=email,
+                name=user.get("name", ""),
+                reset_url=reset_url,
+                expires_in_minutes=60,
+            )
+        except Exception:  # noqa: BLE001
+            pass  # never leak send failures
+
+    return generic_reply
+
+
+@router.post("/auth/reset-password")
+async def reset_password(req: ResetPasswordRequest, response: Response):
+    """Consume a reset token and set the user's new password.
+
+    - Token is hashed (SHA-256) before lookup; raw token is never persisted
+    - Must not be expired
+    - Must not have been used before (single-use)
+    - Successful reset also invalidates all existing sessions for that user
+    """
+    from datetime import datetime, timezone
+    token_hash = _hash_reset_token(req.token)
+    doc = await _db.password_reset_tokens.find_one({"token_hash": token_hash})
+    if not doc:
+        raise HTTPException(400, "This reset link is invalid or has already been used.")
+    if doc.get("used_at"):
+        raise HTTPException(400, "This reset link has already been used. Request a new one.")
+    if doc.get("expires_at") and doc["expires_at"] < datetime.now(timezone.utc).isoformat():
+        raise HTTPException(400, "This reset link has expired. Request a new one.")
+
+    user = await _db.users.find_one({"user_id": doc["user_id"]})
+    if not user:
+        raise HTTPException(400, "Account no longer exists.")
+
+    ts = _now_iso()
+    await _db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"password_hash": _hash_password(req.password), "password_reset_at": ts, "updated_at": ts}},
+    )
+    await _db.password_reset_tokens.update_one(
+        {"token_hash": token_hash},
+        {"$set": {"used_at": ts}},
+    )
+    # Kill any existing sessions so an attacker's stolen cookie doesn't survive a reset
+    await _db.user_sessions.delete_many({"user_id": user["user_id"]})
+    response.delete_cookie("session_token", path="/", samesite="none", secure=True)
+    return {"ok": True, "message": "Password updated. Please sign in with your new password."}

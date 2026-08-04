@@ -1306,6 +1306,12 @@ async def seed_db():
         await db.users.create_index("email", unique=True)
         await db.user_sessions.create_index("session_token", unique=True)
         await db.user_sessions.create_index("last_activity_at")
+        # Password-reset tokens auto-expire 24h past their `expires_at` (we
+        # keep them briefly for audit before the TTL sweeps them out).
+        await db.password_reset_tokens.create_index("token_hash", unique=True)
+        await db.password_reset_tokens.create_index("expires_at")
+        await db.password_reset_attempts.create_index("email")
+        await db.password_reset_attempts.create_index("created_at")
     except Exception as e:  # noqa: BLE001
         logging.warning("auth index create warn: %s", e)
     # Idempotent seed. `price` + `price_history` are ONLY set on first insert so

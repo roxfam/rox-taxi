@@ -29,6 +29,7 @@ import AdminGroups from "./pages/AdminGroups";
 import MyBookings from "./pages/MyBookings";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import ResetPassword from "./pages/ResetPassword";
 import AuthCallback from "./pages/AuthCallback";
 import PrintReceipt from "./pages/PrintReceipt";
 import GiftCards from "./pages/GiftCards";
@@ -85,6 +86,7 @@ function AppRouter() {
       <Route path="/my-bookings" element={<CustomerShell><MyBookings /></CustomerShell>} />
       <Route path="/login" element={<CustomerShell><Login /></CustomerShell>} />
       <Route path="/signup" element={<CustomerShell><Signup /></CustomerShell>} />
+      <Route path="/reset-password" element={<CustomerShell><ResetPassword /></CustomerShell>} />
       <Route path="/payment/success" element={<CustomerShell><PaymentSuccess /></CustomerShell>} />
       <Route path="/payment/cancel" element={<CustomerShell><PaymentCancel /></CustomerShell>} />
       <Route path="/upload-license/:bookingId" element={<UploadLicense />} />

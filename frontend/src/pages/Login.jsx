@@ -19,6 +19,10 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // Forgot-password inline UI: null | "form" | "sent"
+  const [forgotState, setForgotState] = useState(null);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
 
   useEffect(() => {
     if (!loading && user) nav("/my-bookings", { replace: true });
@@ -33,6 +37,19 @@ export default function Login() {
     } catch (ex) {
       setErr(ex.message || "Login failed");
     } finally { setBusy(false); }
+  };
+
+  const submitForgot = async (e) => {
+    e.preventDefault();
+    setForgotBusy(true);
+    try {
+      const { api } = await import("../lib/api");
+      await api.post("/auth/forgot-password", { email: (forgotEmail || email).trim().toLowerCase() });
+      setForgotState("sent");
+    } catch {
+      // Backend returns generic response either way — treat any success as "sent"
+      setForgotState("sent");
+    } finally { setForgotBusy(false); }
   };
 
   return (
@@ -131,9 +148,34 @@ export default function Login() {
                     <LogIn className="w-4 h-4" /> {busy ? "Signing in…" : "Sign in"}
                   </button>
 
-                  <p className="text-xs text-[#64748B] text-center pt-1">
-                    New to Rox? <Link to="/signup" className="text-[#D4A94A] font-semibold hover:underline" data-testid="login-goto-signup">Create an account</Link>
-                  </p>
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <button type="button" onClick={() => { setForgotEmail(email); setForgotState("form"); }} className="text-[#64748B] hover:text-[#D4A94A] transition-colors" data-testid="login-forgot-password">
+                      Forgot password?
+                    </button>
+                    <span className="text-[#64748B]">
+                      New to Rox? <Link to="/signup" className="text-[#D4A94A] font-semibold hover:underline" data-testid="login-goto-signup">Create an account</Link>
+                    </span>
+                  </div>
+
+                  {forgotState === "form" && (
+                    <div className="mt-3 rounded-2xl border border-[#EFE7D5] bg-[#FBF7EF]/60 p-4" data-testid="forgot-form">
+                      <div className="text-[11px] uppercase tracking-widest text-[#94a3b8] font-semibold mb-2">Reset your password</div>
+                      <p className="text-xs text-[#64748B] mb-3">We'll email you a secure link. It expires in 60 minutes.</p>
+                      <div className="flex gap-2">
+                        <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@example.com" className="flex-1 rounded-full border border-[#E2E8F0] bg-white px-4 py-2 text-sm text-[#0B3B5C] outline-none focus:border-[#D4A94A]" data-testid="forgot-email-input" required />
+                        <button type="button" onClick={submitForgot} disabled={forgotBusy || !forgotEmail} className="rounded-full bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] px-4 py-2 text-xs font-bold disabled:opacity-60" data-testid="forgot-submit">
+                          {forgotBusy ? "Sending…" : "Send link"}
+                        </button>
+                      </div>
+                      <button type="button" onClick={() => setForgotState(null)} className="mt-2 text-[11px] text-[#94a3b8] hover:text-[#0B3B5C]" data-testid="forgot-cancel">Cancel</button>
+                    </div>
+                  )}
+
+                  {forgotState === "sent" && (
+                    <div className="mt-3 rounded-2xl bg-[#059669]/10 border border-[#059669]/30 text-[#065f46] px-4 py-3 text-xs" data-testid="forgot-sent">
+                      If that email is registered, a reset link is on its way. Check your inbox (and spam folder just in case).
+                    </div>
+                  )}
                 </form>
               ) : (
                 <div className="mt-6">
