@@ -770,6 +770,79 @@ def _html_escape(s: str) -> str:
     return _h.escape(str(s or ""), quote=True)
 
 
+def send_driver_arrival_notification(booking: dict, prefs: Optional[dict] = None) -> dict:
+    """Fires when the driver taps "I've arrived" from their mobile screen.
+    Sends BOTH an SMS (fastest read-receipt) and an email (for lock-screen
+    fallback / hotel front desk). Includes booking id + pickup so a guest
+    with multiple bookings knows which driver is out front.
+
+    Returns: {"email": {...}, "sms": {...}} — same shape as other notifiers.
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+    report = {
+        "kind": "driver_arrival",
+        "email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+        "sms":   {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
+    }
+
+    pickup = booking.get("pickup_location") or booking.get("item_name") or "your pickup point"
+    guest_first = (booking.get("customer_name") or "there").split(" ")[0]
+    driver_note = (booking.get("driver_note") or "").strip()
+
+    subject = f"Your Rox driver has arrived — Booking {booking['id']}"
+    text = (
+        f"Hi {guest_first},\n\n"
+        f"Your Rox driver is at {pickup} and ready when you are.\n"
+        f"Booking: {booking['id']}\n"
+        f"Service: {booking.get('item_name','')}\n\n"
+        + (f"Driver note: {driver_note}\n\n" if driver_note else "")
+        + f"Track live: https://roxtaxi.com/track?id={booking['id']}\n"
+        f"Need to reach us? WhatsApp +1 (242) 432-2587\n\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#059669;font-weight:700;">Your driver is here</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:28px;line-height:1.15;">
+        Hi {_html_escape(guest_first)}, your Rox driver just arrived.
+      </h1>
+      <p style="color:#64748B;font-size:15px;margin:14px 0 0;">
+        We're at <strong style="color:#0B3B5C;">{_html_escape(pickup)}</strong> and ready when you are.
+      </p>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:20px;margin-top:20px;">
+        <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#64748B;">Booking</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#0B3B5C;margin-top:4px;">{_html_escape(booking['id'])}</div>
+        <div style="color:#0B3B5C;font-size:14px;margin-top:6px;">{_html_escape(booking.get('item_name',''))}</div>
+        {f'<div style="color:#0B3B5C;font-size:13px;margin-top:10px;padding:10px 12px;background:#F7F5EF;border-radius:10px;font-style:italic;">Driver: &ldquo;{_html_escape(driver_note)}&rdquo;</div>' if driver_note else ''}
+      </div>
+      <div style="margin:22px 0 4px;">
+        <a href="https://roxtaxi.com/track?id={booking['id']}" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;font-weight:800;padding:12px 22px;border-radius:999px;font-size:14px;">Track live →</a>
+        <a href="https://wa.me/12424322587" style="display:inline-block;margin-left:8px;background:#25D366;color:#fff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:999px;font-size:13px;">WhatsApp us</a>
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:22px;">Rox Taxi Service &amp; Tours · Nassau, Bahamas · 24/7 dispatch</p>
+    </div>
+    """
+
+    if email_enabled and booking.get("customer_email"):
+        report["email"].update(send_email(booking["customer_email"], subject, html, text, category="confirmation"))
+    else:
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+
+    if sms_enabled and booking.get("customer_phone"):
+        sms = (
+            f"Rox Taxi: Your driver is HERE at {pickup} (Booking {booking['id']})."
+            + (f" Note: {driver_note}." if driver_note else "")
+            + f" Track: roxtaxi.com/track?id={booking['id']}"
+        )
+        report["sms"].update(send_sms(booking["customer_phone"], sms))
+    else:
+        report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+
+    return report
+
+
 def send_password_reset_email(*, to_email: str, name: str, reset_url: str,
                               expires_in_minutes: int = 60) -> dict:
     """Password-reset link email. Category "confirmation" reuses the same

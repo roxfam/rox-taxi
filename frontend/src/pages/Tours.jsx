@@ -190,6 +190,8 @@ export default function Tours() {
   // Annotate every tour with a `fitsPort` flag driven by the active cruise
   // ship's arrive→depart window minus a 90-minute safety buffer. Tours with
   // no parseable duration default to `true` so we never hide them by accident.
+  // Also picks a `__bestFit` — the LONGEST tour that still fits — so the UI
+  // can spotlight "if you only book one thing, do this" for cruise guests.
   const filteredTours = useMemo(() => {
     const budget = activeShip && activeShip.arrive
       ? Math.max(0, portWindowMinutes(activeShip) - PORT_BUFFER_MIN)
@@ -199,10 +201,23 @@ export default function Tours() {
       const fits = budget == null ? true : (dur === 0 || dur <= budget);
       return { ...t, __fits: fits, __minutes: dur };
     });
-    return hideNotFitting ? annotated.filter((t) => t.__fits) : annotated;
+    // Find the longest tour that fits AND is featured/curated (has an
+    // image_url). Cruise-guests default to "get the biggest experience I
+    // can fit" so longest-fits-within-budget is the right heuristic.
+    let bestId = null;
+    if (budget != null) {
+      const eligible = annotated.filter((t) => t.__fits && t.__minutes > 0 && t.image_url);
+      if (eligible.length > 0) {
+        eligible.sort((a, b) => b.__minutes - a.__minutes);
+        bestId = eligible[0].id;
+      }
+    }
+    const withBest = annotated.map((t) => ({ ...t, __bestFit: t.id === bestId }));
+    return hideNotFitting ? withBest.filter((t) => t.__fits) : withBest;
   }, [sortedTours, activeShip, hideNotFitting]);
 
   const fittingCount = filteredTours.filter((t) => t.__fits).length;
+  const bestFitTour = filteredTours.find((t) => t.__bestFit);
 
   return (
     <div data-testid="tours-page">
@@ -435,6 +450,8 @@ export default function Tours() {
           totalCount={sortedTours.length}
           hideNotFitting={hideNotFitting}
           setHideNotFitting={setHideNotFitting}
+          bestFitTour={bestFitTour}
+          onPickBestFit={(t) => setSelected(t)}
         />
 
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -463,7 +480,15 @@ export default function Tours() {
 
       <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-24 grid md:grid-cols-2 lg:grid-cols-3 gap-8">
         {filteredTours.map((t) => (
-          <div key={t.id} className={`group rounded-2xl overflow-hidden bg-white border transition-transform ${t.__fits ? "border-[#E2E8F0] hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(212,169,74,0.15)]" : "border-dashed border-[#E2E8F0] opacity-70"}`} data-testid={`tour-card-${t.id}`}>
+          <div key={t.id} className={`group rounded-2xl overflow-hidden bg-white border transition-transform relative ${t.__fits ? "border-[#E2E8F0] hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(212,169,74,0.15)]" : "border-dashed border-[#E2E8F0] opacity-70"} ${t.__bestFit ? "ring-2 ring-[#D4A94A] shadow-[0_20px_50px_rgba(212,169,74,0.25)]" : ""}`} data-testid={`tour-card-${t.id}`}>
+            {t.__bestFit && (
+              <div
+                className="absolute -top-3 left-4 z-10 rounded-full bg-[#D4A94A] text-[#0B192C] text-[10px] font-black uppercase tracking-widest px-3 py-1 shadow-[0_4px_12px_rgba(212,169,74,0.5)]"
+                data-testid={`tour-best-fit-ribbon-${t.id}`}
+              >
+                ⭐ Best fit for your port
+              </div>
+            )}
             <div className={`aspect-[4/3] overflow-hidden relative ${t.id === "junkanoo-party-bus" ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C]" : ""}`}>
               <img src={t.image_url} alt={t.name} className={`w-full h-full ${t.id === "junkanoo-party-bus" ? "object-contain p-2 scale-125" : "object-cover"} group-hover:scale-105 transition-transform duration-500`} />
               <div className="absolute bottom-3 left-3 glass rounded-full px-3 py-1 text-xs text-[#0B3B5C] font-semibold flex items-center gap-1">
@@ -548,7 +573,7 @@ export default function Tours() {
 // ── Cruise Ship Picker ─────────────────────────────────────────────────
 // Standalone so the filter UI can be dropped in above the sort row without
 // bloating the main Tours component. Fully controlled — parent owns state.
-function CruiseShipPicker({ shipId, setShipId, activeShip, fittingCount, totalCount, hideNotFitting, setHideNotFitting }) {
+function CruiseShipPicker({ shipId, setShipId, activeShip, fittingCount, totalCount, hideNotFitting, setHideNotFitting, bestFitTour, onPickBestFit }) {
   const budget = activeShip && activeShip.arrive
     ? Math.max(0, portWindowMinutes(activeShip) - PORT_BUFFER_MIN)
     : null;
@@ -624,6 +649,39 @@ function CruiseShipPicker({ shipId, setShipId, activeShip, fittingCount, totalCo
           )}
         </div>
       </div>
+
+      {/* Best-fit recommendation — the longest tour that still fits inside
+          the selected ship's port window. Only surfaces when a ship is
+          picked AND we found a viable pick. */}
+      {activeShip?.arrive && bestFitTour && (
+        <div
+          className="mt-4 rounded-xl bg-[#D4A94A]/12 border border-[#D4A94A]/40 p-4 flex items-center gap-4 flex-wrap"
+          data-testid="cruise-ship-best-fit"
+        >
+          <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 ring-2 ring-[#D4A94A]">
+            <img src={bestFitTour.image_url} alt={bestFitTour.name} className="w-full h-full object-cover" />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">
+              ⭐ Best fit for your port window
+            </div>
+            <div className="serif text-white text-base sm:text-lg leading-tight mt-1">{bestFitTour.name}</div>
+            <div className="text-[11px] text-white/70 mt-1">
+              <Clock className="w-3 h-3 inline mr-1" />{bestFitTour.duration}
+              <span className="mx-2 text-white/40">·</span>
+              from <span className="font-bold text-[#D4A94A]">${bestFitTour.price}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onPickBestFit?.(bestFitTour)}
+            data-testid="cruise-ship-best-fit-book"
+            className="rounded-full bg-[#D4A94A] text-[#0B192C] font-black text-xs px-4 py-2.5 hover:bg-[#E5BC5A] active:scale-95 inline-flex items-center gap-1.5"
+          >
+            Book this <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

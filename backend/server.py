@@ -2663,6 +2663,146 @@ async def driver_location_ping(req: DriverPing):
     return {"ok": True, "cached_at": _driver_pings[req.booking_id.upper()]["at"]}
 
 
+# ── Driver mobile self-serve (booking-id-as-auth) ─────────────────────
+# Drivers get a private /driver/{booking_id} link (mobile). From there,
+# they can (a) advance the booking status and (b) fire a "your driver is
+# here" SMS+email to the guest — WITHOUT needing the admin JWT.
+#
+# Auth model: possession of the booking_id acts as a capability token,
+# same as /drivers/location. The link is only shared with the dispatched
+# driver so leakage risk is scoped to a single ride. Cancelled/completed
+# bookings become read-only.
+
+# Valid forward transitions the driver mobile page is allowed to make.
+# Deliberately linear — driver can't skip from `confirmed` → `completed`
+# without passing through the intermediate states so the guest's Track
+# page always tells the truth.
+_DRIVER_STATUS_FLOW: Dict[str, set] = {
+    "confirmed":       {"driver_assigned", "en_route"},
+    "driver_assigned": {"en_route", "arrived"},
+    "en_route":        {"arrived", "no_show"},
+    "arrived":         {"completed", "no_show"},
+    "completed":       set(),
+    "cancelled":       set(),
+    "no_show":         set(),
+    "pending_payment": {"confirmed"},
+}
+
+
+class DriverStatusUpdate(BaseModel):
+    status: str
+    note: Optional[str] = None  # optional short note ("2 min away", "front entrance")
+
+
+@api_router.get("/driver/{booking_id}")
+async def driver_view_booking(booking_id: str):
+    """Minimal booking snapshot the driver mobile page uses to render its
+    header + current-status pill. No PII beyond what the driver already
+    sees on the printed manifest / SMS."""
+    b = await db.bookings.find_one({"id": booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    return {
+        "id": b["id"],
+        "status": b.get("status", "confirmed"),
+        "customer_name": b.get("customer_name"),
+        "customer_phone": b.get("customer_phone"),
+        "pickup_location": b.get("pickup_location"),
+        "dropoff_location": b.get("dropoff_location"),
+        "item_name": b.get("item_name"),
+        "booking_date": b.get("booking_date"),
+        "passengers": b.get("passengers"),
+        "notes": b.get("notes"),
+        "flight_number": b.get("flight_number"),
+        "driver_arrival_notified_at": b.get("driver_arrival_notified_at"),
+    }
+
+
+@api_router.post("/driver/{booking_id}/status")
+async def driver_update_status(booking_id: str, req: DriverStatusUpdate):
+    """Driver-mobile status transition. Rejects illegal transitions so a
+    fat-finger tap can't jump the booking forward past a step. When the
+    driver moves to `arrived` we auto-fire the guest arrival ping — one
+    tap, both actions."""
+    b = await db.bookings.find_one({"id": booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    cur = b.get("status", "confirmed")
+    if req.status not in _DRIVER_STATUS_FLOW.get(cur, set()):
+        raise HTTPException(409, f"Cannot move from '{cur}' to '{req.status}'")
+
+    now = now_iso()
+    update: Dict[str, Any] = {"status": req.status, "updated_at": now}
+    if req.status == "arrived":
+        update["arrived_at"] = now
+    elif req.status == "completed":
+        update["completed_at"] = now
+    elif req.status == "no_show":
+        update["no_show_at"] = now
+    if req.note:
+        update["driver_note"] = req.note[:200]
+
+    await db.bookings.update_one({"id": b["id"]}, {"$set": update})
+    fresh = await db.bookings.find_one({"id": b["id"]})
+
+    # Auto-fire the guest arrival notification when transitioning to `arrived`
+    # (idempotent — never re-fires if the driver taps Arrived twice).
+    notification = None
+    if req.status == "arrived" and not b.get("driver_arrival_notified_at"):
+        try:
+            prefs = await db.site_config.find_one({"_id": "main"}) or {}
+            from notifications import send_driver_arrival_notification
+            notification = send_driver_arrival_notification(clean(dict(fresh)), prefs)
+            await db.bookings.update_one(
+                {"id": b["id"]},
+                {"$set": {"driver_arrival_notified_at": now_iso(),
+                          "driver_arrival_notification": notification}},
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("driver arrival notify failed: %s", e)
+
+    return {
+        "id": b["id"],
+        "status": req.status,
+        "notification": notification,
+        "note": req.note,
+    }
+
+
+@api_router.post("/driver/{booking_id}/notify-arrival")
+async def driver_notify_arrival(booking_id: str, req: DriverStatusUpdate | None = None):
+    """Standalone "I've arrived" ping — for the case where the driver
+    already advanced status manually but wants to re-send the notification
+    (e.g. guest missed the first buzz). Idempotency guard on
+    `driver_arrival_notified_at` is bypassed here so repeat pings are
+    intentional."""
+    b = await db.bookings.find_one({"id": booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    if b.get("status") in {"cancelled", "completed", "no_show"}:
+        raise HTTPException(409, f"Booking is {b['status']} — arrival ping closed")
+
+    note = (req.note if req else None) or ""
+    if note:
+        await db.bookings.update_one({"id": b["id"]}, {"$set": {"driver_note": note[:200]}})
+        b["driver_note"] = note[:200]
+
+    try:
+        prefs = await db.site_config.find_one({"_id": "main"}) or {}
+        from notifications import send_driver_arrival_notification
+        result = send_driver_arrival_notification(clean(dict(b)), prefs)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("driver arrival notify failed: %s", e)
+        raise HTTPException(500, f"Notification failed: {e}") from e
+
+    await db.bookings.update_one(
+        {"id": b["id"]},
+        {"$set": {"driver_arrival_notified_at": now_iso(),
+                  "driver_arrival_notification": result}},
+    )
+    return {"id": b["id"], "notification": result}
+
+
 @api_router.get("/bookings/{booking_id}/driver-location")
 async def get_driver_location(booking_id: str):
     key = booking_id.upper()

@@ -18,6 +18,23 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Driver mobile self-serve — status flow + guest arrival ping)
+- **Backend**: three new endpoints on `server.py` gated by possession of `booking_id` (same capability-URL model as `/drivers/location`):
+  - `GET /api/driver/{booking_id}` — booking snapshot for the mobile console (name, phone, pickup/dropoff, current status, `driver_arrival_notified_at`).
+  - `POST /api/driver/{booking_id}/status` — status transition with a linear state machine (`_DRIVER_STATUS_FLOW`) so a fat-finger tap can't skip steps (`confirmed → en_route → arrived → completed`, plus `no_show` off-ramps from `en_route`/`arrived`). Illegal jumps return 409. When transitioning to `arrived`, auto-fires the guest arrival ping ONCE (idempotent via `driver_arrival_notified_at`).
+  - `POST /api/driver/{booking_id}/notify-arrival` — explicit re-send of the arrival ping for the "guest missed the first buzz" case; bypasses idempotency but refuses `completed`/`cancelled`/`no_show` bookings.
+- **`notifications.py::send_driver_arrival_notification`** — email + SMS "your driver is here" template with optional short driver note ("Black SUV at front entrance"), tracks live URL, and WhatsApp fallback. Returns the standard `{email, sms}` delivery-report shape.
+- **`DriverShare.jsx` mobile console** rewrite: 
+  - Live booking snapshot with status pill
+  - "Call guest" + "WhatsApp" quick-contact row
+  - Four one-tap status buttons: "On my way", "I've arrived", "Trip done", "No-show" — each with a themed background colour
+  - Optional 120-char note field that attaches to the status update AND the guest-facing arrival email/SMS
+  - "Re-send I've arrived" button surfaces only when status is `arrived`
+  - Existing GPS live-share block preserved (start/stop, ping counter, last-ping display)
+  - Locked read-only view when booking is `completed` / `cancelled` / `no_show`
+- **Tests**: `tests/test_driver_status_and_arrival.py` — 6 cases (read snapshot, illegal transition → 409, full legal flow + auto-notification, explicit re-send bypasses idempotency, closed booking refuses ping).
+- **Testids**: `driver-share-page`, `driver-share-booking`, `driver-share-status-pill`, `driver-share-contact-row`, `driver-share-call`, `driver-share-wa`, `driver-share-actions`, `driver-share-note`, `driver-share-step-en_route`, `driver-share-step-arrived`, `driver-share-step-completed`, `driver-share-step-no_show`, `driver-share-resend-arrival`, `driver-share-gps`, `driver-share-closed`.
+
 ### ✅ Shipped Feb 2026 (Cruise Ship Filter · Custom Caption · Share to Social)
 - **Cruise Ship Filter (`/tours`)**: new gold-bordered picker card at the top of the excursions list with a dropdown of 10 curated Nassau-calling ships (Carnival, Royal Caribbean, MSC, NCL, Disney, Celebrity, Princess, Holland America, Virgin, plus a "generic cruise" fallback and "not on a cruise"). Each ship carries an `arrive` + `depart` port window; the filter computes `port_window − 90-min boarding buffer` and annotates every tour with `__fits`. Tour cards get a green **"Fits your port"** badge or a red **"Too long for port"** badge based on the parsed `duration` (handles "6 hours", "2.5 hours", "30 minutes"). "Hide tours that don't fit" checkbox available. Ship choice persists in `localStorage["rox_cruise_ship"]` across visits. Sort row now shows "N of M tours fit". Testids: `cruise-ship-picker`, `cruise-ship-select`, `cruise-ship-clear`, `cruise-ship-hide-toggle`, `tour-fits-badge-*`, `tour-no-fit-badge-*`.
 - **Custom Caption on `/wall`**: new text input above the strip (max 60 chars, live counter turns orange near the limit). Caption renders as an italic quote under the theme tagline inside the exportable PNG (so it lands in every download/social share). Testids: `wall-caption-input`, `wall-caption-counter`, `wall-strip-caption`.

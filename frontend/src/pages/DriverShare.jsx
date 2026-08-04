@@ -1,20 +1,65 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { toast } from "sonner";
 import { api } from "../lib/api";
-import { MapPin, Play, Pause, Signal, AlertTriangle, Check } from "lucide-react";
+import {
+  MapPin, Play, Pause, Signal, AlertTriangle, Check, BellRing,
+  Navigation2, Flag, Ban, User, Phone, MessageCircle,
+} from "lucide-react";
 
-/**
- * Driver-facing page — /driver/:booking_id.
- * The driver hits Start; browser geolocation.watchPosition streams pings
- * every ~5s to POST /api/drivers/location which the customer's Track page reads.
- */
+// Driver mobile console — /driver/:booking_id
+// Two responsibilities in one screen:
+//   1) Live GPS sharing (same as before) so the guest's Track page has an
+//      ETA marker.
+//   2) One-tap status + arrival notification actions so the driver never
+//      has to open the admin app on their phone just to say "I'm here."
+//
+// Auth: possession of `booking_id` acts as a capability token (same model
+// as `/drivers/location`). The private link is only shared with the
+// dispatched driver.
+const STEPS = [
+  { key: "en_route", label: "On my way",   Icon: Navigation2, tint: "#E86A3C" },
+  { key: "arrived",  label: "I've arrived", Icon: BellRing,    tint: "#059669" },
+  { key: "completed", label: "Trip done",  Icon: Flag,        tint: "#0B3B5C" },
+  { key: "no_show",  label: "No-show",     Icon: Ban,         tint: "#DC2626" },
+];
+
+const STATUS_META = {
+  confirmed:       { label: "Confirmed",  tint: "#0B3B5C" },
+  driver_assigned: { label: "Assigned",   tint: "#D4A94A" },
+  en_route:        { label: "En route",   tint: "#E86A3C" },
+  arrived:         { label: "At pickup",  tint: "#059669" },
+  completed:       { label: "Completed",  tint: "#64748B" },
+  no_show:         { label: "No-show",    tint: "#DC2626" },
+  cancelled:       { label: "Cancelled",  tint: "#DC2626" },
+  pending_payment: { label: "Pending pay", tint: "#94a3b8" },
+};
+
 export default function DriverShare() {
   const { booking_id } = useParams();
+  const [booking, setBooking] = useState(null);
+  const [loadingBooking, setLoadingBooking] = useState(true);
   const [sharing, setSharing] = useState(false);
   const [lastPing, setLastPing] = useState(null);
   const [error, setError] = useState("");
   const [pingCount, setPingCount] = useState(0);
+  const [advancing, setAdvancing] = useState("");
+  const [notifying, setNotifying] = useState(false);
+  const [note, setNote] = useState("");
   const watchIdRef = useRef(null);
+
+  const loadBooking = async () => {
+    try {
+      const { data } = await api.get(`/driver/${booking_id}`);
+      setBooking(data);
+    } catch (e) {
+      setError(e?.response?.data?.detail || "Couldn't load booking. Double-check the link.");
+    } finally {
+      setLoadingBooking(false);
+    }
+  };
+
+  useEffect(() => { loadBooking(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [booking_id]);
 
   const start = () => {
     if (!("geolocation" in navigator)) {
@@ -42,9 +87,7 @@ export default function DriverShare() {
           setError(e?.response?.data?.detail || "Ping failed — retrying…");
         }
       },
-      (err) => {
-        setError(`Location denied: ${err.message}. Grant location to this page.`);
-      },
+      (err) => setError(`Location denied: ${err.message}. Grant location to this page.`),
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
     );
   };
@@ -57,64 +100,262 @@ export default function DriverShare() {
 
   useEffect(() => () => { if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current); }, []);
 
+  const advance = async (nextStatus) => {
+    if (!booking) return;
+    setAdvancing(nextStatus);
+    try {
+      const { data } = await api.post(`/driver/${booking_id}/status`, {
+        status: nextStatus,
+        note: note.trim() || undefined,
+      });
+      setBooking((b) => ({ ...b, status: nextStatus, driver_note: note.trim() || b?.driver_note }));
+      if (nextStatus === "arrived") {
+        const emailOk = data?.notification?.email?.sent;
+        const smsOk = data?.notification?.sms?.sent;
+        if (emailOk || smsOk) {
+          toast.success(`Guest notified — ${[emailOk && "email", smsOk && "SMS"].filter(Boolean).join(" + ")} sent ✓`);
+        } else {
+          toast.warning("Status updated — but no phone/email on file to notify guest.");
+        }
+      } else {
+        toast.success(`Status → ${STATUS_META[nextStatus]?.label || nextStatus}`);
+      }
+      setNote("");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Update failed");
+    } finally {
+      setAdvancing("");
+    }
+  };
+
+  const resendArrival = async () => {
+    setNotifying(true);
+    try {
+      const { data } = await api.post(`/driver/${booking_id}/notify-arrival`, {
+        status: "arrived", // required by shared model but ignored here
+        note: note.trim() || undefined,
+      });
+      const emailOk = data?.notification?.email?.sent;
+      const smsOk = data?.notification?.sms?.sent;
+      if (emailOk || smsOk) {
+        toast.success(`Guest re-notified — ${[emailOk && "email", smsOk && "SMS"].filter(Boolean).join(" + ")}`);
+      } else {
+        toast.warning("Sent — but no phone/email on file for this guest.");
+      }
+      setNote("");
+      loadBooking();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Notify failed");
+    } finally {
+      setNotifying(false);
+    }
+  };
+
+  const meta = STATUS_META[booking?.status] || STATUS_META.confirmed;
+  const isClosed = booking && ["completed", "cancelled", "no_show"].includes(booking.status);
+  const phone = (booking?.customer_phone || "").replace(/[^+\d]/g, "");
+
   return (
-    <div className="min-h-screen bg-[#0B192C] text-white flex flex-col items-center justify-center p-6" data-testid="driver-share-page">
-      <div className="w-full max-w-md rounded-3xl bg-white/5 border border-white/10 p-8 backdrop-blur">
-        <div className="flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-[#D4A94A]">
-          <Signal className="w-3 h-3" /> Rox driver
+    <div className="min-h-screen bg-[#0B192C] text-white flex flex-col items-center p-4 pb-24" data-testid="driver-share-page">
+      <div className="w-full max-w-md mt-6 rounded-3xl bg-white/5 border border-white/10 p-6 backdrop-blur">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[10px] tracking-[0.32em] uppercase text-[#D4A94A] font-black">
+            <Signal className="w-3 h-3" /> Rox driver
+          </div>
+          {booking && (
+            <span
+              className="text-[10px] uppercase tracking-widest font-black rounded-full px-2.5 py-1"
+              style={{ color: meta.tint, background: `${meta.tint}22` }}
+              data-testid="driver-share-status-pill"
+            >
+              {meta.label}
+            </span>
+          )}
         </div>
-        <h1 className="serif text-4xl mt-2">Trip <em className="italic text-[#F5E1A4]">{booking_id}</em></h1>
-        <p className="text-white/60 mt-2 text-sm">
-          Tap Start to share your live location with this rider. Your phone will keep the tab open —
-          keep the screen on. Hit Stop when you arrive.
-        </p>
 
-        {!sharing ? (
-          <button
-            onClick={start}
-            data-testid="driver-share-start"
-            className="mt-8 w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] py-4 text-lg font-semibold active:scale-95 transition-transform"
-          >
-            <Play className="w-5 h-5" /> Start sharing
-          </button>
-        ) : (
-          <button
-            onClick={stop}
-            data-testid="driver-share-stop"
-            className="mt-8 w-full inline-flex items-center justify-center gap-2 rounded-full bg-white text-[#0B192C] hover:bg-white/90 py-4 text-lg font-semibold active:scale-95 transition-transform"
-          >
-            <Pause className="w-5 h-5" /> Stop sharing
-          </button>
-        )}
+        <h1 className="serif text-3xl mt-2">
+          Trip <em className="italic text-[#F5E1A4]">{booking_id}</em>
+        </h1>
 
-        {sharing && (
-          <div className="mt-6 space-y-2" data-testid="driver-share-status">
-            <div className="flex items-center gap-2 text-sm text-[#D4A94A]">
-              <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" /> Live
-              <span className="text-white/60">— {pingCount} ping{pingCount === 1 ? "" : "s"} sent</span>
+        {loadingBooking ? (
+          <p className="text-white/50 mt-3 text-sm">Loading booking…</p>
+        ) : booking ? (
+          <div className="mt-3 space-y-2 text-sm text-white/80" data-testid="driver-share-booking">
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-[#D4A94A] shrink-0" />
+              <span className="font-semibold">{booking.customer_name || "Guest"}</span>
+              {booking.passengers && <span className="text-white/50">· {booking.passengers} pax</span>}
             </div>
-            {lastPing && (
-              <div className="text-xs text-white/60 flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {lastPing.lat.toFixed(5)}, {lastPing.lng.toFixed(5)}
-                {lastPing.accuracy_m && ` · ±${Math.round(lastPing.accuracy_m)}m`}
+            {booking.pickup_location && (
+              <div className="flex items-start gap-2">
+                <MapPin className="w-4 h-4 text-[#D4A94A] shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="text-white">{booking.pickup_location}</div>
+                  {booking.dropoff_location && (
+                    <div className="text-white/50 text-xs mt-0.5">→ {booking.dropoff_location}</div>
+                  )}
+                </div>
+              </div>
+            )}
+            {booking.driver_arrival_notified_at && (
+              <div className="text-[11px] text-[#059669] flex items-center gap-1">
+                <Check className="w-3 h-3" /> Guest already pinged at {new Date(booking.driver_arrival_notified_at).toLocaleTimeString()}
               </div>
             )}
           </div>
-        )}
-
-        {error && (
-          <div className="mt-4 flex items-start gap-2 text-xs text-[#E86A3C]" data-testid="driver-share-error">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {error}
-          </div>
-        )}
-
-        {pingCount > 0 && !sharing && (
-          <div className="mt-4 flex items-center gap-2 text-xs text-[#22c55e]">
-            <Check className="w-4 h-4" /> Sharing stopped. Rider saw {pingCount} update{pingCount === 1 ? "" : "s"}.
-          </div>
+        ) : (
+          <p className="text-[#E86A3C] mt-3 text-sm">Booking not found for this link.</p>
         )}
       </div>
+
+      {/* Quick contact row */}
+      {booking && phone && !isClosed && (
+        <div className="w-full max-w-md mt-3 grid grid-cols-2 gap-2" data-testid="driver-share-contact-row">
+          <a
+            href={`tel:${phone}`}
+            className="rounded-2xl bg-[#059669] text-white text-sm font-bold py-3 flex items-center justify-center gap-1.5 active:scale-95"
+            data-testid="driver-share-call"
+          >
+            <Phone className="w-4 h-4" /> Call guest
+          </a>
+          <a
+            href={`https://wa.me/${phone.replace(/[^\d]/g, "")}`}
+            target="_blank" rel="noreferrer"
+            className="rounded-2xl bg-[#25D366] text-white text-sm font-bold py-3 flex items-center justify-center gap-1.5 active:scale-95"
+            data-testid="driver-share-wa"
+          >
+            <MessageCircle className="w-4 h-4" /> WhatsApp
+          </a>
+        </div>
+      )}
+
+      {/* Status actions — the whole point of this feature */}
+      {booking && !isClosed && (
+        <div className="w-full max-w-md mt-3 rounded-3xl bg-white/5 border border-white/10 p-5 backdrop-blur" data-testid="driver-share-actions">
+          <div className="text-[10px] tracking-[0.32em] uppercase text-white/60 font-black mb-3">
+            Update the guest
+          </div>
+
+          {/* Optional short note attached to the next action + guest ping */}
+          <label className="block mb-3">
+            <span className="text-[10px] uppercase tracking-widest text-white/50 font-bold">Note to guest (optional)</span>
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value.slice(0, 120))}
+              placeholder="e.g. Black SUV at front entrance"
+              maxLength={120}
+              data-testid="driver-share-note"
+              className="mt-1 w-full rounded-full bg-white/10 border border-white/15 text-white placeholder-white/40 text-sm px-4 py-2.5 focus:outline-none focus:border-[#D4A94A]"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-2" data-testid="driver-share-step-grid">
+            {STEPS.map((s) => {
+              const active = advancing === s.key;
+              const Ico = s.Icon;
+              const isArrival = s.key === "arrived";
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => advance(s.key)}
+                  disabled={!!advancing}
+                  data-testid={`driver-share-step-${s.key}`}
+                  className="rounded-2xl text-white text-sm font-bold py-3.5 px-3 active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2 transition-all"
+                  style={{ background: s.tint, boxShadow: isArrival ? "0 10px 30px rgba(5,150,105,0.35)" : "none" }}
+                >
+                  <Ico className="w-4 h-4" />
+                  {active ? "…" : s.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Re-send arrival notification (for the "guest missed it" case) */}
+          {booking.status === "arrived" && (
+            <button
+              type="button"
+              onClick={resendArrival}
+              disabled={notifying}
+              data-testid="driver-share-resend-arrival"
+              className="mt-3 w-full rounded-2xl bg-[#D4A94A]/15 border border-[#D4A94A]/40 text-[#D4A94A] text-sm font-bold py-3 active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              <BellRing className="w-4 h-4" /> {notifying ? "Re-sending…" : "Re-send \"I've arrived\" ping"}
+            </button>
+          )}
+
+          <div className="mt-3 text-[10px] text-white/40 leading-relaxed text-center">
+            Tapping "I've arrived" auto-sends an SMS + email to the guest.
+          </div>
+        </div>
+      )}
+
+      {/* GPS live-share block — unchanged core, restyled to match new layout */}
+      {!isClosed && (
+        <div className="w-full max-w-md mt-3 rounded-3xl bg-white/5 border border-white/10 p-5 backdrop-blur" data-testid="driver-share-gps">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[10px] tracking-[0.32em] uppercase text-white/60 font-black">Live location</div>
+              <div className="text-sm text-white/70 mt-1">
+                Streams your GPS to the rider's Track page. Keep the screen on.
+              </div>
+            </div>
+          </div>
+
+          {!sharing ? (
+            <button
+              onClick={start}
+              data-testid="driver-share-start"
+              className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] py-3.5 text-base font-bold active:scale-95"
+            >
+              <Play className="w-5 h-5" /> Start GPS sharing
+            </button>
+          ) : (
+            <button
+              onClick={stop}
+              data-testid="driver-share-stop"
+              className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full bg-white text-[#0B192C] py-3.5 text-base font-bold active:scale-95"
+            >
+              <Pause className="w-5 h-5" /> Stop sharing
+            </button>
+          )}
+
+          {sharing && (
+            <div className="mt-4 space-y-2" data-testid="driver-share-status">
+              <div className="flex items-center gap-2 text-sm text-[#D4A94A]">
+                <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" /> Live
+                <span className="text-white/60">— {pingCount} ping{pingCount === 1 ? "" : "s"} sent</span>
+              </div>
+              {lastPing && (
+                <div className="text-xs text-white/60 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {lastPing.lat.toFixed(5)}, {lastPing.lng.toFixed(5)}
+                  {lastPing.accuracy_m && ` · ±${Math.round(lastPing.accuracy_m)}m`}
+                </div>
+              )}
+            </div>
+          )}
+
+          {pingCount > 0 && !sharing && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-[#22c55e]">
+              <Check className="w-4 h-4" /> Sharing stopped. Rider saw {pingCount} update{pingCount === 1 ? "" : "s"}.
+            </div>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className="w-full max-w-md mt-3 flex items-start gap-2 text-xs text-[#E86A3C] rounded-2xl bg-[#E86A3C]/10 border border-[#E86A3C]/30 p-3" data-testid="driver-share-error">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {error}
+        </div>
+      )}
+
+      {isClosed && (
+        <div className="w-full max-w-md mt-3 rounded-2xl bg-white/5 border border-white/10 p-5 text-center text-sm text-white/70" data-testid="driver-share-closed">
+          This trip is <span className="font-bold text-white">{meta.label.toLowerCase()}</span> — driver actions are locked.
+        </div>
+      )}
     </div>
   );
 }

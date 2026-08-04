@@ -69,6 +69,17 @@ export default function Wall() {
   const stripRef = useRef(null);
   const CAPTION_MAX = 60;
 
+  // One-tap caption chips — theme-aware so "Sunset with the crew" only shows
+  // up on the Sunset preset, "Ocean day" on Ocean, etc. Guests can still
+  // type freely, but the chips remove the empty-state paralysis and give
+  // us a chance to slip subtle brand copy into their shares.
+  const captionPresets = useMemo(() => ({
+    classic: ["Nassau, done right", "Rox got us there", "Best day of the trip", "Book yours next"],
+    sunset:  ["Sunset with the crew", "Golden hour, Bahamas", "Rox took us straight to it", "Chasing the light"],
+    ocean:   ["Bahamian blues 🌊", "Ocean day, no regrets", "Salt in our hair", "Rox to the beach"],
+    party:   ["Nassau nights 🍹", "The crew went off", "Rum, sand, repeat", "Book the party bus"],
+  }[themeId] || []), [themeId]);
+
   useEffect(() => {
     api.get("/gallery")
       .then(({ data }) => {
@@ -311,6 +322,31 @@ export default function Wall() {
                   {caption.length}/{CAPTION_MAX}
                 </span>
               </div>
+              {/* One-tap caption presets — theme-aware. Clicking swaps the
+                  caption; clicking the already-active preset clears it. */}
+              {captionPresets.length > 0 && (
+                <div className="mt-2 flex items-center justify-center gap-1.5 flex-wrap" data-testid="wall-caption-presets">
+                  {captionPresets.map((preset) => {
+                    const on = caption === preset;
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setCaption(on ? "" : preset)}
+                        data-testid={`wall-caption-preset-${preset.slice(0, 12).replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`}
+                        aria-pressed={on}
+                        className={`text-[10px] font-bold rounded-full px-2.5 py-1 transition-all active:scale-95 ${
+                          on
+                            ? "bg-[#D4A94A] text-[#0B192C] shadow-[0_4px_12px_rgba(212,169,74,0.4)]"
+                            : "bg-white/8 border border-white/20 text-white/80 hover:bg-white/15"
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div
