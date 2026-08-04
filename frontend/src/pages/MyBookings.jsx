@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API, money, STATUS_STEPS, STATUS_INDEX, BACKEND_URL } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { Ticket, MapPin, ArrowRight, LogOut, XCircle, Download, CreditCard, Clock, Shield, CalendarPlus, Gift, Copy, Sparkles, IdCard, Trash2, ShieldAlert } from "lucide-react";
+import { Ticket, MapPin, ArrowRight, LogOut, XCircle, Download, CreditCard, Clock, Shield, CalendarPlus, Gift, Copy, Sparkles, IdCard, Trash2, ShieldAlert, Monitor, Smartphone, Globe } from "lucide-react";
 import { toast } from "sonner";
 import ExtendRentalModal from "./ExtendRentalModal";
 import WalletCard from "./WalletCard";
@@ -78,6 +78,7 @@ export default function MyBookings() {
     loadBookings();
     loadReferral();
     loadWallet();
+    loadSessions();
     // Post-checkout success toast
     const q = new URLSearchParams(window.location.search);
     if (q.get("extended")) {
@@ -168,6 +169,62 @@ export default function MyBookings() {
       <div className="mt-4 inline-flex items-center gap-2 text-[11px] text-[#64748B] bg-white/60 backdrop-blur rounded-full border border-white/70 px-3 py-1.5" data-testid="mybookings-idle-notice">
         <Shield className="w-3.5 h-3.5 text-[#D4A94A]" /> You'll be signed out automatically after 1 hour of inactivity.
       </div>
+
+      {/* Signed-in devices — per-device revocation so users can knock out just
+          the shared laptop / lost phone without wiping their current session. */}
+      {sessions.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-[#E2E8F0] bg-white p-5" data-testid="signed-in-devices">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <div className="text-xs uppercase tracking-[0.25em] text-[#64748B] font-bold">Signed-in devices</div>
+              <div className="text-sm text-[#0B3B5C] mt-0.5">{sessions.length} active session{sessions.length === 1 ? "" : "s"}</div>
+            </div>
+            <button
+              onClick={loadSessions}
+              className="text-[11px] text-[#64748B] hover:text-[#D4A94A]"
+              data-testid="signed-in-devices-refresh"
+            >Refresh</button>
+          </div>
+          <div className="divide-y divide-[#F1F5F9]">
+            {sessions.map((s) => {
+              const Icon = /iOS|Android/.test(s.device) ? Smartphone : Monitor;
+              const last = s.last_activity_at ? new Date(s.last_activity_at) : null;
+              return (
+                <div key={s.id} className="py-3 flex items-center gap-3 flex-wrap" data-testid={`device-row-${s.id}`}>
+                  <div className="w-10 h-10 rounded-xl bg-[#D4A94A]/12 text-[#D4A94A] flex items-center justify-center shrink-0">
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-[#0B3B5C] font-semibold flex items-center gap-2 flex-wrap">
+                      {s.device || "Unknown device"}
+                      {s.current && (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest rounded-full bg-[#059669] text-white px-2 py-0.5" data-testid={`device-current-${s.id}`}>
+                          This device
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-[#64748B] mt-0.5 flex items-center gap-2 flex-wrap">
+                      {s.location && <span className="inline-flex items-center gap-1"><Globe className="w-3 h-3" /> {s.location}</span>}
+                      {last && <span>· Active {last.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>}
+                      <span className="uppercase tracking-widest text-[9px] font-bold text-[#94a3b8]">{s.auth_method}</span>
+                    </div>
+                  </div>
+                  {!s.current && (
+                    <button
+                      onClick={() => revokeSession(s.id)}
+                      disabled={revoking === s.id}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[#FCA5A5] text-[#B91C1C] hover:bg-[#FEF2F2] text-xs font-semibold px-3 py-1.5 disabled:opacity-60"
+                      data-testid={`device-revoke-${s.id}`}
+                    >
+                      {revoking === s.id ? "Signing out…" : "Sign out"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Nudge banner — only when the guest is 1-2 conversions from a $25 unlock AND has already converted ≥ 1.
           A brand-new user with 0 conversions sees the education card only; this banner is for fence-sitters. */}

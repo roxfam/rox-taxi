@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { UserPlus, Mail, Lock, User as UserIcon, AlertCircle, Sparkles, ShieldCheck, Gift } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import PasswordStrengthMeter, { scorePassword } from "../components/PasswordStrengthMeter";
 
 export default function Signup() {
   const { user, loading, login: googleLogin, register } = useAuth();
@@ -10,6 +11,7 @@ export default function Signup() {
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", referral_code: "" });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const strength = useMemo(() => scorePassword(form.password), [form.password]);
 
   useEffect(() => { if (!loading && user) nav("/my-bookings", { replace: true }); }, [user, loading, nav]);
 
@@ -19,6 +21,7 @@ export default function Signup() {
     e.preventDefault();
     setErr("");
     if (form.password.length < 6) return setErr("Password must be at least 6 characters.");
+    if (!strength.strong) return setErr("Password is too weak. Mix letters, numbers, and symbols.");
     if (form.password !== form.confirm) return setErr("Passwords don't match.");
     setBusy(true);
     try {

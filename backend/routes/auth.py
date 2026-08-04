@@ -115,13 +115,22 @@ def _site_base_url() -> str:
     return (os.environ.get("SITE_BASE_URL") or "https://roxtaxi.com").rstrip("/")
 
 
-async def _create_customer_session(user_id: str, method: str) -> str:
+async def _create_customer_session(user_id: str, method: str, request: Optional["Request"] = None) -> str:
     session_token = f"sess_{uuid.uuid4().hex}{uuid.uuid4().hex}"
     ts = _now_iso()
+    ua = ""
+    ip = ""
+    if request is not None:
+        ua = (request.headers.get("user-agent") or "")[:400]
+        # Prefer the leftmost XFF entry (real client), else socket peer
+        xff = request.headers.get("x-forwarded-for", "")
+        ip = (xff.split(",")[0].strip() if xff else (request.client.host if request.client else ""))[:64]
     await _db.user_sessions.insert_one({
         "user_id": user_id,
         "session_token": session_token,
         "auth_method": method,
+        "user_agent": ua,
+        "ip": ip,
         "expires_at": (_now_utc() + timedelta(days=7)).isoformat(),
         "last_activity_at": ts,
         "created_at": ts,
@@ -219,7 +228,7 @@ async def process_google_session(request: Request, response: Response):
 
 
 @router.post("/auth/register")
-async def customer_register(req: CustomerRegisterRequest, response: Response):
+async def customer_register(req: CustomerRegisterRequest, request: Request, response: Response):
     """Customer email/password signup. Auto-links past bookings by email.
 
     Referral: an optional `referral_code` in the payload links this new
@@ -267,7 +276,7 @@ async def customer_register(req: CustomerRegisterRequest, response: Response):
             insert_doc["referred_by"] = referred_by
         await _db.users.insert_one(insert_doc)
 
-    token = await _create_customer_session(user_id, "email")
+    token = await _create_customer_session(user_id, "email", request=request)
     _set_session_cookie(response, token)
     user = await _db.users.find_one({"user_id": user_id}, {"_id": 0})
     user.pop("password_hash", None)
@@ -275,7 +284,7 @@ async def customer_register(req: CustomerRegisterRequest, response: Response):
 
 
 @router.post("/auth/login-email")
-async def customer_login_email(req: CustomerLoginRequest, response: Response):
+async def customer_login_email(req: CustomerLoginRequest, request: Request, response: Response):
     """Customer email/password login."""
     email = req.email.lower()
     user = await _db.users.find_one({"email": email})
@@ -284,7 +293,7 @@ async def customer_login_email(req: CustomerLoginRequest, response: Response):
     if not _verify_password(req.password, user["password_hash"]):
         raise HTTPException(401, "Invalid email or password")
 
-    token = await _create_customer_session(user["user_id"], "email")
+    token = await _create_customer_session(user["user_id"], "email", request=request)
     _set_session_cookie(response, token)
     user.pop("_id", None)
     user.pop("password_hash", None)
@@ -344,6 +353,82 @@ async def logout_everywhere(user: dict = _current_user(), response: Response = N
     if response is not None:
         response.delete_cookie("session_token", path="/", samesite="none", secure=True)
     return {"ok": True, "sessions_killed": result.deleted_count}
+
+
+# ─── Active sessions (signed-in devices) ──────────────────────────────
+
+
+def _parse_ua(ua: str) -> str:
+    """Best-effort browser + OS label from a User-Agent string."""
+    ua = ua or ""
+    browser = "Browser"
+    if "Chrome" in ua and "Edg" not in ua and "OPR" not in ua:
+        browser = "Chrome"
+    elif "Firefox" in ua:
+        browser = "Firefox"
+    elif "Safari" in ua and "Chrome" not in ua:
+        browser = "Safari"
+    elif "Edg" in ua:
+        browser = "Edge"
+    elif "OPR" in ua or "Opera" in ua:
+        browser = "Opera"
+    os_name = "Unknown"
+    if "iPhone" in ua or "iPad" in ua or "iOS" in ua:
+        os_name = "iOS"
+    elif "Android" in ua:
+        os_name = "Android"
+    elif "Macintosh" in ua or "Mac OS" in ua:
+        os_name = "macOS"
+    elif "Windows" in ua:
+        os_name = "Windows"
+    elif "Linux" in ua:
+        os_name = "Linux"
+    return f"{browser} on {os_name}" if os_name != "Unknown" else browser
+
+
+async def _city_for_ip(ip: str) -> str:
+    if not ip:
+        return ""
+    doc = await _db.visitor_geo_cache.find_one({"ip": ip})
+    if not doc:
+        return ""
+    parts = [doc.get(k) for k in ("city", "region", "country") if doc.get(k)]
+    return ", ".join(parts[:2])
+
+
+@router.get("/auth/sessions")
+async def list_sessions(request: Request, user: dict = _current_user()):
+    """List every active session for the current user for the devices card."""
+    current = request.cookies.get("session_token", "")
+    sessions = []
+    async for s in _db.user_sessions.find({"user_id": user["user_id"]}).sort("last_activity_at", -1):
+        token = s.get("session_token", "")
+        sessions.append({
+            "id": token[:16],
+            "current": token == current,
+            "device": _parse_ua(s.get("user_agent", "")),
+            "location": await _city_for_ip(s.get("ip", "")),
+            "auth_method": s.get("auth_method", "email"),
+            "last_activity_at": s.get("last_activity_at"),
+            "created_at": s.get("created_at"),
+        })
+    return {"sessions": sessions}
+
+
+@router.post("/auth/sessions/{session_prefix}/revoke")
+async def revoke_session(session_prefix: str, user: dict = _current_user()):
+    """Revoke one specific session by its ID prefix. Scoped to the current
+    user_id so nobody can knock out someone else's session."""
+    if not session_prefix or len(session_prefix) < 8:
+        raise HTTPException(400, "Invalid session id")
+    result = await _db.user_sessions.delete_one({
+        "user_id": user["user_id"],
+        "session_token": {"$regex": f"^{session_prefix}"},
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Session not found")
+    return {"ok": True}
+
 
 
 # ─── Password reset (self-serve) ──────────────────────────────────────

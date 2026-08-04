@@ -18,6 +18,13 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Tour +$10 · Strength meter on Signup · Signed-in devices list)
+- **+$10 across every tour**: DB migration bumped all 15 tours by $10 with a `price_history` audit entry (`reason: "Feb 2026: +$10 across all tours"`, `changed_by: roxfam2509@gmail.com`). Taxi + rentals untouched. `seed_data.py` also updated so fresh seeds start at the new prices.
+- **Signup strength meter**: extracted `PasswordStrengthMeter` + `scorePassword` into a shared `components/PasswordStrengthMeter.jsx`. `ResetPassword` and `Signup` both use it now. `Signup.jsx` blocks weak passwords on submit ("Password is too weak. Mix letters, numbers, and symbols.").
+- **Signed-in devices list**: new `GET /api/auth/sessions` returns per-session `{id (prefix), current, device (browser + OS from UA), location (city, country from `visitor_geo_cache`), auth_method, last_activity_at, created_at}`. `POST /api/auth/sessions/{prefix}/revoke` kills a single session; scoped to `user_id` so users can only revoke their own. `_create_customer_session` now captures raw `user_agent` + `ip` on the session doc.
+- **`MyBookings.jsx` devices card**: shows each session with a Monitor/Smartphone icon, browser+OS label, city, last-active timestamp, "This device" badge for the current session, and a per-row "Sign out" button (hidden on current session).
+- **Tested end-to-end**: registered user with 2 sessions (Chrome/Mac + Safari/iOS UAs), `GET /auth/sessions` returned both with correct UA parsing + current-flag; `POST /revoke` on the iOS session → 200; iOS cookie's `/auth/me` returned 401 immediately.
+
 ### ✅ Shipped Feb 2026 (Sign Out Everywhere)
 - **Backend**: new `POST /api/auth/logout-everywhere` — deletes every session for the current user across all devices, records a `logout_everywhere` login-event with `sessions_killed` count, updates `last_logout_everywhere_at`, and clears the current cookie. Returns `{ok, sessions_killed}`.
 - **Frontend `MyBookings.jsx`**: new red-outlined **"Sign me out everywhere"** button next to the existing "Sign out". Confirms via `window.confirm`, calls the endpoint, toasts `Signed out of N devices.`, then redirects to `/login`.
