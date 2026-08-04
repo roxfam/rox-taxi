@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Sign Out Everywhere)
+- **Backend**: new `POST /api/auth/logout-everywhere` — deletes every session for the current user across all devices, records a `logout_everywhere` login-event with `sessions_killed` count, updates `last_logout_everywhere_at`, and clears the current cookie. Returns `{ok, sessions_killed}`.
+- **Frontend `MyBookings.jsx`**: new red-outlined **"Sign me out everywhere"** button next to the existing "Sign out". Confirms via `window.confirm`, calls the endpoint, toasts `Signed out of N devices.`, then redirects to `/login`.
+- **Tested end-to-end**: registered user with 2 active sessions (2 cookie jars). First jar hit `/logout-everywhere` → `{sessions_killed: 2}`. Second jar's `/auth/me` immediately returned 401 — session on the "other device" was killed.
+
 ### ✅ Shipped Feb 2026 (Forgot Password self-serve)
 - **Backend**: `routes/auth.py` — new `POST /api/auth/forgot-password` (accepts email, per-email rate-limit 3/hr, generates `secrets.token_urlsafe(32)` reset token, stores SHA-256 hash + 60-min expiry in `password_reset_tokens`, emails link via SendGrid). Returns a generic "if that email is registered…" reply either way — no user enumeration. `POST /api/auth/reset-password` (validates token hash + not-expired + not-used, updates `password_hash` via bcrypt, marks token used, deletes all sessions for that user).
 - **Startup indexes** in `server.py`: `password_reset_tokens.token_hash` (unique), `.expires_at`, `password_reset_attempts.email` + `.created_at`.

@@ -322,6 +322,30 @@ async def logout(request: Request, response: Response):
     return {"ok": True}
 
 
+@router.post("/auth/logout-everywhere")
+async def logout_everywhere(user: dict = _current_user(), response: Response = None):
+    """Wipe every active session for the current user across all devices.
+
+    Same session-annihilating behaviour as a successful password reset, but
+    the user keeps their existing password. Handy for the "I lost my phone /
+    used a hotel PC" scenario. Returns the count of sessions killed.
+    """
+    result = await _db.user_sessions.delete_many({"user_id": user["user_id"]})
+    await _db.login_events.insert_one({
+        "user_id": user["user_id"],
+        "action": "logout_everywhere",
+        "sessions_killed": result.deleted_count,
+        "at": _now_iso(),
+    })
+    await _db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"last_logout_at": _now_iso(), "last_logout_everywhere_at": _now_iso()}},
+    )
+    if response is not None:
+        response.delete_cookie("session_token", path="/", samesite="none", secure=True)
+    return {"ok": True, "sessions_killed": result.deleted_count}
+
+
 # ─── Password reset (self-serve) ──────────────────────────────────────
 
 

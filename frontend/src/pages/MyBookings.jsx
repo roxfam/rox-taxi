@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API, money, STATUS_STEPS, STATUS_INDEX, BACKEND_URL } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { Ticket, MapPin, ArrowRight, LogOut, XCircle, Download, CreditCard, Clock, Shield, CalendarPlus, Gift, Copy, Sparkles, IdCard, Trash2 } from "lucide-react";
+import { Ticket, MapPin, ArrowRight, LogOut, XCircle, Download, CreditCard, Clock, Shield, CalendarPlus, Gift, Copy, Sparkles, IdCard, Trash2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import ExtendRentalModal from "./ExtendRentalModal";
 import WalletCard from "./WalletCard";
@@ -16,6 +16,26 @@ export default function MyBookings() {
   const [referral, setReferral] = useState(null);
   const [wallet, setWallet] = useState(null);
   const [walletBusy, setWalletBusy] = useState(false);
+  const [signOutAllBusy, setSignOutAllBusy] = useState(false);
+
+  const signOutEverywhere = async () => {
+    if (!window.confirm(
+      "Sign out of every device that's ever signed into your account?\n\nYou'll need to sign back in on this device after. Do it now if you've lost a phone or used a shared computer."
+    )) return;
+    setSignOutAllBusy(true);
+    try {
+      const r = await fetch(`${API}/auth/logout-everywhere`, { method: "POST", credentials: "include" });
+      if (r.ok) {
+        const d = await r.json();
+        toast.success(`Signed out of ${d.sessions_killed} device${d.sessions_killed === 1 ? "" : "s"}.`);
+        setTimeout(() => { window.location.href = "/login"; }, 900);
+      } else {
+        toast.error("Couldn't sign out. Please try again.");
+      }
+    } catch {
+      toast.error("Couldn't sign out. Please try again.");
+    } finally { setSignOutAllBusy(false); }
+  };
 
   const loadBookings = async () => {
     setFetching(true);
@@ -132,6 +152,16 @@ export default function MyBookings() {
         </div>
         <button onClick={() => logout()} className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] px-4 py-2 text-sm hover:border-[#0B3B5C]" data-testid="mybookings-logout">
           <LogOut className="w-4 h-4" /> Sign out
+        </button>
+        <button
+          onClick={signOutEverywhere}
+          disabled={signOutAllBusy}
+          className="inline-flex items-center gap-2 rounded-full border border-[#FCA5A5] text-[#B91C1C] hover:bg-[#FEF2F2] px-4 py-2 text-sm disabled:opacity-60"
+          data-testid="mybookings-signout-everywhere"
+          title="Kills every active session for your account across all devices"
+        >
+          <ShieldAlert className="w-4 h-4" />
+          {signOutAllBusy ? "Signing out…" : "Sign me out everywhere"}
         </button>
       </div>
 
