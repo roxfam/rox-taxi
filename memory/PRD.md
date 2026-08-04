@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Taxi Add-on Analytics Chart)
+- **New `GET /api/admin/analytics/taxi-addon?days=30` endpoint** (in `routes/analytics.py`) — returns attach rate, add-on revenue, per-day breakdown (sparkline), and top-5 tours ranked by add-on revenue. Excludes cancelled bookings.
+- **`TaxiAddonCard`** rendered on the Admin Dashboard right below the Photo-Nudge card. Recharts BarChart shows daily add-on revenue; KPIs show attach rate + total revenue + $/booking; ranked "Top tours by add-on revenue" table underneath. Auto-refreshes every 30s alongside the rest of the dashboard.
+- **Verified**: With seeded test bookings, endpoint returned `attach_rate: 33.3%`, `addon_revenue: $70`, daily bars for 08-03 (0 addons) and 08-04 (2 addons, $70). Chart renders correctly at 1920×900 (screenshot captured).
+
 ### ✅ Shipped Feb 2026 (Optional Taxi Add-on · Kids Pricing UI · Guest Photo Delete)
 - **Optional taxi add-on** — end-to-end pricing hook so tours can upsell a round-trip taxi at checkout.
   - **Global master switch** in Site Config panel (`taxi_addon_master_enabled`, default ON). When OFF the add-on hides site-wide regardless of per-tour setting.

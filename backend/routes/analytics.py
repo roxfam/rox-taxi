@@ -189,3 +189,89 @@ async def visitors_summary(_admin: str = _require(), hours: int = Query(24, ge=1
         "top_referrers": await _top("referrer"),
         "top_devices": await _top("device", 5),
     }
+
+
+
+@router.get("/admin/analytics/taxi-addon")
+async def taxi_addon_analytics(_admin: str = _require(), days: int = Query(30, ge=1, le=365)):
+    """Attach-rate + revenue for the optional taxi add-on upsell.
+
+    Returns totals for the trailing `days` window plus a per-day sparkline
+    so admin can eyeball whether the upsell is landing after copy tweaks.
+    Only counts paid tour bookings — reservations that never converted are
+    excluded so the attach rate reflects real revenue, not intent.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    base_q = {
+        "service_type": "tour",
+        "status": {"$ne": "cancelled"},
+        "created_at": {"$gte": cutoff},
+    }
+    total_tour_bookings = await _db.bookings.count_documents(base_q)
+    addon_q = {**base_q, "taxi_addon_fee": {"$gt": 0}}
+    addon_bookings = await _db.bookings.count_documents(addon_q)
+
+    # Sum addon revenue across matching bookings.
+    revenue_pipe = [
+        {"$match": addon_q},
+        {"$group": {"_id": None, "revenue": {"$sum": "$taxi_addon_fee"}}},
+    ]
+    revenue = 0.0
+    async for r in _db.bookings.aggregate(revenue_pipe):
+        revenue = float(r.get("revenue") or 0)
+
+    # Per-day timeseries — group by ISO date (YYYY-MM-DD) using $substr on
+    # `created_at`. Works because we store ISO strings, not BSON dates.
+    daily_pipe = [
+        {"$match": base_q},
+        {"$group": {
+            "_id": {"$substr": ["$created_at", 0, 10]},
+            "tours": {"$sum": 1},
+            "addons": {"$sum": {"$cond": [{"$gt": [{"$ifNull": ["$taxi_addon_fee", 0]}, 0]}, 1, 0]}},
+            "revenue": {"$sum": {"$ifNull": ["$taxi_addon_fee", 0]}},
+        }},
+        {"$sort": {"_id": 1}},
+    ]
+    daily = []
+    async for r in _db.bookings.aggregate(daily_pipe):
+        daily.append({
+            "date": r["_id"],
+            "tours": r["tours"],
+            "addons": r["addons"],
+            "revenue": round(float(r.get("revenue") or 0), 2),
+        })
+
+    # Top 5 tours by attach rate (min 3 bookings to avoid noise).
+    per_tour_pipe = [
+        {"$match": base_q},
+        {"$group": {
+            "_id": "$item_name",
+            "tours": {"$sum": 1},
+            "addons": {"$sum": {"$cond": [{"$gt": [{"$ifNull": ["$taxi_addon_fee", 0]}, 0]}, 1, 0]}},
+            "revenue": {"$sum": {"$ifNull": ["$taxi_addon_fee", 0]}},
+        }},
+        {"$sort": {"revenue": -1}},
+        {"$limit": 5},
+    ]
+    by_tour = []
+    async for r in _db.bookings.aggregate(per_tour_pipe):
+        tours = int(r["tours"])
+        addons = int(r["addons"])
+        by_tour.append({
+            "name": r["_id"] or "—",
+            "tours": tours,
+            "addons": addons,
+            "revenue": round(float(r.get("revenue") or 0), 2),
+            "attach_rate": round(100 * addons / max(1, tours), 1),
+        })
+
+    attach_rate = round(100 * addon_bookings / max(1, total_tour_bookings), 1)
+    return {
+        "window_days": days,
+        "total_tour_bookings": total_tour_bookings,
+        "addon_bookings": addon_bookings,
+        "attach_rate": attach_rate,
+        "addon_revenue": round(revenue, 2),
+        "daily": daily,
+        "by_tour": by_tour,
+    }

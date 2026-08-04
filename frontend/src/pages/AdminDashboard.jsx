@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money, BACKEND_URL } from "../lib/api";
-import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp } from "lucide-react";
+import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart } from "recharts";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -22,22 +23,25 @@ export default function AdminDashboard() {
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [authMethods, setAuthMethods] = useState(null);
   const [nudgeStats, setNudgeStats] = useState(null);
+  const [addonStats, setAddonStats] = useState(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [s, b, g, a, n] = await Promise.all([
+      const [s, b, g, a, n, ax] = await Promise.all([
         api.get("/admin/stats"),
         api.get("/admin/bookings"),
         api.get("/admin/gallery/pending").catch(() => ({ data: [] })),
         api.get("/admin/auth/methods-summary").catch(() => ({ data: null })),
         api.get("/admin/photo-nudge-stats").catch(() => ({ data: null })),
+        api.get("/admin/analytics/taxi-addon").catch(() => ({ data: null })),
       ]);
       setStats(s.data);
       setBookings(b.data);
       setPendingPhotos(Array.isArray(g.data) ? g.data.length : 0);
       setAuthMethods(a.data);
       setNudgeStats(n.data);
+      setAddonStats(ax.data);
     } catch (e) {
       if (e?.response?.status === 401) {
         localStorage.removeItem("admin_token");
@@ -173,6 +177,9 @@ export default function AdminDashboard() {
             submissions to fill the "Recent group tours" strip on
             /cruise-groups-nassau with real customer photos. */}
         <PhotoNudgeCard data={nudgeStats} onRecompute={(fresh) => setNudgeStats((prev) => prev ? { ...prev, ...fresh } : fresh)} />
+
+        {/* Taxi add-on attach rate — is the upsell landing? */}
+        <TaxiAddonCard data={addonStats} />
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">
@@ -1132,3 +1139,98 @@ function NudgeStat({ testId, label, value, tone, Icon }) {
     </div>
   );
 }
+
+
+// Taxi add-on attach rate + revenue chart. Reads from
+// GET /admin/analytics/taxi-addon (last 30d). Renders a compact card with:
+//  · Attach-rate + revenue KPIs
+//  · 30-day sparkline (add-on revenue per day)
+//  · Top 5 tours ranked by add-on revenue
+function TaxiAddonCard({ data }) {
+  if (!data) return null;
+  const attach = Number(data.attach_rate || 0);
+  const totalTours = Number(data.total_tour_bookings || 0);
+  const addonBookings = Number(data.addon_bookings || 0);
+  const revenue = Number(data.addon_revenue || 0);
+  const daily = Array.isArray(data.daily) ? data.daily : [];
+  const byTour = Array.isArray(data.by_tour) ? data.by_tour : [];
+  const empty = totalTours === 0;
+  return (
+    <div
+      className="mt-6 rounded-2xl border border-[#D4A94A]/25 bg-white p-5 lg:p-6"
+      data-testid="admin-taxi-addon-card"
+    >
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-xl bg-[#D4A94A]/15 flex items-center justify-center text-[#D4A94A]">
+          <Car className="w-5 h-5" />
+        </div>
+        <div className="flex-1">
+          <div className="serif text-lg text-[#0B3B5C] leading-tight">Taxi add-on performance</div>
+          <div className="text-[11px] text-[#64748B] mt-0.5">
+            Attach rate + revenue for the optional round-trip taxi upsell · last {data.window_days || 30} days · confirmed tour bookings
+          </div>
+        </div>
+      </div>
+
+      {empty ? (
+        <div
+          className="rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC] px-4 py-6 text-center text-sm text-[#64748B]"
+          data-testid="admin-taxi-addon-empty"
+        >
+          No paid tour bookings yet in this window — the chart will populate as bookings come in.
+        </div>
+      ) : (
+        <div className="grid lg:grid-cols-5 gap-5">
+          <div className="lg:col-span-2 space-y-3">
+            <AddonStat testId="addon-attach-rate" label="Attach rate" value={`${attach}%`} sub={`${addonBookings} of ${totalTours} tours`} tone="#D4A94A" />
+            <AddonStat testId="addon-revenue" label="Add-on revenue" value={money(revenue)} sub={addonBookings > 0 ? `${money(revenue / addonBookings)} avg` : "—"} tone="#059669" />
+          </div>
+          <div className="lg:col-span-3">
+            <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold mb-2">Add-on revenue · daily</div>
+            <div className="h-32" data-testid="admin-taxi-addon-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={daily} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#94a3b8" }} tickFormatter={(d) => d.slice(5)} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} width={40} />
+                  <Tooltip
+                    contentStyle={{ background: "#0B3B5C", border: "none", borderRadius: 8, color: "#fff", fontSize: 11 }}
+                    labelStyle={{ color: "#D4A94A" }}
+                    formatter={(v, k) => k === "revenue" ? [`$${Number(v).toFixed(2)}`, "Revenue"] : [v, k === "addons" ? "Add-ons" : "Tours"]}
+                  />
+                  <Bar dataKey="revenue" fill="#D4A94A" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {byTour.length > 0 && (
+        <div className="mt-5 pt-4 border-t border-[#F1F5F9]" data-testid="admin-taxi-addon-by-tour">
+          <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold mb-2">Top tours by add-on revenue</div>
+          <div className="space-y-1.5">
+            {byTour.map((t) => (
+              <div key={t.name} className="flex items-center gap-3 text-xs" data-testid={`admin-taxi-addon-tour-${t.name}`}>
+                <div className="flex-1 min-w-0 truncate text-[#0B3B5C] font-semibold">{t.name}</div>
+                <div className="w-16 text-right text-[#64748B] mono">{t.attach_rate}%</div>
+                <div className="w-14 text-right text-[#94a3b8]">{t.addons}/{t.tours}</div>
+                <div className="w-20 text-right mono font-semibold text-[#D4A94A]">{money(t.revenue)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddonStat({ testId, label, value, sub, tone }) {
+  return (
+    <div className="rounded-xl border border-[#F1F5F9] bg-[#FBF7EF]/40 p-3" data-testid={testId}>
+      <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold">{label}</div>
+      <div className="serif text-2xl mt-0.5" style={{ color: tone }}>{value}</div>
+      <div className="text-[11px] text-[#64748B] mt-0.5">{sub}</div>
+    </div>
+  );
+}
+
