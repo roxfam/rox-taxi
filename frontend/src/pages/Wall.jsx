@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { toPng } from "html-to-image";
-import { Download, Share2, Copy, Camera, Sparkles, ArrowRight, RefreshCw, Instagram, Palette, Sun, Waves, PartyPopper } from "lucide-react";
+import { Download, Share2, Copy, Camera, Sparkles, ArrowRight, RefreshCw, Instagram, Palette, Sun, Waves, PartyPopper, Facebook, MessageCircle, Twitter } from "lucide-react";
 import { api } from "../lib/api";
 
 // Theme presets — each drives the exportable strip's colours. Kept as plain
@@ -63,8 +63,11 @@ export default function Wall() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [themeId, setThemeId] = useState("classic");
+  const [caption, setCaption] = useState("");
+  const [showSocial, setShowSocial] = useState(false);
   const theme = THEMES[themeId] || THEMES.classic;
   const stripRef = useRef(null);
+  const CAPTION_MAX = 60;
 
   useEffect(() => {
     api.get("/gallery")
@@ -82,7 +85,26 @@ export default function Wall() {
   const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${process.env.REACT_APP_BACKEND_URL}${u}`);
 
   const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/wall` : "https://roxtaxi.com/wall";
-  const shareText = "Real Nassau moments from the Rox Taxi guest wall. Book yours 👉";
+  const shareText = caption ? `${caption} — Nassau moments · Rox Taxi` : "Real Nassau moments from the Rox Taxi guest wall. Book yours 👉";
+
+  // Platform-specific share URLs. Instagram has no direct URL API (they
+  // deliberately don't allow it), so we surface a "Save image → then IG
+  // Story" hint instead.
+  const socialTargets = useMemo(() => {
+    const u = encodeURIComponent(shareUrl);
+    const t = encodeURIComponent(shareText);
+    return [
+      { id: "facebook",  label: "Facebook",  color: "#1877F2", Icon: Facebook,      url: `https://www.facebook.com/sharer/sharer.php?u=${u}&quote=${t}` },
+      { id: "whatsapp",  label: "WhatsApp",  color: "#25D366", Icon: MessageCircle, url: `https://wa.me/?text=${t}%20${u}` },
+      { id: "twitter",   label: "X",         color: "#000000", Icon: Twitter,       url: `https://twitter.com/intent/tweet?text=${t}&url=${u}` },
+      { id: "messenger", label: "Messenger", color: "#0084FF", Icon: MessageCircle, url: `https://www.facebook.com/dialog/send?link=${u}&app_id=140586622674265&redirect_uri=${u}` },
+    ];
+  }, [shareUrl, shareText]);
+
+  const openSocial = (target) => {
+    // window.open with a name so mobile browsers respect popup behaviour
+    window.open(target.url, "_blank", "noopener,noreferrer,width=680,height=680");
+  };
 
   const savePNG = async () => {
     if (!stripRef.current || saving) return;
@@ -160,6 +182,14 @@ export default function Wall() {
               {saving ? "Rendering…" : "Save as image"}
             </button>
             <button
+              onClick={() => setShowSocial((v) => !v)}
+              data-testid="wall-share-to-social"
+              aria-expanded={showSocial}
+              className="inline-flex items-center gap-2 rounded-full bg-[#D4A94A]/15 border border-[#D4A94A]/40 text-[#D4A94A] font-bold text-sm px-4 py-3 hover:bg-[#D4A94A]/25 active:scale-95 backdrop-blur"
+            >
+              <Share2 className="w-4 h-4" /> Share to Social
+            </button>
+            <button
               onClick={shareNative}
               data-testid="wall-share"
               className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/25 text-white font-bold text-sm px-4 py-3 hover:bg-white/20 active:scale-95 backdrop-blur"
@@ -174,6 +204,48 @@ export default function Wall() {
               <Copy className="w-4 h-4" /> Copy link
             </button>
           </div>
+
+          {/* Social platform tray — expands under the CTAs when guests hit
+              "Share to Social". Each button opens the platform's official
+              share dialog in a popup. Instagram gets a helper hint since
+              they don't offer a public share-URL API. */}
+          {showSocial && (
+            <div
+              data-testid="wall-social-tray"
+              className="mt-4 mx-auto max-w-md rounded-2xl bg-white/8 border border-white/20 backdrop-blur px-4 py-4"
+            >
+              <div className="text-[10px] tracking-[0.28em] uppercase text-white/70 font-black mb-3">Share to</div>
+              <div className="flex items-center justify-center gap-2 flex-wrap">
+                {socialTargets.map((s) => {
+                  const Ico = s.Icon;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => openSocial(s)}
+                      data-testid={`wall-social-${s.id}`}
+                      className="inline-flex items-center gap-2 rounded-full text-white font-bold text-sm px-4 py-2.5 hover:opacity-90 active:scale-95 transition-all"
+                      style={{ background: s.color }}
+                    >
+                      <Ico className="w-4 h-4" /> {s.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => { savePNG(); toast("Save the image, then paste it into a new IG Story."); }}
+                  data-testid="wall-social-instagram"
+                  className="inline-flex items-center gap-2 rounded-full text-white font-bold text-sm px-4 py-2.5 hover:opacity-90 active:scale-95 transition-all"
+                  style={{ background: "linear-gradient(135deg, #F58529 0%, #DD2A7B 50%, #8134AF 100%)" }}
+                >
+                  <Instagram className="w-4 h-4" /> Instagram
+                </button>
+              </div>
+              <div className="mt-3 text-[10px] text-white/60 text-center leading-relaxed">
+                Instagram doesn't support direct sharing — hit the button to save the image, then drop it into a new Story.
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -216,13 +288,38 @@ export default function Wall() {
               </div>
             </div>
 
+            {/* Custom caption input — lands under the strip's tagline before
+                export. Max 60 chars so the layout stays balanced. */}
+            <div className="mb-5" data-testid="wall-caption-block">
+              <div className="text-[10px] tracking-[0.28em] uppercase text-white/60 font-black mb-2 text-center">
+                Add your caption (optional)
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value.slice(0, CAPTION_MAX))}
+                  placeholder="e.g. Sunset with the crew · Ally, Marco & Jess"
+                  maxLength={CAPTION_MAX}
+                  data-testid="wall-caption-input"
+                  className="w-full rounded-full bg-white/10 border border-white/20 text-white placeholder-white/40 text-sm px-4 py-2.5 pr-14 focus:outline-none focus:border-[#D4A94A] focus:bg-white/15 transition-colors"
+                />
+                <span
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] tabular-nums font-bold ${caption.length >= CAPTION_MAX - 5 ? "text-[#F97316]" : "text-white/40"}`}
+                  data-testid="wall-caption-counter"
+                >
+                  {caption.length}/{CAPTION_MAX}
+                </span>
+              </div>
+            </div>
+
             <div
               ref={stripRef}
               data-testid="wall-strip"
               className="rounded-[28px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.5)] transition-[background] duration-500"
               style={{ aspectRatio: "9 / 16", background: theme.gradient }}
             >
-              <StripHeader theme={theme} />
+              <StripHeader theme={theme} caption={caption} />
               <StripMosaic photos={photos} resolveUrl={resolveUrl} theme={theme} />
               <StripFooter theme={theme} />
             </div>
@@ -255,7 +352,7 @@ export default function Wall() {
 }
 
 
-function StripHeader({ theme }) {
+function StripHeader({ theme, caption }) {
   return (
     <div className="px-5 pt-6 pb-4 text-center">
       <div
@@ -267,6 +364,15 @@ function StripHeader({ theme }) {
       <div className="serif text-[26px] leading-[1.1] mt-3" style={{ color: theme.headerText }}>
         {theme.tagline1}<br /><span style={{ color: theme.accent }}>{theme.tagline2}</span>
       </div>
+      {caption && (
+        <div
+          data-testid="wall-strip-caption"
+          className="mt-2 text-[12px] italic font-medium leading-snug px-2"
+          style={{ color: theme.subText }}
+        >
+          &ldquo;{caption}&rdquo;
+        </div>
+      )}
     </div>
   );
 }

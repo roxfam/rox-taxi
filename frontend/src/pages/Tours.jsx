@@ -3,7 +3,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
 import Seo from "../components/Seo";
-import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown, MapPin, Star, Users } from "lucide-react";
+import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown, MapPin, Star, Users, Ship, X as XIcon, CheckCircle2 } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
 // Inject an ItemList of Product schemas per tour so Google can pull them
@@ -60,6 +60,48 @@ const SORTS = [
   { key: "duration", label: "Shortest first", cmp: (a, b) => (parseFloat(a.duration) || 99) - (parseFloat(b.duration) || 99) },
 ];
 
+// Cruise-ship port hours in Nassau — sourced from typical published itineraries
+// for each line's Bahamas-calling ships. Ranges are conservative (earliest
+// realistic arrival, latest realistic all-aboard). Guests can also pick
+// "Generic" for a rough 8am–4pm window when their exact ship isn't listed.
+// The tour picker filters excursions whose `duration` fits INSIDE this window
+// with a 90-minute safety buffer (transfer + boarding + queue).
+const CRUISE_SHIPS = [
+  { id: "generic",       label: "I'm on a cruise (generic)",         line: "Any",              arrive: "08:00", depart: "17:00" },
+  { id: "carnival",      label: "Carnival (Sunrise · Elation · etc)", line: "Carnival",         arrive: "08:00", depart: "16:30" },
+  { id: "royal",         label: "Royal Caribbean (Symphony · Utopia)", line: "Royal Caribbean", arrive: "07:00", depart: "18:00" },
+  { id: "msc",           label: "MSC (Meraviglia · Seascape)",         line: "MSC Cruises",     arrive: "08:00", depart: "17:00" },
+  { id: "norwegian",     label: "Norwegian (Escape · Joy · Getaway)",  line: "NCL",             arrive: "08:00", depart: "17:00" },
+  { id: "disney",        label: "Disney (Magic · Wish · Dream)",       line: "Disney",          arrive: "09:00", depart: "17:00" },
+  { id: "celebrity",     label: "Celebrity (Reflection · Silhouette)", line: "Celebrity",       arrive: "08:00", depart: "17:00" },
+  { id: "princess",      label: "Princess (Enchanted · Regal)",        line: "Princess",        arrive: "07:00", depart: "16:00" },
+  { id: "holland",       label: "Holland America (Rotterdam · Nieuw)", line: "Holland America", arrive: "08:00", depart: "17:00" },
+  { id: "virgin",        label: "Virgin Voyages (Scarlet · Valiant)",  line: "Virgin Voyages",  arrive: "09:00", depart: "22:00" },
+  { id: "not-cruising",  label: "Not on a cruise",                     line: "-",               arrive: null,    depart: null },
+];
+
+// Duration strings in the catalog look like "6 hours", "2.5 hours", "30
+// minutes", "1 hour", "7 hours". Return the tour length in minutes, or 0
+// when we can't parse (safest — 0 always fits any window).
+function parseDurationMinutes(str) {
+  if (!str || typeof str !== "string") return 0;
+  const s = str.toLowerCase();
+  const num = parseFloat(s.replace(/[^\d.]/g, "")) || 0;
+  if (s.includes("min")) return Math.round(num);
+  if (s.includes("hour") || s.includes("hr")) return Math.round(num * 60);
+  return Math.round(num * 60); // default assume hours
+}
+
+// Turns "08:00"/"17:00" into a total window length in minutes. Handles same-day windows only.
+function portWindowMinutes(ship) {
+  if (!ship?.arrive || !ship?.depart) return 0;
+  const [ah, am] = ship.arrive.split(":").map(Number);
+  const [dh, dm] = ship.depart.split(":").map(Number);
+  return Math.max(0, (dh * 60 + dm) - (ah * 60 + am));
+}
+
+const PORT_BUFFER_MIN = 90; // transfer + boarding queue safety net
+
 // The Attraction Discovery Hub — 4 curated micro-landing pages we own.
 // Each card links to /tours/<slug>. `cheapest_taxi_route_id` is used to pull
 // live pricing from GET /api/taxi-services so the "from $XX" chip stays fresh.
@@ -104,6 +146,20 @@ export default function Tours() {
   const [selected, setSelected] = useState(null);
   const [params] = useSearchParams();
   const [sortKey, setSortKey] = useState("featured");
+  // Cruise-ship filter — persisted so guests who reload after picking their
+  // ship keep the filtered view. `null` means "don't filter".
+  const [shipId, setShipId] = useState(() => {
+    try { return localStorage.getItem("rox_cruise_ship") || ""; } catch { return ""; }
+  });
+  const activeShip = CRUISE_SHIPS.find((s) => s.id === shipId) || null;
+  const [hideNotFitting, setHideNotFitting] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (shipId) localStorage.setItem("rox_cruise_ship", shipId);
+      else localStorage.removeItem("rox_cruise_ship");
+    } catch { /* private mode */ }
+  }, [shipId]);
 
   useToursJsonLd(tours);
 
@@ -130,6 +186,23 @@ export default function Tours() {
     const cmp = SORTS.find((s) => s.key === sortKey)?.cmp;
     return cmp ? [...tours].sort(cmp) : tours;
   }, [tours, sortKey]);
+
+  // Annotate every tour with a `fitsPort` flag driven by the active cruise
+  // ship's arrive→depart window minus a 90-minute safety buffer. Tours with
+  // no parseable duration default to `true` so we never hide them by accident.
+  const filteredTours = useMemo(() => {
+    const budget = activeShip && activeShip.arrive
+      ? Math.max(0, portWindowMinutes(activeShip) - PORT_BUFFER_MIN)
+      : null;
+    const annotated = sortedTours.map((t) => {
+      const dur = parseDurationMinutes(t.duration);
+      const fits = budget == null ? true : (dur === 0 || dur <= budget);
+      return { ...t, __fits: fits, __minutes: dur };
+    });
+    return hideNotFitting ? annotated.filter((t) => t.__fits) : annotated;
+  }, [sortedTours, activeShip, hideNotFitting]);
+
+  const fittingCount = filteredTours.filter((t) => t.__fits).length;
 
   return (
     <div data-testid="tours-page">
@@ -350,9 +423,26 @@ export default function Tours() {
             Full-day <em className="italic font-black text-[#D4A94A]">tours & adventures</em>.
           </h2>
         </div>
+
+        {/* Cruise-ship filter — picks the guest's ship and auto-suggests
+            excursions that fit inside their port window (arrival → all-aboard
+            minus a 90-minute transfer + boarding buffer). */}
+        <CruiseShipPicker
+          shipId={shipId}
+          setShipId={setShipId}
+          activeShip={activeShip}
+          fittingCount={fittingCount}
+          totalCount={sortedTours.length}
+          hideNotFitting={hideNotFitting}
+          setHideNotFitting={setHideNotFitting}
+        />
+
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="text-sm text-[#64748B]" data-testid="tours-count">
-            <span className="font-semibold text-[#0B3B5C]">{sortedTours.length}</span> excursion{sortedTours.length === 1 ? "" : "s"}
+            <span className="font-semibold text-[#0B3B5C]">{filteredTours.length}</span> excursion{filteredTours.length === 1 ? "" : "s"}
+            {activeShip?.arrive && (
+              <span className="ml-2 text-[11px] text-[#D4A94A]">· <span className="font-bold">{fittingCount}</span> fit your port hours</span>
+            )}
           </div>
           <div className="inline-flex items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-white p-1 text-xs" data-testid="tours-sort">
             <ArrowUpDown className="w-3.5 h-3.5 text-[#64748B] ml-2" />
@@ -372,13 +462,31 @@ export default function Tours() {
       </section>
 
       <section className="max-w-7xl mx-auto px-6 lg:px-10 pb-24 grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {sortedTours.map((t) => (
-          <div key={t.id} className="group rounded-2xl overflow-hidden bg-white border border-[#E2E8F0] hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(212,169,74,0.15)] transition-transform" data-testid={`tour-card-${t.id}`}>
+        {filteredTours.map((t) => (
+          <div key={t.id} className={`group rounded-2xl overflow-hidden bg-white border transition-transform ${t.__fits ? "border-[#E2E8F0] hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(212,169,74,0.15)]" : "border-dashed border-[#E2E8F0] opacity-70"}`} data-testid={`tour-card-${t.id}`}>
             <div className={`aspect-[4/3] overflow-hidden relative ${t.id === "junkanoo-party-bus" ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C]" : ""}`}>
               <img src={t.image_url} alt={t.name} className={`w-full h-full ${t.id === "junkanoo-party-bus" ? "object-contain p-2 scale-125" : "object-cover"} group-hover:scale-105 transition-transform duration-500`} />
               <div className="absolute bottom-3 left-3 glass rounded-full px-3 py-1 text-xs text-[#0B3B5C] font-semibold flex items-center gap-1">
                 <Clock className="w-3 h-3" /> {t.duration}
               </div>
+              {activeShip?.arrive && t.__fits && (
+                <div
+                  className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-[#059669] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 shadow-md"
+                  data-testid={`tour-fits-badge-${t.id}`}
+                  title={`Fits your ${activeShip.line} port window`}
+                >
+                  <CheckCircle2 className="w-3 h-3" /> Fits your port
+                </div>
+              )}
+              {activeShip?.arrive && !t.__fits && (
+                <div
+                  className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-[#DC2626] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 shadow-md"
+                  data-testid={`tour-no-fit-badge-${t.id}`}
+                  title="Tour is longer than your ship's port window minus 90-min boarding buffer"
+                >
+                  Too long for port
+                </div>
+              )}
             </div>
             <div className="p-6">
               <h3 className="serif text-2xl text-[#0B3B5C] leading-tight">{t.name}</h3>
@@ -432,6 +540,90 @@ export default function Tours() {
           )}
         />
       )}
+    </div>
+  );
+}
+
+
+// ── Cruise Ship Picker ─────────────────────────────────────────────────
+// Standalone so the filter UI can be dropped in above the sort row without
+// bloating the main Tours component. Fully controlled — parent owns state.
+function CruiseShipPicker({ shipId, setShipId, activeShip, fittingCount, totalCount, hideNotFitting, setHideNotFitting }) {
+  const budget = activeShip && activeShip.arrive
+    ? Math.max(0, portWindowMinutes(activeShip) - PORT_BUFFER_MIN)
+    : null;
+  const budgetHours = budget != null ? (budget / 60).toFixed(1) : null;
+
+  return (
+    <div
+      className="mb-6 rounded-2xl border border-[#D4A94A]/30 bg-gradient-to-r from-[#0B3B5C] via-[#0B192C] to-[#0B192C] text-white p-5 sm:p-6"
+      data-testid="cruise-ship-picker"
+    >
+      <div className="flex items-start gap-4 flex-wrap">
+        <div className="w-11 h-11 rounded-xl bg-[#D4A94A]/20 text-[#D4A94A] flex items-center justify-center flex-shrink-0">
+          <Ship className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-[260px]">
+          <div className="text-[10px] tracking-[0.32em] uppercase text-[#D4A94A] font-black">
+            Cruising in? Pick your ship
+          </div>
+          <div className="serif text-lg sm:text-xl leading-tight mt-1">
+            We'll auto-flag every excursion that fits your port hours.
+          </div>
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <select
+              value={shipId}
+              onChange={(e) => setShipId(e.target.value)}
+              data-testid="cruise-ship-select"
+              aria-label="Cruise ship"
+              className="rounded-full bg-white text-[#0B192C] text-sm font-semibold px-4 py-2 pr-9 border border-white/20 focus:outline-none focus:ring-2 focus:ring-[#D4A94A] cursor-pointer"
+            >
+              <option value="">— Choose your ship —</option>
+              {CRUISE_SHIPS.map((s) => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+            {shipId && (
+              <button
+                type="button"
+                onClick={() => { setShipId(""); setHideNotFitting(false); }}
+                data-testid="cruise-ship-clear"
+                className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-white/70 hover:text-white bg-white/10 border border-white/20 rounded-full px-3 py-1.5"
+              >
+                <XIcon className="w-3 h-3" /> Clear
+              </button>
+            )}
+          </div>
+
+          {activeShip?.arrive && (
+            <div className="mt-3 flex items-center gap-3 flex-wrap text-[12px]">
+              <span className="rounded-full bg-white/10 border border-white/20 px-3 py-1">
+                Arrive <span className="font-bold text-[#D4A94A]">{activeShip.arrive}</span>
+                <span className="mx-2 text-white/40">→</span>
+                All-aboard <span className="font-bold text-[#D4A94A]">{activeShip.depart}</span>
+              </span>
+              <span className="rounded-full bg-[#059669]/20 border border-[#059669]/40 text-[#6EE7B7] px-3 py-1 font-bold">
+                {fittingCount} of {totalCount} tours fit
+              </span>
+              <span className="text-white/60 text-[11px]">
+                Usable window: <span className="text-white font-bold">{budgetHours}h</span> (after 90-min boarding buffer)
+              </span>
+            </div>
+          )}
+
+          {activeShip?.arrive && (
+            <label className="mt-3 inline-flex items-center gap-2 text-[12px] text-white/80 cursor-pointer select-none" data-testid="cruise-ship-hide-toggle">
+              <input
+                type="checkbox"
+                checked={hideNotFitting}
+                onChange={(e) => setHideNotFitting(e.target.checked)}
+                className="accent-[#D4A94A]"
+              />
+              Hide tours that don't fit
+            </label>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
