@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
-import { Images, X, MapPin, Car, ShipWheel, MapPinned, Camera, Upload, CheckCircle2, Loader2 } from "lucide-react";
+import { Images, X, MapPin, Car, ShipWheel, MapPinned, Camera, Upload, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 // Filter chips mirror the site's primary IA (Nassau/Home = "the place",
@@ -89,6 +90,27 @@ export default function Gallery() {
 
       {/* Filter chips */}
       <section className="max-w-7xl mx-auto px-6 lg:px-10 pt-8">
+        {/* Wall of Moments teaser — screenshot-and-share strip */}
+        <Link
+          to="/wall"
+          data-testid="gallery-wall-cta"
+          className="mb-6 group flex items-center gap-4 rounded-2xl border border-[#D4A94A]/40 bg-gradient-to-r from-[#0B3B5C] via-[#0B192C] to-[#0B192C] text-white px-5 py-4 hover:border-[#D4A94A] transition-all overflow-hidden"
+        >
+          <div className="w-11 h-11 rounded-xl bg-[#D4A94A] text-[#0B192C] flex items-center justify-center flex-shrink-0 group-hover:rotate-[8deg] transition-transform">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">New — Wall of moments</div>
+            <div className="serif text-lg leading-tight mt-0.5">
+              Grab a shareable strip of our featured guests
+            </div>
+            <div className="text-[11px] text-white/60 mt-0.5">Save it as an image, drop it in your IG story.</div>
+          </div>
+          <span className="hidden sm:inline-flex text-xs font-black tracking-widest uppercase rounded-full bg-[#D4A94A] text-[#0B192C] px-4 py-2 group-hover:bg-[#E5BC5A]">
+            Open →
+          </span>
+        </Link>
+
         <div className="flex items-center gap-2 flex-wrap" data-testid="gallery-filters">
           {FILTERS.map(({ key, label, Icon }) => {
             const count = key === "all" ? photos.length : photos.filter((p) => p.category === key).length;

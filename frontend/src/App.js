@@ -15,6 +15,7 @@ import About from "./pages/About";
 import Groups from "./pages/Groups";
 import WeddingBuilder from "./pages/WeddingBuilder";
 import Gallery from "./pages/Gallery";
+import Wall from "./pages/Wall";
 import Ardastra from "./pages/attractions/Ardastra";
 import Atlantis from "./pages/attractions/Atlantis";
 import BlueLagoon from "./pages/attractions/BlueLagoon";
@@ -74,6 +75,7 @@ function AppRouter() {
       <Route path="/groups" element={<CustomerShell><Groups /></CustomerShell>} />
       <Route path="/wedding-builder" element={<CustomerShell><WeddingBuilder /></CustomerShell>} />
       <Route path="/gallery" element={<CustomerShell><Gallery /></CustomerShell>} />
+      <Route path="/wall" element={<CustomerShell><Wall /></CustomerShell>} />
       <Route path="/travel-to-nassau" element={<CustomerShell><TravelToNassau /></CustomerShell>} />
       <Route path="/cruise-groups-nassau" element={<CustomerShell><CruiseGroupsNassau /></CustomerShell>} />
       <Route path="/tours/ardastra" element={<CustomerShell><Ardastra /></CustomerShell>} />

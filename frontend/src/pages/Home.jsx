@@ -266,13 +266,22 @@ function FeaturedGuestWall() {
             <div className="text-xs tracking-[0.3em] uppercase text-[#D4A94A] font-bold">Featured guests</div>
             <h2 className="serif text-4xl sm:text-5xl text-[#0B3B5C] mt-2 leading-tight">Real moments, hand-picked.</h2>
           </div>
-          <Link
-            to="/gallery"
-            className="text-sm font-bold text-[#0B3B5C] hover:text-[#D4A94A] transition-colors inline-flex items-center gap-1"
-            data-testid="home-featured-wall-see-all"
-          >
-            See full gallery <ArrowRight className="w-4 h-4" />
-          </Link>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Link
+              to="/wall"
+              className="text-xs font-black tracking-widest uppercase rounded-full bg-[#0B3B5C] text-white px-4 py-2 hover:bg-[#132a4a] active:scale-95 inline-flex items-center gap-1.5"
+              data-testid="home-featured-wall-share"
+            >
+              Share the wall <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+            <Link
+              to="/gallery"
+              className="text-sm font-bold text-[#0B3B5C] hover:text-[#D4A94A] transition-colors inline-flex items-center gap-1"
+              data-testid="home-featured-wall-see-all"
+            >
+              See full gallery <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {pinned.map((p, i) => (
