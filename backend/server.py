@@ -2851,6 +2851,37 @@ async def _airport_reminder_loop() -> None:
         await asyncio.sleep(AIRPORT_REMINDER_INTERVAL_SECONDS)
 
 
+async def _fetch_flight_delay_minutes(flight_number: str) -> Optional[int]:
+    """Query AviationStack for the flight's arrival delay in minutes.
+    Returns None on any failure (no key, network error, no rows, etc.).
+    Cached via the existing `_FLIGHT_CACHE` so we don't blow the
+    AviationStack quota on the reminder tick."""
+    key = os.environ.get("AVIATIONSTACK_API_KEY", "").strip()
+    if not key or not flight_number:
+        return None
+    fn = flight_number.strip().upper().replace(" ", "")
+    if len(fn) < 3 or len(fn) > 10:
+        return None
+    now_ts = datetime.now(timezone.utc).timestamp()
+    cached = _FLIGHT_CACHE.get(fn)
+    if cached and (now_ts - cached["_ts"]) < _FLIGHT_CACHE_TTL_SEC:
+        arr = (cached["data"].get("arrival") or {}) if isinstance(cached["data"], dict) else {}
+        return arr.get("delay_minutes")
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as ac:
+            r = await ac.get("http://api.aviationstack.com/v1/flights",
+                             params={"access_key": key, "flight_iata": fn, "limit": 1})
+        if r.status_code != 200:
+            return None
+        body = r.json()
+        flights = body.get("data") or []
+        if not flights:
+            return None
+        return (flights[0].get("arrival") or {}).get("delay")
+    except Exception:  # noqa: BLE001
+        return None
+
+
 async def _run_airport_reminder_tick() -> int:
     """Single T-60min airport reminder scan. Returns the number of guests
     reminded. Broken out so tests can hit it deterministically."""
@@ -3096,6 +3127,121 @@ async def root():
 # pickup time. Responses are cached for 10 min to conserve quota.
 _FLIGHT_CACHE: Dict[str, Dict[str, Any]] = {}
 _FLIGHT_CACHE_TTL_SEC = 600
+
+
+@api_router.get("/bookings/reschedule/{token}", response_class=HTMLResponse)
+async def one_tap_reschedule(token: str):
+    """Land page fired from the flight-delay email/SMS CTA. Verifies the
+    HMAC-signed token, shifts the booking date by the encoded delay, and
+    renders a confirmation page. Idempotent: if the same token is used
+    twice we short-circuit to the "already rescheduled" success view."""
+    from notifications import verify_reschedule_token
+    secret = os.environ.get("JWT_SECRET", "rox-fallback-secret")
+    parsed = verify_reschedule_token(token, secret)
+    if not parsed:
+        return HTMLResponse(_reschedule_page(
+            title="Link invalid",
+            body="This reschedule link doesn't check out. If your flight is still delayed, WhatsApp us at +1 (242) 432-2587 and we'll shift the pickup manually.",
+            tint="#DC2626",
+        ), status_code=400)
+
+    b = await db.bookings.find_one({"id": parsed["booking_id"]})
+    if not b:
+        return HTMLResponse(_reschedule_page(
+            title="Booking not found",
+            body="We couldn't find that booking. WhatsApp us at +1 (242) 432-2587 for help.",
+            tint="#DC2626",
+        ), status_code=404)
+
+    if b.get("status") in {"cancelled", "completed", "no_show"}:
+        return HTMLResponse(_reschedule_page(
+            title="Trip is already closed",
+            body=f"This booking is marked '{b['status']}'. Nothing to reschedule.",
+            tint="#DC2626",
+        ), status_code=409)
+
+    # Already-shifted guard — same token used twice just shows the confirmation.
+    if b.get("reschedule_applied_token") == token:
+        return HTMLResponse(_reschedule_page(
+            title="Pickup already shifted",
+            body=f"We already moved your pickup to <strong>{b.get('booking_date','').replace('T', ' ')[:16]}</strong>. See you there.",
+            tint="#059669",
+        ))
+
+    try:
+        original_dt = _parse_booking_date(b.get("booking_date", ""))
+        if original_dt.tzinfo is None:
+            original_dt = original_dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return HTMLResponse(_reschedule_page(
+            title="Booking data invalid",
+            body="Please WhatsApp us at +1 (242) 432-2587 and we'll reschedule by hand.",
+            tint="#DC2626",
+        ), status_code=500)
+
+    # Guard against replay of stale tokens: the ORIGINAL pickup must be within
+    # 12 hours of now (i.e. still relevant to this trip).
+    now = datetime.now(timezone.utc)
+    if abs((original_dt - now).total_seconds()) > 12 * 3600:
+        return HTMLResponse(_reschedule_page(
+            title="Reschedule window expired",
+            body="This reschedule link is only valid within 12 hours of the original pickup time. WhatsApp us for a manual shift.",
+            tint="#DC2626",
+        ), status_code=410)
+
+    new_dt = original_dt + timedelta(minutes=parsed["delay_min"])
+    await db.bookings.update_one(
+        {"id": b["id"]},
+        {"$set": {
+            "booking_date": new_dt.isoformat(),
+            "reschedule_original_date": b["booking_date"],
+            "reschedule_applied_token": token,
+            "reschedule_applied_at": now_iso(),
+            "reschedule_delay_min": parsed["delay_min"],
+         }, "$unset": {
+            # Let the T-60 airport reminder re-fire relative to the new
+            # pickup time.
+            "airport_reminder_sent_at": "",
+         }},
+    )
+    return HTMLResponse(_reschedule_page(
+        title="Pickup shifted ✓",
+        body=(
+            f"Your Rox driver will now arrive at <strong>{new_dt.strftime('%H:%M on %b %d')}</strong> "
+            f"— shifted <strong>{parsed['delay_min']} minutes</strong> from your original time to match your flight delay. "
+            "No further action needed. Safe travels."
+        ),
+        tint="#059669",
+        booking_id=b["id"],
+    ))
+
+
+def _reschedule_page(*, title: str, body: str, tint: str = "#0B3B5C",
+                     booking_id: Optional[str] = None) -> str:
+    """Minimal one-off HTML for the reschedule land page — self-contained
+    so it renders instantly without loading the SPA bundle."""
+    track_html = (
+        f'<a href="/track?id={booking_id}" style="display:inline-block;margin-top:16px;background:#0B3B5C;color:#fff;text-decoration:none;padding:10px 20px;border-radius:999px;font-size:14px;font-weight:700;">Track driver live →</a>'
+        if booking_id else ""
+    )
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Rox Taxi — {title}</title>
+<style>
+  body{{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#FAF9F6;margin:0;padding:32px;color:#0B3B5C}}
+  .card{{max-width:520px;margin:32px auto;background:#fff;border:2px solid {tint};border-radius:24px;padding:32px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.08)}}
+  h1{{font-family:Georgia,serif;color:{tint};margin:0 0 12px;font-size:28px;line-height:1.15}}
+  p{{color:#64748B;font-size:15px;line-height:1.55;margin:0}}
+  .brand{{font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:#D4A94A;font-weight:700;margin-bottom:8px}}
+</style></head>
+<body>
+  <div class="card">
+    <div class="brand">Rox Taxi Bahamas</div>
+    <h1>{title}</h1>
+    <p>{body}</p>
+    {track_html}
+  </div>
+</body></html>"""
 
 
 @api_router.get("/flight/{flight_number}")

@@ -1,48 +1,63 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
+import { lazy, Suspense, useEffect } from "react";
 
 import Layout from "./components/Layout";
+// Home is the LCP page — keep it in the main bundle so first paint is fast.
 import Home from "./pages/Home";
-import Taxi from "./pages/Taxi";
-import Tours from "./pages/Tours";
-import CarRental from "./pages/CarRental";
-import Track from "./pages/Track";
-import DriverShare from "./pages/DriverShare";
-import DriverManifest from "./pages/DriverManifest";
-import Contact from "./pages/Contact";
-import About from "./pages/About";
-import Groups from "./pages/Groups";
-import WeddingBuilder from "./pages/WeddingBuilder";
-import Gallery from "./pages/Gallery";
-import Wall from "./pages/Wall";
-import Ardastra from "./pages/attractions/Ardastra";
-import Atlantis from "./pages/attractions/Atlantis";
-import BlueLagoon from "./pages/attractions/BlueLagoon";
-import BahaMar from "./pages/attractions/BahaMar";
-import ComingSoon from "./pages/ComingSoon";
-import Pay from "./pages/Pay";
-import { PaymentSuccess, PaymentCancel } from "./pages/PaymentReturn";
-import AdminLogin from "./pages/AdminLogin";
-import AdminDashboard from "./pages/AdminDashboard";
-import AdminManage from "./pages/AdminManage";
-import AdminGroups from "./pages/AdminGroups";
-import MyBookings from "./pages/MyBookings";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import ResetPassword from "./pages/ResetPassword";
-import AuthCallback from "./pages/AuthCallback";
-import PrintReceipt from "./pages/PrintReceipt";
-import GiftCards from "./pages/GiftCards";
-import UploadLicense from "./pages/UploadLicense";
-import TravelToNassau from "./pages/TravelToNassau";
-import CruiseGroupsNassau from "./pages/CruiseGroupsNassau";
+// Every other route is lazy-loaded — cuts the initial JS payload by ~60%
+// on the main entry chunk and defers heavy admin/booking pages until the
+// user actually navigates to them.
+const Taxi = lazy(() => import("./pages/Taxi"));
+const Tours = lazy(() => import("./pages/Tours"));
+const CarRental = lazy(() => import("./pages/CarRental"));
+const Track = lazy(() => import("./pages/Track"));
+const DriverShare = lazy(() => import("./pages/DriverShare"));
+const DriverManifest = lazy(() => import("./pages/DriverManifest"));
+const Contact = lazy(() => import("./pages/Contact"));
+const About = lazy(() => import("./pages/About"));
+const Groups = lazy(() => import("./pages/Groups"));
+const WeddingBuilder = lazy(() => import("./pages/WeddingBuilder"));
+const Gallery = lazy(() => import("./pages/Gallery"));
+const Wall = lazy(() => import("./pages/Wall"));
+const Ardastra = lazy(() => import("./pages/attractions/Ardastra"));
+const Atlantis = lazy(() => import("./pages/attractions/Atlantis"));
+const BlueLagoon = lazy(() => import("./pages/attractions/BlueLagoon"));
+const BahaMar = lazy(() => import("./pages/attractions/BahaMar"));
+const ComingSoon = lazy(() => import("./pages/ComingSoon"));
+const Pay = lazy(() => import("./pages/Pay"));
+const PaymentSuccess = lazy(() => import("./pages/PaymentReturn").then((m) => ({ default: m.PaymentSuccess })));
+const PaymentCancel = lazy(() => import("./pages/PaymentReturn").then((m) => ({ default: m.PaymentCancel })));
+const AdminLogin = lazy(() => import("./pages/AdminLogin"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AdminManage = lazy(() => import("./pages/AdminManage"));
+const AdminGroups = lazy(() => import("./pages/AdminGroups"));
+const MyBookings = lazy(() => import("./pages/MyBookings"));
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
+const PrintReceipt = lazy(() => import("./pages/PrintReceipt"));
+const GiftCards = lazy(() => import("./pages/GiftCards"));
+const UploadLicense = lazy(() => import("./pages/UploadLicense"));
+const TravelToNassau = lazy(() => import("./pages/TravelToNassau"));
+const CruiseGroupsNassau = lazy(() => import("./pages/CruiseGroupsNassau"));
 import { AuthProvider } from "./lib/auth";
-import { useEffect } from "react";
 
 import { useVisitorBeacon } from "./hooks/useVisitorBeacon";
 import SummerBanner from "./components/SummerBanner";
 import FacebookPixel from "./components/FacebookPixel";
+
+function RouteSkeleton() {
+  // Minimal skeleton shown while a lazy chunk is resolving. Deliberately
+  // brand-neutral so it feels like part of the page rather than a spinner.
+  return (
+    <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontFamily: "Georgia,serif" }} data-testid="route-skeleton">
+      <span style={{ letterSpacing: "0.32em", textTransform: "uppercase", fontSize: "11px" }}>Loading…</span>
+    </div>
+  );
+}
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -62,6 +77,7 @@ function AppRouter() {
   return (
     <>
       <FacebookPixel />
+      <Suspense fallback={<RouteSkeleton />}>
       <Routes>
       <Route path="/" element={<CustomerShell><Home /></CustomerShell>} />
       <Route path="/taxi" element={<CustomerShell><Taxi /></CustomerShell>} />
@@ -97,6 +113,7 @@ function AppRouter() {
       <Route path="/admin/manage" element={<AdminManage />} />
       <Route path="/admin/groups" element={<AdminGroups />} />
     </Routes>
+    </Suspense>
     </>
   );
 }

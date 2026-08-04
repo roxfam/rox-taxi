@@ -5,6 +5,8 @@ against the booking (used for admin dashboard delivery badges):
 
     {"sent": bool, "provider": str, "error": Optional[str]}
 """
+import hmac
+import hashlib
 import logging
 from typing import Optional
 
@@ -770,7 +772,10 @@ def _html_escape(s: str) -> str:
     return _h.escape(str(s or ""), quote=True)
 
 
-def send_airport_pre_pickup_reminder(booking: dict, prefs: Optional[dict] = None) -> dict:
+def send_airport_pre_pickup_reminder(booking: dict, prefs: Optional[dict] = None,
+                                     flight_delay_min: Optional[int] = None,
+                                     reschedule_url: Optional[str] = None,
+                                     new_pickup_iso: Optional[str] = None) -> dict:
     """T-60min "we're picking you up in an hour" reminder for airport-bound
     bookings. Deliberately checklist-heavy so guests aren't scrambling in
     the driveway looking for a lost passport:
@@ -779,14 +784,19 @@ def send_airport_pre_pickup_reminder(booking: dict, prefs: Optional[dict] = None
       • Online check-in complete + boarding pass on phone
       • Passport in-hand (biggest cause of "we have to turn around" calls)
 
-    Sends both email (checklist rendering) + SMS (short-form). Idempotency
-    is the caller's job — this helper just delivers.
+    When `flight_delay_min` is >= 120, the template pivots — instead of a
+    bare checklist, it leads with "your flight is delayed ~X min, want to
+    shift your pickup?" and includes a one-tap `reschedule_url` that moves
+    the pickup by the same amount.
     """
     prefs = prefs or {}
     email_enabled = prefs.get("notify_email_enabled", True) is not False
     sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+    is_delayed = flight_delay_min is not None and flight_delay_min >= 120 and reschedule_url
     report = {
         "kind": "airport_pre_pickup",
+        "flight_delayed": bool(is_delayed),
+        "flight_delay_min": flight_delay_min,
         "email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
         "sms":   {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
     }
@@ -796,9 +806,69 @@ def send_airport_pre_pickup_reminder(booking: dict, prefs: Optional[dict] = None
     flight = (booking.get("flight_number") or "").strip()
     when = booking.get("booking_date") or ""
     when_pretty = when.replace("T", " ").split("+")[0][:16] if when else ""
+    new_when_pretty = (new_pickup_iso or "").replace("T", " ").split("+")[0][:16] if new_pickup_iso else ""
 
-    subject = f"1 hour to your Rox airport pickup — Booking {booking['id']}"
-    text = (
+    if is_delayed:
+        delay_hrs = flight_delay_min // 60
+        delay_lbl = f"~{delay_hrs} hr{'s' if delay_hrs != 1 else ''}"
+        subject = f"Flight delayed {delay_lbl} — shift your Rox pickup? Booking {booking['id']}"
+        text = (
+            f"Hi {guest_first},\n\n"
+            f"Heads up — your flight {flight} is showing a {delay_lbl} delay.\n"
+            f"Original pickup: {when_pretty}\n"
+            f"Suggested new pickup: {new_when_pretty}\n\n"
+            f"Tap here to shift your pickup automatically:\n{reschedule_url}\n\n"
+            f"If the delay resolves, ignore this — we'll stick with the original pickup time.\n\n"
+            f"Pre-departure checklist (still applies):\n"
+            f"  [ ] Passport in carry-on\n"
+            f"  [ ] All belongings collected\n"
+            f"  [ ] Flight status confirmed\n"
+            f"  [ ] Online check-in done + boarding pass on phone\n\n"
+            f"Questions? WhatsApp us: +1 (242) 432-2587\n\n"
+            f"— Rox Taxi Service & Tours"
+        )
+        html = f"""
+        <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#DC2626;font-weight:800;">✈️ Flight delayed {_html_escape(delay_lbl)}</div>
+          <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;line-height:1.15;">
+            Hi {_html_escape(guest_first)}, want to shift your Rox pickup?
+          </h1>
+          <p style="color:#64748B;font-size:14px;margin:12px 0 0;">
+            Your flight <strong style="color:#0B3B5C;">{_html_escape(flight)}</strong> is showing a <strong style="color:#DC2626;">{_html_escape(delay_lbl)}</strong> delay. We'd rather not have you sitting at the pickup point while the plane's still on approach.
+          </p>
+
+          <div style="background:#fff;border:2px solid #DC2626;border-radius:16px;padding:22px;margin-top:20px;text-align:center;">
+            <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#DC2626;font-weight:800;">One-tap reschedule</div>
+            <div style="margin-top:12px;font-size:13px;color:#64748B;">Original pickup</div>
+            <div style="font-family:'JetBrains Mono',monospace;color:#94a3b8;text-decoration:line-through;font-size:16px;">{_html_escape(when_pretty)}</div>
+            <div style="margin-top:8px;font-size:13px;color:#059669;font-weight:600;">Suggested new pickup</div>
+            <div style="font-family:'JetBrains Mono',monospace;color:#0B3B5C;font-size:20px;font-weight:800;">{_html_escape(new_when_pretty)}</div>
+            <div style="margin-top:18px;">
+              <a href="{_html_escape(reschedule_url)}" style="display:inline-block;background:#DC2626;color:#fff;text-decoration:none;font-weight:800;padding:14px 28px;border-radius:999px;font-size:15px;box-shadow:0 8px 24px rgba(220,38,38,0.35);">Shift my pickup →</a>
+            </div>
+            <div style="margin-top:12px;font-size:11px;color:#94a3b8;">Nothing changes until you tap. Keep the original time if the delay resolves.</div>
+          </div>
+
+          <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:20px;margin-top:18px;">
+            <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Still on your checklist</div>
+            <table style="width:100%;margin-top:10px;border-collapse:collapse;font-size:13px;color:#0B3B5C;">
+              <tr><td style="padding:4px 0;">🛂 Passport in carry-on</td></tr>
+              <tr><td style="padding:4px 0;">🧳 All belongings collected</td></tr>
+              <tr><td style="padding:4px 0;">✈️ Confirm the final flight status before you leave</td></tr>
+              <tr><td style="padding:4px 0;">📱 Boarding pass saved to Wallet</td></tr>
+            </table>
+          </div>
+
+          <div style="margin:22px 0 4px;">
+            <a href="https://roxtaxi.com/track?id={booking['id']}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;font-size:13px;">Track driver</a>
+            <a href="https://wa.me/12424322587" style="display:inline-block;margin-left:8px;background:#25D366;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;font-size:13px;">WhatsApp us</a>
+          </div>
+          <p style="color:#94a3b8;font-size:11px;margin-top:22px;">— Rox Taxi Service &amp; Tours · Nassau, Bahamas</p>
+        </div>
+        """
+    else:
+        subject = f"1 hour to your Rox airport pickup — Booking {booking['id']}"
+        text = (
         f"Hi {guest_first},\n\n"
         f"Your Rox driver arrives in ~1 hour at {pickup} to take you to {dropoff}.\n"
         f"Pickup time: {when_pretty} (local Nassau time)\n"
@@ -867,17 +937,52 @@ def send_airport_pre_pickup_reminder(booking: dict, prefs: Optional[dict] = None
         report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
 
     if sms_enabled and booking.get("customer_phone"):
-        checklist_sms = (
-            f"Rox Taxi: 1hr to pickup at {pickup}. Quick check — Passport ✓ "
-            f"Belongings ✓ Flight confirmed ✓ Checked in online ✓"
-            + (f" Flight {flight}." if flight else "")
-            + f" Track: roxtaxi.com/track?id={booking['id']}"
-        )
+        if is_delayed:
+            delay_hrs = flight_delay_min // 60
+            checklist_sms = (
+                f"Rox Taxi: Flight {flight} delayed ~{delay_hrs}h. Shift pickup to {new_when_pretty}? Tap: {reschedule_url}"
+            )
+        else:
+            checklist_sms = (
+                f"Rox Taxi: 1hr to pickup at {pickup}. Quick check — Passport ✓ "
+                f"Belongings ✓ Flight confirmed ✓ Checked in online ✓"
+                + (f" Flight {flight}." if flight else "")
+                + f" Track: roxtaxi.com/track?id={booking['id']}"
+            )
         report["sms"].update(send_sms(booking["customer_phone"], checklist_sms))
     else:
         report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
 
     return report
+
+
+def make_reschedule_token(booking_id: str, delay_min: int, secret: str) -> str:
+    """HMAC-signed capability token that lets a guest one-tap shift their
+    pickup by `delay_min` minutes. Format: `<bid>.<delay>.<sig>`. No
+    expiry embedded — the endpoint enforces "must be within 12 hours of
+    the original pickup" so a leaked token from a past booking can't be
+    replayed against a future one.
+    """
+    payload = f"{booking_id}:{delay_min}"
+    sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{booking_id}.{delay_min}.{sig}"
+
+
+def verify_reschedule_token(token: str, secret: str) -> Optional[dict]:
+    """Return {booking_id, delay_min} if the token is signed correctly,
+    else None. Constant-time compare guards against timing attacks."""
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        bid, delay_str, sig = parts
+        delay_min = int(delay_str)
+        expected = hmac.new(secret.encode(), f"{bid}:{delay_min}".encode(), hashlib.sha256).hexdigest()[:16]
+        if not hmac.compare_digest(sig, expected):
+            return None
+        return {"booking_id": bid.upper(), "delay_min": delay_min}
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def send_driver_eta_notification(booking: dict, minutes_away: int = 5,

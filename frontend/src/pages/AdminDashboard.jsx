@@ -202,6 +202,7 @@ export default function AdminDashboard() {
                   <th className="px-4 py-3">Deposit</th>
                   <th className="px-4 py-3">Pay</th>
                   <th className="px-4 py-3">Notify</th>
+                  <th className="px-4 py-3">Proof</th>
                   <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
@@ -285,7 +286,7 @@ export default function AdminDashboard() {
                   );
                 })}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={9} className="text-center py-12 text-[#64748B]">No bookings for this filter yet.</td></tr>
+                  <tr><td colSpan={10} className="text-center py-12 text-[#64748B]">No bookings for this filter yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -304,6 +305,100 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
+function HandoffPhotosCell({ booking }) {
+  // Compact thumbnail strip + lightbox for the driver-uploaded handoff
+  // photos. Surfaces exactly where an admin needs it for no-show disputes
+  // and rental damage claims — the booking row itself.
+  const photos = booking.handoff_photos || [];
+  const [preview, setPreview] = useState(null);
+  const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${BACKEND_URL}${u}`);
+  if (photos.length === 0) {
+    return (
+      <span className="text-[10px] text-[#94a3b8]" data-testid={`handoff-none-${booking.id}`}>
+        —
+      </span>
+    );
+  }
+  return (
+    <>
+      <div className="flex items-center gap-1 flex-wrap" data-testid={`handoff-cell-${booking.id}`}>
+        {photos.slice(0, 3).map((p, i) => (
+          <button
+            key={p.url}
+            type="button"
+            onClick={() => setPreview(p)}
+            data-testid={`handoff-thumb-${booking.id}-${i}`}
+            className="w-10 h-10 rounded-md overflow-hidden ring-1 ring-[#E2E8F0] hover:ring-[#D4A94A] transition-all active:scale-95"
+            title={`Handoff photo — ${new Date(p.uploaded_at).toLocaleString()}`}
+          >
+            <img src={resolveUrl(p.url)} alt="Handoff proof" className="w-full h-full object-cover" loading="lazy" />
+          </button>
+        ))}
+        {photos.length > 3 && (
+          <button
+            type="button"
+            onClick={() => setPreview(photos[3])}
+            data-testid={`handoff-more-${booking.id}`}
+            className="w-10 h-10 rounded-md bg-[#F1F5F9] text-[10px] font-bold text-[#0B3B5C] hover:bg-[#E2E8F0] active:scale-95"
+          >
+            +{photos.length - 3}
+          </button>
+        )}
+      </div>
+      {preview && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/85 backdrop-blur flex items-center justify-center p-4"
+          onClick={() => setPreview(null)}
+          data-testid={`handoff-preview-${booking.id}`}
+        >
+          <div className="max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+            <img src={resolveUrl(preview.url)} alt="Handoff proof" className="w-full rounded-2xl" />
+            <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-white/70 text-xs">
+                <span className="text-white font-semibold">Booking {booking.id}</span>
+                <span className="mx-2 text-white/40">·</span>
+                {new Date(preview.uploaded_at).toLocaleString()}
+                {preview.size_bytes && <span className="ml-2 text-white/40">{Math.round(preview.size_bytes / 1024)} KB</span>}
+              </div>
+              <div className="flex gap-2">
+                {photos.length > 1 && (
+                  <div className="flex gap-1">
+                    {photos.map((p) => (
+                      <button
+                        key={p.url}
+                        type="button"
+                        onClick={() => setPreview(p)}
+                        className={`w-2 h-2 rounded-full ${p.url === preview.url ? "bg-[#D4A94A]" : "bg-white/40 hover:bg-white/60"}`}
+                        aria-label="Switch photo"
+                      />
+                    ))}
+                  </div>
+                )}
+                <a
+                  href={resolveUrl(preview.url)}
+                  download
+                  className="rounded-full bg-white/10 border border-white/20 text-white text-xs font-bold px-3 py-2 hover:bg-white/20"
+                  data-testid={`handoff-download-${booking.id}`}
+                >
+                  Download
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreview(null)}
+                  className="rounded-full bg-white text-[#0B192C] text-xs font-bold px-3 py-2"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 
 function NotifyCell({ booking, onRefresh }) {
   const [resending, setResending] = useState(false);
