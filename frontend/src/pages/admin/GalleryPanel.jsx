@@ -72,14 +72,26 @@ export default function GalleryPanel() {
     }
   };
 
-  // Toggle "featured pin" — pinned photos always surface first in /api/gallery
-  // across home, footer, and the cruise-groups strip.
   const togglePin = async (id) => {
     setBusy((b) => ({ ...b, [id]: "pin" }));
     try {
       const { data } = await api.post(`/admin/gallery/${id}/pin`);
-      toast.success(data.is_pinned ? "Pinned as featured ✓" : "Unpinned");
       setApproved((xs) => xs.map((x) => (x.id === id ? { ...x, is_pinned: data.is_pinned } : x)));
+      if (data.is_pinned) {
+        // Undo toast — admin has `undo_window_seconds` (default 30s) to
+        // reverse before the guest email + Facebook post actually fire.
+        const undoSec = data.undo_window_seconds || 30;
+        toast("Pinned as featured 🌟", {
+          description: `Guest email + Facebook post firing in ${undoSec}s. Unpin now to cancel both.`,
+          duration: Math.max(4000, undoSec * 1000 - 2000),
+          action: {
+            label: "Unpin",
+            onClick: () => togglePin(id),
+          },
+        });
+      } else {
+        toast.success("Unpinned");
+      }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Pin failed");
     } finally {

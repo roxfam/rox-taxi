@@ -12,6 +12,7 @@ Endpoints:
 All Facebook auto-post triggers live here now. Wired up by server.py via
 `configure()` + `include_router()`.
 """
+import asyncio
 import html as _html
 import io as _io
 import json as _json
@@ -203,8 +204,14 @@ async def admin_facebook_status(_admin: str = _require()):
 @router.post("/admin/gallery/{sub_id}/pin")
 async def admin_pin_submission(sub_id: str, _admin: str = _require()):
     """Toggle pin state — pinned photos always surface first in /api/gallery
-    (used on home, footer, groups strip). Idempotent. On pin (not unpin), the
-    submitter is emailed a "you're featured" note if we have their email."""
+    (used on home, footer, groups strip). Idempotent.
+
+    On pin (not unpin), the guest email + Facebook auto-post are DEFERRED by
+    30 seconds via `asyncio.create_task` so the admin can hit the "Unpin"
+    action on the toast to cancel both side effects (the deferred worker
+    re-checks `is_pinned` before firing). One accidental pin no longer spams
+    the guest with an email and floods the FB page with a post.
+    """
     doc = await _db.gallery_submissions.find_one({"id": sub_id, "status": "approved"})
     if not doc:
         raise HTTPException(404, "Approved submission not found")
@@ -216,56 +223,70 @@ async def admin_pin_submission(sub_id: str, _admin: str = _require()):
         update["pinned_at"] = None
     await _db.gallery_submissions.update_one({"id": sub_id}, {"$set": update})
 
-    # On PIN (not unpin), notify the submitter — best-effort, never blocks.
-    # Idempotent via `featured_notified_at` so re-pinning after an unpin
-    # doesn't spam the guest with duplicate emails within 90 days.
-    notify_result = None
-    if new_pinned and doc.get("submitter_email") and not doc.get("featured_notified_at"):
+    scheduled = False
+    UNDO_WINDOW = 30
+    if new_pinned and (not doc.get("featured_notified_at") or not doc.get("featured_fb_posted_at")):
+        asyncio.create_task(_fire_pin_side_effects_after_delay(sub_id, delay_seconds=UNDO_WINDOW))
+        scheduled = True
+
+    return {
+        "id": sub_id,
+        "is_pinned": new_pinned,
+        "side_effects_scheduled": scheduled,
+        "undo_window_seconds": UNDO_WINDOW if scheduled else 0,
+    }
+
+
+async def _fire_pin_side_effects_after_delay(sub_id: str, delay_seconds: int = 30):
+    """Sleep for the undo window, then re-check `is_pinned` and fire the
+    guest email + Facebook post only if the photo is still pinned. Silent
+    no-op if the admin unpinned during the window. Both side effects remain
+    idempotent via `featured_notified_at` / `featured_fb_posted_at`."""
+    try:
+        await asyncio.sleep(delay_seconds)
+    except asyncio.CancelledError:
+        return
+
+    doc = await _db.gallery_submissions.find_one({"id": sub_id, "status": "approved"})
+    if not doc or not doc.get("is_pinned"):
+        return  # admin unpinned — skip both side effects
+
+    # Guest email
+    if doc.get("submitter_email") and not doc.get("featured_notified_at"):
         try:
             from notifications import send_featured_notification
-            notify_result = send_featured_notification(doc)
-            if notify_result.get("sent"):
+            r = send_featured_notification(doc)
+            if r.get("sent"):
                 await _db.gallery_submissions.update_one(
                     {"id": sub_id},
-                    {"$set": {"featured_notified_at": _now_iso(), "featured_notify_result": notify_result}},
+                    {"$set": {"featured_notified_at": _now_iso(), "featured_notify_result": r}},
                 )
         except Exception as e:  # noqa: BLE001
             if _logger:
-                _logger.warning(f"featured-notify failed: {e}")
+                _logger.warning(f"delayed featured-notify failed: {e}")
 
-    # On PIN (not unpin), auto-post a "Featured Guest" post to Facebook with
-    # the deep-link OG URL. Every click on the post goes through the OG page
-    # which shows the actual guest photo in any onward share. Idempotent via
-    # `featured_fb_posted_at`.
-    fb_featured_result = None
-    if new_pinned and not doc.get("featured_fb_posted_at"):
+    # Facebook auto-post — refresh doc so the email flag added above is visible
+    doc = await _db.gallery_submissions.find_one({"id": sub_id, "status": "approved"})
+    if not doc or not doc.get("is_pinned"):
+        return
+    if not doc.get("featured_fb_posted_at"):
         try:
             from facebook import post_pinned_photo_to_facebook
             deep_link = f"https://roxtaxi.com/api/og/photo/{sub_id}"
-            fb_featured_result = await post_pinned_photo_to_facebook(
+            r = await post_pinned_photo_to_facebook(
                 image_url=doc.get("url", ""),
                 submitter_name=doc.get("submitter_name", ""),
                 guest_caption=doc.get("caption", ""),
                 deep_link=deep_link,
             )
-            if fb_featured_result.get("ok"):
+            if r.get("ok"):
                 await _db.gallery_submissions.update_one(
                     {"id": sub_id},
-                    {"$set": {
-                        "featured_fb_posted_at": _now_iso(),
-                        "featured_fb_post_id": fb_featured_result.get("post_id"),
-                    }},
+                    {"$set": {"featured_fb_posted_at": _now_iso(), "featured_fb_post_id": r.get("post_id")}},
                 )
         except Exception as e:  # noqa: BLE001
             if _logger:
-                _logger.warning(f"featured-fb post failed: {e}")
-
-    return {
-        "id": sub_id,
-        "is_pinned": new_pinned,
-        "guest_notified": bool(notify_result and notify_result.get("sent")),
-        "fb_featured_posted": bool(fb_featured_result and fb_featured_result.get("ok")),
-    }
+                _logger.warning(f"delayed featured-fb post failed: {e}")
 
 
 @router.get("/admin/gallery/approved")
