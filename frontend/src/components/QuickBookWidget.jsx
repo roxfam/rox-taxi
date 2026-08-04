@@ -50,7 +50,7 @@ const TABS = [
   },
   {
     key: "rentals",
-    label: "Rentals",
+    label: "Car Rentals",
     Icon: MapPinned,
     accent: "#0F766E",        // rich emerald teal
     accentSoft: "rgba(15,118,110,0.14)",
