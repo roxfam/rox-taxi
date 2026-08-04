@@ -154,7 +154,25 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const taxiAddonSelected = showTaxiAddon && (addonForced || !!form.taxi_addon_selected);
   const addonPrice = Number(item?.taxi_addon_price || 0);
   const addonMode = (item?.taxi_addon_price_mode || "flat").toLowerCase();
-  const addonLabel = item?.taxi_addon_label || "Round-trip taxi add-on";
+  // A/B label — deterministic 50/50 assignment per visitor (localStorage
+  // survives page reloads so the same guest never sees the label flip).
+  // We only pick a variant when the tour has A/B enabled and Variant B
+  // has a non-empty label; otherwise Variant A is the default.
+  const abEnabled = showTaxiAddon && !!item?.taxi_addon_ab_enabled && !!(item?.taxi_addon_label_b || "").trim();
+  const [addonVariant] = useState(() => {
+    if (typeof window === "undefined") return "A";
+    try {
+      let v = localStorage.getItem("rox_addon_ab");
+      if (v !== "A" && v !== "B") {
+        v = Math.random() < 0.5 ? "A" : "B";
+        localStorage.setItem("rox_addon_ab", v);
+      }
+      return v;
+    } catch { return "A"; }
+  });
+  const addonLabel = abEnabled && addonVariant === "B"
+    ? (item?.taxi_addon_label_b || "Round-trip taxi add-on")
+    : (item?.taxi_addon_label || "Round-trip taxi add-on");
   const totalPaxForAddon = hasChildPricing ? (numAdults + numKids + numToddlers) : Number(form.passengers || 1);
   const taxiAddonFee = taxiAddonSelected
     ? (addonMode === "per_person" ? addonPrice * Math.max(1, totalPaxForAddon) : addonPrice)
@@ -211,6 +229,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         group_discount: groupDiscountActive ? Number(groupDiscount.toFixed(2)) : 0,
         processing_fee: Number(processingFee.toFixed(2)),
         taxi_addon_selected: !!taxiAddonSelected,
+        taxi_addon_variant: abEnabled ? addonVariant : null,
         days: Number(form.days) || 1,
         extra_luggage: Number(form.extra_luggage) || 0,
         additional_drivers: Number(form.additional_drivers) || 0,
@@ -387,9 +406,14 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     />
                     <div className="flex-1">
                       <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <div className="text-sm font-semibold text-[#0B3B5C]">
+                        <div className="text-sm font-semibold text-[#0B3B5C]" data-testid="taxi-addon-label">
                           {addonLabel}
                           {addonForced && <span className="ml-2 text-[10px] uppercase tracking-widest text-[#D4A94A] font-black">Included</span>}
+                          {abEnabled && (
+                            <span className="ml-2 text-[9px] uppercase tracking-widest text-[#94a3b8] font-black" data-testid="taxi-addon-variant-badge">
+                              · v{addonVariant}
+                            </span>
+                          )}
                         </div>
                         <span className="mono font-semibold text-[#E86A3C] text-sm" data-testid="taxi-addon-fee">
                           +${taxiAddonFee.toFixed(2)}

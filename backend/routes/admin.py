@@ -321,6 +321,12 @@ class ItemUpsert(BaseModel):
     taxi_addon_price_mode: Optional[str] = None  # "flat" | "per_person"
     taxi_addon_forced: Optional[bool] = None
     taxi_addon_label: Optional[str] = None
+    # A/B test — when `taxi_addon_ab_enabled` is True the booking flow rolls
+    # a 50/50 coin per session and shows either `taxi_addon_label` (variant A)
+    # or `taxi_addon_label_b` (variant B). The chosen variant is recorded on
+    # the booking so the analytics dashboard can pick the winner.
+    taxi_addon_ab_enabled: Optional[bool] = None
+    taxi_addon_label_b: Optional[str] = None
 
 
 class HomeSlideUpsert(BaseModel):

@@ -38,6 +38,8 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
     taxi_addon_price_mode: initial.taxi_addon_price_mode || "flat",
     taxi_addon_forced: !!initial.taxi_addon_forced,
     taxi_addon_label: initial.taxi_addon_label || "Round-trip taxi add-on",
+    taxi_addon_ab_enabled: !!initial.taxi_addon_ab_enabled,
+    taxi_addon_label_b: initial.taxi_addon_label_b || "",
   });
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -87,6 +89,8 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
           taxi_addon_price_mode: form.taxi_addon_price_mode || "flat",
           taxi_addon_forced: !!form.taxi_addon_forced,
           taxi_addon_label: (form.taxi_addon_label || "").trim() || "Round-trip taxi add-on",
+          taxi_addon_ab_enabled: !!form.taxi_addon_ab_enabled,
+          taxi_addon_label_b: (form.taxi_addon_label_b || "").trim(),
         });
       }
       if (initial.new) await api.post(`/admin/${kind}`, payload);
@@ -198,6 +202,29 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
                     Auto-include (no guest choice) — <span className="text-[#94a3b8]">unchecked = guest sees an opt-in checkbox at checkout</span>
                   </span>
                 </label>
+                <div className="rounded-lg bg-[#0B3B5C]/5 border border-[#0B3B5C]/10 p-3 space-y-2 mt-2" data-testid="edit-taxi-addon-ab">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={!!form.taxi_addon_ab_enabled}
+                      onChange={(e) => setForm({ ...form, taxi_addon_ab_enabled: e.target.checked })}
+                      data-testid="edit-taxi-addon-ab-enabled"
+                    />
+                    <span className="font-semibold text-[#0B3B5C]">A/B test the checkbox label</span>
+                  </label>
+                  {form.taxi_addon_ab_enabled ? (
+                    <>
+                      <div className="text-[11px] text-[#64748B] leading-relaxed pl-6">
+                        Each guest sees either label above (variant A) or the one below (variant B), randomly. Attach rate per variant shows in the admin dashboard.
+                      </div>
+                      <div className="pl-6">
+                        <F l='Variant B label (e.g. "Skip the bus — private taxi both ways")' v={form.taxi_addon_label_b} on={(v) => setForm({ ...form, taxi_addon_label_b: v })} testid="edit-taxi-addon-label-b" />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-[#94a3b8] pl-6">Off — every guest sees the same label above.</div>
+                  )}
+                </div>
               </div>
             )}
           </div>

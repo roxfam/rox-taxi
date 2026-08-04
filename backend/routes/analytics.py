@@ -265,6 +265,45 @@ async def taxi_addon_analytics(_admin: str = _require(), days: int = Query(30, g
             "attach_rate": round(100 * addons / max(1, tours), 1),
         })
 
+    # A/B variant breakdown — only counts bookings where the tour had A/B
+    # enabled at booking time (i.e. `taxi_addon_variant` was recorded).
+    ab_pipe = [
+        {"$match": {**base_q, "taxi_addon_variant": {"$in": ["A", "B"]}}},
+        {"$group": {
+            "_id": "$taxi_addon_variant",
+            "tours": {"$sum": 1},
+            "addons": {"$sum": {"$cond": [{"$gt": [{"$ifNull": ["$taxi_addon_fee", 0]}, 0]}, 1, 0]}},
+            "revenue": {"$sum": {"$ifNull": ["$taxi_addon_fee", 0]}},
+        }},
+    ]
+    ab_rows = {}
+    async for r in _db.bookings.aggregate(ab_pipe):
+        tours = int(r["tours"])
+        addons = int(r["addons"])
+        ab_rows[r["_id"]] = {
+            "impressions": tours,
+            "addons": addons,
+            "revenue": round(float(r.get("revenue") or 0), 2),
+            "attach_rate": round(100 * addons / max(1, tours), 1),
+        }
+    ab = None
+    if ab_rows:
+        a = ab_rows.get("A", {"impressions": 0, "addons": 0, "revenue": 0, "attach_rate": 0})
+        b = ab_rows.get("B", {"impressions": 0, "addons": 0, "revenue": 0, "attach_rate": 0})
+        min_impressions = min(a["impressions"], b["impressions"])
+        winner = None
+        # Need at least 20 impressions on the weaker arm before declaring
+        # anything — otherwise the "winner" flips wildly on 1-2 bookings.
+        if min_impressions >= 20 and a["attach_rate"] != b["attach_rate"]:
+            winner = "A" if a["attach_rate"] > b["attach_rate"] else "B"
+        ab = {
+            "A": a,
+            "B": b,
+            "winner": winner,
+            "significant": winner is not None,
+            "min_impressions_needed": max(0, 20 - min_impressions),
+        }
+
     attach_rate = round(100 * addon_bookings / max(1, total_tour_bookings), 1)
     return {
         "window_days": days,
@@ -274,4 +313,5 @@ async def taxi_addon_analytics(_admin: str = _require(), days: int = Query(30, g
         "addon_revenue": round(revenue, 2),
         "daily": daily,
         "by_tour": by_tour,
+        "ab": ab,
     }

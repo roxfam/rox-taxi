@@ -1220,6 +1220,56 @@ function TaxiAddonCard({ data }) {
           </div>
         </div>
       )}
+
+      {data.ab && (
+        <div className="mt-5 pt-4 border-t border-[#F1F5F9]" data-testid="admin-taxi-addon-ab">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold">A/B label test</div>
+            {data.ab.winner ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-[#059669] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5"
+                data-testid="admin-taxi-addon-ab-winner"
+              >
+                Winner · Variant {data.ab.winner}
+              </span>
+            ) : (
+              <span
+                className="text-[10px] text-[#94a3b8]"
+                data-testid="admin-taxi-addon-ab-pending"
+              >
+                {data.ab.min_impressions_needed > 0
+                  ? `Need ${data.ab.min_impressions_needed} more on the weaker arm before calling it`
+                  : "Tied — keep watching"}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <AbVariantTile v="A" row={data.ab.A} winner={data.ab.winner === "A"} testId="admin-taxi-addon-ab-a" />
+            <AbVariantTile v="B" row={data.ab.B} winner={data.ab.winner === "B"} testId="admin-taxi-addon-ab-b" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AbVariantTile({ v, row, winner, testId }) {
+  const tint = winner ? "#059669" : "#0B3B5C";
+  return (
+    <div
+      className={`rounded-xl border p-3 ${winner ? "border-[#059669]/40 bg-[#059669]/5" : "border-[#F1F5F9] bg-white"}`}
+      data-testid={testId}
+    >
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-black">Variant {v}</div>
+        {winner && <span className="text-[9px] font-black uppercase tracking-widest text-[#059669]">Leading</span>}
+      </div>
+      <div className="serif text-2xl mt-0.5" style={{ color: tint }} data-testid={`${testId}-rate`}>
+        {(row?.attach_rate ?? 0).toFixed(1)}%
+      </div>
+      <div className="text-[11px] text-[#64748B] mt-0.5">
+        <span data-testid={`${testId}-addons`}>{row?.addons ?? 0}</span> of <span data-testid={`${testId}-impressions`}>{row?.impressions ?? 0}</span> · <span className="mono font-semibold text-[#D4A94A]" data-testid={`${testId}-revenue`}>{money(row?.revenue ?? 0)}</span>
+      </div>
     </div>
   );
 }

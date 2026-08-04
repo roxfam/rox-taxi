@@ -166,6 +166,9 @@ class BookingCreate(BaseModel):
     # the tour + master switch is on). Server re-computes the fee from the
     # tour's stored taxi_addon_price / mode so the total can't be spoofed.
     taxi_addon_selected: Optional[bool] = False
+    # A/B variant shown to the guest ("A" or "B"). Recorded verbatim so the
+    # analytics chart can compute per-variant attach rate.
+    taxi_addon_variant: Optional[str] = Field(None, max_length=1)
 
 
 LUGGAGE_FEE_USD = 3.0
@@ -2169,6 +2172,15 @@ async def create_booking(req: BookingCreate):
                 booking["taxi_addon_selected"] = True
                 booking["taxi_addon_label"] = tour_doc.get("taxi_addon_label") or "Round-trip taxi add-on"
                 booking["taxi_addon_price_mode"] = mode
+                # Store the A/B variant when the tour has A/B enabled — even
+                # if the guest didn't opt in, we still want to know which
+                # copy was shown (for future "impressions" attach-rate math).
+                if tour_doc.get("taxi_addon_ab_enabled") and req.taxi_addon_variant in ("A", "B"):
+                    booking["taxi_addon_variant"] = req.taxi_addon_variant
+        # Also record the variant even for non-addon bookings so the
+        # denominator for attach-rate per variant is honest.
+        if master_on and tour_addon_on and tour_doc.get("taxi_addon_ab_enabled") and req.taxi_addon_variant in ("A", "B"):
+            booking["taxi_addon_variant"] = req.taxi_addon_variant
 
     if req.service_type == "taxi":
         if req.flight_number:

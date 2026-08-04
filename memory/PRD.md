@@ -18,6 +18,14 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (A/B Test the Add-on Label)
+- **Per-tour A/B toggle** on the Catalog editor — set Variant A copy (existing label) + a new **Variant B** label field. When A/B is off, every guest sees Variant A (unchanged behaviour).
+- **Deterministic 50/50 assignment** in `BookingFlow.jsx` via `localStorage.rox_addon_ab` (survives page reloads so the same guest never sees the label flip mid-checkout). A tiny `· vA`/`· vB` badge next to the label helps QA verify the split without opening devtools.
+- **Booking payload** now carries `taxi_addon_variant: "A" | "B"`; the server stores it on the booking regardless of opt-in (so the denominator for attach-rate is honest — impressions vs conversions).
+- **Analytics endpoint** (`/api/admin/analytics/taxi-addon`) now returns `ab.A`, `ab.B`, and a `winner` flag. Winner is only declared once the weaker arm has ≥20 impressions AND the attach rates differ — otherwise the card shows `"Need N more on the weaker arm before calling it"` so nobody ships based on 3-booking noise.
+- **Admin dashboard tiles**: two side-by-side variant tiles under the daily chart, the leading arm gets a green border + "Leading" chip; declared winner gets a "Winner · Variant X" pill in the section header.
+- **Verified live**: Ran 6 bookings (2× A with 1 opt-in, 4× B with 3 opt-ins) → variant A 50.0%, variant B 75.0%, `winner=null`, `min_impressions_needed=18`. Everything rendered correctly on the dashboard.
+
 ### ✅ Shipped Feb 2026 (Taxi Add-on Analytics Chart)
 - **New `GET /api/admin/analytics/taxi-addon?days=30` endpoint** (in `routes/analytics.py`) — returns attach rate, add-on revenue, per-day breakdown (sparkline), and top-5 tours ranked by add-on revenue. Excludes cancelled bookings.
 - **`TaxiAddonCard`** rendered on the Admin Dashboard right below the Photo-Nudge card. Recharts BarChart shows daily add-on revenue; KPIs show attach rate + total revenue + $/booking; ranked "Top tours by add-on revenue" table underneath. Auto-refreshes every 30s alongside the rest of the dashboard.
