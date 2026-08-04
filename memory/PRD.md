@@ -18,6 +18,18 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Yacht + Horse partner tours added — +10% booking fee convention)
+- **Yacht (Blue Water Charters)** — 3 new SKUs seeded and live via `/api/tours`:
+  - `yacht-shared-halfday` — Shared 4-hr yacht cruise, **$187** (base $170 + 10%). Featured.
+  - `yacht-private-halfday` — Private 4-hr charter up to 8 pax, **$2200** (base $2000 + 10%).
+  - `yacht-private-fullday` — Private 8-hr charter up to 10 pax, **$3630** (base $3300 + 10%).
+- **Horseback (Happy Trails Stables)** — 2 new SKUs:
+  - `horse-trail-beach` — 90-min trail + beach ride, **$165** (base $150 + 10%). Featured. Kid pricing mirrors adult; 10+ years required.
+  - `horse-private-lesson` — 60-min private lesson, **$110** (base $100 + 10%).
+- All 5 entries carry `external_booking_url` pointing to the partner's official page so the "Book" CTA can either flow through our checkout or hand off. `category` set to `watersport` / `adventure` so they filter correctly on `/tours`. `duration` strings parseable by the cruise-ship "fits your port" filter.
+- **Pricing convention documented in `seed_data.py`**: "official operator site price + 10% booking fee". Baseline prices reflect commonly-published partner rates at time of writing — admin can override any value from the Catalog panel once contracts finalise. Taxi tariffs remain untouched (regulated Nassau rate, no markup).
+- **Verified**: MongoDB upserted the new SKUs; `/api/tours` returns them; both `yacht-*` and `horse-*` entries appear in the live catalog with correct pricing math.
+
 ### ✅ Shipped Feb 2026 (Driver Leaderboard · Preview Card Boost)
 - **Driver Leaderboard** (`GET /api/admin/driver/leaderboard`): computes team on-time performance from every booking where `arrived_at` was stamped vs the scheduled `booking_date`. On-time = arrived within ±5 min of pickup. Returns: current-month on-time %, previous-month on-time % + delta, current consecutive on-time streak (walks the newest arrivals backward), and a 6-month sparkline. Anonymous, no PII. New `LeaderboardCard` on `/driver/manifest` renders a mini spark-bar chart, a big colour-coded on-time % (green ≥90%, gold ≥75%, orange below), month-over-month delta chip, and a streak flame when 3+ in a row. Fully gamified, zero admin action needed.
 - **Preview Card Boost — OG tour endpoints**:
