@@ -18,6 +18,16 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Optional Taxi Add-on · Kids Pricing UI · Guest Photo Delete)
+- **Optional taxi add-on** — end-to-end pricing hook so tours can upsell a round-trip taxi at checkout.
+  - **Global master switch** in Site Config panel (`taxi_addon_master_enabled`, default ON). When OFF the add-on hides site-wide regardless of per-tour setting.
+  - **Per-tour toggle** in the Catalog editor: `taxi_addon_enabled`, `taxi_addon_price`, `taxi_addon_price_mode` (`flat` or `per_person`), `taxi_addon_label`, and `taxi_addon_forced` (auto-included with no guest choice vs guest-selectable checkbox).
+  - **Guest flow**: `BookingFlow.jsx` shows a gold-bordered add-on card between the passenger picker and closed-Saturday warning. Forced mode locks the checkbox ON; optional mode lets the guest opt in. Total recalculates live.
+  - **Server**: `create_booking` fetches the tour doc, recomputes the fee from stored price × mode (no client-side spoofing), stores `taxi_addon_fee` + `taxi_addon_selected` + `taxi_addon_label` on the booking.
+- **Kids pricing line** — the admin `EditModal` now surfaces the previously seed-only fields (`child_price`, `child_free_under`, `child_age_max`) so owners can turn per-person kids pricing on/off for any tour without touching code. Frontend already renders the Adults/Kids/Toddlers stepper when `child_price > 0`.
+- **Guest photo delete** — new `DELETE /api/admin/gallery/{sub_id}` endpoint hard-deletes the row + file from disk. Admin Gallery panel now shows a trash-icon delete button on BOTH pending and approved photos (in addition to the existing Reject/Repost buttons). Confirmed via API smoke tests (403 → auth ok, 404 on missing → correct).
+- **Verified via curl**: booking with addon selected on $99 tour + 2 adults = $223 total ($198 base + $25 flat addon). Same booking without addon = $198. Booking with 2 adults + 2 kids at $40 child_price = $278 total. Forced-mode addon (per-person × 3 pax @ $15) = $342 with $45 addon_fee, no client selection needed.
+
 ### ✅ Shipped Feb 2026 (Cruise Tour Bundles · Handoff Photo Delete)
 - **Cruise Tour Bundles** (`/tours` when a ship is selected): 3 ready-made packages surface right below the ship picker — **Classic Nassau Day** (city tour + snorkel + Junkanoo bus), **Adrenaline Trio** (ATV + jet ski + Blue Lagoon), **Paradise Luxe** (shared yacht + horseback + city tour). Each bundle's total duration is checked against the guest's port budget (`port_window − 90-min buffer`); bundles too long for their ship show a dashed card with a "Too long for [line]" overlay and are unclickable. Every bundle bakes in a **10% package discount** vs the sum of individual tours — the strikethrough raw price + savings chip make the value obvious. Tapping a bundle drops the guest into the hero tour's booking modal (future work: single-transaction batch booking for all three items).
 - **Handoff Photo Delete** in admin booking rows: added a red "Delete" button inside the handoff-photo lightbox modal alongside Download / Close. Uses the pre-existing `DELETE /api/driver/{id}/handoff-photo?url=<>` endpoint. Optimistic removal from the local view + toast confirmation.

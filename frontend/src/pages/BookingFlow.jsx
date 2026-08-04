@@ -70,6 +70,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     round_trip: false,
     flight_number: "",
     notes: "",
+    taxi_addon_selected: false,
   });
   const LUGGAGE_FEE = 3;
   const PASSENGER_FEE = 5;
@@ -84,11 +85,12 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
   const [loading, setLoading] = useState(false);
   const [booking, setBooking] = useState(null);
-  const [siteCfg, setSiteCfg] = useState({ zelle_email: "payments@roxtaxi.com", zelle_phone: "+1-242-000-0000" });
+  const [siteCfg, setSiteCfg] = useState({ zelle_email: "payments@roxtaxi.com", zelle_phone: "+1-242-000-0000", taxi_addon_master_enabled: true });
   const [paypalCfg, setPaypalCfg] = useState({ client_id: "", configured: false, mode: "sandbox" });
 
   useEffect(() => {
     api.get("/paypal/config").then((r) => setPaypalCfg(r.data)).catch(() => {});
+    api.get("/site-config").then((r) => setSiteCfg((c) => ({ ...c, ...r.data }))).catch(() => {});
   }, []);
 
   const setF = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -141,10 +143,27 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const babySeatCount = serviceType === "rental" ? Number(form.baby_seats || 0) : 0;
   const babySeatFree = serviceType === "rental" && rentalDays >= BABY_SEAT_FREE_AFTER_DAYS;
   const babySeatFee = babySeatFree ? 0 : babySeatCount * BABY_SEAT_FEE * Math.max(1, rentalDays);
+
+  // Optional taxi add-on (tours only). Surfaces when the tour has it
+  // enabled AND the site-wide master switch is on. `taxi_addon_forced`
+  // auto-includes with no guest choice (checkbox locked ON + disabled).
+  const masterAddonOn = siteCfg.taxi_addon_master_enabled !== false;
+  const tourAddonEnabled = !!item?.taxi_addon_enabled;
+  const addonForced = !!item?.taxi_addon_forced;
+  const showTaxiAddon = serviceType === "tour" && masterAddonOn && tourAddonEnabled;
+  const taxiAddonSelected = showTaxiAddon && (addonForced || !!form.taxi_addon_selected);
+  const addonPrice = Number(item?.taxi_addon_price || 0);
+  const addonMode = (item?.taxi_addon_price_mode || "flat").toLowerCase();
+  const addonLabel = item?.taxi_addon_label || "Round-trip taxi add-on";
+  const totalPaxForAddon = hasChildPricing ? (numAdults + numKids + numToddlers) : Number(form.passengers || 1);
+  const taxiAddonFee = taxiAddonSelected
+    ? (addonMode === "per_person" ? addonPrice * Math.max(1, totalPaxForAddon) : addonPrice)
+    : 0;
+
   // Processing fee — 3% on the whole transaction (base + extras + deposit)
   // to cover Stripe/PayPal card fees. Shown to the customer as its own line.
   const PROCESSING_FEE_PCT = 0.03;
-  const subtotal = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee + babySeatFee;
+  const subtotal = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee + babySeatFee + taxiAddonFee;
   const processingFee = subtotal * PROCESSING_FEE_PCT;
   const total = subtotal + processingFee;
 
@@ -191,6 +210,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         toddlers: hasChildPricing ? numToddlers : undefined,
         group_discount: groupDiscountActive ? Number(groupDiscount.toFixed(2)) : 0,
         processing_fee: Number(processingFee.toFixed(2)),
+        taxi_addon_selected: !!taxiAddonSelected,
         days: Number(form.days) || 1,
         extra_luggage: Number(form.extra_luggage) || 0,
         additional_drivers: Number(form.additional_drivers) || 0,
@@ -350,6 +370,41 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 </div>
               </div>
               {extraFields && extraFields(form, setForm)}
+
+              {/* Optional taxi add-on — surfaces on tours only, when master
+                  switch + per-tour toggle are both ON. Forced mode auto-adds
+                  the fee (checkbox locked/disabled). */}
+              {showTaxiAddon && (
+                <div className="rounded-xl border border-[#D4A94A]/40 bg-[#FBF7EF] p-4" data-testid="taxi-addon-section">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-1 accent-[#D4A94A] w-4 h-4"
+                      checked={!!taxiAddonSelected}
+                      disabled={addonForced}
+                      onChange={(e) => setForm({ ...form, taxi_addon_selected: e.target.checked })}
+                      data-testid="taxi-addon-checkbox"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="text-sm font-semibold text-[#0B3B5C]">
+                          {addonLabel}
+                          {addonForced && <span className="ml-2 text-[10px] uppercase tracking-widest text-[#D4A94A] font-black">Included</span>}
+                        </div>
+                        <span className="mono font-semibold text-[#E86A3C] text-sm" data-testid="taxi-addon-fee">
+                          +${taxiAddonFee.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-[#64748B] mt-1 leading-relaxed">
+                        {addonMode === "per_person"
+                          ? `$${addonPrice.toFixed(2)} × ${totalPaxForAddon} passenger${totalPaxForAddon === 1 ? "" : "s"}`
+                          : `Flat ${addonPrice ? `$${addonPrice.toFixed(2)}` : "fee"} added to your booking.`}
+                        {addonForced && " · Auto-included with this tour."}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              )}
 
               {["taxi", "rental"].includes(serviceType) && isClosedDate(form.booking_date, Number(form.days) || 1) && (
                 <div className="rounded-xl border border-[#E86A3C]/30 bg-[#E86A3C]/10 text-[#7a2d10] px-4 py-3 flex items-start gap-2 text-sm" data-testid="closed-saturday-warning">

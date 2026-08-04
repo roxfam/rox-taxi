@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, X, RefreshCw, Images, Mail, Facebook, RotateCw, ExternalLink, AlertTriangle, Pin, PinOff } from "lucide-react";
+import { Check, X, RefreshCw, Images, Mail, Facebook, RotateCw, ExternalLink, AlertTriangle, Pin, PinOff, Trash2 } from "lucide-react";
 import { api, BACKEND_URL } from "../../lib/api";
 
 // Admin panel for reviewing customer-submitted gallery photos.
@@ -94,6 +94,21 @@ export default function GalleryPanel() {
       }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Pin failed");
+    } finally {
+      setBusy((b) => { const n = { ...b }; delete n[id]; return n; });
+    }
+  };
+
+  const hardDelete = async (id, source) => {
+    if (!window.confirm("Permanently delete this photo? The image file will be removed from disk. This cannot be undone.")) return;
+    setBusy((b) => ({ ...b, [id]: "delete" }));
+    try {
+      await api.delete(`/admin/gallery/${id}`);
+      if (source === "approved") setApproved((xs) => xs.filter((x) => x.id !== id));
+      else setPending((xs) => xs.filter((x) => x.id !== id));
+      toast.success("Photo deleted");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Delete failed");
     } finally {
       setBusy((b) => { const n = { ...b }; delete n[id]; return n; });
     }
@@ -196,6 +211,15 @@ export default function GalleryPanel() {
                       >
                         <X className="w-3.5 h-3.5" /> {b === "reject" ? "…" : "Reject"}
                       </button>
+                      <button
+                        onClick={() => hardDelete(it.id, "pending")}
+                        disabled={!!b}
+                        className="inline-flex items-center justify-center rounded-full bg-white border border-[#94a3b8] text-[#64748B] hover:bg-[#DC2626] hover:text-white hover:border-[#DC2626] p-2 disabled:opacity-60 active:scale-95 transition-colors"
+                        data-testid={`admin-gallery-delete-${it.id}`}
+                        title="Permanently delete — removes file from disk + DB"
+                      >
+                        {b === "delete" ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -284,6 +308,15 @@ export default function GalleryPanel() {
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>
                       )}
+                      <button
+                        onClick={() => hardDelete(it.id, "approved")}
+                        disabled={!!b}
+                        className="inline-flex items-center justify-center rounded-full bg-white border border-[#94a3b8] text-[#64748B] hover:bg-[#DC2626] hover:text-white hover:border-[#DC2626] p-2 disabled:opacity-60 active:scale-95 transition-colors"
+                        data-testid={`admin-gallery-delete-${it.id}`}
+                        title="Permanently delete photo — removes file from disk + DB (does NOT delete the Facebook post)"
+                      >
+                        {b === "delete" ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      </button>
                     </div>
                   </div>
                 </div>

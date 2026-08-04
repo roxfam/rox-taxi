@@ -132,6 +132,19 @@ export default function SiteConfigPanel() {
           </div>
         </div>
 
+        <div className="pt-4 mt-4 border-t border-[#E2E8F0]">
+          <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold mb-3">Taxi add-on (tours)</div>
+          <div className="space-y-2">
+            <Toggle
+              label="Enable optional taxi add-on at checkout"
+              hint="Master switch. When OFF, no tour offers the round-trip taxi upsell — even if enabled per-tour. When ON, each tour's own toggle controls whether the add-on appears."
+              checked={cfg.taxi_addon_master_enabled !== false}
+              onChange={(v) => setCfg({ ...cfg, taxi_addon_master_enabled: v })}
+              testid="taxi-addon-master-toggle"
+            />
+          </div>
+        </div>
+
         <button onClick={save} disabled={saving} data-testid="site-save" className="mt-2 rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm">Save</button>
       </div>
 

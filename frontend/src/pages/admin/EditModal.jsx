@@ -28,6 +28,16 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
     featured: !!initial.featured,
     external_booking_url: initial.external_booking_url || "",
     blackout_dates: Array.isArray(initial.blackout_dates) ? [...initial.blackout_dates] : [],
+    // Kids / per-person pricing (tours only)
+    child_price: initial.child_price ?? 0,
+    child_age_max: initial.child_age_max ?? 12,
+    child_free_under: initial.child_free_under ?? 3,
+    // Optional taxi add-on (tours only)
+    taxi_addon_enabled: !!initial.taxi_addon_enabled,
+    taxi_addon_price: initial.taxi_addon_price ?? 0,
+    taxi_addon_price_mode: initial.taxi_addon_price_mode || "flat",
+    taxi_addon_forced: !!initial.taxi_addon_forced,
+    taxi_addon_label: initial.taxi_addon_label || "Round-trip taxi add-on",
   });
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -67,6 +77,16 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
           // None-valued keys, so null wouldn't wipe an existing URL. Empty string
           // is falsy on the frontend so the public "official site" link hides.
           external_booking_url: (form.external_booking_url ?? "").trim(),
+          // Kids pricing (0 disables per-person mode → flat fare)
+          child_price: parseFloat(form.child_price) || 0,
+          child_age_max: parseInt(form.child_age_max) || 12,
+          child_free_under: parseInt(form.child_free_under) || 3,
+          // Optional taxi add-on
+          taxi_addon_enabled: !!form.taxi_addon_enabled,
+          taxi_addon_price: parseFloat(form.taxi_addon_price) || 0,
+          taxi_addon_price_mode: form.taxi_addon_price_mode || "flat",
+          taxi_addon_forced: !!form.taxi_addon_forced,
+          taxi_addon_label: (form.taxi_addon_label || "").trim() || "Round-trip taxi add-on",
         });
       }
       if (initial.new) await api.post(`/admin/${kind}`, payload);
@@ -118,6 +138,69 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
             on={(v) => setForm({ ...form, external_booking_url: v })}
             testid="edit-external-url"
           />
+        )}
+
+        {!isRental && !isTaxi && (
+          <div className="pt-3 border-t border-[#F1F5F9]" data-testid="edit-kids-pricing">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] tracking-[0.2em] uppercase text-[#64748B] font-semibold">Kids pricing</span>
+              <span className="text-[10px] text-[#94a3b8]">— set child price to 0 for flat-fare tours</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <F l="Child price (USD)" type="number" v={form.child_price} on={(v) => setForm({ ...form, child_price: v })} testid="edit-child-price" />
+              <F l="Free under age" type="number" v={form.child_free_under} on={(v) => setForm({ ...form, child_free_under: v })} testid="edit-child-free-under" />
+              <F l="Kid max age" type="number" v={form.child_age_max} on={(v) => setForm({ ...form, child_age_max: v })} testid="edit-child-age-max" />
+            </div>
+          </div>
+        )}
+
+        {!isRental && !isTaxi && (
+          <div className="pt-3 border-t border-[#F1F5F9]" data-testid="edit-taxi-addon">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] tracking-[0.2em] uppercase text-[#64748B] font-semibold">Optional taxi add-on</span>
+              <span className="text-[10px] text-[#94a3b8]">— round-trip taxi upsell at checkout</span>
+            </div>
+            <label className="flex items-center gap-2 text-sm mb-3">
+              <input
+                type="checkbox"
+                checked={!!form.taxi_addon_enabled}
+                onChange={(e) => setForm({ ...form, taxi_addon_enabled: e.target.checked })}
+                data-testid="edit-taxi-addon-enabled"
+              />
+              Offer taxi add-on for this tour
+            </label>
+            {form.taxi_addon_enabled && (
+              <div className="space-y-3 pl-5 border-l-2 border-[#D4A94A]/30" data-testid="edit-taxi-addon-fields">
+                <div className="grid grid-cols-2 gap-3">
+                  <F l="Add-on price (USD)" type="number" v={form.taxi_addon_price} on={(v) => setForm({ ...form, taxi_addon_price: v })} testid="edit-taxi-addon-price" />
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[#64748B] mb-1">Price mode</label>
+                    <select
+                      value={form.taxi_addon_price_mode}
+                      onChange={(e) => setForm({ ...form, taxi_addon_price_mode: e.target.value })}
+                      data-testid="edit-taxi-addon-mode"
+                      className="w-full rounded-md border border-[#E2E8F0] px-3 py-2 text-sm focus:border-[#D4A94A] focus:outline-none bg-white"
+                    >
+                      <option value="flat">Flat fee per booking</option>
+                      <option value="per_person">Per person × passengers</option>
+                    </select>
+                  </div>
+                </div>
+                <F l="Checkbox label shown to guest" v={form.taxi_addon_label} on={(v) => setForm({ ...form, taxi_addon_label: v })} testid="edit-taxi-addon-label" />
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={!!form.taxi_addon_forced}
+                    onChange={(e) => setForm({ ...form, taxi_addon_forced: e.target.checked })}
+                    data-testid="edit-taxi-addon-forced"
+                  />
+                  <span>
+                    Auto-include (no guest choice) — <span className="text-[#94a3b8]">unchecked = guest sees an opt-in checkbox at checkout</span>
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
         )}
 
         <F l="Image URL" v={form.image_url} on={(v) => setForm({ ...form, image_url: v })} testid="edit-image" />

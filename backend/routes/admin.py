@@ -302,6 +302,25 @@ class ItemUpsert(BaseModel):
     # string; booking creation refuses any day in this list, blocking the car
     # while it's in maintenance / already reserved by an offline customer.
     blackout_dates: Optional[List[str]] = None
+    # ── Per-person tour pricing (kids/toddlers) ──────────────────────────
+    # When child_price > 0 the booking modal shows Adults / Kids / Toddlers
+    # inputs and totals as (adults × price) + (kids × child_price). Toddlers
+    # under `child_free_under` ride free; kids up to `child_age_max` pay the
+    # child rate. Only relevant for kind="tours".
+    child_price: Optional[float] = None
+    child_age_max: Optional[int] = None
+    child_free_under: Optional[int] = None
+    # ── Optional taxi add-on (tours only) ────────────────────────────────
+    # Per-tour toggle to offer round-trip taxi as an optional add-on at
+    # checkout. When `taxi_addon_forced` is true the fee is auto-included
+    # (no guest choice); otherwise the guest sees a checkbox.
+    # `taxi_addon_price_mode`: "flat" (price applied once) or "per_person"
+    # (price × total passengers).
+    taxi_addon_enabled: Optional[bool] = None
+    taxi_addon_price: Optional[float] = None
+    taxi_addon_price_mode: Optional[str] = None  # "flat" | "per_person"
+    taxi_addon_forced: Optional[bool] = None
+    taxi_addon_label: Optional[str] = None
 
 
 class HomeSlideUpsert(BaseModel):
@@ -334,6 +353,10 @@ class SiteConfigUpdate(BaseModel):
     logo_url: Optional[str] = None
     notify_email_enabled: Optional[bool] = None
     notify_sms_enabled: Optional[bool] = None
+    # Global master switch — when False, the per-tour taxi add-on is hidden
+    # everywhere on the booking flow (per-tour toggle is still respected but
+    # requires this master switch to actually surface the option).
+    taxi_addon_master_enabled: Optional[bool] = None
 
 
 class ContactMessageStatusUpdate(BaseModel):

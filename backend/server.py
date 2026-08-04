@@ -157,6 +157,15 @@ class BookingCreate(BaseModel):
     tip_amount: Optional[float] = Field(0, ge=0, le=1000)
     flight_number: Optional[str] = Field(None, max_length=12)
     gift_code: Optional[str] = Field(None, max_length=32)
+    # Per-person passenger breakdown (tours with child_price > 0). Optional —
+    # falls back to `passengers` for flat-fare items.
+    adults: Optional[int] = Field(None, ge=0, le=40)
+    kids: Optional[int] = Field(None, ge=0, le=40)
+    toddlers: Optional[int] = Field(None, ge=0, le=20)
+    # Optional taxi add-on chosen at checkout (tours only, when enabled on
+    # the tour + master switch is on). Server re-computes the fee from the
+    # tour's stored taxi_addon_price / mode so the total can't be spoofed.
+    taxi_addon_selected: Optional[bool] = False
 
 
 LUGGAGE_FEE_USD = 3.0
@@ -2119,6 +2128,48 @@ async def create_booking(req: BookingCreate):
     deposit_amount = 0.0
     additional_driver_fee = 0.0
     bridge_toll_fee = 0.0
+    taxi_addon_fee = 0.0
+
+    # ── Tour: per-person kids/toddlers pricing + optional taxi add-on ────
+    if req.service_type == "tour":
+        tour_doc = await db.tours.find_one({"id": req.item_id}) or {}
+        child_price = float(tour_doc.get("child_price") or 0.0)
+        if child_price > 0 and (req.adults is not None or req.kids is not None):
+            adults_n = max(0, int(req.adults or 0))
+            kids_n = max(0, int(req.kids or 0))
+            toddlers_n = max(0, int(req.toddlers or 0))
+            # Recompute base as adults × item price + kids × child price.
+            # (Toddlers ride free.) Overwrites the flat-fare base above.
+            base = round(adults_n * float(req.price) + kids_n * child_price, 2)
+            booking["adults"] = adults_n
+            booking["kids"] = kids_n
+            booking["toddlers"] = toddlers_n
+            booking["child_price"] = child_price
+            # 10% group discount for 6+ paying passengers, mirrors the UI.
+            paying = adults_n + kids_n
+            if paying >= 6:
+                group_disc = round(base * 0.10, 2)
+                base = round(base - group_disc, 2)
+                booking["group_discount"] = group_disc
+        # Optional taxi add-on (per-tour toggle + global master switch).
+        cfg = await db.site_config.find_one({"_id": "main"}) or {}
+        master_on = cfg.get("taxi_addon_master_enabled") is not False  # default ON
+        tour_addon_on = bool(tour_doc.get("taxi_addon_enabled"))
+        forced = bool(tour_doc.get("taxi_addon_forced"))
+        if master_on and tour_addon_on and (forced or req.taxi_addon_selected):
+            price = float(tour_doc.get("taxi_addon_price") or 0.0)
+            mode = (tour_doc.get("taxi_addon_price_mode") or "flat").lower()
+            if mode == "per_person":
+                total_pax = int(req.passengers or 1)
+                taxi_addon_fee = round(price * max(1, total_pax), 2)
+            else:
+                taxi_addon_fee = round(price, 2)
+            if taxi_addon_fee > 0:
+                booking["taxi_addon_fee"] = taxi_addon_fee
+                booking["taxi_addon_selected"] = True
+                booking["taxi_addon_label"] = tour_doc.get("taxi_addon_label") or "Round-trip taxi add-on"
+                booking["taxi_addon_price_mode"] = mode
+
     if req.service_type == "taxi":
         if req.flight_number:
             booking["flight_number"] = req.flight_number.strip().upper().replace(" ", "")
@@ -2207,7 +2258,7 @@ async def create_booking(req: BookingCreate):
     computed_total = round(
         base + round_trip_fare_addition - round_trip_discount - rental_discount
         + luggage_fee + passenger_fee + deposit_amount + additional_driver_fee
-        + bridge_toll_fee + tip_amount + booking.get("baby_seat_fee", 0.0),
+        + bridge_toll_fee + tip_amount + taxi_addon_fee + booking.get("baby_seat_fee", 0.0),
         2,
     )
 

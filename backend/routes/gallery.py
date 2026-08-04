@@ -347,6 +347,23 @@ async def admin_reject_submission(sub_id: str, _admin: str = _require()):
     return {"id": sub_id, "status": "rejected"}
 
 
+@router.delete("/admin/gallery/{sub_id}")
+async def admin_delete_submission(sub_id: str, _admin: str = _require()):
+    """Hard-delete an approved/pending guest gallery submission — removes the
+    file from disk AND the DB row. Use the reject endpoint for the softer
+    'mark rejected but keep audit trail' flow."""
+    doc = await _db.gallery_submissions.find_one({"id": sub_id})
+    if not doc:
+        raise HTTPException(404, "Submission not found")
+    try:
+        if doc.get("filename"):
+            (_upload_dir / doc["filename"]).unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        pass
+    await _db.gallery_submissions.delete_one({"id": sub_id})
+    return {"id": sub_id, "deleted": True}
+
+
 
 @router.get("/og/tour/{tour_id}", response_class=HTMLResponse)
 async def og_tour_page(tour_id: str):
