@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money } from "../lib/api";
-import { Phone, MessageCircle, MapPin, ArrowRight, RefreshCw, LogOut, Calendar, User, Navigation } from "lucide-react";
+import { Phone, MessageCircle, MapPin, ArrowRight, RefreshCw, LogOut, Calendar, User, Navigation, Trophy, Zap } from "lucide-react";
 
 // Mobile-first "today's runs" screen for the driver / dispatcher.
 // Auth: reuses the admin JWT — the owner IS the primary driver here.
@@ -33,10 +33,19 @@ export default function DriverManifest() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState({});
+  const [leaderboard, setLeaderboard] = useState(null);
 
   useEffect(() => {
     if (!localStorage.getItem("admin_token")) nav("/admin/login");
   }, [nav]);
+
+  // Pull the team on-time leaderboard once on mount. Failures are silent —
+  // the manifest UX shouldn't break if the stats endpoint hiccups.
+  useEffect(() => {
+    api.get("/admin/driver/leaderboard")
+      .then(({ data }) => setLeaderboard(data))
+      .catch(() => {});
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -141,6 +150,9 @@ export default function DriverManifest() {
       </header>
 
       <div className="px-4 pt-4 space-y-3">
+        {leaderboard && leaderboard.this_month?.total > 0 && (
+          <LeaderboardCard data={leaderboard} />
+        )}
         {bookings.length === 0 ? (
           <div className="text-center py-24 text-white/50" data-testid="driver-manifest-empty">
             <Calendar className="w-10 h-10 mx-auto mb-3 opacity-40" />
@@ -254,6 +266,64 @@ export default function DriverManifest() {
             );
           })
         )}
+      </div>
+    </div>
+  );
+}
+
+
+// ── Leaderboard card ─────────────────────────────────────────────────
+// Team on-time performance gamification. Shows this month's on-time %,
+// delta vs last month, current streak, and a 6-month spark bar. Zero
+// PII — purely a "beat last month" scorecard.
+function LeaderboardCard({ data }) {
+  const pct = data.this_month.on_time_pct;
+  const delta = data.delta_pct;
+  const streak = data.streak || 0;
+  const trend = data.trend || [];
+  const maxPct = Math.max(100, ...trend.map((t) => t.on_time_pct));
+  const tone = pct >= 90 ? "#059669" : pct >= 75 ? "#D4A94A" : "#E86A3C";
+
+  return (
+    <div className="rounded-2xl bg-gradient-to-br from-[#0B3B5C] via-[#0B192C] to-[#0B192C] border border-[#D4A94A]/30 p-4" data-testid="leaderboard-card">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black">
+          <Trophy className="w-3.5 h-3.5" /> Team on-time · this month
+        </div>
+        {streak >= 3 && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#D4A94A]" data-testid="leaderboard-streak">
+            <Zap className="w-3 h-3" /> {streak} in a row
+          </span>
+        )}
+      </div>
+      <div className="mt-2 flex items-baseline gap-3">
+        <span className="serif text-4xl leading-none" style={{ color: tone }} data-testid="leaderboard-pct">{pct}%</span>
+        <span className="text-xs text-white/60">of {data.this_month.total} runs</span>
+        {delta !== 0 && (
+          <span className={`text-[11px] font-bold ${delta > 0 ? "text-[#059669]" : "text-[#E86A3C]"}`} data-testid="leaderboard-delta">
+            {delta > 0 ? "▲" : "▼"} {Math.abs(delta)}% vs last month
+          </span>
+        )}
+      </div>
+      {trend.length > 0 && (
+        <div className="mt-3 flex items-end gap-1 h-10" data-testid="leaderboard-trend">
+          {trend.map((t, i) => {
+            const h = maxPct > 0 ? Math.max(4, (t.on_time_pct / maxPct) * 40) : 4;
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <div
+                  className="w-full rounded-t"
+                  style={{ height: `${h}px`, background: i === trend.length - 1 ? tone : "#D4A94A80" }}
+                  title={`${t.month}: ${t.on_time_pct}% (${t.total} runs)`}
+                />
+                <span className="text-[8px] text-white/50">{t.month}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="mt-2 text-[10px] text-white/50 leading-relaxed">
+        On-time = arrived within {data.on_time_tolerance_min || 5} min of the scheduled pickup.
       </div>
     </div>
   );

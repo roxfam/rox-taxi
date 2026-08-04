@@ -23,6 +23,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from PIL import Image, ImageOps
+import httpx
 
 
 _db = None
@@ -345,6 +346,135 @@ async def admin_reject_submission(sub_id: str, _admin: str = _require()):
     )
     return {"id": sub_id, "status": "rejected"}
 
+
+
+@router.get("/og/tour/{tour_id}", response_class=HTMLResponse)
+async def og_tour_page(tour_id: str):
+    """Server-rendered Open Graph landing page for a specific tour so
+    WhatsApp / Facebook / Twitter previews show the actual excursion
+    image + name + price instead of the generic site logo. Same pattern
+    as /og/photo/{sub_id} — instant meta-refresh redirect for humans."""
+    tour = await _db.tours.find_one({"id": tour_id})
+    if not tour:
+        raise HTTPException(404, "Tour not found")
+
+    name = (tour.get("name") or "Nassau tour").strip()
+    price = tour.get("price")
+    duration = (tour.get("duration") or "").strip()
+    location = (tour.get("location") or "Nassau, Bahamas").strip()
+
+    price_str = f"from ${price}" if price else ""
+    subtitle_bits = [b for b in (duration, price_str) if b]
+    subtitle = " · ".join(subtitle_bits) or "Booked in 60 seconds"
+    description = _html.escape(
+        (tour.get("description") or f"Book {name} with Rox Taxi & Tours — fixed Bahamian tariff, live GPS tracking, licensed drivers.")[:200]
+    )
+    canonical = f"https://roxtaxi.com/tours?tour={tour_id}"
+    canonical_esc = _html.escape(canonical, quote=True)
+    js_redirect = _json.dumps(canonical)
+    title = _html.escape(f"{name} — {subtitle}")
+    og_image_url = f"https://roxtaxi.com/api/og/tour/{tour_id}/image.jpg"
+    og_image_esc = _html.escape(og_image_url, quote=True)
+
+    body = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{title} — Rox Taxi &amp; Tours</title>
+<link rel="canonical" href="{canonical_esc}">
+<meta name="description" content="{description}">
+
+<meta property="og:type" content="product">
+<meta property="og:url" content="{canonical_esc}">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{description}">
+<meta property="og:image" content="{og_image_esc}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{title}">
+<meta property="og:site_name" content="Rox Taxi Service &amp; Tours">
+<meta property="product:price:amount" content="{price or ''}">
+<meta property="product:price:currency" content="USD">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{title}">
+<meta name="twitter:description" content="{description}">
+<meta name="twitter:image" content="{og_image_esc}">
+
+<meta http-equiv="refresh" content="0;url={canonical_esc}">
+<script>window.location.replace({js_redirect});</script>
+<style>body{{font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:2rem;color:#0B3B5C;background:#FAF9F6;}}a{{color:#D4A94A;font-weight:600;}}</style>
+</head>
+<body>
+  <p>Loading tour… <a href="{canonical_esc}">Click here if you aren't redirected</a>.</p>
+</body>
+</html>"""
+    return HTMLResponse(content=body)
+
+
+@router.get("/og/tour/{tour_id}/image.jpg")
+async def og_tour_image(tour_id: str):
+    """Composite the tour's hero image with a gold price ribbon + title
+    band at 1200x630 so social previews look bespoke. Uses PIL + the
+    same request pipeline as /og/photo/*.
+    """
+    import io as _io
+    tour = await _db.tours.find_one({"id": tour_id})
+    if not tour:
+        raise HTTPException(404, "Tour not found")
+    src_url = (tour.get("image_url") or "").strip()
+    if not src_url:
+        raise HTTPException(404, "Tour has no image")
+
+    try:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as ac:
+            r = await ac.get(src_url)
+        r.raise_for_status()
+        img = Image.open(_io.BytesIO(r.content)).convert("RGB")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Couldn't fetch tour image: {e}") from e
+
+    # Fit the source to 1200x630 (cover / center-crop).
+    fitted = ImageOps.fit(img, (1200, 630), method=Image.LANCZOS, centering=(0.5, 0.4))
+
+    # Compose gradient overlay + branded footer bar.
+    from PIL import ImageDraw, ImageFont
+    canvas = fitted.copy()
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    # Bottom-gradient scrim so the title always reads over the photo.
+    for y in range(300, 630):
+        alpha = int(((y - 300) / 330) * 210)
+        draw.line([(0, y), (1200, y)], fill=(11, 25, 44, alpha))
+    # Gold left accent bar
+    draw.rectangle((0, 500, 12, 620), fill=(212, 169, 74, 255))
+
+    # Title text — falls back gracefully if the OS lacks the font file.
+    try:
+        title_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", 56)
+        sub_font   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",     28)
+        brand_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
+    except Exception:  # noqa: BLE001
+        title_font = ImageFont.load_default()
+        sub_font = ImageFont.load_default()
+        brand_font = ImageFont.load_default()
+
+    name = (tour.get("name") or "Nassau tour")[:60]
+    price = tour.get("price")
+    duration = tour.get("duration") or ""
+    bits = [b for b in (duration, f"from ${price}" if price else "") if b]
+
+    draw.text((32, 500), name, font=title_font, fill=(255, 255, 255))
+    if bits:
+        draw.text((32, 570), " · ".join(bits), font=sub_font, fill=(245, 225, 164))
+    # Brand ribbon top-right
+    draw.rectangle((900, 24, 1180, 74), fill=(212, 169, 74, 255))
+    draw.text((915, 34), "ROX TAXI · BAHAMAS", font=brand_font, fill=(11, 25, 44))
+
+    buf = _io.BytesIO()
+    canvas.save(buf, format="JPEG", quality=85, optimize=True, progressive=True)
+    buf.seek(0)
+    return Response(content=buf.read(), media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/og/photo/{sub_id}", response_class=HTMLResponse)

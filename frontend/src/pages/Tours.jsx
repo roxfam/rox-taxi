@@ -3,7 +3,8 @@ import { useSearchParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
 import Seo from "../components/Seo";
-import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown, MapPin, Star, Users, Ship, X as XIcon, CheckCircle2 } from "lucide-react";
+import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown, MapPin, Star, Users, Ship, X as XIcon, CheckCircle2, Share2 } from "lucide-react";
+import { toast } from "sonner";
 import { cdn, cdnSrcSet } from "../lib/img";
 import { PromoPrice } from "../components/PromoPrice";
 
@@ -521,6 +522,7 @@ export default function Tours() {
                   Too long for port
                 </div>
               )}
+              <ShareTourButton tour={t} />
             </div>
             <div className="p-6">
               <h3 className="serif text-2xl text-[#0B3B5C] leading-tight">{t.name}</h3>
@@ -582,6 +584,51 @@ export default function Tours() {
 // ── Cruise Ship Picker ─────────────────────────────────────────────────
 // Standalone so the filter UI can be dropped in above the sort row without
 // bloating the main Tours component. Fully controlled — parent owns state.
+// One-tap "share this tour" — pushes the /api/og/tour/<id> URL to the
+// native share sheet (or clipboard) so WhatsApp / Facebook / Twitter link
+// previews render the bespoke OG image + name + price instead of the
+// generic site logo.
+function ShareTourButton({ tour }) {
+  const [busy, setBusy] = useState(false);
+  const share = async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    const shareUrl = `${window.location.origin}/api/og/tour/${tour.id}`;
+    const payload = {
+      title: tour.name,
+      text: `${tour.name}${tour.price ? ` — from $${tour.price}` : ""} · Rox Taxi Bahamas`,
+      url: shareUrl,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(payload);
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success("Link copied — paste anywhere for a proper preview card.");
+      }
+    } catch {
+      /* user cancelled */
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={share}
+      disabled={busy}
+      data-testid={`tour-share-${tour.id}`}
+      className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 backdrop-blur text-[#0B3B5C] flex items-center justify-center hover:bg-white active:scale-95 shadow-md z-10"
+      title="Share this tour — link preview shows the actual excursion"
+      aria-label="Share this tour"
+    >
+      <Share2 className="w-4 h-4" />
+    </button>
+  );
+}
+
+
 function CruiseShipPicker({ shipId, setShipId, activeShip, fittingCount, totalCount, hideNotFitting, setHideNotFitting, bestFitTour, onPickBestFit }) {
   const budget = activeShip && activeShip.arrive
     ? Math.max(0, portWindowMinutes(activeShip) - PORT_BUFFER_MIN)

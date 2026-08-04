@@ -3365,6 +3365,105 @@ def _reschedule_page(*, title: str, body: str, tint: str = "#0B3B5C",
 </body></html>"""
 
 
+@api_router.get("/admin/driver/leaderboard")
+async def driver_leaderboard(_: str = Depends(require_admin)):
+    """Team on-time performance stats for the manifest gamification panel.
+
+    Computes:
+      • On-time % for the current calendar month (arrived within ±5 min of
+        the scheduled pickup on any booking with an `arrived_at` timestamp)
+      • Previous month's same stat for delta comparison
+      • Current on-time streak (consecutive completed bookings, most-recent
+        backwards, until we hit a late one)
+      • Trailing 6-month sparkline of on-time %
+    Anonymously aggregated — no PII returned. Purely for the driver team
+    to see a friendly weekly / monthly number and try to beat last month.
+    """
+    ON_TIME_TOLERANCE_MIN = 5
+    now = datetime.now(timezone.utc)
+    month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    prev_month_end = month_start - timedelta(seconds=1)
+    prev_month_start = datetime(prev_month_end.year, prev_month_end.month, 1, tzinfo=timezone.utc)
+
+    def _classify(b: dict) -> Optional[bool]:
+        """True = on-time, False = late, None = skip (no arrival data)."""
+        arr = b.get("arrived_at")
+        sched = b.get("booking_date")
+        if not arr or not sched:
+            return None
+        try:
+            a = _parse_booking_date(arr) if isinstance(arr, str) else arr
+            s = _parse_booking_date(sched)
+        except Exception:
+            return None
+        if a.tzinfo is None: a = a.replace(tzinfo=timezone.utc)
+        if s.tzinfo is None: s = s.replace(tzinfo=timezone.utc)
+        # On-time = arrived within tolerance minutes of scheduled pickup.
+        # Early arrival is always fine; late by > tolerance is a miss.
+        delta_min = (a - s).total_seconds() / 60.0
+        return delta_min <= ON_TIME_TOLERANCE_MIN
+
+    async def _month_stats(start: datetime, end: datetime):
+        cur = db.bookings.find({
+            "arrived_at": {"$exists": True, "$ne": None},
+            "booking_date": {"$gte": start.isoformat(), "$lt": end.isoformat()},
+        })
+        total = on_time = late = 0
+        async for b in cur:
+            v = _classify(b)
+            if v is None: continue
+            total += 1
+            if v: on_time += 1
+            else: late += 1
+        pct = round((on_time / total) * 100, 1) if total > 0 else 0.0
+        return {"total": total, "on_time": on_time, "late": late, "on_time_pct": pct}
+
+    this_month = await _month_stats(month_start, now)
+    last_month = await _month_stats(prev_month_start, month_start)
+
+    # 6-month trend
+    trend = []
+    for offset in range(5, -1, -1):
+        target = month_start
+        # Walk back `offset` months
+        y, m = target.year, target.month
+        for _ in range(offset):
+            m -= 1
+            if m == 0:
+                m = 12; y -= 1
+        s = datetime(y, m, 1, tzinfo=timezone.utc)
+        e_m = m + 1; e_y = y
+        if e_m > 12:
+            e_m = 1; e_y += 1
+        e = datetime(e_y, e_m, 1, tzinfo=timezone.utc)
+        stats = await _month_stats(s, e)
+        trend.append({
+            "month": s.strftime("%b"),
+            "on_time_pct": stats["on_time_pct"],
+            "total": stats["total"],
+        })
+
+    # Current streak — walk newest arrivals backward until we hit a late.
+    streak = 0
+    async for b in db.bookings.find(
+        {"arrived_at": {"$exists": True, "$ne": None}}
+    ).sort("arrived_at", -1).limit(50):
+        v = _classify(b)
+        if v is None: continue
+        if v: streak += 1
+        else: break
+
+    return {
+        "on_time_tolerance_min": ON_TIME_TOLERANCE_MIN,
+        "this_month": this_month,
+        "last_month": last_month,
+        "delta_pct": round(this_month["on_time_pct"] - last_month["on_time_pct"], 1),
+        "streak": streak,
+        "trend": trend,
+        "generated_at": now_iso(),
+    }
+
+
 @api_router.get("/flight/{flight_number}")
 async def lookup_flight(flight_number: str):
     key = os.environ.get("AVIATIONSTACK_API_KEY", "").strip()
