@@ -2,8 +2,48 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { toPng } from "html-to-image";
-import { Download, Share2, Copy, Camera, Sparkles, ArrowRight, RefreshCw, Instagram } from "lucide-react";
+import { Download, Share2, Copy, Camera, Sparkles, ArrowRight, RefreshCw, Instagram, Palette, Sun, Waves, PartyPopper } from "lucide-react";
 import { api } from "../lib/api";
+
+// Theme presets — each drives the exportable strip's colours. Kept as plain
+// hex + inline styles (not Tailwind arbitrary values) so html-to-image
+// serialises them reliably at 2× pixel ratio without CSS-var resolution
+// gotchas. Every colour surface a viewer touches — background gradient,
+// pill, accent text, tile ring, footer accents — pulls from this object.
+const THEMES = {
+  classic: {
+    id: "classic", label: "Classic",  Icon: Palette,
+    gradient: "linear-gradient(180deg, #0B3B5C 0%, #0B192C 100%)",
+    accent:  "#D4A94A", accentSoft: "rgba(212,169,74,0.15)", accentRing: "rgba(212,169,74,0.35)",
+    headerText: "#FFFFFF", subText: "rgba(255,255,255,0.72)",
+    tagLabel: "Nassau moments", tagline1: "Real trips.", tagline2: "Real Rox guests.",
+    pillBg: "rgba(212,169,74,0.15)", pillBorder: "rgba(212,169,74,0.4)",
+  },
+  sunset: {
+    id: "sunset", label: "Sunset", Icon: Sun,
+    gradient: "linear-gradient(180deg, #F97316 0%, #EA580C 45%, #7C2D12 100%)",
+    accent:  "#FFE082", accentSoft: "rgba(255,224,130,0.2)", accentRing: "rgba(255,224,130,0.45)",
+    headerText: "#FFF7ED", subText: "rgba(255,247,237,0.78)",
+    tagLabel: "Sunset in Nassau", tagline1: "Golden hour.", tagline2: "Rox Taxi kind of day.",
+    pillBg: "rgba(255,255,255,0.15)", pillBorder: "rgba(255,224,130,0.6)",
+  },
+  ocean: {
+    id: "ocean", label: "Ocean", Icon: Waves,
+    gradient: "linear-gradient(180deg, #0891B2 0%, #0369A1 50%, #082F49 100%)",
+    accent:  "#67E8F9", accentSoft: "rgba(103,232,249,0.18)", accentRing: "rgba(103,232,249,0.4)",
+    headerText: "#F0F9FF", subText: "rgba(240,249,255,0.75)",
+    tagLabel: "Bahamian blues", tagline1: "Salt, sun,", tagline2: "and Rox rides.",
+    pillBg: "rgba(103,232,249,0.15)", pillBorder: "rgba(103,232,249,0.5)",
+  },
+  party: {
+    id: "party", label: "Party", Icon: PartyPopper,
+    gradient: "linear-gradient(180deg, #7C3AED 0%, #C026D3 55%, #EC4899 100%)",
+    accent:  "#FDE047", accentSoft: "rgba(253,224,71,0.18)", accentRing: "rgba(253,224,71,0.45)",
+    headerText: "#FFFFFF", subText: "rgba(255,255,255,0.85)",
+    tagLabel: "Nassau nights", tagline1: "Bookings by day.", tagline2: "Vibes all night.",
+    pillBg: "rgba(253,224,71,0.2)", pillBorder: "rgba(253,224,71,0.55)",
+  },
+};
 
 // "Wall of Nassau moments" — a portrait 9:16 mosaic of the admin-pinned
 // guest photos, rendered for screenshotting and Instagram/WhatsApp story
@@ -22,6 +62,8 @@ export default function Wall() {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [themeId, setThemeId] = useState("classic");
+  const theme = THEMES[themeId] || THEMES.classic;
   const stripRef = useRef(null);
 
   useEffect(() => {
@@ -53,14 +95,13 @@ export default function Wall() {
       const dataUrl = await toPng(stripRef.current, {
         cacheBust: true,
         pixelRatio: 2,
+        // Fallback solid so the PNG never has a transparent edge if the
+        // gradient stops don't fully cover a rounded corner.
         backgroundColor: "#0B192C",
-        style: {
-          // Kill the outer page padding so the export is edge-to-edge
-          margin: "0",
-        },
+        style: { margin: "0" },
       });
       const link = document.createElement("a");
-      link.download = `rox-taxi-nassau-moments-${Date.now()}.png`;
+      link.download = `rox-taxi-${theme.id}-moments-${Date.now()}.png`;
       link.href = dataUrl;
       link.click();
       toast.success("Wall saved to your device 📸");
@@ -144,15 +185,46 @@ export default function Wall() {
           <EmptyWall />
         ) : (
           <div className="w-full max-w-[420px]">
+            {/* Theme picker — sits ABOVE the exportable strip so guests can
+                preview their pick without it leaking into the PNG. */}
+            <div className="mb-5" data-testid="wall-theme-picker">
+              <div className="text-[10px] tracking-[0.28em] uppercase text-white/60 font-black mb-2 text-center">
+                Pick a vibe
+              </div>
+              <div className="flex items-center justify-center gap-2 flex-wrap">
+                {Object.values(THEMES).map((t) => {
+                  const on = t.id === themeId;
+                  const Ico = t.Icon;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setThemeId(t.id)}
+                      data-testid={`wall-theme-${t.id}`}
+                      aria-pressed={on}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold transition-all active:scale-95 ${
+                        on
+                          ? "text-[#0B192C] shadow-[0_8px_20px_rgba(0,0,0,0.3)] scale-105"
+                          : "bg-white/10 border border-white/20 text-white hover:bg-white/20"
+                      }`}
+                      style={on ? { background: t.accent } : {}}
+                    >
+                      <Ico className="w-3.5 h-3.5" /> {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div
               ref={stripRef}
               data-testid="wall-strip"
-              className="rounded-[28px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.5)] bg-gradient-to-b from-[#0B3B5C] to-[#0B192C]"
-              style={{ aspectRatio: "9 / 16" }}
+              className="rounded-[28px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.5)] transition-[background] duration-500"
+              style={{ aspectRatio: "9 / 16", background: theme.gradient }}
             >
-              <StripHeader />
-              <StripMosaic photos={photos} resolveUrl={resolveUrl} />
-              <StripFooter />
+              <StripHeader theme={theme} />
+              <StripMosaic photos={photos} resolveUrl={resolveUrl} theme={theme} />
+              <StripFooter theme={theme} />
             </div>
             <p className="text-center text-[11px] text-white/50 mt-4">
               Tip: on iPhone, tap Save as image → open Photos → share to Instagram Story.
@@ -183,21 +255,24 @@ export default function Wall() {
 }
 
 
-function StripHeader() {
+function StripHeader({ theme }) {
   return (
     <div className="px-5 pt-6 pb-4 text-center">
-      <div className="inline-flex items-center gap-1.5 rounded-full bg-[#D4A94A]/15 border border-[#D4A94A]/40 text-[#D4A94A] px-2.5 py-1 text-[9px] tracking-[0.32em] uppercase font-black">
-        <Sparkles className="w-2.5 h-2.5" /> Nassau moments
+      <div
+        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] tracking-[0.32em] uppercase font-black"
+        style={{ background: theme.pillBg, border: `1px solid ${theme.pillBorder}`, color: theme.accent }}
+      >
+        <Sparkles className="w-2.5 h-2.5" /> {theme.tagLabel}
       </div>
-      <div className="serif text-white text-[26px] leading-[1.1] mt-3">
-        Real trips.<br /><span className="text-[#D4A94A]">Real Rox guests.</span>
+      <div className="serif text-[26px] leading-[1.1] mt-3" style={{ color: theme.headerText }}>
+        {theme.tagline1}<br /><span style={{ color: theme.accent }}>{theme.tagline2}</span>
       </div>
     </div>
   );
 }
 
 
-function StripMosaic({ photos, resolveUrl }) {
+function StripMosaic({ photos, resolveUrl, theme }) {
   // Fixed 6-slot asymmetric mosaic. If we have fewer photos, we pad by
   // repeating so the layout never has empty holes in the export.
   const slots = useMemo(() => {

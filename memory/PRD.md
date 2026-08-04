@@ -18,6 +18,13 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Wall Preset Themes — Classic · Sunset · Ocean · Party)
+- **Theme picker on `/wall`**: four presets (Classic gold, Sunset warm orange→umber, Ocean cyan→navy, Party purple→magenta→pink) rendered as pill chips above the exportable strip. Selection persists in local component state so guests can flip themes without a reload.
+- **Per-theme surface**: each theme drives the strip's background gradient, pill background + border, accent colour (used for guest attribution + section headings), sub-text opacity/tint, header tagline pair ("Real trips. / Real Rox guests." for Classic, "Golden hour. / Rox Taxi kind of day." for Sunset, etc.), tile inset ring, and footer accents. Every value is a plain hex/rgba applied inline so `html-to-image` bakes the colours into the exported PNG at 2× pixel ratio without CSS-var resolution hiccups.
+- **Downloaded filename** now reflects the theme (`rox-taxi-sunset-moments-<ts>.png`) so guests can save a set of variants.
+- **Testids**: `wall-theme-picker`, `wall-theme-classic`, `wall-theme-sunset`, `wall-theme-ocean`, `wall-theme-party`.
+- **No new dependencies**. Existing `html-to-image` and `lucide-react` (Sun / Waves / PartyPopper / Palette icons) cover the picker UI.
+
 ### ✅ Shipped Feb 2026 (Wall of Nassau Moments — shareable strip)
 - **New `/wall` page** (`frontend/src/pages/Wall.jsx`): a portrait 9:16 mosaic strip built from the admin-pinned guest photos. Layout is a fixed 6-slot asymmetric grid (hero + tall + 2 squares + wide bottom) inside a rounded-28px card, branded with a gold "Nassau moments" pill and a Rox logo + roxtaxi.com footer — designed to be screenshot-worthy on iPhone and drop straight into an Instagram Story.
 - **Save-as-image**: `html-to-image::toPng` renders the strip at `pixelRatio: 2` into a PNG the guest can download with one tap ("rox-taxi-nassau-moments-<ts>.png"). Uses `crossOrigin="anonymous"` on every tile so the canvas isn't tainted.
