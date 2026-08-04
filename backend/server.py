@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 import uuid
 import asyncio
 import bcrypt
+import hashlib as _hashlib
 import jwt
 from datetime import datetime, timezone, timedelta
 
@@ -1010,7 +1011,6 @@ async def _run_reminder_tick() -> int:
     # Bucket deterministically by booking-id hash so a single booking stays
     # in one variant forever, and no booking gets nudged twice.
     # Idempotent via `photo_nudge_sent_at`.
-    import hashlib as _hashlib
     a_lower = now - timedelta(hours=48)
     a_upper = now - timedelta(hours=22)
     b_lower = now - timedelta(hours=96)
@@ -1296,6 +1296,12 @@ async def seed_db():
         asyncio.create_task(_booking_reminder_loop())
     except Exception as e:  # noqa: BLE001
         logging.warning("reminder loop start warn: %s", e)
+    # T-60 min airport-specific reminder (passport / belongings / check-in).
+    # Runs alongside the 24h reminder — different cadence, different content.
+    try:
+        asyncio.create_task(_airport_reminder_loop())
+    except Exception as e:  # noqa: BLE001
+        logging.warning("airport reminder loop start warn: %s", e)
     # License retention purge + expired-before-pickup alerts.
     try:
         asyncio.create_task(_license_maintenance_loop())
@@ -2715,6 +2721,8 @@ async def driver_view_booking(booking_id: str):
         "notes": b.get("notes"),
         "flight_number": b.get("flight_number"),
         "driver_arrival_notified_at": b.get("driver_arrival_notified_at"),
+        "eta_auto_ping_sent_at": b.get("eta_auto_ping_sent_at"),
+        "handoff_photos": b.get("handoff_photos") or [],
     }
 
 
@@ -2801,6 +2809,161 @@ async def driver_notify_arrival(booking_id: str, req: DriverStatusUpdate | None 
                   "driver_arrival_notification": result}},
     )
     return {"id": b["id"], "notification": result}
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# T-60 min airport pre-pickup reminder loop
+# ─────────────────────────────────────────────────────────────────────────
+# Runs every 5 min. Picks up bookings that are:
+#   • Airport-bound (dropoff or item_id looks like an airport route)
+#   • Whose pickup is between now+30min and now+90min (60-min sweet spot
+#     with a wide grace window in case a tick is skipped)
+#   • Haven't been reminded yet (`airport_reminder_sent_at` unset)
+#   • Not cancelled / completed
+#
+# The reminder is deliberately airport-specific (passport, boarding pass,
+# check-in, belongings) so a generic "24h" reminder doesn't cover it. Both
+# reminders can fire on the same booking — the 24h one is a "you have a
+# ride tomorrow" nudge, this one is the "grab your passport NOW" nudge.
+
+AIRPORT_REMINDER_MINUTES_BEFORE = 60
+AIRPORT_REMINDER_INTERVAL_SECONDS = 300  # 5 min
+
+
+def _is_airport_bound(b: dict) -> bool:
+    """Heuristic — matches on item_id prefix (`airport-*`), item_name / route
+    containing 'airport' or 'LPIA', or an explicit `flight_number`."""
+    hay = " ".join(str(b.get(k) or "") for k in ("item_id", "item_name", "route", "dropoff_location", "pickup_location")).lower()
+    if b.get("flight_number"):
+        return True
+    if "airport" in hay or "lpia" in hay:
+        return True
+    return False
+
+
+async def _airport_reminder_loop() -> None:
+    log = logging.getLogger("rox.airport_reminders")
+    while True:
+        try:
+            await _run_airport_reminder_tick()
+        except Exception as e:  # noqa: BLE001
+            log.warning("tick error: %s", e)
+        await asyncio.sleep(AIRPORT_REMINDER_INTERVAL_SECONDS)
+
+
+async def _run_airport_reminder_tick() -> int:
+    """Single T-60min airport reminder scan. Returns the number of guests
+    reminded. Broken out so tests can hit it deterministically."""
+    log = logging.getLogger("rox.airport_reminders")
+    now = datetime.now(timezone.utc)
+    # 30-min grace on either side of the 60-min target — window: 30 to 90
+    # minutes ahead of pickup.
+    early = now + timedelta(minutes=30)
+    late  = now + timedelta(minutes=90)
+
+    cfg = await db.site_config.find_one({"_id": "main"}) or {}
+    prefs = {
+        "notify_email_enabled": cfg.get("notify_email_enabled", True),
+        "notify_sms_enabled":   cfg.get("notify_sms_enabled",   True),
+    }
+
+    cur = db.bookings.find({
+        "status": {"$nin": ["cancelled", "completed", "no_show"]},
+        "airport_reminder_sent_at": {"$exists": False},
+    })
+    sent = 0
+    async for b in cur:
+        try:
+            dt = _parse_booking_date(b.get("booking_date", ""))
+        except Exception:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if not (early <= dt <= late):
+            continue
+        if not _is_airport_bound(b):
+            continue
+        try:
+            from notifications import send_airport_pre_pickup_reminder
+            result = send_airport_pre_pickup_reminder(clean(dict(b)), prefs)
+            await db.bookings.update_one(
+                {"id": b["id"]},
+                {"$set": {"airport_reminder_sent_at": now_iso(),
+                          "airport_reminder_result": result}},
+            )
+            sent += 1
+            log.info("Airport reminder sent for %s (email=%s sms=%s)",
+                     b["id"], result["email"].get("sent"), result["sms"].get("sent"))
+        except Exception as e:  # noqa: BLE001
+            log.warning("Airport reminder failed for %s: %s", b["id"], e)
+    return sent
+
+
+@api_router.post("/driver/{booking_id}/handoff-photo")
+async def driver_handoff_photo(booking_id: str, file: UploadFile = File(...)):
+    """Driver-mobile pickup photo upload. Booking-id-as-capability auth (same
+    model as the rest of the /driver/* endpoints). Photos serve as receipts
+    for no-show disputes and delivery-condition proof on rentals.
+
+    Stored under /app/backend/uploads/handoff_<id>_<uuid>.<ext>, appended to
+    booking.handoff_photos: [{url, uploaded_at, size_bytes}]. Max 8MB.
+    """
+    b = await db.bookings.find_one({"id": booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    if b.get("status") in {"cancelled"}:
+        raise HTTPException(409, f"Booking is {b['status']} — photo upload closed")
+    ct = (file.content_type or "").lower()
+    if not ct.startswith("image/"):
+        raise HTTPException(400, "Only image files are allowed")
+    contents = await file.read()
+    if len(contents) > 8 * 1024 * 1024:
+        raise HTTPException(400, "Image too large (max 8MB)")
+    ext = (file.filename or "photo.jpg").rsplit(".", 1)[-1].lower()
+    if ext not in ("jpg", "jpeg", "png", "webp", "heic", "heif"):
+        ext = "jpg"
+    name = f"handoff_{b['id']}_{uuid.uuid4().hex[:8]}.{ext}"
+    (UPLOAD_DIR / name).write_bytes(contents)
+    entry = {
+        "url": f"/api/uploads/{name}",
+        "uploaded_at": now_iso(),
+        "size_bytes": len(contents),
+    }
+    await db.bookings.update_one(
+        {"id": b["id"]},
+        {"$push": {"handoff_photos": entry}, "$set": {"updated_at": now_iso()}},
+    )
+    fresh = await db.bookings.find_one({"id": b["id"]})
+    return {"id": b["id"], "photo": entry, "photos": fresh.get("handoff_photos") or []}
+
+
+@api_router.delete("/driver/{booking_id}/handoff-photo")
+async def driver_delete_handoff_photo(booking_id: str, url: str):
+    """Delete a handoff photo by its stored URL. Guards against traversal
+    by requiring the file to live under UPLOAD_DIR and match the booking id."""
+    b = await db.bookings.find_one({"id": booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    photos = b.get("handoff_photos") or []
+    match = next((p for p in photos if p.get("url") == url), None)
+    if not match:
+        raise HTTPException(404, "Photo not found on this booking")
+    # Strip the /api/uploads/ prefix to get filename, then guard traversal
+    name = url.rsplit("/", 1)[-1]
+    if not name.startswith(f"handoff_{b['id']}_"):
+        raise HTTPException(400, "Filename does not match this booking")
+    path = (UPLOAD_DIR / name).resolve()
+    if not str(path).startswith(str(UPLOAD_DIR.resolve())):
+        raise HTTPException(400, "Invalid path")
+    try:
+        path.unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        pass
+    await db.bookings.update_one(
+        {"id": b["id"]},
+        {"$pull": {"handoff_photos": {"url": url}}},
+    )
+    return {"id": b["id"], "deleted": url}
 
 
 @api_router.get("/bookings/{booking_id}/driver-location")

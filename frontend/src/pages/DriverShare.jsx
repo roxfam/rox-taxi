@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { api } from "../lib/api";
+import { api, BACKEND_URL } from "../lib/api";
 import {
   MapPin, Play, Pause, Signal, AlertTriangle, Check, BellRing,
-  Navigation2, Flag, Ban, User, Phone, MessageCircle,
+  Navigation2, Flag, Ban, User, Phone, MessageCircle, Camera, X, Zap,
 } from "lucide-react";
 
 // Driver mobile console — /driver/:booking_id
@@ -46,7 +46,10 @@ export default function DriverShare() {
   const [advancing, setAdvancing] = useState("");
   const [notifying, setNotifying] = useState(false);
   const [note, setNote] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [previewPhoto, setPreviewPhoto] = useState(null);
   const watchIdRef = useRef(null);
+  const photoInputRef = useRef(null);
 
   const loadBooking = async () => {
     try {
@@ -79,10 +82,16 @@ export default function DriverShare() {
             heading: pos.coords.heading,
             speed_mps: pos.coords.speed,
           };
-          await api.post("/drivers/location", payload);
+          const { data } = await api.post("/drivers/location", payload);
           setLastPing({ ...payload, at: new Date().toISOString() });
           setPingCount((n) => n + 1);
           setError("");
+          // Backend just fired the "~5 min away" auto-ping — surface a
+          // one-shot toast so the driver knows the guest was warned.
+          if (data?.eta_auto_ping) {
+            toast.success("Guest auto-pinged: ~5 minutes away ✓");
+            loadBooking();
+          }
         } catch (e) {
           setError(e?.response?.data?.detail || "Ping failed — retrying…");
         }
@@ -151,6 +160,41 @@ export default function DriverShare() {
     }
   };
 
+  const uploadHandoffPhoto = async (file) => {
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post(`/driver/${booking_id}/handoff-photo`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setBooking((b) => ({ ...b, handoff_photos: data.photos }));
+      toast.success("Pickup photo saved to the booking ✓");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Photo upload failed");
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
+
+  const deleteHandoffPhoto = async (url) => {
+    try {
+      await api.delete(`/driver/${booking_id}/handoff-photo`, { params: { url } });
+      setBooking((b) => ({
+        ...b,
+        handoff_photos: (b?.handoff_photos || []).filter((p) => p.url !== url),
+      }));
+      toast.success("Photo removed");
+      setPreviewPhoto(null);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Delete failed");
+    }
+  };
+
+  const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${BACKEND_URL}${u}`);
+
   const meta = STATUS_META[booking?.status] || STATUS_META.confirmed;
   const isClosed = booking && ["completed", "cancelled", "no_show"].includes(booking.status);
   const phone = (booking?.customer_phone || "").replace(/[^+\d]/g, "");
@@ -200,6 +244,11 @@ export default function DriverShare() {
             {booking.driver_arrival_notified_at && (
               <div className="text-[11px] text-[#059669] flex items-center gap-1">
                 <Check className="w-3 h-3" /> Guest already pinged at {new Date(booking.driver_arrival_notified_at).toLocaleTimeString()}
+              </div>
+            )}
+            {booking.eta_auto_ping_sent_at && !booking.driver_arrival_notified_at && (
+              <div className="text-[11px] text-[#E86A3C] flex items-center gap-1" data-testid="driver-share-eta-auto-fired">
+                <Zap className="w-3 h-3" /> ~5-min ETA auto-ping sent at {new Date(booking.eta_auto_ping_sent_at).toLocaleTimeString()}
               </div>
             )}
           </div>
@@ -291,6 +340,96 @@ export default function DriverShare() {
         </div>
       )}
 
+      {/* Photo handoff proof — camera capture on mobile, receipts for no-show
+          disputes and rental delivery-condition claims. */}
+      {booking && !isClosed && (
+        <div className="w-full max-w-md mt-3 rounded-3xl bg-white/5 border border-white/10 p-5 backdrop-blur" data-testid="driver-share-photos">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[10px] tracking-[0.32em] uppercase text-white/60 font-black">
+              Handoff proof photos
+            </div>
+            <span className="text-[10px] text-white/50 font-bold">
+              {(booking.handoff_photos || []).length}
+            </span>
+          </div>
+
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            data-testid="driver-share-photo-input"
+            onChange={(e) => uploadHandoffPhoto(e.target.files?.[0])}
+          />
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            disabled={uploadingPhoto}
+            data-testid="driver-share-photo-capture"
+            className="w-full rounded-2xl bg-[#D4A94A] text-[#0B192C] text-sm font-bold py-3 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60"
+          >
+            <Camera className="w-4 h-4" />
+            {uploadingPhoto ? "Uploading…" : "Snap pickup photo"}
+          </button>
+
+          {(booking.handoff_photos || []).length > 0 && (
+            <div className="mt-3 grid grid-cols-3 gap-2" data-testid="driver-share-photo-grid">
+              {(booking.handoff_photos || []).map((p) => (
+                <button
+                  key={p.url}
+                  type="button"
+                  onClick={() => setPreviewPhoto(p)}
+                  data-testid={`driver-share-photo-thumb-${p.url.split("_").pop()}`}
+                  className="aspect-square rounded-xl overflow-hidden ring-1 ring-white/20 hover:ring-[#D4A94A] transition-all active:scale-95"
+                >
+                  <img src={resolveUrl(p.url)} alt="Handoff proof" className="w-full h-full object-cover" loading="lazy" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-2 text-[10px] text-white/40 leading-relaxed text-center">
+            Snap a photo of the guest, luggage, or vehicle at pickup — saved to this booking as receipt.
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox / delete confirm for a single handoff photo */}
+      {previewPhoto && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur flex items-center justify-center p-4"
+          onClick={() => setPreviewPhoto(null)}
+          data-testid="driver-share-photo-preview"
+        >
+          <div className="max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <img src={resolveUrl(previewPhoto.url)} alt="Handoff proof" className="w-full rounded-2xl" />
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <div className="text-white/60 text-xs">
+                {new Date(previewPhoto.uploaded_at).toLocaleString()}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => deleteHandoffPhoto(previewPhoto.url)}
+                  data-testid="driver-share-photo-delete"
+                  className="rounded-full bg-[#DC2626] text-white text-xs font-bold px-3 py-2"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewPhoto(null)}
+                  className="rounded-full bg-white text-[#0B192C] text-xs font-bold px-3 py-2 inline-flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" /> Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* GPS live-share block — unchanged core, restyled to match new layout */}
       {!isClosed && (
         <div className="w-full max-w-md mt-3 rounded-3xl bg-white/5 border border-white/10 p-5 backdrop-blur" data-testid="driver-share-gps">
@@ -334,6 +473,9 @@ export default function DriverShare() {
                   {lastPing.accuracy_m && ` · ±${Math.round(lastPing.accuracy_m)}m`}
                 </div>
               )}
+              <div className="text-[10px] text-white/40 leading-relaxed pt-1">
+                <Zap className="w-3 h-3 inline text-[#E86A3C] mr-0.5" /> Guest auto-pings when you're within 800m (~5 min) of pickup.
+              </div>
             </div>
           )}
 

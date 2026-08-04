@@ -770,6 +770,166 @@ def _html_escape(s: str) -> str:
     return _h.escape(str(s or ""), quote=True)
 
 
+def send_airport_pre_pickup_reminder(booking: dict, prefs: Optional[dict] = None) -> dict:
+    """T-60min "we're picking you up in an hour" reminder for airport-bound
+    bookings. Deliberately checklist-heavy so guests aren't scrambling in
+    the driveway looking for a lost passport:
+      • All personal belongings collected from the room / villa
+      • Flight status confirmed (online) — not delayed, not cancelled
+      • Online check-in complete + boarding pass on phone
+      • Passport in-hand (biggest cause of "we have to turn around" calls)
+
+    Sends both email (checklist rendering) + SMS (short-form). Idempotency
+    is the caller's job — this helper just delivers.
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+    report = {
+        "kind": "airport_pre_pickup",
+        "email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+        "sms":   {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
+    }
+    guest_first = (booking.get("customer_name") or "there").split(" ")[0]
+    pickup = booking.get("pickup_location") or "your pickup point"
+    dropoff = booking.get("dropoff_location") or "the airport"
+    flight = (booking.get("flight_number") or "").strip()
+    when = booking.get("booking_date") or ""
+    when_pretty = when.replace("T", " ").split("+")[0][:16] if when else ""
+
+    subject = f"1 hour to your Rox airport pickup — Booking {booking['id']}"
+    text = (
+        f"Hi {guest_first},\n\n"
+        f"Your Rox driver arrives in ~1 hour at {pickup} to take you to {dropoff}.\n"
+        f"Pickup time: {when_pretty} (local Nassau time)\n"
+        + (f"Flight: {flight}\n\n" if flight else "\n")
+        + f"Quick pre-departure checklist — takes 2 minutes:\n"
+        f"  [ ] Passport in your carry-on (biggest 'turn around' cause)\n"
+        f"  [ ] All personal belongings collected from the room\n"
+        f"  [ ] Flight status confirmed online — no delays/cancellations\n"
+        f"  [ ] Online check-in complete + boarding pass saved to phone/wallet\n\n"
+        f"Track your driver live: https://roxtaxi.com/track?id={booking['id']}\n"
+        f"Anything wrong? WhatsApp us: +1 (242) 432-2587\n\n"
+        f"Safe travels — see you soon.\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:700;">1 hour to pickup</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;line-height:1.15;">
+        Hi {_html_escape(guest_first)}, your Rox airport pickup is in ~1 hour.
+      </h1>
+      <p style="color:#64748B;font-size:14px;margin:12px 0 0;">
+        We'll be at <strong style="color:#0B3B5C;">{_html_escape(pickup)}</strong> to take you to <strong style="color:#0B3B5C;">{_html_escape(dropoff)}</strong> around <strong style="color:#0B3B5C;">{_html_escape(when_pretty)}</strong>.{f' Flight <strong style="color:#0B3B5C;">{_html_escape(flight)}</strong>.' if flight else ''}
+      </p>
+
+      <div style="background:#fff;border:2px solid #D4A94A;border-radius:16px;padding:22px;margin-top:20px;">
+        <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Pre-departure checklist</div>
+        <div style="font-family:Georgia,serif;color:#0B3B5C;font-size:18px;margin-top:4px;">2 minutes to check — saves the trip</div>
+
+        <table style="width:100%;margin-top:16px;border-collapse:collapse;font-size:14px;color:#0B3B5C;">
+          <tr>
+            <td style="vertical-align:top;padding:8px 0;width:32px;font-size:20px;">🛂</td>
+            <td style="padding:8px 0;"><strong>Passport</strong> — in your carry-on, not the checked bag. Biggest cause of "turn around" calls.</td>
+          </tr>
+          <tr>
+            <td style="vertical-align:top;padding:8px 0;font-size:20px;">🧳</td>
+            <td style="padding:8px 0;"><strong>All belongings collected</strong> — check drawers, safe, bathroom, charger sockets.</td>
+          </tr>
+          <tr>
+            <td style="vertical-align:top;padding:8px 0;font-size:20px;">✈️</td>
+            <td style="padding:8px 0;"><strong>Flight status confirmed</strong> — check your airline app or FlightAware. Delays / cancellations happen.</td>
+          </tr>
+          <tr>
+            <td style="vertical-align:top;padding:8px 0;font-size:20px;">📱</td>
+            <td style="padding:8px 0;"><strong>Online check-in done</strong> — boarding pass in Apple Wallet / Google Wallet. Skip the airline counter.</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:20px;margin-top:18px;">
+        <div style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#64748B;">Booking</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#0B3B5C;margin-top:4px;">{_html_escape(booking['id'])}</div>
+        <div style="color:#0B3B5C;font-size:13px;margin-top:6px;">{_html_escape(booking.get('item_name',''))}</div>
+      </div>
+
+      <div style="margin:22px 0 4px;">
+        <a href="https://roxtaxi.com/track?id={booking['id']}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:800;padding:12px 22px;border-radius:999px;font-size:14px;">Track driver live →</a>
+        <a href="https://wa.me/12424322587" style="display:inline-block;margin-left:8px;background:#25D366;color:#fff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:999px;font-size:13px;">WhatsApp us</a>
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:22px;">Safe travels. — Rox Taxi Service &amp; Tours · Nassau, Bahamas</p>
+    </div>
+    """
+
+    if email_enabled and booking.get("customer_email"):
+        report["email"].update(send_email(booking["customer_email"], subject, html, text, category="confirmation"))
+    else:
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+
+    if sms_enabled and booking.get("customer_phone"):
+        checklist_sms = (
+            f"Rox Taxi: 1hr to pickup at {pickup}. Quick check — Passport ✓ "
+            f"Belongings ✓ Flight confirmed ✓ Checked in online ✓"
+            + (f" Flight {flight}." if flight else "")
+            + f" Track: roxtaxi.com/track?id={booking['id']}"
+        )
+        report["sms"].update(send_sms(booking["customer_phone"], checklist_sms))
+    else:
+        report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+
+    return report
+
+
+def send_driver_eta_notification(booking: dict, minutes_away: int = 5,
+                                 prefs: Optional[dict] = None) -> dict:
+    """Fires ONCE when the driver's live GPS enters the pickup radius. Tells
+    the guest "your driver is X minutes away" so they can head down to the
+    lobby / port gate. Both SMS + email (SMS is the primary channel — email
+    is a lock-screen fallback).
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+    report = {
+        "kind": "driver_eta",
+        "email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+        "sms":   {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
+    }
+    guest_first = (booking.get("customer_name") or "there").split(" ")[0]
+    pickup = booking.get("pickup_location") or booking.get("item_name") or "your pickup point"
+    subject = f"Rox driver ~{minutes_away} min away — Booking {booking['id']}"
+    text = (
+        f"Hi {guest_first},\n\n"
+        f"Your Rox driver is close — about {minutes_away} minutes from {pickup}.\n"
+        f"Booking: {booking['id']}\n"
+        f"Track live: https://roxtaxi.com/track?id={booking['id']}\n\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#E86A3C;font-weight:700;">~{minutes_away} minutes away</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;">Hi {_html_escape(guest_first)}, your Rox driver is close.</h1>
+      <p style="color:#64748B;font-size:14px;margin:14px 0 0;">
+        About <strong style="color:#E86A3C;">{minutes_away} minutes</strong> out from <strong style="color:#0B3B5C;">{_html_escape(pickup)}</strong>. Head down when you're ready.
+      </p>
+      <div style="margin:22px 0 4px;">
+        <a href="https://roxtaxi.com/track?id={booking['id']}" style="display:inline-block;background:#E86A3C;color:#fff;text-decoration:none;font-weight:800;padding:12px 22px;border-radius:999px;font-size:14px;">Track live →</a>
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:22px;">Rox Taxi Service &amp; Tours · Nassau, Bahamas</p>
+    </div>
+    """
+    if email_enabled and booking.get("customer_email"):
+        report["email"].update(send_email(booking["customer_email"], subject, html, text, category="confirmation"))
+    else:
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+    if sms_enabled and booking.get("customer_phone"):
+        sms = f"Rox Taxi: Driver ~{minutes_away} min from {pickup} (Booking {booking['id']}). Track: roxtaxi.com/track?id={booking['id']}"
+        report["sms"].update(send_sms(booking["customer_phone"], sms))
+    else:
+        report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+    return report
+
+
 def send_driver_arrival_notification(booking: dict, prefs: Optional[dict] = None) -> dict:
     """Fires when the driver taps "I've arrived" from their mobile screen.
     Sends BOTH an SMS (fastest read-receipt) and an email (for lock-screen
