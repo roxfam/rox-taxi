@@ -26,16 +26,18 @@ export default function AdminDashboard() {
   const load = async () => {
     setLoading(true);
     try {
-      const [s, b, g, a] = await Promise.all([
+      const [s, b, g, a, n] = await Promise.all([
         api.get("/admin/stats"),
         api.get("/admin/bookings"),
         api.get("/admin/gallery/pending").catch(() => ({ data: [] })),
         api.get("/admin/auth/methods-summary").catch(() => ({ data: null })),
+        api.get("/admin/photo-nudge-stats").catch(() => ({ data: null })),
       ]);
       setStats(s.data);
       setBookings(b.data);
       setPendingPhotos(Array.isArray(g.data) ? g.data.length : 0);
       setAuthMethods(a.data);
+      setNudgeStats(n.data);
     } catch (e) {
       if (e?.response?.status === 401) {
         localStorage.removeItem("admin_token");
@@ -170,7 +172,7 @@ export default function AdminDashboard() {
         {/* Post-trip photo-nudge funnel — proves the email nudge is driving
             submissions to fill the "Recent group tours" strip on
             /cruise-groups-nassau with real customer photos. */}
-        <PhotoNudgeCard data={nudgeStats} />
+        <PhotoNudgeCard data={nudgeStats} onRecompute={(fresh) => setNudgeStats((prev) => prev ? { ...prev, ...fresh } : fresh)} />
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">
@@ -860,12 +862,31 @@ function LegendChip({ testId, Icon, color, label, value, pct }) {
  * driving real submissions. Shows lifetime + last-30-day funnel:
  * nudges sent → attributed submissions → conversion %.
  */
-function PhotoNudgeCard({ data }) {
+function PhotoNudgeCard({ data, onRecompute }) {
+  const [recomputing, setRecomputing] = useState(false);
+  const [flash, setFlash] = useState(false);
   if (!data) return null;
   const life = data.lifetime || {};
   const r = data.last_30d || {};
   const lifeConv = Number(life.conversion_pct || 0);
   const recentConv = Number(r.conversion_pct || 0);
+
+  const recompute = async () => {
+    if (recomputing) return;
+    setRecomputing(true);
+    try {
+      const { data: fresh } = await api.get("/admin/photo-nudge-stats/ab-significance");
+      if (fresh && typeof onRecompute === "function") {
+        onRecompute({ ab_test: fresh.ab_test, ab_significance: fresh.ab_significance });
+      }
+      setFlash(true);
+      setTimeout(() => setFlash(false), 900);
+    } catch {
+      // Silent — the panel keeps whatever it had.
+    } finally {
+      setRecomputing(false);
+    }
+  };
   return (
     <div className="mt-6 rounded-2xl border border-[#E2E8F0] bg-white p-5" data-testid="admin-photo-nudge-card">
       <div className="flex items-center justify-between gap-4 mb-4">
@@ -894,11 +915,27 @@ function PhotoNudgeCard({ data }) {
         <NudgeStat testId="nudge-30d-conv"      label="Conversion"           value={`${recentConv}%`}             tone="#E86A3C" Icon={TrendingUp} />
       </div>
 
-      {/* A/B variant breakdown — 24h send vs 3-day send */}
+      {/* A/B variant breakdown — 24h send vs 3-day send. Tapping any card
+          triggers a fresh /admin/photo-nudge-stats/ab-significance recompute
+          so the "Ship the winner" hint below updates inline without a
+          full page reload. */}
       {Array.isArray(data.ab_test) && data.ab_test.length > 0 && (
         <div className="mt-4 pt-4 border-t border-[#E2E8F0]" data-testid="nudge-ab-block">
-          <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-bold mb-3">
-            A/B send-window test · last 30 days
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-bold">
+              A/B send-window test · last 30 days
+            </div>
+            <button
+              type="button"
+              onClick={recompute}
+              disabled={recomputing}
+              data-testid="nudge-ab-recompute"
+              className="text-[10px] uppercase tracking-widest inline-flex items-center gap-1 rounded-full px-2 py-1 border border-[#E2E8F0] text-[#0B3B5C] hover:bg-[#F1F5F9] active:scale-95 disabled:opacity-60"
+              title="Recompute variant conversion + significance from the latest data"
+            >
+              <RotateCw className={`w-3 h-3 ${recomputing ? "animate-spin" : ""}`} />
+              {recomputing ? "Recomputing…" : "Recompute"}
+            </button>
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
             {data.ab_test.map((v) => {
@@ -907,10 +944,14 @@ function PhotoNudgeCard({ data }) {
                 && v.conversion_pct > 0
                 && data.ab_test[0].conversion_pct !== data.ab_test[1].conversion_pct;
               return (
-                <div
+                <button
                   key={v.variant}
+                  type="button"
+                  onClick={recompute}
+                  disabled={recomputing}
                   data-testid={`nudge-ab-variant-${v.variant}`}
-                  className={`rounded-xl border p-3 ${isWinning ? "border-[#059669] bg-[#059669]/6" : "border-[#E2E8F0] bg-[#FAF9F6]"}`}
+                  className={`text-left rounded-xl border p-3 transition-all cursor-pointer hover:shadow-sm active:scale-[.99] ${isWinning ? "border-[#059669] bg-[#059669]/6 hover:bg-[#059669]/10" : "border-[#E2E8F0] bg-[#FAF9F6] hover:border-[#D4A94A]"} ${flash ? "ring-2 ring-[#D4A94A]" : ""}`}
+                  title="Tap to recompute significance from the latest data"
                 >
                   <div className="flex items-center justify-between">
                     <div className="text-xs font-bold text-[#0B3B5C]">
@@ -929,7 +970,7 @@ function PhotoNudgeCard({ data }) {
                       {v.attributed_submissions} / {v.nudges_sent} nudges
                     </span>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

@@ -700,6 +700,76 @@ def send_featured_notification(submission: dict) -> dict:
 
 
 
+def send_suspicious_login_alert(*, to_email: str, name: str, method: str,
+                                city: str, country: str, device: str,
+                                ip: str, when_iso: str,
+                                sessions_url: str) -> dict:
+    """Alert the account owner that a new session opened from a new city or a
+    very different device/browser than their prior login. One-way "if this
+    wasn't you, revoke it" nudge that links straight to the Active Sessions
+    card so they can hit Sign Out Everywhere in two taps.
+
+    Email-only (never SMS — a phishy-looking SMS about account activity is
+    worse than no alert).
+    """
+    first = (name or "there").strip().split(" ")[0] or "there"
+    loc_line = ", ".join([p for p in (city, country) if p]) or "an unfamiliar location"
+    subject = f"New sign-in to your Rox Taxi account from {loc_line}"
+    when_pretty = (when_iso or "").replace("T", " ").split(".")[0] + " UTC"
+    text = (
+        f"Hi {first},\n\n"
+        f"We just spotted a new sign-in to your Rox Taxi account:\n\n"
+        f"  When   : {when_pretty}\n"
+        f"  From   : {loc_line}\n"
+        f"  Device : {device}\n"
+        f"  Method : {method}\n"
+        f"  IP     : {ip}\n\n"
+        f"If this was you — great, nothing to do.\n\n"
+        f"If it wasn't, open your Active Sessions and hit \"Sign out everywhere\":\n"
+        f"  {sessions_url}\n\n"
+        f"Then set a new password from the login page. This alert only fires\n"
+        f"when a new city or a very different device signs in — routine\n"
+        f"sign-ins from your usual gear stay quiet.\n\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Account security</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;line-height:1.15;">New sign-in from {_html_escape(loc_line)}</h1>
+      <p style="color:#64748B;font-size:15px;margin:14px 0 0;">
+        Hi {_html_escape(first)} — we just spotted a new sign-in to your Rox Taxi account. If this was you, you're all set. If it wasn't, revoke it below.
+      </p>
+
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:20px;margin-top:20px;">
+        <table style="width:100%;font-size:13px;color:#0B3B5C;border-collapse:collapse;">
+          <tr><td style="color:#64748B;padding:4px 0;">When</td><td style="text-align:right;font-weight:600;">{_html_escape(when_pretty)}</td></tr>
+          <tr><td style="color:#64748B;padding:4px 0;">From</td><td style="text-align:right;font-weight:600;">{_html_escape(loc_line)}</td></tr>
+          <tr><td style="color:#64748B;padding:4px 0;">Device</td><td style="text-align:right;font-weight:600;">{_html_escape(device)}</td></tr>
+          <tr><td style="color:#64748B;padding:4px 0;">Method</td><td style="text-align:right;font-weight:600;">{_html_escape(method)}</td></tr>
+          <tr><td style="color:#64748B;padding:4px 0;">IP</td><td style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;">{_html_escape(ip)}</td></tr>
+        </table>
+      </div>
+
+      <div style="margin:22px 0 8px;">
+        <a href="{_html_escape(sessions_url)}" style="display:inline-block;background:#DC2626;color:#fff;text-decoration:none;font-weight:800;padding:12px 22px;border-radius:999px;font-size:14px;">Wasn't me — sign out everywhere</a>
+      </div>
+      <p style="color:#64748B;font-size:12px;margin:10px 0 22px;">
+        Or paste this link: <span style="color:#0B3B5C;word-break:break-all;">{_html_escape(sessions_url)}</span>
+      </p>
+      <div style="border-top:1px solid #E2E8F0;padding-top:18px;color:#94a3b8;font-size:12px;">
+        We only send this when a new city or a very different device signs in — routine sign-ins from your usual gear stay quiet. If in doubt, reset your password from the login page.
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:20px;">Rox Taxi Service &amp; Tours · Nassau, Bahamas</p>
+    </div>
+    """
+    return send_email(to_email, subject, html, text, category="confirmation")
+
+
+def _html_escape(s: str) -> str:
+    import html as _h
+    return _h.escape(str(s or ""), quote=True)
+
+
 def send_password_reset_email(*, to_email: str, name: str, reset_url: str,
                               expires_in_minutes: int = 60) -> dict:
     """Password-reset link email. Category "confirmation" reuses the same

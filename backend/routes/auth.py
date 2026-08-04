@@ -115,6 +115,99 @@ def _site_base_url() -> str:
     return (os.environ.get("SITE_BASE_URL") or "https://roxtaxi.com").rstrip("/")
 
 
+# ─── Suspicious-login detection ──────────────────────────────────────
+# Two prior-session comparators — a new city (from IP geo cache) or a
+# fundamentally different device signature (browser+OS from UA) counts
+# as "suspicious" and triggers a one-shot alert email to the account
+# owner. We deliberately do NOT alert on IP change alone (mobile networks
+# rotate IPs freely) or minor UA version bumps (Chrome auto-updates).
+
+def _device_signature(ua: str) -> str:
+    """Coarse browser+OS fingerprint. Chrome 132 → Chrome 133 stays 'Chrome on macOS'."""
+    # Reuse the existing UI-friendly parser — its browser/OS bucketing is
+    # exactly the granularity we want for "same device" comparison.
+    return _parse_ua(ua)
+
+
+async def _maybe_send_suspicious_login_alert(*, user_id: str, method: str,
+                                             ip: str, ua: str, when_iso: str,
+                                             event_id) -> None:
+    """Compare this brand-new session against the user's most recent prior
+    login. If either the city OR the device signature is meaningfully
+    different, fire a one-time alert email to the account owner and stamp
+    the login_events doc so we never re-alert the same session."""
+    try:
+        # Find the most recent PRIOR login event (exclude the one we just wrote).
+        prior = await _db.login_events.find_one(
+            {"user_id": user_id, "action": "login", "_id": {"$ne": event_id}},
+            sort=[("at", -1)],
+        )
+        # First-ever login — don't alarm the user about their own signup.
+        if not prior:
+            return
+
+        prior_ip = (prior.get("ip") or "").strip()
+        prior_ua = (prior.get("user_agent") or "").strip()
+
+        # If we don't have anything to compare against (older sessions
+        # pre-date the ip/ua columns) skip silently — a single legacy
+        # alert about "your first ever recorded device" is just noise.
+        if not prior_ip and not prior_ua:
+            return
+
+        cur_geo = await _geo_for_ip(ip)
+        prior_geo = await _geo_for_ip(prior_ip) if prior_ip else {"city": "", "country": ""}
+
+        cur_city = (cur_geo.get("city") or "").strip().lower()
+        prior_city = (prior_geo.get("city") or "").strip().lower()
+        cur_device = _device_signature(ua)
+        prior_device = _device_signature(prior_ua)
+
+        new_city = bool(cur_city) and bool(prior_city) and cur_city != prior_city
+        new_device = bool(cur_device) and bool(prior_device) and cur_device != prior_device
+
+        if not (new_city or new_device):
+            return
+
+        # Fetch user to get the email + display name
+        user = await _db.users.find_one({"user_id": user_id})
+        if not user or not user.get("email"):
+            return
+
+        loc_parts = [cur_geo.get("city"), cur_geo.get("country")]
+        try:
+            from notifications import send_suspicious_login_alert
+            result = send_suspicious_login_alert(
+                to_email=user["email"],
+                name=user.get("name", ""),
+                method=method.capitalize() if method else "Email",
+                city=loc_parts[0] or "",
+                country=loc_parts[1] or "",
+                device=cur_device,
+                ip=ip or "unknown",
+                when_iso=when_iso,
+                sessions_url=f"{_site_base_url()}/my-bookings#sessions",
+            )
+        except Exception:  # noqa: BLE001
+            result = {"sent": False, "provider": "none", "error": "send_failed"}
+
+        await _db.login_events.update_one(
+            {"_id": event_id},
+            {"$set": {
+                "suspicious_alert_sent": bool(result.get("sent")),
+                "suspicious_alert_at": _now_iso(),
+                "suspicious_alert_reason": (
+                    "new_city+new_device" if new_city and new_device
+                    else ("new_city" if new_city else "new_device")
+                ),
+                "suspicious_alert_result": result,
+            }},
+        )
+    except Exception:  # noqa: BLE001
+        # Never let a security-alert bug hurt the login itself.
+        return
+
+
 async def _create_customer_session(user_id: str, method: str, request: Optional["Request"] = None) -> str:
     session_token = f"sess_{uuid.uuid4().hex}{uuid.uuid4().hex}"
     ts = _now_iso()
@@ -139,9 +232,19 @@ async def _create_customer_session(user_id: str, method: str, request: Optional[
         {"user_id": user_id},
         {"$set": {"last_login_at": ts, "last_login_method": method}},
     )
-    await _db.login_events.insert_one({
+    event_result = await _db.login_events.insert_one({
         "user_id": user_id, "action": "login", "method": method, "at": ts,
+        "ip": ip, "user_agent": ua,
     })
+    # Suspicious-login check runs in the background so login stays fast.
+    try:
+        import asyncio as _aio
+        _aio.create_task(_maybe_send_suspicious_login_alert(
+            user_id=user_id, method=method, ip=ip, ua=ua,
+            when_iso=ts, event_id=event_result.inserted_id,
+        ))
+    except Exception:  # noqa: BLE001
+        pass
     return session_token
 
 
@@ -216,10 +319,27 @@ async def process_google_session(request: Request, response: Response):
         "user_id": user_id, "session_token": session_token, "auth_method": "google",
         "expires_at": (_now_utc() + timedelta(days=7)).isoformat(),
         "last_activity_at": ts, "created_at": ts,
+        "ip": ((request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                if request.headers.get("x-forwarded-for") else
+                (request.client.host if request.client else ""))[:64]),
+        "user_agent": (request.headers.get("user-agent") or "")[:400],
     })
-    await _db.login_events.insert_one({
+    google_ip = ((request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                  if request.headers.get("x-forwarded-for") else
+                  (request.client.host if request.client else ""))[:64])
+    google_ua = (request.headers.get("user-agent") or "")[:400]
+    event_result = await _db.login_events.insert_one({
         "user_id": user_id, "action": "login", "method": "google", "at": ts,
+        "ip": google_ip, "user_agent": google_ua,
     })
+    try:
+        import asyncio as _aio
+        _aio.create_task(_maybe_send_suspicious_login_alert(
+            user_id=user_id, method="google", ip=google_ip, ua=google_ua,
+            when_iso=ts, event_id=event_result.inserted_id,
+        ))
+    except Exception:  # noqa: BLE001
+        pass
 
     _set_session_cookie(response, session_token)
 
@@ -386,13 +506,24 @@ def _parse_ua(ua: str) -> str:
     return f"{browser} on {os_name}" if os_name != "Unknown" else browser
 
 
-async def _city_for_ip(ip: str) -> str:
+async def _geo_for_ip(ip: str) -> dict:
+    """Look up cached geo for an IP. Analytics.py writes rows keyed by _id=ip
+    with a nested {geo: {...}} sub-doc. Returns {city, region, country} or
+    empty strings when we've never seen the IP before (no upstream call — we
+    don't want to slow down login by more than one Mongo hit)."""
     if not ip:
-        return ""
-    doc = await _db.visitor_geo_cache.find_one({"ip": ip})
+        return {"city": "", "region": "", "country": ""}
+    doc = await _db.visitor_geo_cache.find_one({"_id": ip})
     if not doc:
-        return ""
-    parts = [doc.get(k) for k in ("city", "region", "country") if doc.get(k)]
+        return {"city": "", "region": "", "country": ""}
+    g = doc.get("geo") or doc
+    return {"city": g.get("city", ""), "region": g.get("region", ""), "country": g.get("country", "")}
+
+
+async def _city_for_ip(ip: str) -> str:
+    g = await _geo_for_ip(ip)
+    parts = [g.get("city"), g.get("region"), g.get("country")]
+    parts = [p for p in parts if p]
     return ", ".join(parts[:2])
 
 
