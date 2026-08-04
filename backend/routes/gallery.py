@@ -13,13 +13,15 @@ All Facebook auto-post triggers live here now. Wired up by server.py via
 `configure()` + `include_router()`.
 """
 import html as _html
+import io as _io
 import json as _json
 import uuid
 from typing import Callable, Awaitable, Optional
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
+from PIL import Image, ImageOps
 
 
 _db = None
@@ -231,7 +233,39 @@ async def admin_pin_submission(sub_id: str, _admin: str = _require()):
             if _logger:
                 _logger.warning(f"featured-notify failed: {e}")
 
-    return {"id": sub_id, "is_pinned": new_pinned, "guest_notified": bool(notify_result and notify_result.get("sent"))}
+    # On PIN (not unpin), auto-post a "Featured Guest" post to Facebook with
+    # the deep-link OG URL. Every click on the post goes through the OG page
+    # which shows the actual guest photo in any onward share. Idempotent via
+    # `featured_fb_posted_at`.
+    fb_featured_result = None
+    if new_pinned and not doc.get("featured_fb_posted_at"):
+        try:
+            from facebook import post_pinned_photo_to_facebook
+            deep_link = f"https://roxtaxi.com/api/og/photo/{sub_id}"
+            fb_featured_result = await post_pinned_photo_to_facebook(
+                image_url=doc.get("url", ""),
+                submitter_name=doc.get("submitter_name", ""),
+                guest_caption=doc.get("caption", ""),
+                deep_link=deep_link,
+            )
+            if fb_featured_result.get("ok"):
+                await _db.gallery_submissions.update_one(
+                    {"id": sub_id},
+                    {"$set": {
+                        "featured_fb_posted_at": _now_iso(),
+                        "featured_fb_post_id": fb_featured_result.get("post_id"),
+                    }},
+                )
+        except Exception as e:  # noqa: BLE001
+            if _logger:
+                _logger.warning(f"featured-fb post failed: {e}")
+
+    return {
+        "id": sub_id,
+        "is_pinned": new_pinned,
+        "guest_notified": bool(notify_result and notify_result.get("sent")),
+        "fb_featured_posted": bool(fb_featured_result and fb_featured_result.get("ok")),
+    }
 
 
 @router.get("/admin/gallery/approved")
@@ -325,6 +359,16 @@ async def og_photo_page(sub_id: str):
     canonical_esc = _html.escape(canonical, quote=True)
     js_redirect = _json.dumps(canonical)
 
+    # Prefer the 1200x630 auto-cropped OG image for local guest uploads so
+    # Facebook / WhatsApp / Twitter previews never letterbox or center-crop
+    # awkwardly. External-URL photos (unsplash etc) fall back to the raw src.
+    og_image_url = (
+        f"https://roxtaxi.com/api/og/photo/{sub_id}/image.jpg"
+        if not (doc.get("url") or "").startswith("http")
+        else img_url
+    )
+    og_image_esc = _html.escape(og_image_url, quote=True)
+
     body = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -337,14 +381,16 @@ async def og_photo_page(sub_id: str):
 <meta property="og:url" content="{canonical_esc}">
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{description}">
-<meta property="og:image" content="{img_url_esc}">
+<meta property="og:image" content="{og_image_esc}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="{title}">
 <meta property="og:site_name" content="Rox Taxi Service &amp; Tours">
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{title}">
 <meta name="twitter:description" content="{description}">
-<meta name="twitter:image" content="{img_url_esc}">
+<meta name="twitter:image" content="{og_image_esc}">
 
 <meta http-equiv="refresh" content="0;url={canonical_esc}">
 <script>window.location.replace({js_redirect});</script>
@@ -355,3 +401,50 @@ async def og_photo_page(sub_id: str):
 </body>
 </html>"""
     return HTMLResponse(content=body)
+
+
+@router.get("/og/photo/{sub_id}/image.jpg")
+async def og_photo_image(sub_id: str):
+    """Return the guest photo center-cropped to Facebook's ideal 1200x630
+    (1.91:1) landscape ratio as a progressive JPEG. Guarantees link previews
+    never letterbox regardless of the original photo's aspect ratio.
+
+    Cached for 24h — the underlying image never changes for a submission id.
+    """
+    doc = await _db.gallery_submissions.find_one({"id": sub_id, "status": "approved"})
+    if not doc:
+        raise HTTPException(404, "Photo not found or not approved")
+
+    raw_url = doc.get("url") or ""
+    # Local file path — strip either "/uploads/" or "/api/uploads/" prefix
+    rel = raw_url.split("/uploads/", 1)[-1] if "/uploads/" in raw_url else ""
+    local = _upload_dir / rel if rel else None
+    if not local or not local.is_file():
+        raise HTTPException(404, "Underlying image file missing")
+
+    try:
+        img = Image.open(_io.BytesIO(local.read_bytes()))
+        img = ImageOps.exif_transpose(img)
+        if img.mode in ("RGBA", "LA", "P"):
+            bg = Image.new("RGB", img.size, (255, 255, 255))
+            bg.paste(img.convert("RGBA"), mask=img.convert("RGBA").split()[-1])
+            img = bg
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+        img = ImageOps.fit(img, (1200, 630), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+        buf = _io.BytesIO()
+        img.save(buf, format="JPEG", quality=88, optimize=True, progressive=True)
+        return Response(
+            content=buf.getvalue(),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400, immutable"},
+        )
+    except Exception as e:  # noqa: BLE001
+        if _logger:
+            _logger.warning(f"OG crop failed for {sub_id}: {e}")
+        # Fall back to raw bytes so the preview never 500s
+        return Response(
+            content=local.read_bytes(),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )

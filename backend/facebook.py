@@ -100,19 +100,53 @@ async def post_gallery_photo_to_facebook(
                 Facebook's 1200x630 sweet spot, and upload the bytes so
                 Facebook doesn't need to fetch from our preview host.
     """
+    return await _post_photo(
+        image_url=image_url,
+        caption=_compose_caption(submitter_name, guest_caption, _cfg()["website"]),
+    )
+
+
+# ── Featured/pin caption rotation — includes the deep-link OG URL so ──
+# taps go through the OG landing page and every click shows the actual
+# guest photo in the preview.
+FEATURED_CAPTION_TEMPLATES = [
+    "🌟 FEATURED GUEST — {name} · Their Nassau moment is now on our homepage. See more real trips at {url}",
+    "Guest of the week: {name} 🇧🇸 · Ready for your own Bahamas day? Explore + book at {url}",
+    "Thanks {name} for the beautiful shot! Featured on our Groups page: {url} · Book yours at roxtaxi.com",
+]
+
+
+def _compose_featured_caption(submitter_name: str, guest_caption: str, deep_link: str) -> str:
+    name = (submitter_name or "").strip() or "our guest"
+    base = random.choice(FEATURED_CAPTION_TEMPLATES).format(name=name, url=deep_link)
+    guest = (guest_caption or "").strip()
+    return f"{base}\n\n\"{guest}\"" if guest else base
+
+
+async def post_pinned_photo_to_facebook(
+    *, image_url: str, submitter_name: str = "", guest_caption: str = "", deep_link: str
+) -> dict:
+    """Publish a "featured guest" post pointing at the photo's deep-link OG
+    URL — every click through the FB post lands on the OG page which shows
+    the actual guest photo in any subsequent share preview.
+    """
+    caption = _compose_featured_caption(submitter_name, guest_caption, deep_link)
+    return await _post_photo(image_url=image_url, caption=caption)
+
+
+async def _post_photo(*, image_url: str, caption: str) -> dict:
+    """Shared upload helper — crop + POST /photos with a caller-provided caption."""
     cfg = _cfg()
     if not cfg["enabled"]:
         return {"ok": False, "post_id": None, "error": "disabled"}
     if not cfg["page_id"] or not cfg["token"]:
         return {"ok": False, "post_id": None, "error": "not_configured"}
 
-    # Resolve local file for upload
     rel = image_url.lstrip("/").removeprefix("uploads/")
     local = UPLOAD_DIR / rel
     if not local.is_file():
         return {"ok": False, "post_id": None, "error": f"file_not_found:{rel}"}
 
-    caption = _compose_caption(submitter_name, guest_caption, cfg["website"])
     endpoint = f"https://graph.facebook.com/{cfg['version']}/{cfg['page_id']}/photos"
     optimised_bytes, mime = _optimise_for_facebook(local.read_bytes())
 
