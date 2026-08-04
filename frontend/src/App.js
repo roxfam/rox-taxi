@@ -15,6 +15,7 @@ const CarRental = lazy(() => import("./pages/CarRental"));
 const Track = lazy(() => import("./pages/Track"));
 const DriverShare = lazy(() => import("./pages/DriverShare"));
 const DriverManifest = lazy(() => import("./pages/DriverManifest"));
+const DriverHelp = lazy(() => import("./pages/DriverHelp"));
 const Contact = lazy(() => import("./pages/Contact"));
 const About = lazy(() => import("./pages/About"));
 const Groups = lazy(() => import("./pages/Groups"));
@@ -86,6 +87,7 @@ function AppRouter() {
       <Route path="/track" element={<CustomerShell><Track /></CustomerShell>} />
       <Route path="/driver/:booking_id" element={<DriverShare />} />
       <Route path="/driver/manifest" element={<DriverManifest />} />
+      <Route path="/driver/help" element={<DriverHelp />} />
       <Route path="/contact" element={<CustomerShell><Contact /></CustomerShell>} />
       <Route path="/about" element={<CustomerShell><About /></CustomerShell>} />
       <Route path="/groups" element={<CustomerShell><Groups /></CustomerShell>} />

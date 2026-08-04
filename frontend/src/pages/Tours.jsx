@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
 import Seo from "../components/Seo";
 import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown, MapPin, Star, Users, Ship, X as XIcon, CheckCircle2 } from "lucide-react";
+import { cdn, cdnSrcSet } from "../lib/img";
 import { PromoPrice } from "../components/PromoPrice";
 
 // Inject an ItemList of Product schemas per tour so Google can pull them
@@ -490,7 +491,15 @@ export default function Tours() {
               </div>
             )}
             <div className={`aspect-[4/3] overflow-hidden relative ${t.id === "junkanoo-party-bus" ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C]" : ""}`}>
-              <img src={t.image_url} alt={t.name} className={`w-full h-full ${t.id === "junkanoo-party-bus" ? "object-contain p-2 scale-125" : "object-cover"} group-hover:scale-105 transition-transform duration-500`} />
+              <img
+                src={cdn(t.image_url, { w: 800 })}
+                srcSet={cdnSrcSet(t.image_url, [400, 800, 1200])}
+                sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                alt={t.name}
+                loading="lazy"
+                decoding="async"
+                className={`w-full h-full ${t.id === "junkanoo-party-bus" ? "object-contain p-2 scale-125" : "object-cover"} group-hover:scale-105 transition-transform duration-500`}
+              />
               <div className="absolute bottom-3 left-3 glass rounded-full px-3 py-1 text-xs text-[#0B3B5C] font-semibold flex items-center gap-1">
                 <Clock className="w-3 h-3" /> {t.duration}
               </div>
@@ -659,7 +668,7 @@ function CruiseShipPicker({ shipId, setShipId, activeShip, fittingCount, totalCo
           data-testid="cruise-ship-best-fit"
         >
           <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 ring-2 ring-[#D4A94A]">
-            <img src={bestFitTour.image_url} alt={bestFitTour.name} className="w-full h-full object-cover" />
+            <img src={cdn(bestFitTour.image_url, { w: 112 })} alt={bestFitTour.name} loading="lazy" className="w-full h-full object-cover" />
           </div>
           <div className="flex-1 min-w-[200px]">
             <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">

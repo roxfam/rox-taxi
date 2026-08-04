@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api, BACKEND_URL } from "../lib/api";
 import {
   MapPin, Play, Pause, Signal, AlertTriangle, Check, BellRing,
-  Navigation2, Flag, Ban, User, Phone, MessageCircle, Camera, X, Zap,
+  Navigation2, Flag, Ban, User, Phone, MessageCircle, Camera, X, Zap, HelpCircle,
 } from "lucide-react";
 
 // Driver mobile console — /driver/:booking_id
@@ -201,7 +201,13 @@ export default function DriverShare() {
 
   return (
     <div className="min-h-screen bg-[#0B192C] text-white flex flex-col items-center p-4 pb-24" data-testid="driver-share-page">
-      <div className="w-full max-w-md mt-6 rounded-3xl bg-white/5 border border-white/10 p-6 backdrop-blur">
+      <div className="w-full max-w-md mt-6 flex items-center justify-between text-xs">
+        <a href="/driver/manifest" className="text-white/50 hover:text-white">← Manifest</a>
+        <a href="/driver/help" className="inline-flex items-center gap-1 text-[#D4A94A] hover:text-[#E5BC5A] font-bold" data-testid="driver-share-help-link">
+          <HelpCircle className="w-3.5 h-3.5" /> How to use this
+        </a>
+      </div>
+      <div className="w-full max-w-md mt-3 rounded-3xl bg-white/5 border border-white/10 p-6 backdrop-blur">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-[10px] tracking-[0.32em] uppercase text-[#D4A94A] font-black">
             <Signal className="w-3 h-3" /> Rox driver

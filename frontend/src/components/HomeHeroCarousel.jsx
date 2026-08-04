@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "../lib/api";
+import { cdn } from "../lib/img";
 
 const FALLBACK = [
   {
@@ -46,7 +47,9 @@ export default function HomeHeroCarousel({ children, className = "", intervalMs 
     if (slides.length <= 1) return;
     const nextIdx = (i + 1) % slides.length;
     const img = new Image();
-    img.src = slides[nextIdx]?.image_url || "";
+    // Preload the WebP variant that the actual slide will render, so the
+    // decoded frame is cache-hot when the crossfade lands.
+    img.src = cdn(slides[nextIdx]?.image_url || "", { w: 1600 });
   }, [i, slides]);
 
   const pause = () => { if (timerRef.current) clearInterval(timerRef.current); };
@@ -83,7 +86,7 @@ export default function HomeHeroCarousel({ children, className = "", intervalMs 
             scale: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
           }}
           style={{
-            backgroundImage: `url(${slide.image_url})`,
+            backgroundImage: `url(${cdn(slide.image_url, { w: 1600 })})`,
             transformOrigin: i % 2 === 0 ? "center 40%" : "60% 55%",
             filter: "brightness(1.14) contrast(1.22) saturate(1.20)",
             backgroundSize: slide.id === "hero-ardastra" ? "contain" : "cover",

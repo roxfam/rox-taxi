@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Car, MapPinned, ShipWheel, Star, ShieldCheck, Clock, Users, X, Facebook, MessageCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { api, money } from "../lib/api";
+import { cdn, cdnSrcSet } from "../lib/img";
 import NassauCarousel from "../components/NassauCarousel";
 import GoogleReviews from "../components/GoogleReviews";
 import HomeHeroCarousel from "../components/HomeHeroCarousel";
@@ -119,7 +120,15 @@ export default function Home() {
               data-testid={`featured-tour-${t.id}`}
             >
               <div className="aspect-[4/5] overflow-hidden">
-                <img src={t.image_url} alt={t.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <img
+                  src={cdn(t.image_url, { w: 800 })}
+                  srcSet={cdnSrcSet(t.image_url, [400, 800, 1200])}
+                  sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                  alt={t.name}
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
               </div>
               <div className="p-5">
                 <h3 className="serif text-xl text-[#0B3B5C] leading-snug">{t.name}</h3>

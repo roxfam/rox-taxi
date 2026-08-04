@@ -1302,6 +1302,12 @@ async def seed_db():
         asyncio.create_task(_airport_reminder_loop())
     except Exception as e:  # noqa: BLE001
         logging.warning("airport reminder loop start warn: %s", e)
+    # 15-min flight-delay watcher — snoozes for delay-bumps after the initial
+    # reminder fires so a mid-flight delay increase pushes another shift-nudge.
+    try:
+        asyncio.create_task(_flight_watcher_loop())
+    except Exception as e:  # noqa: BLE001
+        logging.warning("flight watcher loop start warn: %s", e)
     # License retention purge + expired-before-pickup alerts.
     try:
         asyncio.create_task(_license_maintenance_loop())
@@ -2830,6 +2836,13 @@ AIRPORT_REMINDER_MINUTES_BEFORE = 60
 AIRPORT_REMINDER_INTERVAL_SECONDS = 300  # 5 min
 
 
+def _site_base_url() -> str:
+    """Public canonical URL of the site — used to build guest-facing links
+    inside notification templates (reschedule tokens, tracking URLs). Env
+    override for QA/staging; falls back to the live production domain."""
+    return (os.environ.get("SITE_BASE_URL") or "https://roxtaxi.com").rstrip("/")
+
+
 def _is_airport_bound(b: dict) -> bool:
     """Heuristic — matches on item_id prefix (`airport-*`), item_name / route
     containing 'airport' or 'LPIA', or an explicit `flight_number`."""
@@ -2849,6 +2862,114 @@ async def _airport_reminder_loop() -> None:
         except Exception as e:  # noqa: BLE001
             log.warning("tick error: %s", e)
         await asyncio.sleep(AIRPORT_REMINDER_INTERVAL_SECONDS)
+
+
+async def _flight_watcher_loop() -> None:
+    """Long-running loop that polls AviationStack every 15 min for bookings
+    whose airport reminder ALREADY fired with a 2+ hour delay. If the
+    delay grew by another 60+ min since the last check, fire a "shift
+    another hour" nudge with a fresh HMAC token. Stops watching when the
+    booking's pickup is less than 15 min out (guest has left) or already
+    completed / cancelled."""
+    log = logging.getLogger("rox.flight_watcher")
+    while True:
+        try:
+            await _run_flight_watcher_tick()
+        except Exception as e:  # noqa: BLE001
+            log.warning("flight-watcher tick err: %s", e)
+        await asyncio.sleep(15 * 60)
+
+
+async def _run_flight_watcher_tick() -> int:
+    """Single pass: find bookings that fired the delayed reminder, re-poll
+    AviationStack, and fire a second nudge if the delay grew by 60+ min.
+    Returns count of new nudges sent."""
+    log = logging.getLogger("rox.flight_watcher")
+    now = datetime.now(timezone.utc)
+
+    cfg = await db.site_config.find_one({"_id": "main"}) or {}
+    prefs = {
+        "notify_email_enabled": cfg.get("notify_email_enabled", True),
+        "notify_sms_enabled":   cfg.get("notify_sms_enabled",   True),
+    }
+
+    # Watch only bookings that fired the flight-aware reminder (delay>=120)
+    # AND are still open AND still hold a flight number.
+    cur = db.bookings.find({
+        "status": {"$nin": ["cancelled", "completed", "no_show"]},
+        "airport_reminder_flight_delay_min": {"$gte": 120},
+        "flight_number": {"$exists": True, "$ne": ""},
+    })
+    sent = 0
+    async for b in cur:
+        try:
+            dt = _parse_booking_date(b.get("booking_date", ""))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        # Stop watching once the pickup is less than 15 min out — guest
+        # has left / driver is already committed to a route.
+        if (dt - now).total_seconds() < 15 * 60:
+            continue
+        # Also stop 6 hours after the original pickup — beyond that we
+        # assume the trip either happened or was cancelled elsewhere.
+        if (dt - now).total_seconds() > 6 * 3600 and b.get("flight_watch_stopped_at"):
+            continue
+
+        flight_number = (b.get("flight_number") or "").strip()
+        try:
+            fresh_delay = await _fetch_flight_delay_minutes(flight_number)
+        except Exception as e:  # noqa: BLE001
+            log.warning("watcher lookup fail for %s: %s", b["id"], e)
+            continue
+        if fresh_delay is None:
+            continue
+
+        prev_delay = int(b.get("flight_watch_last_delay_min") or b.get("airport_reminder_flight_delay_min") or 0)
+        # Only re-nudge when the delay GREW by 60+ min since our last check.
+        if fresh_delay - prev_delay < 60:
+            await db.bookings.update_one(
+                {"id": b["id"]},
+                {"$set": {"flight_watch_last_delay_min": fresh_delay,
+                          "flight_watch_last_checked_at": now_iso()}},
+            )
+            continue
+
+        # Grew significantly — send a fresh "shift another N minutes" nudge.
+        additional_min = fresh_delay - prev_delay
+        try:
+            from notifications import send_airport_pre_pickup_reminder, make_reschedule_token
+            secret = os.environ.get("JWT_SECRET", "rox-fallback-secret")
+            # Token encodes the ADDITIONAL delta so the guest doesn't
+            # re-shift by the original delay a second time.
+            tok = make_reschedule_token(b["id"], additional_min, secret)
+            resched_url = f"{_site_base_url()}/api/bookings/reschedule/{tok}"
+            new_dt = dt + timedelta(minutes=additional_min)
+            result = send_airport_pre_pickup_reminder(
+                clean(dict(b)), prefs,
+                flight_delay_min=fresh_delay,
+                reschedule_url=resched_url,
+                new_pickup_iso=new_dt.isoformat(),
+            )
+            await db.bookings.update_one(
+                {"id": b["id"]},
+                {"$set": {
+                    "flight_watch_last_delay_min": fresh_delay,
+                    "flight_watch_last_checked_at": now_iso(),
+                    f"flight_watch_nudges.{now.strftime('%Y%m%dT%H%M')}": {
+                        "delta_min": additional_min,
+                        "fresh_delay_min": fresh_delay,
+                        "result": result,
+                    },
+                }},
+            )
+            sent += 1
+            log.info("flight-watcher nudge for %s: +%d min (delay now %d)",
+                     b["id"], additional_min, fresh_delay)
+        except Exception as e:  # noqa: BLE001
+            log.warning("flight-watcher nudge fail for %s: %s", b["id"], e)
+    return sent
 
 
 async def _fetch_flight_delay_minutes(flight_number: str) -> Optional[int]:
