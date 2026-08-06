@@ -18,6 +18,12 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Blackout Reason Log — Hover to See Why)
+- **Backend**: `POST /admin/rentals/bulk-blackout` now stamps the audit note across a new `blackout_reasons` map on every affected rental (keyed by ISO date). On `action: "remove"`, `$unset` cleans those keys so unblocked days don't leave orphan notes.
+- **Frontend**: chip in the rental Edit modal shows a small ⓘ icon next to the date when a reason is stored, plus a native tooltip on hover ("Reason: Hurricane Aug 14–20"). Chips without reasons say "No reason recorded" on hover so the state is never ambiguous.
+- **Auto-refresh on open**: `EditModal` re-fetches the item on mount, so bulk-blackout runs (whether via the Bulk modal, curl, or another admin session) surface immediately without a page refresh.
+- **Verified live**: Applied "Hurricane test week" to 2027-09-10 → 2027-09-16 via bulk-blackout. Modal shows 7 ⓘ icons on those chips; hover reveals the exact reason string.
+
 ### ✅ Shipped Feb 2026 (Fleet-Wide Range Picker — Bulk Blackout via Calendar)
 - **Bulk maintenance blackout modal** rebuilt around the two-month `Calendar` range picker (same react-day-picker component as the per-car editor) — no more two clunky date inputs.
 - **New vehicle-picker column** on the right: category filter + scrollable checkbox list with "Select all" / "Clear" — admins can bulk-block one class, hand-pick arbitrary cars, or leave both empty to hit the whole fleet.

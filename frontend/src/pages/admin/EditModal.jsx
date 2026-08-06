@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
-import { FolderOpen, Save, X, CalendarRange, Trash2 } from "lucide-react";
+import { FolderOpen, Save, X, CalendarRange, Trash2, Info } from "lucide-react";
 import { Calendar } from "../../components/ui/calendar";
 import { api } from "../../lib/api";
 import { F, resolveUrl } from "./shared";
@@ -57,6 +57,31 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
   const [newBlackout, setNewBlackout] = useState("");
+
+  // Refetch the item fresh on mount so any bulk-blackout operations that
+  // ran while the catalog list was already loaded (or hot-reloads of
+  // reasons via /admin/rentals/bulk-blackout) surface immediately without
+  // the admin needing a full page refresh. Only re-fetches for existing
+  // items — new-items skip this cheap round-trip.
+  useEffect(() => {
+    if (initial.new || !initial.id) return;
+    let alive = true;
+    api.get(`/admin/${kind}`)
+      .then(({ data }) => {
+        if (!alive) return;
+        const fresh = (Array.isArray(data) ? data : []).find((x) => x.id === initial.id);
+        if (fresh) {
+          setForm((f) => ({
+            ...f,
+            blackout_dates: Array.isArray(fresh.blackout_dates) ? [...fresh.blackout_dates] : f.blackout_dates,
+            blackout_reasons: (fresh.blackout_reasons && typeof fresh.blackout_reasons === "object") ? { ...fresh.blackout_reasons } : f.blackout_reasons,
+          }));
+        }
+      })
+      .catch(() => { /* silent — form still works with stale data */ });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial.id, kind]);
 
   const save = async () => {
     if (!form.name.trim()) return toast.error("Name is required");
@@ -345,24 +370,41 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
               <div className="text-xs text-[#94a3b8]" data-testid="edit-blackout-empty">No blackouts — the car is bookable on every open day.</div>
             ) : (
               <div className="flex flex-wrap gap-1.5" data-testid="edit-blackout-list">
-                {form.blackout_dates.map((d) => (
-                  <span
-                    key={d}
-                    data-testid={`edit-blackout-item-${d}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C] text-[11px] font-semibold px-2.5 py-1"
-                  >
-                    {d}
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...form, blackout_dates: form.blackout_dates.filter((x) => x !== d) })}
-                      data-testid={`edit-blackout-remove-${d}`}
-                      className="ml-0.5 -mr-1 hover:text-[#7f1d1d]"
-                      title="Remove"
+                {form.blackout_dates.map((d) => {
+                  const reason = (form.blackout_reasons || {})[d] || "";
+                  return (
+                    <span
+                      key={d}
+                      data-testid={`edit-blackout-item-${d}`}
+                      title={reason ? `Reason: ${reason}` : "No reason recorded"}
+                      className="inline-flex items-center gap-1 rounded-full bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C] text-[11px] font-semibold px-2.5 py-1"
                     >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
+                      {d}
+                      {reason && (
+                        <Info
+                          className="w-3 h-3 text-[#B91C1C]/70"
+                          aria-label={`Reason: ${reason}`}
+                          data-testid={`edit-blackout-reason-${d}`}
+                        />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setForm({
+                          ...form,
+                          blackout_dates: form.blackout_dates.filter((x) => x !== d),
+                          blackout_reasons: Object.fromEntries(
+                            Object.entries(form.blackout_reasons || {}).filter(([k]) => k !== d),
+                          ),
+                        })}
+                        data-testid={`edit-blackout-remove-${d}`}
+                        className="ml-0.5 -mr-1 hover:text-[#7f1d1d]"
+                        title="Remove"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>

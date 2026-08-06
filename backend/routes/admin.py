@@ -215,8 +215,23 @@ async def rentals_bulk_blackout(req: BulkBlackoutRequest, _: str = Depends(_requ
     if not rentals:
         return {"ok": True, "affected": 0, "dates": dates, "action": action, "note": "No matching rentals."}
 
-    update = {"$addToSet": {"blackout_dates": {"$each": dates}}} if action == "add" \
-             else {"$pull": {"blackout_dates": {"$in": dates}}}
+    update: dict = {}
+    if action == "add":
+        update["$addToSet"] = {"blackout_dates": {"$each": dates}}
+        # Also stamp the reason (audit note) against every date in the range
+        # so admins can hover a blocked date later and see WHY. Stored as a
+        # `blackout_reasons` map on each rental keyed by ISO date.
+        if req.reason and (req.reason or "").strip():
+            update["$set"] = {
+                f"blackout_reasons.{d}": (req.reason or "").strip()
+                for d in dates
+            }
+    else:
+        update["$pull"] = {"blackout_dates": {"$in": dates}}
+        # Wipe the associated reasons so unblocked days don't leave orphan
+        # audit notes behind. `$unset` uses dotted keys just like the $set
+        # in the add-branch above.
+        update["$unset"] = {f"blackout_reasons.{d}": "" for d in dates}
     result = await _db.rentals.update_many({"id": {"$in": [r["id"] for r in rentals]}}, update)
 
     return {
