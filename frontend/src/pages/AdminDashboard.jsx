@@ -1302,10 +1302,9 @@ function BlackoutReasonCard({ data }) {
   if (!data) return null;
   const rows = Array.isArray(data.rows) ? data.rows : [];
   const empty = rows.length === 0;
-  const total = Number(data.total_days_blocked || 0);
+  const totalDays = Number(data.total_days_blocked || 0);
+  const totalRevLost = Number(data.total_revenue_lost || 0);
   const topReason = rows.find((r) => r.reason !== "(no reason)") || rows[0];
-  // Palette — first "(no reason)" bucket gets grey so it visually reads as
-  // "undocumented"; the rest cycle through the brand palette.
   const paletteFor = (label) => {
     if (label === "(no reason)") return "#94a3b8";
     const palette = ["#B91C1C", "#D4A94A", "#0B3B5C", "#E86A3C", "#059669", "#7c3aed", "#0891b2", "#c026d3"];
@@ -1321,9 +1320,9 @@ function BlackoutReasonCard({ data }) {
           <Camera className="w-5 h-5 rotate-45" />
         </div>
         <div className="flex-1">
-          <div className="serif text-lg text-[#0B3B5C] leading-tight">Blackout cost by reason</div>
+          <div className="serif text-lg text-[#0B3B5C] leading-tight">Downtime cost by reason</div>
           <div className="text-[11px] text-[#64748B] mt-0.5">
-            Days each vehicle is unavailable, grouped by reason · {data.year} · {data.total_vehicles || 0} vehicle{(data.total_vehicles || 0) === 1 ? "" : "s"} affected
+            Revenue lost while each vehicle is off the road · {data.year} · {data.total_vehicles || 0} vehicle{(data.total_vehicles || 0) === 1 ? "" : "s"} · daily rate × blocked days
           </div>
         </div>
       </div>
@@ -1339,33 +1338,33 @@ function BlackoutReasonCard({ data }) {
         <div className="grid lg:grid-cols-5 gap-5">
           <div className="lg:col-span-2 space-y-3">
             <div className="rounded-xl border border-[#F1F5F9] bg-[#FBF7EF]/40 p-3">
-              <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold">Days blocked · {data.year}</div>
-              <div className="serif text-2xl mt-0.5 text-[#B91C1C]" data-testid="admin-blackout-total-days">{total}</div>
-              <div className="text-[11px] text-[#64748B] mt-0.5">across the whole fleet</div>
+              <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold">Revenue lost · {data.year}</div>
+              <div className="serif text-2xl mt-0.5 text-[#B91C1C]" data-testid="admin-blackout-total-revenue">{money(totalRevLost)}</div>
+              <div className="text-[11px] text-[#64748B] mt-0.5">across {totalDays} blocked day{totalDays === 1 ? "" : "s"}</div>
             </div>
             {topReason && (
               <div className="rounded-xl border border-[#F1F5F9] bg-white p-3" data-testid="admin-blackout-top-reason">
-                <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold">Top reason</div>
+                <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold">Biggest bucket</div>
                 <div className="serif text-lg mt-0.5 text-[#0B3B5C] truncate">{topReason.reason}</div>
                 <div className="text-[11px] text-[#64748B] mt-0.5">
-                  {topReason.days} day{topReason.days === 1 ? "" : "s"} · {topReason.vehicles} vehicle{topReason.vehicles === 1 ? "" : "s"}
+                  <span className="text-[#B91C1C] font-semibold mono">{money(topReason.revenue_lost)}</span> · {topReason.days} day{topReason.days === 1 ? "" : "s"} · {topReason.vehicles} vehicle{topReason.vehicles === 1 ? "" : "s"}
                 </div>
               </div>
             )}
           </div>
           <div className="lg:col-span-3">
-            <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold mb-2">Days per reason</div>
+            <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold mb-2">Revenue lost per reason</div>
             <div className="h-40" data-testid="admin-blackout-reason-chart">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={rows} margin={{ top: 4, right: 4, left: -20, bottom: 40 }}>
+                <BarChart data={rows} margin={{ top: 4, right: 4, left: -10, bottom: 40 }}>
                   <XAxis dataKey="reason" tick={{ fontSize: 9, fill: "#94a3b8" }} interval={0} angle={-25} textAnchor="end" height={60} />
-                  <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} width={40} />
+                  <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} width={55} tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`} />
                   <Tooltip
                     contentStyle={{ background: "#0B3B5C", border: "none", borderRadius: 8, color: "#fff", fontSize: 11 }}
                     labelStyle={{ color: "#D4A94A" }}
-                    formatter={(v, k) => k === "days" ? [`${v} day${v === 1 ? "" : "s"}`, "Days"] : [v, k]}
+                    formatter={(v) => [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, "Revenue lost"]}
                   />
-                  <Bar dataKey="days" radius={[3, 3, 0, 0]}>
+                  <Bar dataKey="revenue_lost" radius={[3, 3, 0, 0]}>
                     {rows.map((r) => (
                       <Cell key={r.reason} fill={paletteFor(r.reason)} />
                     ))}
@@ -1379,17 +1378,18 @@ function BlackoutReasonCard({ data }) {
 
       {rows.length > 0 && (
         <div className="mt-5 pt-4 border-t border-[#F1F5F9]" data-testid="admin-blackout-reason-table">
-          <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold mb-2">Breakdown</div>
+          <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold mb-2">Breakdown · ranked by dollars lost</div>
           <div className="space-y-1.5">
             {rows.map((r) => (
               <div key={r.reason} className="flex items-center gap-3 text-xs" data-testid={`admin-blackout-row-${r.reason}`}>
                 <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: paletteFor(r.reason) }} />
                 <div className="flex-1 min-w-0 truncate text-[#0B3B5C] font-semibold">{r.reason}</div>
-                <div className="w-16 text-right text-[#64748B]">{r.vehicles} veh</div>
-                <div className="w-32 text-right text-[#94a3b8] truncate hidden sm:block" title={r.top_vehicle?.name || ""}>
-                  {r.top_vehicle?.name} · {r.top_vehicle?.days}d
+                <div className="w-14 text-right text-[#64748B]">{r.days}d</div>
+                <div className="w-14 text-right text-[#64748B]">{r.vehicles} veh</div>
+                <div className="w-40 text-right text-[#94a3b8] truncate hidden sm:block" title={`${r.top_vehicle?.name || ""} · ${money(r.top_vehicle?.revenue_lost || 0)}`}>
+                  {r.top_vehicle?.name} · <span className="mono">{money(r.top_vehicle?.revenue_lost || 0)}</span>
                 </div>
-                <div className="w-16 text-right mono font-semibold text-[#B91C1C]">{r.days}d</div>
+                <div className="w-24 text-right mono font-bold text-[#B91C1C]">{money(r.revenue_lost || 0)}</div>
               </div>
             ))}
           </div>

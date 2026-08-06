@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Downtime Cost in Dollars)
+- **Backend**: `GET /admin/analytics/blackout-reasons` now multiplies each vehicle's `blackout_dates` × its daily `price` and returns `revenue_lost` on every bucket + `total_revenue_lost` at the top. Buckets are sorted by dollars lost (not days) and `top_vehicle` ranks by dollars so a $250/day luxury van never hides behind a $65/day compact with more days.
+- **Frontend**: dashboard card retitled "Downtime cost by reason". KPI headline is now `$13,320.00` (dollars) rather than `148` (days). Bar chart Y-axis renders in `$k` (`$14.0k`, `$7.0k`) with formatted tooltips. Breakdown row: `dot · Hurricane Nadine · 7d · 1 veh · NV200 · $630.00 · $630.00` — days stay visible but dollars carry the weight.
+- **Verified live**: NV200 @ $90/day × 148 days (2026) = **$13,320.00** rendered exactly; 2027 total = $20,160 ($19,530 no-reason + $630 hurricane); all-years total = $33,480.
+
 ### ✅ Shipped Feb 2026 (Blackout Reason Presets + Annual Cost Chart)
 - **Preset editor** in Site Config panel — admins add/remove common reasons (Hurricane, Maintenance, Insurance renewal, Sold, Detailing, Rented offline by default; "Reset to defaults" button restores the seed list). Saved via existing `PUT /admin/site-config` on the `blackout_reason_presets` field.
 - **Datalist autocomplete** — the inline reason input on every blackout chip is now bound to a `<datalist>` populated from the presets, so staff pick "Hurricane" from a dropdown instead of retyping. Custom strings still work.

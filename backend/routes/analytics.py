@@ -342,8 +342,9 @@ async def blackout_reason_analytics(_admin: str = _require(), year: Optional[int
 
     buckets: Dict[str, Dict[str, Any]] = {}
     total_days = 0
+    total_revenue_lost = 0.0
     total_vehicles = 0
-    async for r in _db.rentals.find({}, {"id": 1, "name": 1, "blackout_dates": 1, "blackout_reasons": 1}):
+    async for r in _db.rentals.find({}, {"id": 1, "name": 1, "price": 1, "blackout_dates": 1, "blackout_reasons": 1}):
         dates = r.get("blackout_dates") or []
         reasons = r.get("blackout_reasons") or {}
         if year_prefix:
@@ -351,23 +352,37 @@ async def blackout_reason_analytics(_admin: str = _require(), year: Optional[int
         if not dates:
             continue
         total_vehicles += 1
+        daily_rate = float(r.get("price") or 0.0)
         # Per-rental per-reason count
         per: Dict[str, int] = {}
         for d in dates:
             key = (reasons.get(d) or "").strip() or "(no reason)"
             per[key] = per.get(key, 0) + 1
         for reason, days in per.items():
+            revenue_lost = round(days * daily_rate, 2)
             total_days += days
-            bucket = buckets.setdefault(reason, {"reason": reason, "days": 0, "vehicles": 0, "top_vehicle": {"name": r.get("name"), "days": days}})
+            total_revenue_lost += revenue_lost
+            bucket = buckets.setdefault(reason, {
+                "reason": reason,
+                "days": 0,
+                "revenue_lost": 0.0,
+                "vehicles": 0,
+                "top_vehicle": {"name": r.get("name"), "days": days, "revenue_lost": revenue_lost},
+            })
             bucket["days"] += days
+            bucket["revenue_lost"] = round(bucket["revenue_lost"] + revenue_lost, 2)
             bucket["vehicles"] += 1
-            if days > bucket["top_vehicle"]["days"]:
-                bucket["top_vehicle"] = {"name": r.get("name"), "days": days}
+            # Rank by revenue lost (not days) so a cheap car with 200 days
+            # doesn't outrank a luxury van with 40 days — the dollar impact
+            # is what matters.
+            if revenue_lost > bucket["top_vehicle"]["revenue_lost"]:
+                bucket["top_vehicle"] = {"name": r.get("name"), "days": days, "revenue_lost": revenue_lost}
 
-    rows = sorted(buckets.values(), key=lambda x: (-x["days"], x["reason"].lower()))
+    rows = sorted(buckets.values(), key=lambda x: (-x["revenue_lost"], -x["days"], x["reason"].lower()))
     return {
         "year": year,
         "total_days_blocked": total_days,
+        "total_revenue_lost": round(total_revenue_lost, 2),
         "total_vehicles": total_vehicles,
         "presets": presets,
         "rows": rows,
