@@ -18,6 +18,12 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (2017 Nissan NV200 Cargo Van Added)
+- **New rental**: `id=ren-a6f24d77` — 2017 Nissan NV200 Cargo (white, 2 seats, cargo van body) @ **$90/day**. Uses the user-supplied Nissan NV200 photo from the artifacts CDN.
+- **Blacked out for the next 365 days** — the van appears in the public rentals list but every date is unavailable. Owner unlocks by removing specific dates from the vehicle's blackout list in Admin > Catalog > Rentals > Edit > Vehicle blackout dates.
+- **CarRental page availability badge fixed**: When a rental has 30+ contiguous forward blackout days, the card now shows a clear orange "Currently unavailable — contact us for a date" instead of the misleading default "Available now" message. Cars with a mix of open/blocked days show "Some dates blocked — check calendar at booking".
+- **Verified**: `/api/rentals` returns the van; booking attempt 3 days out correctly rejected with the "vehicle is unavailable on … please pick different dates or another vehicle" error; card renders on `/rentals` with the correct badge and Reserve button.
+
 ### ✅ Shipped Feb 2026 (A/B Test the Add-on Label)
 - **Per-tour A/B toggle** on the Catalog editor — set Variant A copy (existing label) + a new **Variant B** label field. When A/B is off, every guest sees Variant A (unchanged behaviour).
 - **Deterministic 50/50 assignment** in `BookingFlow.jsx` via `localStorage.rox_addon_ab` (survives page reloads so the same guest never sees the label flip mid-checkout). A tiny `· vA`/`· vB` badge next to the label helps QA verify the split without opening devtools.

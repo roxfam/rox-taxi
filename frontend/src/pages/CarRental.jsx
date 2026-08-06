@@ -146,7 +146,7 @@ export default function CarRental() {
                 {r.make && <span>· {r.make}</span>}
               </div>
 
-              <BlackoutList blackouts={availability[r.id] || []} />
+              <BlackoutList blackouts={availability[r.id] || []} vehicleBlackouts={r.blackout_dates || []} />
 
               <div className="mt-6 flex items-center justify-between">
                 <div>
@@ -205,19 +205,40 @@ export default function CarRental() {
   );
 }
 
-function BlackoutList({ blackouts }) {
+function BlackoutList({ blackouts, vehicleBlackouts = [] }) {
   const upcoming = (blackouts || [])
     .filter((b) => new Date(b.end) >= new Date())
     .slice(0, 3);
+
+  // Contiguous forward blackout window from today — if the admin has
+  // blocked the whole next month+ (e.g. a car in maintenance) we call it
+  // out instead of the misleading "Available now" line.
+  const today = new Date().toISOString().slice(0, 10);
+  const set = new Set(vehicleBlackouts);
+  let contiguousDays = 0;
+  const cur = new Date();
+  while (contiguousDays < 400 && set.has(cur.toISOString().slice(0, 10))) {
+    contiguousDays += 1;
+    cur.setDate(cur.getDate() + 1);
+  }
+  const fullyBlocked = contiguousDays >= 30;
 
   return (
     <div className="mt-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3" data-testid="rental-blackouts">
       <div className="flex items-center gap-1.5 text-xs tracking-[0.2em] uppercase text-[#0B3B5C] font-bold">
         <CalendarX className="w-3.5 h-3.5" /> Blackout dates
       </div>
-      {upcoming.length === 0 ? (
+      {fullyBlocked ? (
+        <div className="mt-1.5 text-sm font-bold text-[#E86A3C] flex items-center gap-1" data-testid="rental-unavailable">
+          <Info className="w-3.5 h-3.5" /> Currently unavailable — contact us for a date
+        </div>
+      ) : upcoming.length === 0 && vehicleBlackouts.length === 0 ? (
         <div className="mt-1.5 text-sm font-bold text-[#D4A94A] flex items-center gap-1">
           <Info className="w-3.5 h-3.5" /> Available now — no upcoming bookings
+        </div>
+      ) : upcoming.length === 0 ? (
+        <div className="mt-1.5 text-sm font-bold text-[#0B3B5C] flex items-center gap-1">
+          <Info className="w-3.5 h-3.5" /> Some dates blocked — check calendar at booking
         </div>
       ) : (
         <ul className="mt-1.5 space-y-0.5">
