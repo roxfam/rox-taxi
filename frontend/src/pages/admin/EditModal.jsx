@@ -261,7 +261,7 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
               <span className="text-[11px] tracking-[0.2em] uppercase text-[#64748B] font-semibold">Vehicle blackout dates</span>
               <span className="text-[10px] text-[#94a3b8]">— days this specific car is unavailable</span>
             </div>
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
               <input
                 type="date"
                 value={newBlackout}
@@ -282,6 +282,46 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
               >
                 Add blackout
               </button>
+              <div className="w-px h-5 bg-[#E2E8F0] mx-1" />
+              <span className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-bold">Block next</span>
+              {[30, 90, 365].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => {
+                    const today = new Date();
+                    const next = new Set(form.blackout_dates);
+                    for (let i = 0; i < n; i++) {
+                      const d = new Date(today);
+                      d.setDate(today.getDate() + i);
+                      next.add(d.toISOString().slice(0, 10));
+                    }
+                    const added = next.size - form.blackout_dates.length;
+                    setForm({ ...form, blackout_dates: [...next].sort() });
+                    toast.success(`Blocked next ${n} days · +${added} new`);
+                  }}
+                  data-testid={`edit-blackout-block-${n}`}
+                  className="rounded-full border border-[#E86A3C]/40 bg-[#E86A3C]/8 text-[#E86A3C] hover:bg-[#E86A3C] hover:text-white px-2.5 py-1 text-xs font-bold transition-colors"
+                  title={`Add every day from today through ${n} days out to the blackout list`}
+                >
+                  {n}d
+                </button>
+              ))}
+              {form.blackout_dates.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!window.confirm(`Remove all ${form.blackout_dates.length} blackout date(s)? The vehicle will become bookable on every open day.`)) return;
+                    setForm({ ...form, blackout_dates: [] });
+                    toast.success("All blackouts cleared — remember to Save");
+                  }}
+                  data-testid="edit-blackout-clear-all"
+                  className="ml-auto rounded-full border border-[#059669]/40 bg-white text-[#059669] hover:bg-[#059669] hover:text-white px-3 py-1 text-xs font-bold transition-colors"
+                  title="Wipe the entire blackout list — makes the vehicle bookable on every open day"
+                >
+                  Clear all ({form.blackout_dates.length})
+                </button>
+              )}
             </div>
             {form.blackout_dates.length === 0 ? (
               <div className="text-xs text-[#94a3b8]" data-testid="edit-blackout-empty">No blackouts — the car is bookable on every open day.</div>

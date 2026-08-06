@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Blackout Shortcuts — Van Unlock in One Tap)
+- **"Block next 30d / 90d / 365d"** orange chips beside the date picker in the rental Edit modal — one tap fills the blackout list with every day between today and N days out (skips duplicates, toast reports how many new dates were added).
+- **"Clear all (N)"** green button at the far right — wipes the entire blackout list (with a confirm dialog). Now unlocking the NV200 cargo van when it's ready to rent is a single click instead of 365 individual removals.
+- Verified live: "Clear all (365)" chip visible on the NV200 edit modal with the correct count; all four shortcuts render cleanly in the flex-wrap layout.
+
 ### ✅ Shipped Feb 2026 (2017 Nissan NV200 Cargo Van Added)
 - **New rental**: `id=ren-a6f24d77` — 2017 Nissan NV200 Cargo (white, 2 seats, cargo van body) @ **$90/day**. Uses the user-supplied Nissan NV200 photo from the artifacts CDN.
 - **Blacked out for the next 365 days** — the van appears in the public rentals list but every date is unavailable. Owner unlocks by removing specific dates from the vehicle's blackout list in Admin > Catalog > Rentals > Edit > Vehicle blackout dates.
