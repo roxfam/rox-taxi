@@ -1,9 +1,22 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { FolderOpen, Save, X } from "lucide-react";
+import { FolderOpen, Save, X, CalendarRange, Trash2 } from "lucide-react";
+import { Calendar } from "../../components/ui/calendar";
 import { api } from "../../lib/api";
 import { F, resolveUrl } from "./shared";
 import ImagePickerModal from "./ImagePickerModal";
+
+// Helpers used by BlackoutRangePicker + shortcut chips
+const iso = (d) => d.toISOString().slice(0, 10);
+function enumerateRange(from, to) {
+  if (!from) return [];
+  const start = new Date(from);
+  const end = to ? new Date(to) : new Date(from);
+  const out = [];
+  const cur = new Date(start);
+  while (cur <= end) { out.push(iso(cur)); cur.setDate(cur.getDate() + 1); }
+  return out;
+}
 
 // Full add/edit form for tour / taxi_service / rental items. Rental adds a
 // second grid of vehicle-specific fields (year/make/model/color/body/seats)
@@ -323,6 +336,11 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
                 </button>
               )}
             </div>
+
+            <BlackoutRangePicker
+              blackouts={form.blackout_dates}
+              onChange={(next) => setForm({ ...form, blackout_dates: next })}
+            />
             {form.blackout_dates.length === 0 ? (
               <div className="text-xs text-[#94a3b8]" data-testid="edit-blackout-empty">No blackouts — the car is bookable on every open day.</div>
             ) : (
@@ -362,6 +380,120 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
           onPick={(url) => { setForm((f) => ({ ...f, image_url: url })); setPicking(false); toast.success("Image linked"); }}
         />
       )}
+    </div>
+  );
+}
+
+// Range picker — click a start day, click an end day (or the same day for a
+// single-date add). Days already in the blackout list render red so the
+// admin sees at a glance what's blocked. Two action buttons then either
+// add or remove every day in the selected range.
+function BlackoutRangePicker({ blackouts, onChange }) {
+  const [range, setRange] = useState(undefined);
+  const blockedSet = useMemo(() => new Set(blackouts), [blackouts]);
+  const blockedDates = useMemo(
+    () => (blackouts || []).map((d) => new Date(d + "T12:00:00")),
+    [blackouts],
+  );
+
+  const rangeDates = useMemo(
+    () => enumerateRange(range?.from, range?.to),
+    [range],
+  );
+  const rangeCount = rangeDates.length;
+  const alreadyBlocked = rangeDates.filter((d) => blockedSet.has(d)).length;
+  const willAdd = rangeCount - alreadyBlocked;
+
+  const block = () => {
+    if (rangeCount === 0) return toast.error("Pick a range first");
+    const next = new Set(blockedSet);
+    rangeDates.forEach((d) => next.add(d));
+    onChange([...next].sort());
+    toast.success(`Blocked ${rangeCount} day${rangeCount === 1 ? "" : "s"} · +${willAdd} new`);
+    setRange(undefined);
+  };
+
+  const unblock = () => {
+    if (rangeCount === 0) return toast.error("Pick a range first");
+    if (alreadyBlocked === 0) return toast.error("Nothing to unblock in that range");
+    const next = new Set(blockedSet);
+    rangeDates.forEach((d) => next.delete(d));
+    onChange([...next].sort());
+    toast.success(`Unblocked ${alreadyBlocked} day${alreadyBlocked === 1 ? "" : "s"}`);
+    setRange(undefined);
+  };
+
+  return (
+    <div
+      className="mt-4 rounded-xl border border-[#0B3B5C]/12 bg-[#FBF7EF]/40 p-3"
+      data-testid="edit-blackout-range-picker"
+    >
+      <div className="flex items-center gap-1.5 mb-2 text-[10px] uppercase tracking-widest text-[#0B3B5C] font-bold">
+        <CalendarRange className="w-3.5 h-3.5 text-[#D4A94A]" /> Range picker
+        <span className="text-[#94a3b8] font-semibold normal-case tracking-normal">
+          — click a start day, then an end day. Red = already blocked.
+        </span>
+      </div>
+      <div className="flex flex-col lg:flex-row gap-4">
+        <div className="rounded-lg bg-white border border-[#E2E8F0] p-1">
+          <Calendar
+            mode="range"
+            selected={range}
+            onSelect={setRange}
+            numberOfMonths={2}
+            modifiers={{ blocked: blockedDates }}
+            modifiersClassNames={{
+              blocked: "bg-[#FEE2E2] text-[#B91C1C] font-bold hover:bg-[#FECACA]",
+            }}
+            className="text-[#0B3B5C]"
+          />
+        </div>
+        <div className="flex-1 flex flex-col gap-2 min-w-[220px]">
+          <div className="rounded-lg bg-white border border-[#E2E8F0] p-3 text-xs" data-testid="edit-blackout-range-summary">
+            {rangeCount === 0 ? (
+              <div className="text-[#94a3b8]">No range selected yet.</div>
+            ) : (
+              <>
+                <div className="font-bold text-[#0B3B5C] mono">
+                  {range.from ? iso(range.from) : ""}
+                  {range.to && iso(range.to) !== iso(range.from) ? ` → ${iso(range.to)}` : ""}
+                </div>
+                <div className="text-[#64748B] mt-1">
+                  {rangeCount} day{rangeCount === 1 ? "" : "s"} selected · <span className="text-[#B91C1C] font-semibold">{alreadyBlocked} already blocked</span> · <span className="text-[#059669] font-semibold">{willAdd} new</span>
+                </div>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={block}
+            disabled={rangeCount === 0}
+            data-testid="edit-blackout-range-block"
+            className="rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white text-xs font-bold uppercase tracking-widest px-3 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Block {rangeCount > 0 ? rangeCount : ""} day{rangeCount === 1 ? "" : "s"}
+          </button>
+          <button
+            type="button"
+            onClick={unblock}
+            disabled={rangeCount === 0}
+            data-testid="edit-blackout-range-unblock"
+            className="rounded-full bg-white border border-[#059669] text-[#059669] hover:bg-[#059669] hover:text-white text-xs font-bold uppercase tracking-widest px-3 py-2 inline-flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <Trash2 className="w-3 h-3" /> Unblock range
+          </button>
+          {rangeCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setRange(undefined)}
+              data-testid="edit-blackout-range-clear"
+              className="text-[10px] text-[#94a3b8] hover:text-[#0B3B5C] underline decoration-dotted"
+            >
+              Clear selection
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

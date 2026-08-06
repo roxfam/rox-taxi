@@ -18,6 +18,12 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Blackout Range Picker — Drag-Style Bulk Add/Remove)
+- **Two-month `Calendar` (react-day-picker in range mode)** embedded in the rental Edit modal. Click a start day, click an end day — the whole span highlights. Already-blocked dates render **red** so the admin sees at a glance what's blocked before touching anything.
+- **Live summary panel** on the right: shows the range as `YYYY-MM-DD → YYYY-MM-DD`, plus `N days selected · X already blocked · Y new` so admins know exactly what a Block/Unblock will do.
+- **Block N days** (orange) — adds every day in the range to the blackout list (dedup). **Unblock range** (green outline) — removes every already-blocked day in the range. Both auto-clear the selection and toast the delta.
+- **Verified live**: Selecting Aug 3–9 on the NV200 showed "7 days selected · 4 already blocked · 3 new" — exactly correct (Aug 6–9 already in the 365-blackout list, Aug 3–5 in the past).
+
 ### ✅ Shipped Feb 2026 (Blackout Shortcuts — Van Unlock in One Tap)
 - **"Block next 30d / 90d / 365d"** orange chips beside the date picker in the rental Edit modal — one tap fills the blackout list with every day between today and N days out (skips duplicates, toast reports how many new dates were added).
 - **"Clear all (N)"** green button at the far right — wipes the entire blackout list (with a confirm dialog). Now unlocking the NV200 cargo van when it's ready to rent is a single click instead of 365 individual removals.
