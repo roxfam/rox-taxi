@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money, BACKEND_URL } from "../lib/api";
 import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart, Cell } from "recharts";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -24,17 +24,20 @@ export default function AdminDashboard() {
   const [authMethods, setAuthMethods] = useState(null);
   const [nudgeStats, setNudgeStats] = useState(null);
   const [addonStats, setAddonStats] = useState(null);
+  const [reasonStats, setReasonStats] = useState(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [s, b, g, a, n, ax] = await Promise.all([
+      const yr = new Date().getFullYear();
+      const [s, b, g, a, n, ax, rs] = await Promise.all([
         api.get("/admin/stats"),
         api.get("/admin/bookings"),
         api.get("/admin/gallery/pending").catch(() => ({ data: [] })),
         api.get("/admin/auth/methods-summary").catch(() => ({ data: null })),
         api.get("/admin/photo-nudge-stats").catch(() => ({ data: null })),
         api.get("/admin/analytics/taxi-addon").catch(() => ({ data: null })),
+        api.get(`/admin/analytics/blackout-reasons?year=${yr}`).catch(() => ({ data: null })),
       ]);
       setStats(s.data);
       setBookings(b.data);
@@ -42,6 +45,7 @@ export default function AdminDashboard() {
       setAuthMethods(a.data);
       setNudgeStats(n.data);
       setAddonStats(ax.data);
+      setReasonStats(rs.data);
     } catch (e) {
       if (e?.response?.status === 401) {
         localStorage.removeItem("admin_token");
@@ -180,6 +184,9 @@ export default function AdminDashboard() {
 
         {/* Taxi add-on attach rate — is the upsell landing? */}
         <TaxiAddonCard data={addonStats} />
+
+        {/* Fleet blackout costs — days blocked by reason for the year */}
+        <BlackoutReasonCard data={reasonStats} />
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">
@@ -1280,6 +1287,114 @@ function AddonStat({ testId, label, value, sub, tone }) {
       <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold">{label}</div>
       <div className="serif text-2xl mt-0.5" style={{ color: tone }}>{value}</div>
       <div className="text-[11px] text-[#64748B] mt-0.5">{sub}</div>
+    </div>
+  );
+}
+
+
+
+// Fleet blackout cost by reason. Reads GET /admin/analytics/blackout-reasons
+// (current year). Renders a compact card with:
+//   · Totals: days blocked + vehicles affected + top reason
+//   · Bar chart: days per reason (color-coded, single glance answer)
+//   · Ranked table showing top vehicle per reason bucket
+function BlackoutReasonCard({ data }) {
+  if (!data) return null;
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  const empty = rows.length === 0;
+  const total = Number(data.total_days_blocked || 0);
+  const topReason = rows.find((r) => r.reason !== "(no reason)") || rows[0];
+  // Palette — first "(no reason)" bucket gets grey so it visually reads as
+  // "undocumented"; the rest cycle through the brand palette.
+  const paletteFor = (label) => {
+    if (label === "(no reason)") return "#94a3b8";
+    const palette = ["#B91C1C", "#D4A94A", "#0B3B5C", "#E86A3C", "#059669", "#7c3aed", "#0891b2", "#c026d3"];
+    return palette[Math.abs([...label].reduce((a, c) => a + c.charCodeAt(0), 0)) % palette.length];
+  };
+  return (
+    <div
+      className="mt-6 rounded-2xl border border-[#B91C1C]/15 bg-white p-5 lg:p-6"
+      data-testid="admin-blackout-reason-card"
+    >
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-xl bg-[#B91C1C]/10 flex items-center justify-center text-[#B91C1C]">
+          <Camera className="w-5 h-5 rotate-45" />
+        </div>
+        <div className="flex-1">
+          <div className="serif text-lg text-[#0B3B5C] leading-tight">Blackout cost by reason</div>
+          <div className="text-[11px] text-[#64748B] mt-0.5">
+            Days each vehicle is unavailable, grouped by reason · {data.year} · {data.total_vehicles || 0} vehicle{(data.total_vehicles || 0) === 1 ? "" : "s"} affected
+          </div>
+        </div>
+      </div>
+
+      {empty ? (
+        <div
+          className="rounded-xl border border-dashed border-[#E2E8F0] bg-[#F8FAFC] px-4 py-6 text-center text-sm text-[#64748B]"
+          data-testid="admin-blackout-reason-empty"
+        >
+          No blackout dates on any rental for {data.year} yet — this chart populates as maintenance / hurricane / detail days are added.
+        </div>
+      ) : (
+        <div className="grid lg:grid-cols-5 gap-5">
+          <div className="lg:col-span-2 space-y-3">
+            <div className="rounded-xl border border-[#F1F5F9] bg-[#FBF7EF]/40 p-3">
+              <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold">Days blocked · {data.year}</div>
+              <div className="serif text-2xl mt-0.5 text-[#B91C1C]" data-testid="admin-blackout-total-days">{total}</div>
+              <div className="text-[11px] text-[#64748B] mt-0.5">across the whole fleet</div>
+            </div>
+            {topReason && (
+              <div className="rounded-xl border border-[#F1F5F9] bg-white p-3" data-testid="admin-blackout-top-reason">
+                <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold">Top reason</div>
+                <div className="serif text-lg mt-0.5 text-[#0B3B5C] truncate">{topReason.reason}</div>
+                <div className="text-[11px] text-[#64748B] mt-0.5">
+                  {topReason.days} day{topReason.days === 1 ? "" : "s"} · {topReason.vehicles} vehicle{topReason.vehicles === 1 ? "" : "s"}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="lg:col-span-3">
+            <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold mb-2">Days per reason</div>
+            <div className="h-40" data-testid="admin-blackout-reason-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={rows} margin={{ top: 4, right: 4, left: -20, bottom: 40 }}>
+                  <XAxis dataKey="reason" tick={{ fontSize: 9, fill: "#94a3b8" }} interval={0} angle={-25} textAnchor="end" height={60} />
+                  <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} width={40} />
+                  <Tooltip
+                    contentStyle={{ background: "#0B3B5C", border: "none", borderRadius: 8, color: "#fff", fontSize: 11 }}
+                    labelStyle={{ color: "#D4A94A" }}
+                    formatter={(v, k) => k === "days" ? [`${v} day${v === 1 ? "" : "s"}`, "Days"] : [v, k]}
+                  />
+                  <Bar dataKey="days" radius={[3, 3, 0, 0]}>
+                    {rows.map((r) => (
+                      <Cell key={r.reason} fill={paletteFor(r.reason)} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div className="mt-5 pt-4 border-t border-[#F1F5F9]" data-testid="admin-blackout-reason-table">
+          <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold mb-2">Breakdown</div>
+          <div className="space-y-1.5">
+            {rows.map((r) => (
+              <div key={r.reason} className="flex items-center gap-3 text-xs" data-testid={`admin-blackout-row-${r.reason}`}>
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: paletteFor(r.reason) }} />
+                <div className="flex-1 min-w-0 truncate text-[#0B3B5C] font-semibold">{r.reason}</div>
+                <div className="w-16 text-right text-[#64748B]">{r.vehicles} veh</div>
+                <div className="w-32 text-right text-[#94a3b8] truncate hidden sm:block" title={r.top_vehicle?.name || ""}>
+                  {r.top_vehicle?.name} · {r.top_vehicle?.days}d
+                </div>
+                <div className="w-16 text-right mono font-semibold text-[#B91C1C]">{r.days}d</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

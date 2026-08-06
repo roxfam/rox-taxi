@@ -18,6 +18,13 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Blackout Reason Presets + Annual Cost Chart)
+- **Preset editor** in Site Config panel — admins add/remove common reasons (Hurricane, Maintenance, Insurance renewal, Sold, Detailing, Rented offline by default; "Reset to defaults" button restores the seed list). Saved via existing `PUT /admin/site-config` on the `blackout_reason_presets` field.
+- **Datalist autocomplete** — the inline reason input on every blackout chip is now bound to a `<datalist>` populated from the presets, so staff pick "Hurricane" from a dropdown instead of retyping. Custom strings still work.
+- **New analytics endpoint** `GET /admin/analytics/blackout-reasons?year=YYYY` — aggregates every rental's `blackout_reasons` map into a per-reason breakdown: days, vehicles affected, top vehicle. Days without a reason land in a "(no reason)" bucket (surfaces how much fleet downtime is undocumented). Year filter matches ISO date prefix.
+- **Dashboard card** — "Blackout cost by reason" renders below the Taxi Add-on card. Two KPIs (total days blocked in the current year + top reason), a bar chart of days per reason (grey for "(no reason)", brand palette for named reasons), and a colour-coded breakdown table naming the top-blocked vehicle per bucket.
+- **Verified live**: 2027 → 224 days across 1 vehicle (217 no-reason + 7 "Hurricane Nadine"). Custom preset "VIP hold" saved via PUT and returned by public `GET /site-config`. Dashboard card scrolls into view with correct KPIs, chart, and breakdown row.
+
 ### ✅ Shipped Feb 2026 (Range Chip Collapse — 372 Pills → 2)
 - **Frontend `groupByReasonRuns`** helper walks the sorted blackout dates and folds any run of consecutive days that share the same reason into one chip. Result: an NV200 with 365 unlabelled + 7 hurricane days now renders as `2026-08-06 → 08-05 ×365` (grey, no reason) + `2027-09-10 → 09-16 ×7 · Hurricane Nadine` (red).
 - **Red for reasoned, grey for unlabelled** — the chip colour instantly signals which stretches are audited vs. blocked with no note.

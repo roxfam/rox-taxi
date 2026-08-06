@@ -452,6 +452,11 @@ class SiteConfigUpdate(BaseModel):
     # everywhere on the booking flow (per-tour toggle is still respected but
     # requires this master switch to actually surface the option).
     taxi_addon_master_enabled: Optional[bool] = None
+    # Admin-editable preset list of common blackout reasons (Hurricane,
+    # Maintenance, Insurance renewal, Sold, Detailing…) surfaced as a
+    # datalist on the inline reason editor so staff don't have to retype
+    # the same string across dozens of ranges.
+    blackout_reason_presets: Optional[list] = None
 
 
 class ContactMessageStatusUpdate(BaseModel):

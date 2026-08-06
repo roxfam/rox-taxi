@@ -62,6 +62,18 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
   const [editingReasonFor, setEditingReasonFor] = useState(null);
   const [reasonDraft, setReasonDraft] = useState("");
   const [reasonSaving, setReasonSaving] = useState(false);
+  // Preset reasons — fetched once and passed to every inline editor as a
+  // <datalist>. Falls back to an in-file default if the config never loads.
+  const [reasonPresets, setReasonPresets] = useState([
+    "Hurricane", "Maintenance", "Insurance renewal", "Sold", "Detailing", "Rented offline",
+  ]);
+  useEffect(() => {
+    api.get("/site-config").then(({ data }) => {
+      if (Array.isArray(data.blackout_reason_presets) && data.blackout_reason_presets.length) {
+        setReasonPresets(data.blackout_reason_presets);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Refetch the item fresh on mount so any bulk-blackout operations that
   // ran while the catalog list was already loaded (or hot-reloads of
@@ -377,6 +389,7 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
               <BlackoutGroupList
                 blackoutDates={form.blackout_dates}
                 blackoutReasons={form.blackout_reasons || {}}
+                reasonPresets={reasonPresets}
                 editingReasonFor={editingReasonFor}
                 reasonDraft={reasonDraft}
                 reasonSaving={reasonSaving}
@@ -579,16 +592,20 @@ function groupByReasonRuns(dates, reasons) {
 }
 
 function BlackoutGroupList({
-  blackoutDates, blackoutReasons, editingReasonFor, reasonDraft, reasonSaving,
+  blackoutDates, blackoutReasons, reasonPresets = [], editingReasonFor, reasonDraft, reasonSaving,
   onStartEdit, onCancelEdit, onDraftChange, onSaveGroupReason, onRemoveGroup,
 }) {
   const groups = useMemo(
     () => groupByReasonRuns(blackoutDates, blackoutReasons),
     [blackoutDates, blackoutReasons],
   );
+  const listId = "blackout-reason-presets";
 
   return (
     <div className="flex flex-wrap gap-1.5" data-testid="edit-blackout-list">
+      <datalist id={listId} data-testid="blackout-reason-datalist">
+        {reasonPresets.map((p) => <option key={p} value={p} />)}
+      </datalist>
       {groups.map((g) => {
         const key = g.dates[0];
         const isRange = g.dates.length > 1;
@@ -617,8 +634,9 @@ function BlackoutGroupList({
                   if (e.key === "Escape") { e.preventDefault(); onCancelEdit(); }
                 }}
                 placeholder="Add a reason…"
+                list={listId}
                 data-testid={`edit-blackout-reason-input-${key}`}
-                className="px-1 py-0.5 text-[11px] outline-none min-w-[160px] max-w-[260px]"
+                className="px-1 py-0.5 text-[11px] outline-none min-w-[180px] max-w-[300px]"
               />
               <button
                 type="button"

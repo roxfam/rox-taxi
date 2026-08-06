@@ -145,6 +145,8 @@ export default function SiteConfigPanel() {
           </div>
         </div>
 
+        <BlackoutReasonPresets cfg={cfg} setCfg={setCfg} />
+
         <button onClick={save} disabled={saving} data-testid="site-save" className="mt-2 rounded-md bg-[#0B3B5C] text-white px-4 py-2 text-sm">Save</button>
       </div>
 
@@ -153,6 +155,61 @@ export default function SiteConfigPanel() {
   );
 }
 
+
+// Admin-editable list of common blackout reasons. Surfaces as a
+// `<datalist>` on the rental Edit-modal inline reason input so staff can
+// pick "Hurricane" from the dropdown instead of retyping. Falls back to a
+// sensible default list if empty. Save happens via the parent form's Save
+// button — same as every other field on this panel.
+function BlackoutReasonPresets({ cfg, setCfg }) {
+  const defaults = ["Hurricane", "Maintenance", "Insurance renewal", "Sold", "Detailing", "Rented offline"];
+  const list = Array.isArray(cfg.blackout_reason_presets) ? cfg.blackout_reason_presets : defaults;
+  const [draft, setDraft] = useState("");
+  const add = () => {
+    const v = draft.trim();
+    if (!v) return;
+    if (list.some((x) => x.toLowerCase() === v.toLowerCase())) { toast.error("Already in the list"); return; }
+    setCfg({ ...cfg, blackout_reason_presets: [...list, v] });
+    setDraft("");
+  };
+  const remove = (v) => setCfg({ ...cfg, blackout_reason_presets: list.filter((x) => x !== v) });
+  const reset = () => setCfg({ ...cfg, blackout_reason_presets: defaults });
+  return (
+    <div className="pt-4 mt-4 border-t border-[#E2E8F0]" data-testid="blackout-reason-presets">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold">Blackout reason presets</div>
+        <button type="button" onClick={reset} className="text-[10px] text-[#94a3b8] hover:text-[#0B3B5C] underline decoration-dotted" data-testid="reset-presets-btn">Reset to defaults</button>
+      </div>
+      <div className="text-[11px] text-[#94a3b8] mb-3 leading-relaxed">
+        Surfaces as autocomplete suggestions on the rental Edit-modal reason input. Staff can still type anything.
+      </div>
+      <div className="flex flex-wrap gap-1.5 mb-3" data-testid="preset-chip-list">
+        {list.length === 0 ? (
+          <span className="text-xs text-[#94a3b8]">No presets — click "Reset to defaults" or add your own below.</span>
+        ) : list.map((p) => (
+          <span key={p} className="inline-flex items-center gap-1 rounded-full bg-[#0B3B5C]/8 text-[#0B3B5C] text-xs font-semibold px-2.5 py-1" data-testid={`preset-chip-${p}`}>
+            {p}
+            <button type="button" onClick={() => remove(p)} className="ml-0.5 opacity-60 hover:opacity-100" data-testid={`preset-remove-${p}`} title={`Remove "${p}"`}>×</button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          placeholder="e.g., Insurance renewal"
+          data-testid="preset-add-input"
+          className="flex-1 rounded-md border border-[#E2E8F0] px-3 py-1.5 text-sm focus:border-[#D4A94A] focus:outline-none"
+        />
+        <button type="button" onClick={add} data-testid="preset-add-btn" className="inline-flex items-center gap-1 rounded-md bg-[#0B3B5C] text-white px-3 py-1.5 text-xs font-semibold hover:bg-[#132a4a]">
+          <Plus className="w-3 h-3" /> Add
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function BlackoutDatesSection() {
   const [dates, setDates] = useState([]);

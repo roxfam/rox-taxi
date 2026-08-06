@@ -315,3 +315,61 @@ async def taxi_addon_analytics(_admin: str = _require(), days: int = Query(30, g
         "by_tour": by_tour,
         "ab": ab,
     }
+
+
+_DEFAULT_BLACKOUT_PRESETS = [
+    "Hurricane", "Maintenance", "Insurance renewal", "Sold", "Detailing", "Rented offline",
+]
+
+
+@router.get("/admin/analytics/blackout-reasons")
+async def blackout_reason_analytics(_admin: str = _require(), year: Optional[int] = Query(None)):
+    """Aggregate rentals.blackout_reasons across the fleet by reason string.
+
+    Returns per-reason: how many blocked days, how many vehicles affected,
+    and the vehicle with the most days in that bucket. `year` filters the
+    date keys to a single ISO year (e.g. 2026). When omitted, aggregates
+    every stored blackout date across the fleet.
+
+    Days with no reason land in the "(no reason)" bucket so admins can see
+    how much of the fleet's unavailable time is undocumented.
+    """
+    year_prefix = f"{year:04d}-" if year else None
+    presets: list = _DEFAULT_BLACKOUT_PRESETS
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    if isinstance(cfg.get("blackout_reason_presets"), list) and cfg["blackout_reason_presets"]:
+        presets = [str(x).strip() for x in cfg["blackout_reason_presets"] if str(x).strip()]
+
+    buckets: Dict[str, Dict[str, Any]] = {}
+    total_days = 0
+    total_vehicles = 0
+    async for r in _db.rentals.find({}, {"id": 1, "name": 1, "blackout_dates": 1, "blackout_reasons": 1}):
+        dates = r.get("blackout_dates") or []
+        reasons = r.get("blackout_reasons") or {}
+        if year_prefix:
+            dates = [d for d in dates if isinstance(d, str) and d.startswith(year_prefix)]
+        if not dates:
+            continue
+        total_vehicles += 1
+        # Per-rental per-reason count
+        per: Dict[str, int] = {}
+        for d in dates:
+            key = (reasons.get(d) or "").strip() or "(no reason)"
+            per[key] = per.get(key, 0) + 1
+        for reason, days in per.items():
+            total_days += days
+            bucket = buckets.setdefault(reason, {"reason": reason, "days": 0, "vehicles": 0, "top_vehicle": {"name": r.get("name"), "days": days}})
+            bucket["days"] += days
+            bucket["vehicles"] += 1
+            if days > bucket["top_vehicle"]["days"]:
+                bucket["top_vehicle"] = {"name": r.get("name"), "days": days}
+
+    rows = sorted(buckets.values(), key=lambda x: (-x["days"], x["reason"].lower()))
+    return {
+        "year": year,
+        "total_days_blocked": total_days,
+        "total_vehicles": total_vehicles,
+        "presets": presets,
+        "rows": rows,
+    }
+
