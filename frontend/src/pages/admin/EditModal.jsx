@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
-import { FolderOpen, Save, X, CalendarRange, Trash2, Info } from "lucide-react";
+import { FolderOpen, Save, X, CalendarRange, Trash2, Info, Check, Pencil } from "lucide-react";
 import { Calendar } from "../../components/ui/calendar";
 import { api } from "../../lib/api";
 import { F, resolveUrl } from "./shared";
@@ -57,6 +57,11 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
   const [newBlackout, setNewBlackout] = useState("");
+  // Inline reason editor — set to the ISO date being edited, or null when
+  // no chip is in edit mode. `reasonDraft` holds the in-flight input value.
+  const [editingReasonFor, setEditingReasonFor] = useState(null);
+  const [reasonDraft, setReasonDraft] = useState("");
+  const [reasonSaving, setReasonSaving] = useState(false);
 
   // Refetch the item fresh on mount so any bulk-blackout operations that
   // ran while the catalog list was already loaded (or hot-reloads of
@@ -372,11 +377,93 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
               <div className="flex flex-wrap gap-1.5" data-testid="edit-blackout-list">
                 {form.blackout_dates.map((d) => {
                   const reason = (form.blackout_reasons || {})[d] || "";
+                  const isEditing = editingReasonFor === d;
+
+                  if (isEditing) {
+                    // Inline editor — text input + Save (blue) / Clear (light) / Cancel (X).
+                    const save = async (nextReason) => {
+                      if (reasonSaving) return;
+                      setReasonSaving(true);
+                      try {
+                        await api.post(`/admin/${kind}/${initial.id}/blackout-reason`, {
+                          date: d,
+                          reason: nextReason,
+                        });
+                        setForm((f) => ({
+                          ...f,
+                          blackout_reasons: nextReason
+                            ? { ...(f.blackout_reasons || {}), [d]: nextReason }
+                            : Object.fromEntries(Object.entries(f.blackout_reasons || {}).filter(([k]) => k !== d)),
+                        }));
+                        setEditingReasonFor(null);
+                        toast.success(nextReason ? "Reason updated" : "Reason cleared");
+                      } catch (e) {
+                        toast.error(e?.response?.data?.detail || "Update failed");
+                      } finally {
+                        setReasonSaving(false);
+                      }
+                    };
+                    return (
+                      <span
+                        key={d}
+                        data-testid={`edit-blackout-editing-${d}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-white border-2 border-[#0B3B5C] px-2 py-0.5"
+                      >
+                        <span className="text-[10px] mono font-bold text-[#0B3B5C]">{d}</span>
+                        <input
+                          type="text"
+                          autoFocus
+                          value={reasonDraft}
+                          onChange={(e) => setReasonDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); save(reasonDraft.trim()); }
+                            if (e.key === "Escape") { e.preventDefault(); setEditingReasonFor(null); }
+                          }}
+                          placeholder="Add a reason…"
+                          data-testid={`edit-blackout-reason-input-${d}`}
+                          className="px-1 py-0.5 text-[11px] outline-none min-w-[160px] max-w-[260px]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => save(reasonDraft.trim())}
+                          disabled={reasonSaving}
+                          data-testid={`edit-blackout-reason-save-${d}`}
+                          className="rounded-full bg-[#0B3B5C] text-white p-1 hover:bg-[#132a4a] disabled:opacity-50"
+                          title="Save (Enter)"
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                        {reason && (
+                          <button
+                            type="button"
+                            onClick={() => save("")}
+                            disabled={reasonSaving}
+                            data-testid={`edit-blackout-reason-clear-${d}`}
+                            className="text-[10px] font-bold uppercase tracking-widest text-[#94a3b8] hover:text-[#B91C1C] px-1"
+                            title="Clear the reason (day stays blocked)"
+                          >
+                            Clear
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setEditingReasonFor(null)}
+                          disabled={reasonSaving}
+                          data-testid={`edit-blackout-reason-cancel-${d}`}
+                          className="text-[#94a3b8] hover:text-[#0B3B5C] p-0.5"
+                          title="Cancel (Esc)"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    );
+                  }
+
                   return (
                     <span
                       key={d}
                       data-testid={`edit-blackout-item-${d}`}
-                      title={reason ? `Reason: ${reason}` : "No reason recorded"}
+                      title={reason ? `Reason: ${reason} · click ✎ to edit` : "No reason recorded · click ✎ to add"}
                       className="inline-flex items-center gap-1 rounded-full bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C] text-[11px] font-semibold px-2.5 py-1"
                     >
                       {d}
@@ -389,6 +476,15 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
                       )}
                       <button
                         type="button"
+                        onClick={() => { setEditingReasonFor(d); setReasonDraft(reason); }}
+                        data-testid={`edit-blackout-reason-edit-${d}`}
+                        className="ml-0.5 text-[#B91C1C]/50 hover:text-[#0B3B5C]"
+                        title={reason ? "Edit reason" : "Add reason"}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setForm({
                           ...form,
                           blackout_dates: form.blackout_dates.filter((x) => x !== d),
@@ -398,7 +494,7 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
                         })}
                         data-testid={`edit-blackout-remove-${d}`}
                         className="ml-0.5 -mr-1 hover:text-[#7f1d1d]"
-                        title="Remove"
+                        title="Remove blackout"
                       >
                         <X className="w-3 h-3" />
                       </button>

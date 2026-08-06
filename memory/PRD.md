@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Inline Reason Editor — Fix Typos Without Unblock/Re-Block)
+- **Backend**: new `POST /admin/rentals/{rental_id}/blackout-reason` endpoint accepts `{date, reason}`. Empty string clears the reason (via `$unset`); non-empty sets it. Guards: 400 on malformed dates, 400 when the date isn't in the vehicle's blackout list.
+- **Frontend**: each blackout chip in the rental Edit modal now has a small ✎ pencil next to the × remove button. Clicking ✎ flips the chip into an inline text input pre-filled with the current reason. Enter or the ✓ save button PATCHes the endpoint and updates local state; Esc or the × cancel button aborts. A "Clear" chip appears when a reason already exists, so admins can wipe a wrong note without deleting the whole blackout.
+- **Verified live**: pencil-edited `2027-09-12` — input pre-filled with "Hurricane recovery — Sep 2027", saved as "Corrected: Hurricane Nadine — Sep 2027", chip's tooltip updated in-place, "Reason updated" toast confirmed the round-trip.
+
 ### ✅ Shipped Feb 2026 (Blackout Reason Log — Hover to See Why)
 - **Backend**: `POST /admin/rentals/bulk-blackout` now stamps the audit note across a new `blackout_reasons` map on every affected rental (keyed by ISO date). On `action: "remove"`, `$unset` cleans those keys so unblocked days don't leave orphan notes.
 - **Frontend**: chip in the rental Edit modal shows a small ⓘ icon next to the date when a reason is stored, plus a native tooltip on hover ("Reason: Hurricane Aug 14–20"). Chips without reasons say "No reason recorded" on hover so the state is never ambiguous.

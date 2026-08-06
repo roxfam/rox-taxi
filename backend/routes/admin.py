@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File, Body
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -182,6 +182,38 @@ class BulkBlackoutRequest(BaseModel):
     rental_ids: Optional[List[str]] = None  # explicit override; ignores category if set
     action: str = "add"  # "add" or "remove"
     reason: Optional[str] = None
+
+
+@router.post("/admin/rentals/{rental_id}/blackout-reason")
+async def set_blackout_reason(
+    rental_id: str,
+    payload: dict = Body(...),
+    _: str = Depends(_require_admin_placeholder),
+):
+    """Set (or clear) the audit-note reason for a single blackout date on
+    one rental. Enables inline reason edits from the Edit-vehicle modal
+    without forcing admins to unblock + re-block just to fix a typo.
+
+    Body: { "date": "YYYY-MM-DD", "reason": "…" }  # empty reason ⇒ clear
+    """
+    date = (payload.get("date") or "").strip()
+    if not date or len(date) != 10 or date[4] != "-" or date[7] != "-":
+        raise HTTPException(400, "date must be an ISO YYYY-MM-DD string")
+    reason = (payload.get("reason") or "").strip()
+
+    rental = await _db.rentals.find_one({"id": rental_id})
+    if not rental:
+        raise HTTPException(404, "Rental not found")
+    # Only allow reasons on dates that are actually blocked — prevents
+    # ghost reasons on unblocked days.
+    if date not in (rental.get("blackout_dates") or []):
+        raise HTTPException(400, f"{date} is not in this vehicle's blackout list")
+
+    if reason:
+        await _db.rentals.update_one({"id": rental_id}, {"$set": {f"blackout_reasons.{date}": reason}})
+    else:
+        await _db.rentals.update_one({"id": rental_id}, {"$unset": {f"blackout_reasons.{date}": ""}})
+    return {"ok": True, "rental_id": rental_id, "date": date, "reason": reason or None}
 
 
 @router.post("/admin/rentals/bulk-blackout")
