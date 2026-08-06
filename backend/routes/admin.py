@@ -184,6 +184,48 @@ class BulkBlackoutRequest(BaseModel):
     reason: Optional[str] = None
 
 
+@router.post("/admin/rentals/{rental_id}/blackout-reasons-bulk")
+async def set_blackout_reasons_bulk(
+    rental_id: str,
+    payload: dict = Body(...),
+    _: str = Depends(_require_admin_placeholder),
+):
+    """Set (or clear) the same reason across many blackout dates at once.
+
+    Used by the collapsed-range chips in the Edit modal so admins can
+    edit one reason and have every day in the visual range pick it up.
+    Body: { "dates": ["YYYY-MM-DD", ...], "reason": "…" } — empty reason
+    clears the reasons instead of setting them.
+    """
+    dates = payload.get("dates") or []
+    if not isinstance(dates, list) or not dates:
+        raise HTTPException(400, "dates must be a non-empty list")
+    for d in dates:
+        if not isinstance(d, str) or len(d) != 10 or d[4] != "-" or d[7] != "-":
+            raise HTTPException(400, f"invalid ISO date: {d}")
+    reason = (payload.get("reason") or "").strip()
+
+    rental = await _db.rentals.find_one({"id": rental_id})
+    if not rental:
+        raise HTTPException(404, "Rental not found")
+    blocked = set(rental.get("blackout_dates") or [])
+    missing = [d for d in dates if d not in blocked]
+    if missing:
+        raise HTTPException(400, f"not in blackout list: {missing[:3]}{'…' if len(missing) > 3 else ''}")
+
+    if reason:
+        await _db.rentals.update_one(
+            {"id": rental_id},
+            {"$set": {f"blackout_reasons.{d}": reason for d in dates}},
+        )
+    else:
+        await _db.rentals.update_one(
+            {"id": rental_id},
+            {"$unset": {f"blackout_reasons.{d}": "" for d in dates}},
+        )
+    return {"ok": True, "rental_id": rental_id, "dates": dates, "reason": reason or None}
+
+
 @router.post("/admin/rentals/{rental_id}/blackout-reason")
 async def set_blackout_reason(
     rental_id: str,

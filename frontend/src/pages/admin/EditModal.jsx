@@ -374,134 +374,52 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
             {form.blackout_dates.length === 0 ? (
               <div className="text-xs text-[#94a3b8]" data-testid="edit-blackout-empty">No blackouts — the car is bookable on every open day.</div>
             ) : (
-              <div className="flex flex-wrap gap-1.5" data-testid="edit-blackout-list">
-                {form.blackout_dates.map((d) => {
-                  const reason = (form.blackout_reasons || {})[d] || "";
-                  const isEditing = editingReasonFor === d;
-
-                  if (isEditing) {
-                    // Inline editor — text input + Save (blue) / Clear (light) / Cancel (X).
-                    const save = async (nextReason) => {
-                      if (reasonSaving) return;
-                      setReasonSaving(true);
-                      try {
-                        await api.post(`/admin/${kind}/${initial.id}/blackout-reason`, {
-                          date: d,
-                          reason: nextReason,
-                        });
-                        setForm((f) => ({
-                          ...f,
-                          blackout_reasons: nextReason
-                            ? { ...(f.blackout_reasons || {}), [d]: nextReason }
-                            : Object.fromEntries(Object.entries(f.blackout_reasons || {}).filter(([k]) => k !== d)),
-                        }));
-                        setEditingReasonFor(null);
-                        toast.success(nextReason ? "Reason updated" : "Reason cleared");
-                      } catch (e) {
-                        toast.error(e?.response?.data?.detail || "Update failed");
-                      } finally {
-                        setReasonSaving(false);
-                      }
-                    };
-                    return (
-                      <span
-                        key={d}
-                        data-testid={`edit-blackout-editing-${d}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-white border-2 border-[#0B3B5C] px-2 py-0.5"
-                      >
-                        <span className="text-[10px] mono font-bold text-[#0B3B5C]">{d}</span>
-                        <input
-                          type="text"
-                          autoFocus
-                          value={reasonDraft}
-                          onChange={(e) => setReasonDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); save(reasonDraft.trim()); }
-                            if (e.key === "Escape") { e.preventDefault(); setEditingReasonFor(null); }
-                          }}
-                          placeholder="Add a reason…"
-                          data-testid={`edit-blackout-reason-input-${d}`}
-                          className="px-1 py-0.5 text-[11px] outline-none min-w-[160px] max-w-[260px]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => save(reasonDraft.trim())}
-                          disabled={reasonSaving}
-                          data-testid={`edit-blackout-reason-save-${d}`}
-                          className="rounded-full bg-[#0B3B5C] text-white p-1 hover:bg-[#132a4a] disabled:opacity-50"
-                          title="Save (Enter)"
-                        >
-                          <Check className="w-3 h-3" />
-                        </button>
-                        {reason && (
-                          <button
-                            type="button"
-                            onClick={() => save("")}
-                            disabled={reasonSaving}
-                            data-testid={`edit-blackout-reason-clear-${d}`}
-                            className="text-[10px] font-bold uppercase tracking-widest text-[#94a3b8] hover:text-[#B91C1C] px-1"
-                            title="Clear the reason (day stays blocked)"
-                          >
-                            Clear
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setEditingReasonFor(null)}
-                          disabled={reasonSaving}
-                          data-testid={`edit-blackout-reason-cancel-${d}`}
-                          className="text-[#94a3b8] hover:text-[#0B3B5C] p-0.5"
-                          title="Cancel (Esc)"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
+              <BlackoutGroupList
+                blackoutDates={form.blackout_dates}
+                blackoutReasons={form.blackout_reasons || {}}
+                editingReasonFor={editingReasonFor}
+                reasonDraft={reasonDraft}
+                reasonSaving={reasonSaving}
+                onStartEdit={(key, existingReason) => { setEditingReasonFor(key); setReasonDraft(existingReason || ""); }}
+                onCancelEdit={() => setEditingReasonFor(null)}
+                onDraftChange={setReasonDraft}
+                onSaveGroupReason={async (dates, newReason) => {
+                  if (reasonSaving) return;
+                  setReasonSaving(true);
+                  try {
+                    await api.post(`/admin/${kind}/${initial.id}/blackout-reasons-bulk`, {
+                      dates,
+                      reason: newReason,
+                    });
+                    setForm((f) => {
+                      const map = { ...(f.blackout_reasons || {}) };
+                      if (newReason) dates.forEach((d) => { map[d] = newReason; });
+                      else dates.forEach((d) => { delete map[d]; });
+                      return { ...f, blackout_reasons: map };
+                    });
+                    setEditingReasonFor(null);
+                    toast.success(newReason
+                      ? `Reason updated on ${dates.length} day${dates.length === 1 ? "" : "s"}`
+                      : `Reason cleared on ${dates.length} day${dates.length === 1 ? "" : "s"}`,
                     );
-                  }
-
-                  return (
-                    <span
-                      key={d}
-                      data-testid={`edit-blackout-item-${d}`}
-                      title={reason ? `Reason: ${reason} · click ✎ to edit` : "No reason recorded · click ✎ to add"}
-                      className="inline-flex items-center gap-1 rounded-full bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C] text-[11px] font-semibold px-2.5 py-1"
-                    >
-                      {d}
-                      {reason && (
-                        <Info
-                          className="w-3 h-3 text-[#B91C1C]/70"
-                          aria-label={`Reason: ${reason}`}
-                          data-testid={`edit-blackout-reason-${d}`}
-                        />
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => { setEditingReasonFor(d); setReasonDraft(reason); }}
-                        data-testid={`edit-blackout-reason-edit-${d}`}
-                        className="ml-0.5 text-[#B91C1C]/50 hover:text-[#0B3B5C]"
-                        title={reason ? "Edit reason" : "Add reason"}
-                      >
-                        <Pencil className="w-3 h-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setForm({
-                          ...form,
-                          blackout_dates: form.blackout_dates.filter((x) => x !== d),
-                          blackout_reasons: Object.fromEntries(
-                            Object.entries(form.blackout_reasons || {}).filter(([k]) => k !== d),
-                          ),
-                        })}
-                        data-testid={`edit-blackout-remove-${d}`}
-                        className="ml-0.5 -mr-1 hover:text-[#7f1d1d]"
-                        title="Remove blackout"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  );
-                })}
-              </div>
+                  } catch (e) {
+                    toast.error(e?.response?.data?.detail || "Update failed");
+                  } finally { setReasonSaving(false); }
+                }}
+                onRemoveGroup={(dates) => {
+                  const label = dates.length === 1 ? dates[0] : `${dates[0]} → ${dates[dates.length - 1]} (${dates.length} days)`;
+                  if (!window.confirm(`Unblock ${label}? The vehicle will become bookable on ${dates.length === 1 ? "that day" : "those days"}.`)) return;
+                  const remove = new Set(dates);
+                  setForm((f) => ({
+                    ...f,
+                    blackout_dates: f.blackout_dates.filter((x) => !remove.has(x)),
+                    blackout_reasons: Object.fromEntries(
+                      Object.entries(f.blackout_reasons || {}).filter(([k]) => !remove.has(k)),
+                    ),
+                  }));
+                  toast.success(`Cleared ${dates.length} blackout${dates.length === 1 ? "" : "s"} — remember to Save`);
+                }}
+              />
             )}
           </div>
         )}
@@ -635,3 +553,159 @@ function BlackoutRangePicker({ blackouts, onChange }) {
     </div>
   );
 }
+
+// Group consecutive ISO YYYY-MM-DD strings that share the same reason
+// into single visual "range" chips. e.g. 2027-09-10 → 09-16 · Hurricane.
+// Days without a reason group by consecutive-ness too (so a maintenance
+// stretch shows one grey chip instead of 30 red pills).
+function groupByReasonRuns(dates, reasons) {
+  const sorted = [...dates].sort();
+  const groups = [];
+  let cur = null;
+  const dayMs = 86400000;
+  for (const d of sorted) {
+    const r = reasons[d] || "";
+    const t = new Date(d + "T12:00:00Z").getTime();
+    if (cur && cur.reason === r && (t - cur.lastT) === dayMs) {
+      cur.dates.push(d);
+      cur.lastT = t;
+    } else {
+      if (cur) groups.push(cur);
+      cur = { reason: r, dates: [d], lastT: t };
+    }
+  }
+  if (cur) groups.push(cur);
+  return groups.map(({ reason, dates: ds }) => ({ reason, dates: ds }));
+}
+
+function BlackoutGroupList({
+  blackoutDates, blackoutReasons, editingReasonFor, reasonDraft, reasonSaving,
+  onStartEdit, onCancelEdit, onDraftChange, onSaveGroupReason, onRemoveGroup,
+}) {
+  const groups = useMemo(
+    () => groupByReasonRuns(blackoutDates, blackoutReasons),
+    [blackoutDates, blackoutReasons],
+  );
+
+  return (
+    <div className="flex flex-wrap gap-1.5" data-testid="edit-blackout-list">
+      {groups.map((g) => {
+        const key = g.dates[0];
+        const isRange = g.dates.length > 1;
+        const rangeLabel = isRange
+          ? `${g.dates[0]} → ${g.dates[g.dates.length - 1].slice(5)}`
+          : g.dates[0];
+        const isEditing = editingReasonFor === key;
+        const hasReason = !!g.reason;
+
+        if (isEditing) {
+          return (
+            <span
+              key={key}
+              data-testid={`edit-blackout-editing-${key}`}
+              className="inline-flex items-center gap-1 rounded-full bg-white border-2 border-[#0B3B5C] px-2 py-0.5"
+            >
+              <span className="text-[10px] mono font-bold text-[#0B3B5C]">{rangeLabel}</span>
+              {isRange && <span className="text-[9px] text-[#94a3b8] font-semibold">({g.dates.length}d)</span>}
+              <input
+                type="text"
+                autoFocus
+                value={reasonDraft}
+                onChange={(e) => onDraftChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); onSaveGroupReason(g.dates, reasonDraft.trim()); }
+                  if (e.key === "Escape") { e.preventDefault(); onCancelEdit(); }
+                }}
+                placeholder="Add a reason…"
+                data-testid={`edit-blackout-reason-input-${key}`}
+                className="px-1 py-0.5 text-[11px] outline-none min-w-[160px] max-w-[260px]"
+              />
+              <button
+                type="button"
+                onClick={() => onSaveGroupReason(g.dates, reasonDraft.trim())}
+                disabled={reasonSaving}
+                data-testid={`edit-blackout-reason-save-${key}`}
+                className="rounded-full bg-[#0B3B5C] text-white p-1 hover:bg-[#132a4a] disabled:opacity-50"
+                title="Save (Enter)"
+              >
+                <Check className="w-3 h-3" />
+              </button>
+              {hasReason && (
+                <button
+                  type="button"
+                  onClick={() => onSaveGroupReason(g.dates, "")}
+                  disabled={reasonSaving}
+                  data-testid={`edit-blackout-reason-clear-${key}`}
+                  className="text-[10px] font-bold uppercase tracking-widest text-[#94a3b8] hover:text-[#B91C1C] px-1"
+                  title="Clear the reason (days stay blocked)"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onCancelEdit}
+                disabled={reasonSaving}
+                data-testid={`edit-blackout-reason-cancel-${key}`}
+                className="text-[#94a3b8] hover:text-[#0B3B5C] p-0.5"
+                title="Cancel (Esc)"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          );
+        }
+
+        const bg = hasReason ? "bg-[#FEF2F2] border-[#FECACA]" : "bg-[#F8FAFC] border-[#E2E8F0]";
+        const text = hasReason ? "text-[#B91C1C]" : "text-[#64748B]";
+        return (
+          <span
+            key={key}
+            data-testid={`edit-blackout-item-${key}`}
+            data-range-length={g.dates.length}
+            title={
+              (hasReason ? `Reason: ${g.reason}` : "No reason recorded") +
+              (isRange ? ` · ${g.dates.length} consecutive days` : "") +
+              " · click ✎ to edit, × to unblock"
+            }
+            className={`inline-flex items-center gap-1 rounded-full border ${bg} ${text} text-[11px] font-semibold px-2.5 py-1`}
+          >
+            <span className="mono">{rangeLabel}</span>
+            {isRange && (
+              <span
+                className="text-[9px] font-black uppercase tracking-widest opacity-70 -ml-0.5"
+                data-testid={`edit-blackout-count-${key}`}
+              >
+                ×{g.dates.length}
+              </span>
+            )}
+            {hasReason && (
+              <span className="max-w-[200px] truncate text-[#0B3B5C] font-medium">
+                · {g.reason}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => onStartEdit(key, g.reason)}
+              data-testid={`edit-blackout-reason-edit-${key}`}
+              className="ml-0.5 opacity-50 hover:opacity-100"
+              title={hasReason ? "Edit reason for all days in this range" : "Add reason for all days in this range"}
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onRemoveGroup(g.dates)}
+              data-testid={`edit-blackout-remove-${key}`}
+              className="ml-0.5 -mr-1 opacity-70 hover:opacity-100 hover:text-[#7f1d1d]"
+              title={isRange ? `Unblock all ${g.dates.length} days` : "Unblock this day"}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+

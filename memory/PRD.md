@@ -18,6 +18,13 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Range Chip Collapse — 372 Pills → 2)
+- **Frontend `groupByReasonRuns`** helper walks the sorted blackout dates and folds any run of consecutive days that share the same reason into one chip. Result: an NV200 with 365 unlabelled + 7 hurricane days now renders as `2026-08-06 → 08-05 ×365` (grey, no reason) + `2027-09-10 → 09-16 ×7 · Hurricane Nadine` (red).
+- **Red for reasoned, grey for unlabelled** — the chip colour instantly signals which stretches are audited vs. blocked with no note.
+- **New backend endpoint** `POST /admin/rentals/{id}/blackout-reasons-bulk` accepts `{dates:[…], reason:str}` — empty reason clears, non-empty sets. 400s on malformed dates or dates not in the blackout list.
+- **Group actions**: ✎ opens the inline editor on the range chip and Save/Clear applies to **every** day in the range in one round-trip. × on a range chip unblocks the whole span (with a confirm dialog that names the range and count).
+- **Verified live**: 372 blackouts collapsed to 2 chips, hurricane chip inner text `"2027-09-10 → 09-16 ×7 · Hurricane Nadine"`, tooltip `"Reason: Hurricane Nadine · 7 consecutive days · click ✎ to edit, × to unblock"`.
+
 ### ✅ Shipped Feb 2026 (Inline Reason Editor — Fix Typos Without Unblock/Re-Block)
 - **Backend**: new `POST /admin/rentals/{rental_id}/blackout-reason` endpoint accepts `{date, reason}`. Empty string clears the reason (via `$unset`); non-empty sets it. Guards: 400 on malformed dates, 400 when the date isn't in the vehicle's blackout list.
 - **Frontend**: each blackout chip in the rental Edit modal now has a small ✎ pencil next to the × remove button. Clicking ✎ flips the chip into an inline text input pre-filled with the current reason. Enter or the ✓ save button PATCHes the endpoint and updates local state; Esc or the × cancel button aborts. A "Clear" chip appears when a reason already exists, so admins can wipe a wrong note without deleting the whole blackout.
