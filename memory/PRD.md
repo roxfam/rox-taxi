@@ -18,6 +18,13 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Fleet-Wide Range Picker — Bulk Blackout via Calendar)
+- **Bulk maintenance blackout modal** rebuilt around the two-month `Calendar` range picker (same react-day-picker component as the per-car editor) — no more two clunky date inputs.
+- **New vehicle-picker column** on the right: category filter + scrollable checkbox list with "Select all" / "Clear" — admins can bulk-block one class, hand-pick arbitrary cars, or leave both empty to hit the whole fleet.
+- **Live final preview** at the bottom always reads e.g. "Block 7 days across 3 vehicles" so the admin sees exactly what Apply will do (turns red for Add, green for Remove).
+- **Backend was already range-native** (`POST /admin/rentals/bulk-blackout` accepted `rental_ids` override + `start_date`/`end_date`) — this ships pure UX on top of the existing endpoint.
+- **Verified live**: Opening the modal on the /admin rentals tab renders the two-month calendar, category dropdown, 7-vehicle checkbox picker, and a "Block N days across M vehicles" summary that updates as the range/selection changes.
+
 ### ✅ Shipped Feb 2026 (Blackout Range Picker — Drag-Style Bulk Add/Remove)
 - **Two-month `Calendar` (react-day-picker in range mode)** embedded in the rental Edit modal. Click a start day, click an end day — the whole span highlights. Already-blocked dates render **red** so the admin sees at a glance what's blocked before touching anything.
 - **Live summary panel** on the right: shows the range as `YYYY-MM-DD → YYYY-MM-DD`, plus `N days selected · X already blocked · Y new` so admins know exactly what a Block/Unblock will do.
