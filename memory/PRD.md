@@ -5,14 +5,25 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 7 — Suspicious Signup Alert (Fraud Watch)
+- New `send_new_country_signup_alert()` email template in `notifications.py` (branded "Rox Fraud Watch" owner alert).
+- New `_maybe_send_new_country_signup_alert()` helper in `routes/auth.py`:
+  - Resolves signup IP → country via cached `visitor_geo_cache` (falls back to a live ip-api.com call with a 3s timeout on cache miss).
+  - Stamps `signup_country`, `signup_city`, `signup_region`, `signup_ip` on every new user doc for future analytics.
+  - Emails `ADMIN_EMAIL` **once per country ever** — repeat signups from a known country stay silent.
+  - Runs as a `asyncio.create_task` so signup latency is not affected.
+- Wired into `POST /auth/register` (new users only — existing pre-Google users don't re-fire).
+- Existing users backfilled with `signup_country: "Legacy"` so historical accounts don't trigger false-positive alerts on next signup batch.
+- Verified end-to-end: US signup with existing US user (no alert), first-ever NG signup (1 alert), second NG signup (no re-alert), private IP (no crash).
+
 ### Feb 7 — Cloudflare Turnstile CAPTCHA (Signup + Login + Password Reset)
 - Added `TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` to backend `.env`; `REACT_APP_TURNSTILE_SITE_KEY` to frontend `.env`.
-- Backend `_verify_turnstile()` helper in `routes/auth.py` calls Cloudflare siteverify. Fails open (dev/preview) when secret is unset.
-- Enforced on `POST /auth/register`, `POST /auth/login-email`, `POST /auth/forgot-password` (returns 400 if missing/invalid).
-- New `<TurnstileWidget />` component (loads CF script once, renders the widget, callbacks for solved/expired/error).
+- Backend `_verify_turnstile()` helper calls Cloudflare siteverify. Fails open (dev/preview) when secret is unset.
+- Enforced on `POST /auth/register`, `POST /auth/login-email`, `POST /auth/forgot-password`.
+- New `<TurnstileWidget />` component (loads CF script once, callbacks for solved/expired/error).
 - Wired into `Signup.jsx`, `Login.jsx` (email tab + inline forgot-password form).
-- Submit buttons stay disabled until the challenge is solved.
-- **⚠️ Requires user action**: add `bahamas-taxi-tours.preview.emergentagent.com` + `roxtaxi.com` in Cloudflare Turnstile dashboard → Hostname Management.
+- Submit buttons stay disabled until challenge is solved.
+- **⚠️ User action pending**: whitelist `bahamas-taxi-tours.preview.emergentagent.com` + `roxtaxi.com` in Turnstile → Hostname Management. User confirmed "managed" mode is set.
 
 ### Earlier (previous session)
 - Optional Taxi Add-on with custom admin pricing & A/B upsell testing
@@ -39,12 +50,14 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ### P2
 - Referral-card test locator (deferred).
-- Pin Undo Toast finalization (verify undo cancels FB post + notification).
+- Pin Undo Toast finalization.
 - Split Driver Leaderboard by individual names.
 - Modularize `server.py` (>3900 lines).
+- Rate-limit failed logins (cool-down after N wrong attempts).
 
 ## Third-party Integrations
 - Cloudflare Turnstile (Signup/Login/Reset CAPTCHA) — user-owned site + secret keys
+- ip-api.com (IP → country for fraud watch + analytics) — no key needed
 - Claude Sonnet 4.6 (Live Chat) — Emergent LLM Key
 - Claude Sonnet 4.5 (Vision OCR/Face Match) — Emergent LLM Key
 - Stripe (Payments) — user API key

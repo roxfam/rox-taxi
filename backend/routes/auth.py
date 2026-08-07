@@ -242,6 +242,108 @@ async def _maybe_send_suspicious_login_alert(*, user_id: str, method: str,
         return
 
 
+async def _resolve_geo_upstream(ip: str) -> dict:
+    """Best-effort IP → geo lookup. Reads cached row first; if missed, does
+    ONE upstream call to ip-api.com (same provider analytics.py uses) with a
+    tight timeout so signup latency stays bounded. Never raises.
+    """
+    if not ip or ip.startswith(("127.", "10.", "192.168.", "172.16.", "::1")):
+        return {"country": "", "city": "", "region": "", "isp": ""}
+    cached = await _geo_for_ip(ip)
+    if cached.get("country"):
+        # Existing helper doesn't cache isp — pull it from the raw row if present
+        try:
+            raw = await _db.visitor_geo_cache.find_one({"_id": ip})
+            isp = (raw or {}).get("geo", {}).get("isp", "") if raw else ""
+        except Exception:  # noqa: BLE001
+            isp = ""
+        return {**cached, "isp": isp}
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as c:
+            r = await c.get(f"http://ip-api.com/json/{ip}?fields=status,country,regionName,city,isp")
+        if r.status_code == 200 and r.json().get("status") == "success":
+            data = r.json()
+            geo = {
+                "country": data.get("country", ""),
+                "region": data.get("regionName", ""),
+                "city": data.get("city", ""),
+                "isp": data.get("isp", ""),
+            }
+            # Cache for future lookups (7d TTL, matching analytics.py)
+            from datetime import datetime, timezone
+            expires = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+            try:
+                await _db.visitor_geo_cache.update_one(
+                    {"_id": ip},
+                    {"$set": {"geo": geo, "expires_at": expires}},
+                    upsert=True,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+            return geo
+    except Exception:  # noqa: BLE001
+        pass
+    return {"country": "", "city": "", "region": "", "isp": ""}
+
+
+async def _maybe_send_new_country_signup_alert(*, user_id: str, email: str,
+                                               name: str, ip: str,
+                                               when_iso: str) -> None:
+    """Owner-only fraud-watch alert: fire ONCE per country the first time a
+    signup happens from that country. Stamps the user doc with signup_country
+    so per-user analytics keep working even if we don't alert.
+    """
+    try:
+        geo = await _resolve_geo_upstream(ip)
+        country = (geo.get("country") or "").strip()
+
+        # Always stamp signup_country/city on the user doc for later analytics
+        await _db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {
+                "signup_country": country or "Unknown",
+                "signup_city": geo.get("city", ""),
+                "signup_region": geo.get("region", ""),
+                "signup_ip": ip or "",
+            }},
+        )
+
+        if not country:
+            return  # can't classify — skip alert quietly
+
+        # Have we ever seen a signup from this country before? Exclude the
+        # user we just wrote so their own row doesn't disqualify the check.
+        prior = await _db.users.find_one(
+            {"signup_country": country, "user_id": {"$ne": user_id}},
+            {"user_id": 1},
+        )
+        if prior:
+            return  # not a first — stay quiet
+
+        # First-ever signup from this country → alert the owner
+        if not _admin_email:
+            return
+        try:
+            from notifications import send_new_country_signup_alert
+            send_new_country_signup_alert(
+                to_email=_admin_email,
+                new_user_email=email,
+                new_user_name=name or "",
+                country=country,
+                city=geo.get("city", ""),
+                region=geo.get("region", ""),
+                ip=ip or "unknown",
+                isp=geo.get("isp", ""),
+                when_iso=when_iso,
+                admin_url=f"{_site_base_url()}/admin/manage",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    except Exception:  # noqa: BLE001
+        # Never let the alert path break signup itself
+        return
+
+
 async def _create_customer_session(user_id: str, method: str, request: Optional["Request"] = None) -> str:
     session_token = f"sess_{uuid.uuid4().hex}{uuid.uuid4().hex}"
     ts = _now_iso()
@@ -433,6 +535,22 @@ async def customer_register(req: CustomerRegisterRequest, request: Request, resp
 
     token = await _create_customer_session(user_id, "email", request=request)
     _set_session_cookie(response, token)
+
+    # Fraud-watch: brand-new country signup alert (owner-only, once per
+    # country, never blocks the signup response).
+    if not existing:
+        try:
+            ip = ""
+            if request is not None:
+                xff = request.headers.get("x-forwarded-for", "")
+                ip = (xff.split(",")[0].strip() if xff else (request.client.host if request.client else ""))
+            import asyncio as _aio
+            _aio.create_task(_maybe_send_new_country_signup_alert(
+                user_id=user_id, email=email, name=req.name or "", ip=ip, when_iso=ts,
+            ))
+        except Exception:  # noqa: BLE001
+            pass
+
     user = await _db.users.find_one({"user_id": user_id}, {"_id": 0})
     user.pop("password_hash", None)
     return {"user": user}

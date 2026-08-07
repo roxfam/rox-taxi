@@ -772,6 +772,72 @@ def _html_escape(s: str) -> str:
     return _h.escape(str(s or ""), quote=True)
 
 
+def send_new_country_signup_alert(*, to_email: str, new_user_email: str,
+                                  new_user_name: str, country: str, city: str,
+                                  region: str, ip: str, isp: str, when_iso: str,
+                                  is_first_ever: bool = True,
+                                  admin_url: str = "") -> dict:
+    """Owner-only alert: a new customer just signed up from a country we've
+    never seen a signup from before. Signal-first, low-noise (fires ONCE per
+    country ever). Handy for spotting fraud waves from new regions before
+    they generate chargebacks.
+    """
+    subject = f"[Rox Fraud Watch] First-ever signup from {country or 'Unknown'} — {new_user_email}"
+    when_pretty = (when_iso or "").replace("T", " ").split(".")[0] + " UTC"
+    loc = ", ".join([p for p in (city, region, country) if p]) or "an unknown location"
+    text = (
+        f"Heads-up — a brand-new account was just created from a country you\n"
+        f"have never had a customer from before.\n\n"
+        f"  When    : {when_pretty}\n"
+        f"  Email   : {new_user_email}\n"
+        f"  Name    : {new_user_name or '(not provided)'}\n"
+        f"  Country : {country or 'Unknown'}\n"
+        f"  Region  : {region or ''}\n"
+        f"  City    : {city or ''}\n"
+        f"  IP      : {ip}\n"
+        f"  ISP     : {isp or 'unknown'}\n\n"
+        f"If the country lines up with a real inquiry you're expecting, great —\n"
+        f"nothing to do. If it feels off (VPN, unusual for your customer mix,\n"
+        f"or you're seeing multiple signups from the same subnet), you can:\n"
+        f"  • Freeze the account from the admin panel\n"
+        f"  • Watch for their first booking and flag the payment for review\n\n"
+        f"You'll only get this alert the FIRST time each country appears in\n"
+        f"your signup base. Repeat signups from the same country stay quiet.\n\n"
+        f"— Rox Taxi Fraud Watch"
+    )
+    admin_link = admin_url or ""
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#DC2626;font-weight:700;">Fraud watch · Owner alert</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:24px;line-height:1.2;">
+        First-ever signup from <span style="color:#DC2626;">{_html_escape(country or 'Unknown')}</span>
+      </h1>
+      <p style="color:#64748B;font-size:14px;margin:12px 0 0;">
+        A brand-new account was just created from a country you've never had a customer from before. Worth a quick glance to rule out fraud.
+      </p>
+
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:20px;margin-top:20px;">
+        <table style="width:100%;font-size:13px;color:#0B3B5C;border-collapse:collapse;">
+          <tr><td style="color:#64748B;padding:5px 0;">When</td><td style="text-align:right;font-weight:600;">{_html_escape(when_pretty)}</td></tr>
+          <tr><td style="color:#64748B;padding:5px 0;">Email</td><td style="text-align:right;font-weight:600;">{_html_escape(new_user_email)}</td></tr>
+          <tr><td style="color:#64748B;padding:5px 0;">Name</td><td style="text-align:right;font-weight:600;">{_html_escape(new_user_name or '(not provided)')}</td></tr>
+          <tr><td style="color:#64748B;padding:5px 0;">Location</td><td style="text-align:right;font-weight:600;">{_html_escape(loc)}</td></tr>
+          <tr><td style="color:#64748B;padding:5px 0;">IP</td><td style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;">{_html_escape(ip)}</td></tr>
+          <tr><td style="color:#64748B;padding:5px 0;">ISP</td><td style="text-align:right;font-size:12px;">{_html_escape(isp or 'unknown')}</td></tr>
+        </table>
+      </div>
+
+      {"<div style='margin:22px 0 8px;'><a href='" + _html_escape(admin_link) + "' style='display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:800;padding:12px 22px;border-radius:999px;font-size:14px;'>Open Admin · Review user</a></div>" if admin_link else ""}
+
+      <div style="border-top:1px solid #E2E8F0;padding-top:18px;margin-top:22px;color:#94a3b8;font-size:12px;line-height:1.55;">
+        <strong style="color:#64748B;">Why you're getting this:</strong> This alert fires ONCE per country ever. Repeat signups from the same country stay quiet — so if you're seeing this, it's genuinely a first.
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:18px;">Rox Taxi Fraud Watch · Nassau, Bahamas</p>
+    </div>
+    """
+    return send_email(to_email, subject, html, text, category="info")
+
+
 def send_airport_pre_pickup_reminder(booking: dict, prefs: Optional[dict] = None,
                                      flight_delay_min: Optional[int] = None,
                                      reschedule_url: Optional[str] = None,
