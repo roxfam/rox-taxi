@@ -405,12 +405,102 @@ def _current_user():
     return Depends(_current_user_dep)
 
 
+# ─── Failed-login rate limiter ────────────────────────────────────────
+# Blocks brute-force even when the bot solves the CAPTCHA. Tracked in
+# Mongo (`login_failures`) with a coarse composite key so both an
+# email-under-attack AND an IP-flooding-many-emails get shut down.
+_LOGIN_FAIL_WINDOW_MIN = 15
+_LOGIN_FAIL_MAX = 5
+
+
+def _client_ip(request: Optional["Request"]) -> str:
+    if request is None:
+        return ""
+    xff = request.headers.get("x-forwarded-for", "")
+    return (xff.split(",")[0].strip() if xff else (request.client.host if request.client else ""))[:64]
+
+
+async def _check_login_rate_limit(email: str, ip: str) -> None:
+    """Raises HTTP 429 with a Retry-After hint if this email OR ip has
+    exceeded the failure threshold in the sliding window."""
+    from datetime import datetime, timezone
+    if _db is None:
+        return
+    cutoff = (_now_utc() - timedelta(minutes=_LOGIN_FAIL_WINDOW_MIN)).isoformat()
+    q_terms = []
+    if email:
+        q_terms.append({"email": email.lower()})
+    if ip:
+        q_terms.append({"ip": ip})
+    if not q_terms:
+        return
+    count = await _db.login_failures.count_documents({
+        "at": {"$gte": cutoff},
+        "$or": q_terms,
+    })
+    if count < _LOGIN_FAIL_MAX:
+        return
+    # Compute a rough retry-after from the OLDEST failure in the window.
+    oldest = await _db.login_failures.find_one(
+        {"at": {"$gte": cutoff}, "$or": q_terms},
+        sort=[("at", 1)],
+    )
+    retry_after_sec = 60 * _LOGIN_FAIL_WINDOW_MIN
+    if oldest and oldest.get("at"):
+        try:
+            oldest_at = datetime.fromisoformat(oldest["at"].replace("Z", "+00:00"))
+            expiry = oldest_at + timedelta(minutes=_LOGIN_FAIL_WINDOW_MIN)
+            retry_after_sec = max(1, int((expiry - datetime.now(timezone.utc)).total_seconds()))
+        except Exception:  # noqa: BLE001
+            pass
+    mins = max(1, (retry_after_sec + 59) // 60)
+    raise HTTPException(
+        429,
+        f"Too many failed sign-in attempts. Please wait about {mins} minute{'s' if mins != 1 else ''} and try again.",
+        headers={"Retry-After": str(retry_after_sec)},
+    )
+
+
+async def _record_login_failure(email: str, ip: str) -> None:
+    if _db is None:
+        return
+    try:
+        await _db.login_failures.insert_one({
+            "email": (email or "").lower(),
+            "ip": ip or "",
+            "at": _now_iso(),
+        })
+    except Exception:  # noqa: BLE001
+        pass
+
+
+async def _clear_login_failures(email: str, ip: str) -> None:
+    if _db is None:
+        return
+    q_terms = []
+    if email:
+        q_terms.append({"email": email.lower()})
+    if ip:
+        q_terms.append({"ip": ip})
+    if not q_terms:
+        return
+    try:
+        await _db.login_failures.delete_many({"$or": q_terms})
+    except Exception:  # noqa: BLE001
+        pass
+
+
 @router.post("/auth/login")
-async def admin_login(req: LoginRequest):
+async def admin_login(req: LoginRequest, request: Request):
+    ip = _client_ip(request)
+    await _check_login_rate_limit(req.email, ip)
     if req.email.lower() != _admin_email.lower():
+        await _record_login_failure(req.email, ip)
         raise HTTPException(401, "Invalid credentials")
     if not bcrypt.checkpw(req.password.encode(), _admin_password_hash.encode()):
+        await _record_login_failure(req.email, ip)
         raise HTTPException(401, "Invalid credentials")
+    await _clear_login_failures(req.email, ip)
     return {"token": make_admin_token(req.email), "email": req.email}
 
 
@@ -561,12 +651,17 @@ async def customer_login_email(req: CustomerLoginRequest, request: Request, resp
     """Customer email/password login."""
     await _verify_turnstile(req.turnstile_token or "", request, "login")
     email = req.email.lower()
+    ip = _client_ip(request)
+    await _check_login_rate_limit(email, ip)
     user = await _db.users.find_one({"email": email})
     if not user or not user.get("password_hash"):
+        await _record_login_failure(email, ip)
         raise HTTPException(401, "Invalid email or password")
     if not _verify_password(req.password, user["password_hash"]):
+        await _record_login_failure(email, ip)
         raise HTTPException(401, "Invalid email or password")
 
+    await _clear_login_failures(email, ip)
     token = await _create_customer_session(user["user_id"], "email", request=request)
     _set_session_cookie(response, token)
     user.pop("_id", None)
