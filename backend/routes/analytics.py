@@ -16,6 +16,7 @@ from typing import Any, Callable, Dict, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 
@@ -458,4 +459,159 @@ async def blackout_reason_analytics(_admin: str = _require(), year: Optional[int
         "presets": presets,
         "rows": rows,
     }
+
+
+@router.get("/admin/analytics/blackout-reasons/pdf")
+async def blackout_reasons_pdf(_admin: str = _require(), year: Optional[int] = Query(None)):
+    """Insurance-ready branded PDF of the downtime-by-reason matrix.
+
+    Renders the same rows × years matrix the CSV export builds, framed by
+    the site's brand logo (from site_config.logo_url), the export date,
+    fleet totals, and a per-row breakdown. Streamed inline so the admin's
+    click triggers a browser save-as dialog.
+    """
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage,
+    )
+    import io as _io
+    import urllib.request
+
+    # Reuse the existing aggregator so PDF + JSON never drift out of sync.
+    payload = await blackout_reason_analytics(_admin=_admin, year=year)  # noqa: SLF001
+    rows = payload.get("rows") or []
+    trend_years = payload.get("available_years") or []
+    trend_years = sorted(trend_years)
+
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    brand = cfg.get("brand_name") or "Rox Taxi & Tours"
+    logo_url = cfg.get("logo_url") or ""
+
+    buf = _io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter,
+        leftMargin=0.5 * inch, rightMargin=0.5 * inch,
+        topMargin=0.5 * inch, bottomMargin=0.5 * inch,
+        title="Fleet Downtime Report",
+    )
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="Brand", fontName="Helvetica-Bold", fontSize=18, textColor=colors.HexColor("#0B3B5C")))
+    styles.add(ParagraphStyle(name="H2", fontName="Helvetica-Bold", fontSize=13, textColor=colors.HexColor("#B91C1C"), spaceAfter=8))
+    styles.add(ParagraphStyle(name="Body", fontName="Helvetica", fontSize=10, textColor=colors.HexColor("#0B3B5C")))
+    styles.add(ParagraphStyle(name="Muted", fontName="Helvetica-Oblique", fontSize=9, textColor=colors.HexColor("#64748B")))
+
+    story = []
+    # Header: logo (if fetchable) + brand name + report date
+    header_cells = []
+    if logo_url:
+        try:
+            src = logo_url if logo_url.startswith("http") else f"http://localhost:8001{logo_url}"
+            with urllib.request.urlopen(src, timeout=3) as r:
+                logo_bytes = r.read()
+            logo_img = RLImage(_io.BytesIO(logo_bytes), width=1.1 * inch, height=1.1 * inch, kind="proportional")
+            header_cells.append(logo_img)
+        except Exception:  # noqa: BLE001
+            header_cells.append(Paragraph("", styles["Body"]))
+    else:
+        header_cells.append(Paragraph("", styles["Body"]))
+    today = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    header_cells.append(Paragraph(
+        f"<font size=18 color='#0B3B5C'><b>{brand}</b></font><br/>"
+        f"<font size=12 color='#64748B'>Fleet Downtime Report</font><br/>"
+        f"<font size=9 color='#94a3b8'>Generated {today} · {'Year: ' + str(year) if year else 'All years'}</font>",
+        styles["Body"],
+    ))
+    header_tbl = Table([header_cells], colWidths=[1.3 * inch, 6.0 * inch])
+    header_tbl.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    story.append(header_tbl)
+    story.append(Spacer(1, 12))
+
+    # Summary strip
+    total_days = payload.get("total_days_blocked", 0)
+    total_rev = payload.get("total_revenue_lost", 0.0)
+    vehicles = payload.get("total_vehicles", 0)
+    yoy = payload.get("yoy_delta_pct")
+    yoy_str = ""
+    if yoy is not None:
+        arrow = "↑" if yoy > 0 else ("↓" if yoy < 0 else "→")
+        tone = "#B91C1C" if yoy > 0 else ("#059669" if yoy < 0 else "#64748B")
+        yoy_str = f"<br/><font size=9 color='{tone}'>{arrow} {abs(yoy):.1f}% vs {payload.get('prev_year')}</font>"
+    summary = Table([[
+        Paragraph(f"<b>Revenue lost</b><br/><font size=14 color='#B91C1C'><b>${total_rev:,.2f}</b></font>{yoy_str}", styles["Body"]),
+        Paragraph(f"<b>Days blocked</b><br/><font size=14>{total_days}</font>", styles["Body"]),
+        Paragraph(f"<b>Vehicles affected</b><br/><font size=14>{vehicles}</font>", styles["Body"]),
+    ]], colWidths=[2.4 * inch, 2.4 * inch, 2.4 * inch])
+    summary.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FBF7EF")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E2E8F0")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    story.append(summary)
+    story.append(Spacer(1, 18))
+
+    # Matrix: Reason × Year (days + $) + Totals row
+    if rows and trend_years:
+        header = ["Reason"] + [f"{y}\ndays" for y in trend_years] + [f"{y}\n$" for y in trend_years] + ["Total\ndays", "Total\n$"]
+        body_rows = []
+        for r in rows:
+            trend = r.get("trend") or []
+            trend_by_year = {t["year"]: t for t in trend}
+            days_cells = [str(trend_by_year.get(y, {"days": 0})["days"]) for y in trend_years]
+            rev_cells = [f"${trend_by_year.get(y, {'revenue_lost': 0}).get('revenue_lost', 0):,.2f}" for y in trend_years]
+            body_rows.append([r["reason"], *days_cells, *rev_cells, str(r["days"]), f"${r['revenue_lost']:,.2f}"])
+        # Totals row
+        tot_days_per = [sum((next((t["days"] for t in (r.get("trend") or []) if t["year"] == y), 0)) for r in rows) for y in trend_years]
+        tot_rev_per = [sum((next((t["revenue_lost"] for t in (r.get("trend") or []) if t["year"] == y), 0)) for r in rows) for y in trend_years]
+        tot_days_cells = [str(x) for x in tot_days_per]
+        tot_rev_cells = [f"${x:,.2f}" for x in tot_rev_per]
+        body_rows.append(["TOTAL", *tot_days_cells, *tot_rev_cells, str(sum(tot_days_per)), f"${sum(tot_rev_per):,.2f}"])
+
+        table_data = [header] + body_rows
+        col_widths = [1.6 * inch] + [0.55 * inch] * len(trend_years) + [0.8 * inch] * len(trend_years) + [0.6 * inch, 0.9 * inch]
+        matrix = Table(table_data, colWidths=col_widths, repeatRows=1)
+        matrix.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0B3B5C")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("ALIGN", (0, 0), (0, -1), "LEFT"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#F8FAFC")]),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#FEF2F2")),
+            ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#B91C1C")),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E2E8F0")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(Paragraph("Downtime breakdown", styles["H2"]))
+        story.append(matrix)
+    else:
+        story.append(Paragraph("No blackout dates on record for this window.", styles["Muted"]))
+    story.append(Spacer(1, 18))
+    story.append(Paragraph(
+        "Revenue lost calculated as: blocked days × each vehicle's daily rental rate. "
+        "Days without a recorded reason land in the (no reason) bucket.",
+        styles["Muted"],
+    ))
+
+    doc.build(story)
+    buf.seek(0)
+    filename = f"downtime-report_{year or 'all'}_{datetime.now(timezone.utc).strftime('%Y%m%d')}.pdf"
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 

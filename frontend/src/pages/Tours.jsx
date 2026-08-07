@@ -129,15 +129,6 @@ const CRUISE_BUNDLES = [
     hero_id: "atv-tour-2hr",
     save_pct: 10,
   },
-  {
-    id: "bundle-paradise-luxe",
-    name: "Paradise Luxe",
-    tagline: "Half-day yacht → beach ride → private dinner drop",
-    total_minutes: 420,          // 7 hours
-    tour_ids: ["yacht-shared-halfday", "horse-trail-beach", "nassau-city-tour"],
-    hero_id: "yacht-shared-halfday",
-    save_pct: 10,
-  },
 ];
 
 // The Attraction Discovery Hub — 4 curated micro-landing pages we own.

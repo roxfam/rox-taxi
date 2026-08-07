@@ -1398,6 +1398,18 @@ function BlackoutReasonCard({ data, year, onYearChange }) {
         >
           <Download className="w-3 h-3" /> CSV
         </button>
+        <a
+          href={`${process.env.REACT_APP_BACKEND_URL}/api/admin/analytics/blackout-reasons/pdf?year=${year}&token=${encodeURIComponent(localStorage.getItem("admin_token") || "")}`}
+          onClick={(e) => {
+            if (empty) { e.preventDefault(); return; }
+            toast.success("Building branded PDF…");
+          }}
+          data-testid="admin-blackout-pdf-export"
+          className={`inline-flex items-center gap-1 rounded-lg border border-[#B91C1C] text-[#B91C1C] hover:bg-[#B91C1C] hover:text-white text-xs font-semibold px-3 py-1.5 transition-colors ${empty ? "opacity-40 cursor-not-allowed" : ""}`}
+          title="Print an insurance-ready branded PDF of this matrix"
+        >
+          <Download className="w-3 h-3" /> PDF
+        </a>
         <select
           value={year}
           onChange={(e) => onYearChange && onYearChange(Number(e.target.value))}

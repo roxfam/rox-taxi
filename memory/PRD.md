@@ -18,6 +18,12 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Removed Yacht + Horse Partner Tours)
+- **DB**: hard-deleted 5 tour docs — `yacht-shared-halfday`, `yacht-private-halfday`, `yacht-private-fullday`, `horse-trail-beach`, `horse-private-lesson` via `DELETE /admin/tours/{id}`. Public `/api/tours` now returns 15 tours (was 20).
+- **Seed data**: removed the same 5 entries from `backend/seed_data.py` so a re-seed doesn't restore them.
+- **Frontend cleanup**: dropped the "Paradise Luxe" tour bundle from `Tours.jsx` — it referenced the deleted `yacht-shared-halfday` + `horse-trail-beach` and would have shown broken cards.
+- **Also fixed**: analytics.py `StreamingResponse` import for the new Insurance-Ready PDF endpoint (previous turn's lint blocker).
+
 ### ✅ Shipped Feb 2026 (CSV Export of Downtime Matrix)
 - **Frontend-only** — no new endpoint since the reason × year × dollars data already lives on the `blackout-reasons` payload.
 - **⤓ CSV button** sits between the card title and the year selector. Disabled when the fleet has no blackouts. Builds a matrix CSV client-side, wraps values with commas/quotes safely, appends a TOTAL row, and downloads with filename `downtime-cost-by-reason_YYYY-MM-DD.csv`. Success toast reports rows × years exported.

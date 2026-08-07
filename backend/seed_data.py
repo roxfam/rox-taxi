@@ -62,51 +62,6 @@ TOURS_SEED: List[Dict] = [
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/08y2qvto_684289985_122108121422812605_8912813587859776552_n.jpg",
      "category": "tour", "active": True,
      "child_price": 25.0, "child_age_max": 12, "child_free_under": 3},
-
-    # ══════════════════════════════════════════════════════════════════════
-    # Yacht & horse partner tours — added Feb 2026.
-    # Pricing convention: official operator site price + 10% booking fee.
-    # Baseline prices below are drawn from published rates on the partner
-    # operator sites at time of writing — admin can adjust in the catalog
-    # panel once contracts finalise.
-    # ══════════════════════════════════════════════════════════════════════
-    {"id": "yacht-shared-halfday", "name": "Shared Luxury Yacht Cruise — Half Day (Blue Water Charters)",
-     "price": 187.0, "duration": "4 hours",
-     "location": "Departs Nassau — Palm Cay Marina / Paradise Island", "featured": True,
-     "description": "Join a shared half-day yacht cruise on a modern 40-60ft catamaran — reef snorkel stop, floating cooler with rum punch + beer, fresh Bahamian bites, and secluded sandbar swim. Official Blue Water Charters operator, small group (max 12), professional captain + mate. Price: base $170 + 10% booking fee (verify with admin — official listing $170 pp).",
-     "image_url": "https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
-     "category": "watersport", "active": True,
-     "external_booking_url": "https://bluewatercharters.com/"},
-    {"id": "yacht-private-halfday", "name": "Private Yacht Charter — Half Day (up to 8 guests)",
-     "price": 2200.0, "duration": "4 hours",
-     "location": "Departs Nassau — Palm Cay / Atlantis Marina", "featured": False,
-     "description": "Your group only — private half-day charter on a 45-60ft yacht with captain, mate, snorkel gear, beach umbrella, cooler stocked with drinks + light snacks, and flexible route (Rose Island, Athol Island, Sandy Cay). Ideal for anniversaries, birthdays, small wedding parties. Price: base $2000 + 10% booking fee (official half-day rate ~$2000).",
-     "image_url": "https://images.unsplash.com/photo-1540946485063-a40da27545f8?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
-     "category": "watersport", "active": True,
-     "external_booking_url": "https://bluewatercharters.com/private-charters/"},
-    {"id": "yacht-private-fullday", "name": "Private Yacht Charter — Full Day (up to 10 guests)",
-     "price": 3630.0, "duration": "8 hours",
-     "location": "Departs Nassau — Palm Cay Marina", "featured": False,
-     "description": "Full-day private yacht charter — captain, mate, all fuel, snorkel gear, floating mat, Bahamian lunch on board, unlimited soft drinks + rum punch. Custom route including Exuma sandbars on request. Price: base $3300 + 10% booking fee.",
-     "image_url": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
-     "category": "watersport", "active": True,
-     "external_booking_url": "https://bluewatercharters.com/private-charters/"},
-
-    {"id": "horse-trail-beach", "name": "Horseback Trail + Beach Ride (Happy Trails Stables)",
-     "price": 165.0, "duration": "90 minutes",
-     "location": "Coral Harbour — pickup from cruise port / hotel available", "featured": True,
-     "description": "The Nassau classic — 90-minute guided ride through Coral Harbour trails ending with a bareback splash in the shallows at a private beach. Small groups (max 8), all levels welcome (10+ years), helmets provided. Includes cruise-port transfer + rum punch on return. Price: base $150 + 10% booking fee (official Happy Trails rate $150 pp).",
-     "image_url": "https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
-     "category": "adventure", "active": True,
-     "external_booking_url": "https://happytrailsstables.com/",
-     "child_price": 165.0, "child_age_max": 15, "child_free_under": 10},
-    {"id": "horse-private-lesson", "name": "Private Horseback Lesson (60 min)",
-     "price": 110.0, "duration": "60 minutes",
-     "location": "Coral Harbour — Happy Trails paddock", "featured": False,
-     "description": "One-on-one riding lesson with a certified instructor — perfect for first-timers or nervous riders who want confidence before a trail ride. Includes helmet, boots and paddock coaching. Price: base $100 + 10% booking fee.",
-     "image_url": "https://images.unsplash.com/photo-1517649763962-0c623066013b?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
-     "category": "adventure", "active": True,
-     "external_booking_url": "https://happytrailsstables.com/lessons"},
 ]
 
 # Nassau / New Providence official taxi tariff (posted at LPIA taxi rank + Ministry table).
