@@ -25,11 +25,19 @@ export default function AdminDashboard() {
   const [nudgeStats, setNudgeStats] = useState(null);
   const [addonStats, setAddonStats] = useState(null);
   const [reasonStats, setReasonStats] = useState(null);
+  const [reasonYear, setReasonYear] = useState(new Date().getFullYear());
+
+  // Refetch only the blackout-reason card when the year picker changes —
+  // avoids a full dashboard reload when an admin scrubs through years.
+  useEffect(() => {
+    api.get(`/admin/analytics/blackout-reasons?year=${reasonYear}`)
+      .then((r) => setReasonStats(r.data))
+      .catch(() => {});
+  }, [reasonYear]);
 
   const load = async () => {
     setLoading(true);
     try {
-      const yr = new Date().getFullYear();
       const [s, b, g, a, n, ax, rs] = await Promise.all([
         api.get("/admin/stats"),
         api.get("/admin/bookings"),
@@ -37,7 +45,7 @@ export default function AdminDashboard() {
         api.get("/admin/auth/methods-summary").catch(() => ({ data: null })),
         api.get("/admin/photo-nudge-stats").catch(() => ({ data: null })),
         api.get("/admin/analytics/taxi-addon").catch(() => ({ data: null })),
-        api.get(`/admin/analytics/blackout-reasons?year=${yr}`).catch(() => ({ data: null })),
+        api.get(`/admin/analytics/blackout-reasons?year=${reasonYear}`).catch(() => ({ data: null })),
       ]);
       setStats(s.data);
       setBookings(b.data);
@@ -186,7 +194,7 @@ export default function AdminDashboard() {
         <TaxiAddonCard data={addonStats} />
 
         {/* Fleet blackout costs — days blocked by reason for the year */}
-        <BlackoutReasonCard data={reasonStats} />
+        <BlackoutReasonCard data={reasonStats} year={reasonYear} onYearChange={setReasonYear} />
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">
@@ -1298,13 +1306,16 @@ function AddonStat({ testId, label, value, sub, tone }) {
 //   · Totals: days blocked + vehicles affected + top reason
 //   · Bar chart: days per reason (color-coded, single glance answer)
 //   · Ranked table showing top vehicle per reason bucket
-function BlackoutReasonCard({ data }) {
+function BlackoutReasonCard({ data, year, onYearChange }) {
   if (!data) return null;
   const rows = Array.isArray(data.rows) ? data.rows : [];
   const empty = rows.length === 0;
   const totalDays = Number(data.total_days_blocked || 0);
   const totalRevLost = Number(data.total_revenue_lost || 0);
   const topReason = rows.find((r) => r.reason !== "(no reason)") || rows[0];
+  const availableYears = Array.isArray(data.available_years) && data.available_years.length
+    ? data.available_years
+    : [year];
   const paletteFor = (label) => {
     if (label === "(no reason)") return "#94a3b8";
     const palette = ["#B91C1C", "#D4A94A", "#0B3B5C", "#E86A3C", "#059669", "#7c3aed", "#0891b2", "#c026d3"];
@@ -1322,9 +1333,20 @@ function BlackoutReasonCard({ data }) {
         <div className="flex-1">
           <div className="serif text-lg text-[#0B3B5C] leading-tight">Downtime cost by reason</div>
           <div className="text-[11px] text-[#64748B] mt-0.5">
-            Revenue lost while each vehicle is off the road · {data.year} · {data.total_vehicles || 0} vehicle{(data.total_vehicles || 0) === 1 ? "" : "s"} · daily rate × blocked days
+            Revenue lost while each vehicle is off the road · {data.total_vehicles || 0} vehicle{(data.total_vehicles || 0) === 1 ? "" : "s"} · daily rate × blocked days
           </div>
         </div>
+        <select
+          value={year}
+          onChange={(e) => onYearChange && onYearChange(Number(e.target.value))}
+          data-testid="admin-blackout-year-select"
+          className="rounded-lg border border-[#E2E8F0] bg-white text-[#0B3B5C] font-semibold text-sm px-3 py-1.5 focus:border-[#D4A94A] focus:outline-none cursor-pointer hover:border-[#D4A94A] transition-colors"
+          title="Flip through prior years"
+        >
+          {availableYears.map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
       </div>
 
       {empty ? (

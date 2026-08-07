@@ -380,6 +380,18 @@ async def blackout_reason_analytics(_admin: str = _require(), year: Optional[int
 
     rows = sorted(buckets.values(), key=lambda x: (-x["revenue_lost"], -x["days"], x["reason"].lower()))
 
+    # Distinct years present across the whole fleet's blackout_dates —
+    # powers the year selector dropdown in the admin card so admins can
+    # scroll through prior years without editing URLs. Always includes the
+    # current calendar year so the picker never shows an empty list.
+    years_set = set()
+    async for r in _db.rentals.find({}, {"blackout_dates": 1}):
+        for d in (r.get("blackout_dates") or []):
+            if isinstance(d, str) and len(d) >= 4 and d[:4].isdigit():
+                years_set.add(int(d[:4]))
+    years_set.add(datetime.now(timezone.utc).year)
+    available_years = sorted(years_set, reverse=True)
+
     # Year-over-year delta — only compute when the caller asked for a
     # specific year (otherwise "prev year" is meaningless). We reuse the
     # same aggregation on the previous year and diff the totals.
@@ -410,6 +422,7 @@ async def blackout_reason_analytics(_admin: str = _require(), year: Optional[int
         "prev_year_days_blocked": prev_year_days,
         "prev_year_revenue_lost": prev_year_revenue,
         "yoy_delta_pct": yoy_delta_pct,
+        "available_years": available_years,
         "presets": presets,
         "rows": rows,
     }

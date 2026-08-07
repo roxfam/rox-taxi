@@ -18,6 +18,12 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Year Selector Dropdown)
+- **Backend**: `GET /admin/analytics/blackout-reasons` now also returns `available_years` — the distinct years present across the whole fleet's blackout_dates (plus the current calendar year, always). Sorted newest-first.
+- **Frontend**: small `<select>` sits at the top-right of the Downtime card. Options come from `available_years`. Changing the year fires a scoped fetch (only the reason card refetches — the whole dashboard doesn't reload). KPI headline, chart, YoY pill, biggest-bucket card, and breakdown table all refresh together.
+- **Fixed**: initial `<BlackoutReasonCard data={reasonStats} />` in AdminDashboard was missing the new `year` + `onYearChange` props — restored them, orphan JSX fragment left over from a bad search_replace also removed.
+- **Verified live**: initial default 2026 → `$13,320.00 ↑ 393.3% VS 2025`; select 2027 → `$20,160.00 ↑ 51.4% VS 2026`; select 2025 → `$2,700.00` (no pill — no baseline). Chart bars, biggest bucket, and breakdown table all track the year.
+
 ### ✅ Shipped Feb 2026 (Year-over-Year Delta Pill)
 - **Backend**: `GET /admin/analytics/blackout-reasons?year=YYYY` now also runs a second aggregation on `year-1` and returns `prev_year`, `prev_year_days_blocked`, `prev_year_revenue_lost`, `yoy_delta_pct`. When no `year` is passed the YoY fields return `null` (comparison is meaningless).
 - **Frontend**: coloured pill sits beside the "Revenue lost" headline. Down = **green ↓** (improving), up = **red ↑** (worsening), zero = **grey →**. Hover reveals `"Previous year (2025): $2,700.00 · 30 days"` so admins can see the raw baseline that produced the percentage.
