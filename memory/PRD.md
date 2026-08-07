@@ -18,6 +18,14 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Hero Slide 1 — New Photo + "Unlock Nassau" Copy)
+- **Slide `hero-nassau`** (position 1 in the home hero carousel) updated via `PUT /admin/home-slides/hero-nassau`:
+  - `image_url`: swapped in the user-supplied couple-walking-on-beach photo from the artifact CDN.
+  - `title`: "Unlock Nassau." — Home.jsx appends the italic gold "On your terms." suffix automatically, producing the full "Unlock Nassau. **On your terms.**" headline the user requested.
+  - `subtitle`: "Book a taxi, tour or rental in sixty seconds."
+- **Public `/api/home-slides`** confirms the update — slide 1 is `hero-nassau` with the new image_url.
+- Home carousel still rotates through the other 3 slides (Atlantis, Rose Island, Junkanoo) as before — only slide 1's photo + copy changed.
+
 ### ✅ Shipped Feb 2026 (Removed Yacht + Horse Partner Tours)
 - **DB**: hard-deleted 5 tour docs — `yacht-shared-halfday`, `yacht-private-halfday`, `yacht-private-fullday`, `horse-trail-beach`, `horse-private-lesson` via `DELETE /admin/tours/{id}`. Public `/api/tours` now returns 15 tours (was 20).
 - **Seed data**: removed the same 5 entries from `backend/seed_data.py` so a re-seed doesn't restore them.
