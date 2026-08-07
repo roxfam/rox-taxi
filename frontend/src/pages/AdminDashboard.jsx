@@ -1321,6 +1321,58 @@ function BlackoutReasonCard({ data, year, onYearChange }) {
     const palette = ["#B91C1C", "#D4A94A", "#0B3B5C", "#E86A3C", "#059669", "#7c3aed", "#0891b2", "#c026d3"];
     return palette[Math.abs([...label].reduce((a, c) => a + c.charCodeAt(0), 0)) % palette.length];
   };
+
+  // Build a matrix CSV so accountants can paste into Excel for insurance
+  // claims + quarterly reviews. Columns: Reason, {year1} days, {year1} $,
+  // {year2} days, {year2} $, …, Total days, Total $. Values are quoted +
+  // commas escaped so a reason like "Sold, retired" doesn't break the row.
+  const exportCsv = () => {
+    const trendYears = rows[0]?.trend?.map((t) => t.year) ?? [];
+    const esc = (v) => {
+      const s = String(v ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = ["Reason", ...trendYears.flatMap((y) => [`${y} days`, `${y} $`]), "Total days", "Total $"];
+    const csvRows = rows.map((r) => {
+      const cells = [r.reason];
+      let totalDays = 0;
+      let totalRev = 0;
+      (r.trend || []).forEach((t) => {
+        cells.push(t.days, t.revenue_lost.toFixed(2));
+        totalDays += t.days;
+        totalRev += t.revenue_lost;
+      });
+      cells.push(totalDays, totalRev.toFixed(2));
+      return cells.map(esc).join(",");
+    });
+    const totalsRow = ["TOTAL"];
+    let grandDays = 0;
+    let grandRev = 0;
+    trendYears.forEach((y) => {
+      let d = 0;
+      let rv = 0;
+      rows.forEach((r) => {
+        const slot = (r.trend || []).find((t) => t.year === y);
+        if (slot) { d += slot.days; rv += slot.revenue_lost; }
+      });
+      totalsRow.push(d, rv.toFixed(2));
+      grandDays += d;
+      grandRev += rv;
+    });
+    totalsRow.push(grandDays, grandRev.toFixed(2));
+    const csv = [header, ...csvRows, totalsRow.map(esc)].map((row) => Array.isArray(row) ? row.map(esc).join(",") : row).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `downtime-cost-by-reason_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${rows.length} reason${rows.length === 1 ? "" : "s"} × ${trendYears.length} year${trendYears.length === 1 ? "" : "s"}`);
+  };
+
   return (
     <div
       className="mt-6 rounded-2xl border border-[#B91C1C]/15 bg-white p-5 lg:p-6"
@@ -1336,6 +1388,16 @@ function BlackoutReasonCard({ data, year, onYearChange }) {
             Revenue lost while each vehicle is off the road · {data.total_vehicles || 0} vehicle{(data.total_vehicles || 0) === 1 ? "" : "s"} · daily rate × blocked days
           </div>
         </div>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={empty}
+          data-testid="admin-blackout-csv-export"
+          className="inline-flex items-center gap-1 rounded-lg border border-[#0B3B5C] text-[#0B3B5C] hover:bg-[#0B3B5C] hover:text-white text-xs font-semibold px-3 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Download reason × year × dollars matrix as CSV"
+        >
+          <Download className="w-3 h-3" /> CSV
+        </button>
         <select
           value={year}
           onChange={(e) => onYearChange && onYearChange(Number(e.target.value))}

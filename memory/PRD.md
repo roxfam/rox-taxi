@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (CSV Export of Downtime Matrix)
+- **Frontend-only** — no new endpoint since the reason × year × dollars data already lives on the `blackout-reasons` payload.
+- **⤓ CSV button** sits between the card title and the year selector. Disabled when the fleet has no blackouts. Builds a matrix CSV client-side, wraps values with commas/quotes safely, appends a TOTAL row, and downloads with filename `downtime-cost-by-reason_YYYY-MM-DD.csv`. Success toast reports rows × years exported.
+- **Verified live**: clicking exported the correct 3-year matrix for the NV200 fleet (grand total $33,480 matches the all-years API total).
+
 ### ✅ Shipped Feb 2026 (Reason Trendline Sparklines)
 - **Backend**: every row in `blackout-reasons` analytics now carries a `trend: [{year, days, revenue_lost}]` series covering every year the fleet has blackout data for. Sparse years (0 days) still emit entries so the sparkline never has gaps.
 - **Frontend**: compact 96×24px `<LineChart>` slots into each breakdown row between the reason label and the day count. Line colour matches the row's brand dot. Native tooltip lists every year + days + direction arrow ("2025: 0d · 2026: 148d · 2027: 217d  (↑)"). Hidden below the `md` breakpoint to keep the essential columns visible on mobile.
