@@ -379,11 +379,37 @@ async def blackout_reason_analytics(_admin: str = _require(), year: Optional[int
                 bucket["top_vehicle"] = {"name": r.get("name"), "days": days, "revenue_lost": revenue_lost}
 
     rows = sorted(buckets.values(), key=lambda x: (-x["revenue_lost"], -x["days"], x["reason"].lower()))
+
+    # Year-over-year delta — only compute when the caller asked for a
+    # specific year (otherwise "prev year" is meaningless). We reuse the
+    # same aggregation on the previous year and diff the totals.
+    prev_year_revenue = None
+    prev_year_days = None
+    yoy_delta_pct = None
+    if year:
+        prev_prefix = f"{year - 1:04d}-"
+        prev_days_total = 0
+        prev_rev_total = 0.0
+        async for r in _db.rentals.find({}, {"blackout_dates": 1, "price": 1}):
+            dates = [d for d in (r.get("blackout_dates") or []) if isinstance(d, str) and d.startswith(prev_prefix)]
+            if not dates:
+                continue
+            prev_days_total += len(dates)
+            prev_rev_total += len(dates) * float(r.get("price") or 0.0)
+        prev_year_revenue = round(prev_rev_total, 2)
+        prev_year_days = prev_days_total
+        if prev_year_revenue > 0:
+            yoy_delta_pct = round(100 * (total_revenue_lost - prev_year_revenue) / prev_year_revenue, 1)
+
     return {
         "year": year,
         "total_days_blocked": total_days,
         "total_revenue_lost": round(total_revenue_lost, 2),
         "total_vehicles": total_vehicles,
+        "prev_year": (year - 1) if year else None,
+        "prev_year_days_blocked": prev_year_days,
+        "prev_year_revenue_lost": prev_year_revenue,
+        "yoy_delta_pct": yoy_delta_pct,
         "presets": presets,
         "rows": rows,
     }

@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Year-over-Year Delta Pill)
+- **Backend**: `GET /admin/analytics/blackout-reasons?year=YYYY` now also runs a second aggregation on `year-1` and returns `prev_year`, `prev_year_days_blocked`, `prev_year_revenue_lost`, `yoy_delta_pct`. When no `year` is passed the YoY fields return `null` (comparison is meaningless).
+- **Frontend**: coloured pill sits beside the "Revenue lost" headline. Down = **green ↓** (improving), up = **red ↑** (worsening), zero = **grey →**. Hover reveals `"Previous year (2025): $2,700.00 · 30 days"` so admins can see the raw baseline that produced the percentage.
+- **Verified live**: seeded 30 maintenance days in Dec 2025 ($2,700), 2026 view now shows `$13,320.00 ↑ 393.3% VS 2025` (red pill, correct tooltip); 2027 vs 2026 = +51.4%; all-years call omits the pill.
+
 ### ✅ Shipped Feb 2026 (Downtime Cost in Dollars)
 - **Backend**: `GET /admin/analytics/blackout-reasons` now multiplies each vehicle's `blackout_dates` × its daily `price` and returns `revenue_lost` on every bucket + `total_revenue_lost` at the top. Buckets are sorted by dollars lost (not days) and `top_vehicle` ranks by dollars so a $250/day luxury van never hides behind a $65/day compact with more days.
 - **Frontend**: dashboard card retitled "Downtime cost by reason". KPI headline is now `$13,320.00` (dollars) rather than `148` (days). Bar chart Y-axis renders in `$k` (`$14.0k`, `$7.0k`) with formatted tooltips. Breakdown row: `dot · Hurricane Nadine · 7d · 1 veh · NV200 · $630.00 · $630.00` — days stay visible but dollars carry the weight.

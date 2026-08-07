@@ -1339,7 +1339,30 @@ function BlackoutReasonCard({ data }) {
           <div className="lg:col-span-2 space-y-3">
             <div className="rounded-xl border border-[#F1F5F9] bg-[#FBF7EF]/40 p-3">
               <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-semibold">Revenue lost · {data.year}</div>
-              <div className="serif text-2xl mt-0.5 text-[#B91C1C]" data-testid="admin-blackout-total-revenue">{money(totalRevLost)}</div>
+              <div className="flex items-baseline gap-2 flex-wrap mt-0.5">
+                <div className="serif text-2xl text-[#B91C1C]" data-testid="admin-blackout-total-revenue">{money(totalRevLost)}</div>
+                {data.yoy_delta_pct !== null && data.yoy_delta_pct !== undefined && (
+                  (() => {
+                    const delta = Number(data.yoy_delta_pct);
+                    // Downtime dollars going DOWN is good news (green ↓);
+                    // going UP is bad news (red ↑). Neutral = zero change.
+                    const improving = delta < 0;
+                    const flat = delta === 0;
+                    const arrow = flat ? "→" : improving ? "↓" : "↑";
+                    const tone = flat ? "text-[#94a3b8]" : improving ? "text-[#059669]" : "text-[#B91C1C]";
+                    const bg = flat ? "bg-[#F1F5F9]" : improving ? "bg-[#D1FAE5]" : "bg-[#FEE2E2]";
+                    return (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full ${bg} ${tone} text-[10px] font-black uppercase tracking-widest px-2 py-0.5`}
+                        data-testid="admin-blackout-yoy-delta"
+                        title={`Previous year (${data.prev_year}): ${money(data.prev_year_revenue_lost || 0)} · ${data.prev_year_days_blocked || 0} days`}
+                      >
+                        {arrow} {Math.abs(delta).toFixed(1)}% vs {data.prev_year}
+                      </span>
+                    );
+                  })()
+                )}
+              </div>
               <div className="text-[11px] text-[#64748B] mt-0.5">across {totalDays} blocked day{totalDays === 1 ? "" : "s"}</div>
             </div>
             {topReason && (
