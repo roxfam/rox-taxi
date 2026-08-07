@@ -33,11 +33,11 @@ export function AuthProvider({ children }) {
     window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
   };
 
-  const loginEmail = useCallback(async (email, password) => {
+  const loginEmail = useCallback(async (email, password, turnstile_token = null) => {
     const r = await fetch(`${API}/auth/login-email`, {
       method: "POST", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, turnstile_token }),
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
@@ -49,11 +49,11 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  const register = useCallback(async (name, email, password, referral_code = null) => {
+  const register = useCallback(async (name, email, password, referral_code = null, turnstile_token = null) => {
     const r = await fetch(`${API}/auth/register`, {
       method: "POST", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, referral_code }),
+      body: JSON.stringify({ name, email, password, referral_code, turnstile_token }),
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));

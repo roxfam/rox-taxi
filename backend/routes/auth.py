@@ -14,6 +14,7 @@ Auth-only helpers (_hash_password, _verify_password, _create_customer_session,
 _set_session_cookie, make_admin_token) live here.
 """
 import hashlib
+import os
 import secrets
 import uuid
 from datetime import timedelta
@@ -24,6 +25,36 @@ import httpx
 import jwt
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, EmailStr, Field
+
+
+# ─── Cloudflare Turnstile verification ────────────────────────────────
+# Guards signup/login/forgot-password from bots. If TURNSTILE_SECRET_KEY
+# is unset, verification is skipped (allows local dev + preview without
+# hitting Cloudflare).
+_TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+
+async def _verify_turnstile(token: str, request: Request, action_label: str) -> None:
+    secret = (os.environ.get("TURNSTILE_SECRET_KEY") or "").strip()
+    if not secret:
+        return  # not configured — fail open in dev/preview
+    if not token:
+        raise HTTPException(400, "CAPTCHA verification required. Please complete the challenge.")
+    ip = ""
+    if request is not None:
+        xff = request.headers.get("x-forwarded-for", "")
+        ip = (xff.split(",")[0].strip() if xff else (request.client.host if request.client else ""))
+    payload = {"secret": secret, "response": token}
+    if ip:
+        payload["remoteip"] = ip
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.post(_TURNSTILE_VERIFY_URL, data=payload)
+            data = r.json() if r.status_code == 200 else {}
+    except Exception:  # noqa: BLE001
+        raise HTTPException(503, "CAPTCHA service unavailable. Please try again.")
+    if not data.get("success"):
+        raise HTTPException(400, "CAPTCHA verification failed. Please try again.")
 
 
 # --- injected via configure() ---
@@ -60,15 +91,18 @@ class CustomerRegisterRequest(BaseModel):
     password: str = Field(..., min_length=6, max_length=200)
     name: str = Field("", max_length=100)
     referral_code: Optional[str] = Field(None, max_length=32)
+    turnstile_token: Optional[str] = Field(None, max_length=2048)
 
 
 class CustomerLoginRequest(BaseModel):
     email: EmailStr
     password: str
+    turnstile_token: Optional[str] = Field(None, max_length=2048)
 
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+    turnstile_token: Optional[str] = Field(None, max_length=2048)
 
 
 class ResetPasswordRequest(BaseModel):
@@ -355,6 +389,7 @@ async def customer_register(req: CustomerRegisterRequest, request: Request, resp
     account back to the referrer. The credit unlocks after this user's
     FIRST paid booking (see `_apply_referral_conversion_if_paid`).
     """
+    await _verify_turnstile(req.turnstile_token or "", request, "signup")
     email = req.email.lower()
     existing = await _db.users.find_one({"email": email})
     if existing and existing.get("password_hash"):
@@ -406,6 +441,7 @@ async def customer_register(req: CustomerRegisterRequest, request: Request, resp
 @router.post("/auth/login-email")
 async def customer_login_email(req: CustomerLoginRequest, request: Request, response: Response):
     """Customer email/password login."""
+    await _verify_turnstile(req.turnstile_token or "", request, "login")
     email = req.email.lower()
     user = await _db.users.find_one({"email": email})
     if not user or not user.get("password_hash"):
@@ -573,6 +609,7 @@ async def forgot_password(req: ForgotPasswordRequest, request: Request):
     registered — prevents user-enumeration. Rate-limited per email (max 3
     per hour) via a `password_reset_attempts` audit collection with TTL.
     """
+    await _verify_turnstile(req.turnstile_token or "", request, "forgot_password")
     from datetime import datetime, timezone
     email = req.email.lower().strip()
     now = datetime.now(timezone.utc)

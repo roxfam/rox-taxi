@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { UserPlus, Mail, Lock, User as UserIcon, AlertCircle, Sparkles, ShieldCheck, Gift } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import PasswordStrengthMeter, { scorePassword } from "../components/PasswordStrengthMeter";
+import TurnstileWidget from "../components/TurnstileWidget";
 
 export default function Signup() {
   const { user, loading, login: googleLogin, register } = useAuth();
@@ -11,6 +12,8 @@ export default function Signup() {
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", referral_code: "" });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const captchaRequired = !!process.env.REACT_APP_TURNSTILE_SITE_KEY;
   const strength = useMemo(() => scorePassword(form.password), [form.password]);
 
   useEffect(() => { if (!loading && user) nav("/my-bookings", { replace: true }); }, [user, loading, nav]);
@@ -23,9 +26,10 @@ export default function Signup() {
     if (form.password.length < 6) return setErr("Password must be at least 6 characters.");
     if (!strength.strong) return setErr("Password is too weak. Mix letters, numbers, and symbols.");
     if (form.password !== form.confirm) return setErr("Passwords don't match.");
+    if (captchaRequired && !captchaToken) return setErr("Please complete the CAPTCHA challenge.");
     setBusy(true);
     try {
-      await register(form.name.trim(), form.email.trim().toLowerCase(), form.password, (form.referral_code || "").trim().toUpperCase() || null);
+      await register(form.name.trim(), form.email.trim().toLowerCase(), form.password, (form.referral_code || "").trim().toUpperCase() || null, captchaToken || null);
       nav("/my-bookings", { replace: true });
     } catch (ex) {
       setErr(ex.message || "Signup failed");
@@ -111,9 +115,11 @@ export default function Signup() {
                 </div>
               )}
 
+              <TurnstileWidget onToken={setCaptchaToken} action="signup" testid="signup-turnstile" />
+
               <button
                 type="submit"
-                disabled={busy}
+                disabled={busy || (captchaRequired && !captchaToken)}
                 data-testid="signup-submit"
                 className="group relative w-full inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#E86A3C] via-[#D4A94A] to-[#A88235] text-white px-6 py-3.5 text-sm font-bold tracking-wide shadow-[0_16px_35px_rgba(232,106,60,0.35)] hover:shadow-[0_20px_45px_rgba(212,169,74,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 disabled:opacity-60 disabled:hover:translate-y-0 overflow-hidden"
               >

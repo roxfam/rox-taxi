@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Ticket, ShieldCheck, MapPin, ArrowRight, Sparkles, Mail, Lock, LogIn, AlertCircle } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import TurnstileWidget from "../components/TurnstileWidget";
 
 const BENEFITS = [
   { Icon: Ticket, title: "All your bookings", body: "Taxis, tours and rentals in one place with confirmation codes." },
@@ -23,6 +24,9 @@ export default function Login() {
   const [forgotState, setForgotState] = useState(null);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotBusy, setForgotBusy] = useState(false);
+  const [loginCaptcha, setLoginCaptcha] = useState("");
+  const [forgotCaptcha, setForgotCaptcha] = useState("");
+  const captchaRequired = !!process.env.REACT_APP_TURNSTILE_SITE_KEY;
 
   useEffect(() => {
     if (!loading && user) nav("/my-bookings", { replace: true });
@@ -144,7 +148,9 @@ export default function Login() {
                     </div>
                   )}
 
-                  <button type="submit" disabled={busy} data-testid="login-submit" className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-6 py-3.5 text-sm font-semibold shadow-[0_10px_25px_rgba(232,106,60,0.35)] disabled:opacity-60 transition">
+                  <TurnstileWidget onToken={setLoginCaptcha} action="login" testid="login-turnstile" />
+
+                  <button type="submit" disabled={busy || (captchaRequired && !loginCaptcha)} data-testid="login-submit" className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-6 py-3.5 text-sm font-semibold shadow-[0_10px_25px_rgba(232,106,60,0.35)] disabled:opacity-60 transition">
                     <LogIn className="w-4 h-4" /> {busy ? "Signing in…" : "Sign in"}
                   </button>
 
@@ -163,9 +169,12 @@ export default function Login() {
                       <p className="text-xs text-[#64748B] mb-3">We'll email you a secure link. It expires in 60 minutes.</p>
                       <div className="flex gap-2">
                         <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@example.com" className="flex-1 rounded-full border border-[#E2E8F0] bg-white px-4 py-2 text-sm text-[#0B3B5C] outline-none focus:border-[#D4A94A]" data-testid="forgot-email-input" required />
-                        <button type="button" onClick={submitForgot} disabled={forgotBusy || !forgotEmail} className="rounded-full bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] px-4 py-2 text-xs font-bold disabled:opacity-60" data-testid="forgot-submit">
+                        <button type="button" onClick={submitForgot} disabled={forgotBusy || !forgotEmail || (captchaRequired && !forgotCaptcha)} className="rounded-full bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] px-4 py-2 text-xs font-bold disabled:opacity-60" data-testid="forgot-submit">
                           {forgotBusy ? "Sending…" : "Send link"}
                         </button>
+                      </div>
+                      <div className="mt-3">
+                        <TurnstileWidget onToken={setForgotCaptcha} action="forgot_password" testid="forgot-turnstile" />
                       </div>
                       <button type="button" onClick={() => setForgotState(null)} className="mt-2 text-[11px] text-[#94a3b8] hover:text-[#0B3B5C]" data-testid="forgot-cancel">Cancel</button>
                     </div>
