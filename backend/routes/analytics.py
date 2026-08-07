@@ -392,6 +392,38 @@ async def blackout_reason_analytics(_admin: str = _require(), year: Optional[int
     years_set.add(datetime.now(timezone.utc).year)
     available_years = sorted(years_set, reverse=True)
 
+    # Per-reason trendline data — for every bucket returned above, roll
+    # up its days/revenue across ALL available years so the sparkline
+    # under each breakdown row can flag "Maintenance is creeping up"
+    # before it becomes the biggest bucket. Sparse years get zero entries.
+    trend_years = sorted(years_set)
+    if trend_years and rows:
+        # Second pass: same aggregation but grouped by year.
+        yearly: Dict[int, Dict[str, Dict[str, float]]] = {y: {} for y in trend_years}
+        async for r in _db.rentals.find({}, {"price": 1, "blackout_dates": 1, "blackout_reasons": 1}):
+            dates = r.get("blackout_dates") or []
+            reasons = r.get("blackout_reasons") or {}
+            daily_rate = float(r.get("price") or 0.0)
+            for d in dates:
+                if not (isinstance(d, str) and len(d) >= 4 and d[:4].isdigit()):
+                    continue
+                y = int(d[:4])
+                if y not in yearly:
+                    continue
+                reason_key = (reasons.get(d) or "").strip() or "(no reason)"
+                slot = yearly[y].setdefault(reason_key, {"days": 0, "revenue_lost": 0.0})
+                slot["days"] += 1
+                slot["revenue_lost"] += daily_rate
+        for row in rows:
+            row["trend"] = [
+                {
+                    "year": y,
+                    "days": int(yearly[y].get(row["reason"], {"days": 0})["days"]),
+                    "revenue_lost": round(yearly[y].get(row["reason"], {"revenue_lost": 0.0})["revenue_lost"], 2),
+                }
+                for y in trend_years
+            ]
+
     # Year-over-year delta — only compute when the caller asked for a
     # specific year (otherwise "prev year" is meaningless). We reuse the
     # same aggregation on the previous year and diff the totals.

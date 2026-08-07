@@ -1429,6 +1429,7 @@ function BlackoutReasonCard({ data, year, onYearChange }) {
               <div key={r.reason} className="flex items-center gap-3 text-xs" data-testid={`admin-blackout-row-${r.reason}`}>
                 <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: paletteFor(r.reason) }} />
                 <div className="flex-1 min-w-0 truncate text-[#0B3B5C] font-semibold">{r.reason}</div>
+                <ReasonTrendSpark trend={r.trend} colour={paletteFor(r.reason)} testId={`admin-blackout-trend-${r.reason}`} />
                 <div className="w-14 text-right text-[#64748B]">{r.days}d</div>
                 <div className="w-14 text-right text-[#64748B]">{r.vehicles} veh</div>
                 <div className="w-40 text-right text-[#94a3b8] truncate hidden sm:block" title={`${r.top_vehicle?.name || ""} · ${money(r.top_vehicle?.revenue_lost || 0)}`}>
@@ -1440,6 +1441,44 @@ function BlackoutReasonCard({ data, year, onYearChange }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+
+// Compact inline sparkline for a single reason's day-count across every
+// year in the fleet's blackout history. Uses the same brand colour as the
+// row dot so admins can eyeball which buckets are creeping up. Hovering
+// shows the year + days for each vertex.
+function ReasonTrendSpark({ trend, colour, testId }) {
+  if (!Array.isArray(trend) || trend.length < 2) {
+    return <div className="w-24 h-6 flex-shrink-0 hidden md:block" data-testid={testId} />;
+  }
+  // Determine the direction so the tooltip title reads plainly.
+  const first = trend[0].days;
+  const last = trend[trend.length - 1].days;
+  const dir = last > first ? "↑" : last < first ? "↓" : "→";
+  const title = trend.map((t) => `${t.year}: ${t.days}d`).join(" · ") + `  (${dir})`;
+  return (
+    <div
+      className="w-24 h-6 flex-shrink-0 hidden md:block"
+      data-testid={testId}
+      title={title}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={trend} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+          <Line
+            type="monotone"
+            dataKey="days"
+            stroke={colour}
+            strokeWidth={1.75}
+            dot={{ r: 1.5, fill: colour, strokeWidth: 0 }}
+            activeDot={{ r: 3 }}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 }

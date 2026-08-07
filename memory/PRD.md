@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Reason Trendline Sparklines)
+- **Backend**: every row in `blackout-reasons` analytics now carries a `trend: [{year, days, revenue_lost}]` series covering every year the fleet has blackout data for. Sparse years (0 days) still emit entries so the sparkline never has gaps.
+- **Frontend**: compact 96×24px `<LineChart>` slots into each breakdown row between the reason label and the day count. Line colour matches the row's brand dot. Native tooltip lists every year + days + direction arrow ("2025: 0d · 2026: 148d · 2027: 217d  (↑)"). Hidden below the `md` breakpoint to keep the essential columns visible on mobile.
+- **Verified live**: NV200 fleet showed `(no reason)` climbing 0d→148d→217d (silver line trending up), `Hurricane Nadine` spiking 0d→0d→7d (red line jumping into 2027).
+
 ### ✅ Shipped Feb 2026 (Year Selector Dropdown)
 - **Backend**: `GET /admin/analytics/blackout-reasons` now also returns `available_years` — the distinct years present across the whole fleet's blackout_dates (plus the current calendar year, always). Sorted newest-first.
 - **Frontend**: small `<select>` sits at the top-right of the Downtime card. Options come from `available_years`. Changing the year fires a scoped fetch (only the reason card refetches — the whole dashboard doesn't reload). KPI headline, chart, YoY pill, biggest-bucket card, and breakdown table all refresh together.
