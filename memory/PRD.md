@@ -18,6 +18,11 @@ LIVE integrations: Twilio SMS, PayPal (live keys), SendGrid, Emergent LLM key
 
 ## Feature status snapshot — Feb 2026
 
+### ✅ Shipped Feb 2026 (Hero Slide 1 — Turquoise Boat Photo Swap)
+- **Slide `hero-nassau`** image_url swapped to the user's new couple-on-boat-in-turquoise-water photo (`5xjeh46t_windsong-gallery-34…jpg`). Title + subtitle unchanged — still "Unlock Nassau. On your terms." + "Book a taxi, tour or rental in sixty seconds."
+- **Gotcha fixed for future edits**: `PUT /admin/home-slides/{id}` uses a `HomeSlideUpsert` model (title + image_url are required, non-Optional). Partial PUTs wipe missing fields to None — always send the full payload when editing via curl.
+- **Verified**: /api/home-slides returns the windsong-gallery URL on slide 1.
+
 ### ✅ Shipped Feb 2026 (Hero Slide 1 — New Photo + "Unlock Nassau" Copy)
 - **Slide `hero-nassau`** (position 1 in the home hero carousel) updated via `PUT /admin/home-slides/hero-nassau`:
   - `image_url`: swapped in the user-supplied couple-walking-on-beach photo from the artifact CDN.
