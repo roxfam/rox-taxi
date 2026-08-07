@@ -17,6 +17,26 @@ export default function MyBookings() {
   const [wallet, setWallet] = useState(null);
   const [walletBusy, setWalletBusy] = useState(false);
   const [signOutAllBusy, setSignOutAllBusy] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [revoking, setRevoking] = useState(null);
+
+  const loadSessions = async () => {
+    try {
+      const r = await fetch(`${API}/auth/sessions`, { credentials: "include" });
+      if (r.ok) setSessions(await r.json());
+    } catch { /* silent */ }
+  };
+
+  const revokeSession = async (id) => {
+    if (!window.confirm("Sign this device out? It'll need to log back in to see your bookings.")) return;
+    setRevoking(id);
+    try {
+      const r = await fetch(`${API}/auth/sessions/${id}/revoke`, { method: "POST", credentials: "include" });
+      if (r.ok) { toast.success("Device signed out."); loadSessions(); }
+      else toast.error("Couldn't sign that device out. Please try again.");
+    } catch { toast.error("Couldn't sign that device out. Please try again."); }
+    finally { setRevoking(null); }
+  };
 
   const signOutEverywhere = async () => {
     if (!window.confirm(
