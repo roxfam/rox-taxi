@@ -93,26 +93,39 @@ export default function Taxi() {
         ogImage="https://roxtaxi.com/og-cover.jpg"
         jsonLd={{
           "@context": "https://schema.org",
-          "@type": "TaxiService",
-          "@id": "https://roxtaxi.com/taxi#service",
-          "name": "Nassau Taxi Service — LPIA Airport, Atlantis, Baha Mar, Cable Beach & Cruise Port Transfers",
-          "url": "https://roxtaxi.com/taxi",
-          "provider": { "@id": "https://roxtaxi.com/#business" },
-          "areaServed": [
-            { "@type": "City", "name": "Nassau" },
-            { "@type": "AdministrativeArea", "name": "New Providence, Bahamas" },
-            { "@type": "TouristDestination", "name": "Paradise Island" },
-            { "@type": "TouristDestination", "name": "Atlantis Paradise Island" },
-            { "@type": "TouristDestination", "name": "Baha Mar" },
-            { "@type": "TouristDestination", "name": "Cable Beach" }
-          ],
-          "serviceType": ["Airport transfer", "Cruise port transfer", "Hotel transfer", "Private charter", "Group van transfer", "Wedding transportation"],
-          "hoursAvailable": {
-            "@type": "OpeningHoursSpecification",
-            "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
-            "opens": "00:00", "closes": "23:59"
-          },
-          "offers": { "@type": "AggregateOffer", "lowPrice": "18", "highPrice": "175", "priceCurrency": "USD" }
+          "@graph": [
+            {
+              "@type": "TaxiService",
+              "@id": "https://roxtaxi.com/taxi#service",
+              "name": "Nassau Taxi Service — LPIA Airport, Atlantis, Baha Mar, Cable Beach & Cruise Port Transfers",
+              "url": "https://roxtaxi.com/taxi",
+              "provider": { "@id": "https://roxtaxi.com/#business" },
+              "areaServed": [
+                { "@type": "City", "name": "Nassau" },
+                { "@type": "AdministrativeArea", "name": "New Providence, Bahamas" },
+                { "@type": "TouristDestination", "name": "Paradise Island" },
+                { "@type": "TouristDestination", "name": "Atlantis Paradise Island" },
+                { "@type": "TouristDestination", "name": "Baha Mar" },
+                { "@type": "TouristDestination", "name": "Cable Beach" }
+              ],
+              "serviceType": ["Airport transfer", "Cruise port transfer", "Hotel transfer", "Private charter", "Group van transfer", "Wedding transportation"],
+              "hoursAvailable": {
+                "@type": "OpeningHoursSpecification",
+                "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+                "opens": "00:00", "closes": "23:59"
+              },
+              "offers": { "@type": "AggregateOffer", "lowPrice": "18", "highPrice": "175", "priceCurrency": "USD" },
+              "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "reviewCount": "187", "bestRating": "5" }
+            },
+            {
+              "@type": "BreadcrumbList",
+              "@id": "https://roxtaxi.com/taxi#breadcrumb",
+              "itemListElement": [
+                { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://roxtaxi.com/" },
+                { "@type": "ListItem", "position": 2, "name": "Nassau Taxi Service", "item": "https://roxtaxi.com/taxi" }
+              ]
+            }
+          ]
         }}
       />
       <section className="bg-[#0B3B5C] text-white py-24">

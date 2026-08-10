@@ -34,6 +34,7 @@ from routes import licenses as licenses_module
 from routes import auth as auth_module
 from routes import customer as customer_module
 from routes import analytics as analytics_module
+from routes import seo as seo_module
 import secrets_store
 
 ROOT_DIR = Path(__file__).parent
@@ -3850,6 +3851,16 @@ customer_module.configure(
     referral_reward_every=REFERRAL_REWARD_EVERY,
 )
 api_router.include_router(customer_module.router)
+
+# Wire up the SEO router (dynamic sitemap.xml + IndexNow ping to
+# Bing/Yandex/Seznam/Naver for instant re-crawl).
+seo_module.configure(
+    db=db,
+    require_admin=require_admin,
+    site_base_url=os.environ.get("SITE_BASE_URL", "https://roxtaxi.com"),
+    indexnow_key="9f2c8b4a6e1d7a3f5b9e2c8d4a6f1e7b",
+)
+api_router.include_router(seo_module.router)
 
 app.include_router(api_router)
 

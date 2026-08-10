@@ -43,27 +43,67 @@ export default function CarRental() {
     <div data-testid="rentals-page">
       <Seo
         title="Nassau Car Rentals Bahamas | Free Airport & Hotel Delivery — Rox Taxi & Tours"
-        description="Rent a car in Nassau Bahamas — economy to luxury, free LPIA airport & hotel delivery, unlimited mileage, full insurance. Compact from $65/day. $150 refundable deposit, 25+ drivers only. Book online with Credit Card, PayPal or Zelle."
+        description="Rent a car in Nassau Bahamas — economy to luxury, free LPIA airport & hotel delivery, unlimited mileage, full insurance. Compact from $65/day. $150 refundable deposit, 25+ drivers only. Nassau van rental, Paradise Island car rental, Baha Mar drop-off. Book online with Credit Card, PayPal or Zelle."
         canonical="https://roxtaxi.com/rentals"
-        keywords="Nassau car rental, Bahamas car rental, car rental Nassau airport, LPIA car rental, Nassau van rental, cheap car rental Nassau, Paradise Island car rental, Cable Beach car rental, Baha Mar car rental, rent a car Bahamas, Bahamas rental car deposit, unlimited mileage Nassau, book car rental Nassau online, Rox car rental, travel to Nassau Bahamas, Nassau road trip, getting around Nassau, Nassau family vacation car, Nassau honeymoon car rental, drive in Bahamas, Bahamas driving license, self drive Nassau, Bahamas vacation car, Nassau week rental, Nassau airport pickup car, Nassau hotel car delivery, plan trip to Nassau, Nassau tourism car hire"
+        keywords="Nassau car rental, Bahamas car rental, car rental Nassau airport, LPIA car rental, Nassau van rental, cheap car rental Nassau, Paradise Island car rental, Cable Beach car rental, Baha Mar car rental, rent a car Bahamas, Bahamas rental car deposit, unlimited mileage Nassau, book car rental Nassau online, Rox car rental, hire car Nassau, Nassau airport pickup car, Nassau hotel car delivery, self drive Nassau, Bahamas driving license, Bahamas road trip, Nassau family vacation car, Nassau honeymoon car rental, Nassau airport car hire, cheapest rental Nassau, Nassau weekly car rental, van rental Bahamas 8 passenger, Nassau airport transportation, drive in Bahamas, Nassau road rules, Nassau car deposit refund, Cable Beach hotel car delivery, no credit card car rental Nassau, PayPal car rental Bahamas, Zelle car rental Nassau"
         ogImage="https://roxtaxi.com/og-cover.jpg"
         jsonLd={{
           "@context": "https://schema.org",
-          "@type": "AutoRental",
-          "@id": "https://roxtaxi.com/rentals#service",
-          "name": "Rox Bahamas Car Rentals — Nassau, LPIA Airport, Cable Beach, Baha Mar, Paradise Island",
-          "url": "https://roxtaxi.com/rentals",
-          "provider": { "@id": "https://roxtaxi.com/#business" },
-          "areaServed": [
-            { "@type": "City", "name": "Nassau" },
-            { "@type": "AdministrativeArea", "name": "New Providence, Bahamas" }
-          ],
-          "priceRange": "$65-$185/day",
-          "currenciesAccepted": "USD",
-          "paymentAccepted": "Credit Card, PayPal, Zelle",
-          "offers": { "@type": "AggregateOffer", "lowPrice": "65", "highPrice": "185", "priceCurrency": "USD" },
-          "termsOfService": "https://roxtaxi.com/rentals",
-          "audience": { "@type": "Audience", "audienceType": "Cruise passengers, resort guests, honeymooners, families 25+" }
+          "@graph": [
+            {
+              "@type": "AutoRental",
+              "@id": "https://roxtaxi.com/rentals#service",
+              "name": "Rox Bahamas Car Rentals — Nassau, LPIA Airport, Cable Beach, Baha Mar, Paradise Island",
+              "url": "https://roxtaxi.com/rentals",
+              "provider": { "@id": "https://roxtaxi.com/#business" },
+              "areaServed": [
+                { "@type": "City", "name": "Nassau" },
+                { "@type": "AdministrativeArea", "name": "New Providence, Bahamas" }
+              ],
+              "priceRange": "$65-$185/day",
+              "currenciesAccepted": "USD",
+              "paymentAccepted": "Credit Card, PayPal, Zelle",
+              "offers": { "@type": "AggregateOffer", "lowPrice": "65", "highPrice": "185", "priceCurrency": "USD" },
+              "termsOfService": "https://roxtaxi.com/rentals",
+              "audience": { "@type": "Audience", "audienceType": "Cruise passengers, resort guests, honeymooners, families 25+" },
+              "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "reviewCount": "187", "bestRating": "5" }
+            },
+            {
+              "@type": "ItemList",
+              "@id": "https://roxtaxi.com/rentals#fleet",
+              "name": "Nassau Car Rental Fleet",
+              "itemListElement": (rentals || []).slice(0, 20).map((r, idx) => ({
+                "@type": "ListItem",
+                "position": idx + 1,
+                "item": {
+                  "@type": "Vehicle",
+                  "name": r.name,
+                  "vehicleModelDate": r.year ? String(r.year) : undefined,
+                  "brand": r.make || undefined,
+                  "color": r.color || undefined,
+                  "seatingCapacity": r.seats || undefined,
+                  "vehicleConfiguration": r.body || r.category || undefined,
+                  "image": r.image_url || undefined,
+                  "offers": {
+                    "@type": "Offer",
+                    "price": String(r.price || 0),
+                    "priceCurrency": "USD",
+                    "availability": "https://schema.org/InStock",
+                    "priceValidUntil": new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10),
+                    "url": `https://roxtaxi.com/rentals#${r.id}`
+                  }
+                }
+              }))
+            },
+            {
+              "@type": "BreadcrumbList",
+              "@id": "https://roxtaxi.com/rentals#breadcrumb",
+              "itemListElement": [
+                { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://roxtaxi.com/" },
+                { "@type": "ListItem", "position": 2, "name": "Nassau Car Rentals", "item": "https://roxtaxi.com/rentals" }
+              ]
+            }
+          ]
         }}
       />
       <section className="relative py-24 bg-[#FBF7EF]">

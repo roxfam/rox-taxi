@@ -1,19 +1,105 @@
-# Rox Taxi Service and Tours — robots policy
-# Everything public is fair game for indexing. Admin + payment-return pages
-# are behind auth or query-string only, so we keep them out of the crawl.
+# ═══════════════════════════════════════════════════════════════════════
+# Rox Taxi Service and Tours — robots.txt
+# Optimized for Google, Bing/MSN, Yandex, DuckDuckGo, Brave, and Applebot.
+# IndexNow key file at /9f2c8b4a6e1d7a3f5b9e2c8d4a6f1e7b.txt lets Bing +
+# Yandex accept instant re-crawl pushes from our admin panel.
+# ═══════════════════════════════════════════════════════════════════════
 
+# ─── Default policy (all crawlers) ────────────────────────────────────
 User-agent: *
 Allow: /
+Allow: /taxi
+Allow: /tours
+Allow: /rentals
+Allow: /packages
+Allow: /travel-to-nassau
+Allow: /cruise-groups-nassau
+Allow: /groups
+Allow: /wedding-builder
+Allow: /gallery
+Allow: /attractions/
+Allow: /contact
+Allow: /about
+
 Disallow: /admin
 Disallow: /admin/
 Disallow: /payment/success
 Disallow: /payment/cancel
-Disallow: /api/
+Disallow: /track
+Disallow: /driver/
+Disallow: /pay/
+Disallow: /api/admin
+Disallow: /login
+Disallow: /signup
+Disallow: /my-bookings
+Disallow: /reset-password
 
-# Aggressive scrapers — throttle them (Bingbot / Yandex handle Crawl-delay)
+# ─── Search engines we explicitly welcome ─────────────────────────────
+User-agent: Googlebot
+Allow: /
+Disallow: /admin/
+
+User-agent: Googlebot-Image
+Allow: /
+Allow: /uploads/
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin/
+Crawl-delay: 1
+
+User-agent: msnbot
+Allow: /
+
+User-agent: YandexBot
+Allow: /
+Disallow: /admin/
+Crawl-delay: 2
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+# ─── AI / LLM crawlers we want to be indexed by (visibility) ──────────
+User-agent: GPTBot
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /admin/
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+# ─── Aggressive commercial scrapers — throttle hard ───────────────────
 User-agent: SemrushBot
-Crawl-delay: 10
-User-agent: AhrefsBot
-Crawl-delay: 10
+Crawl-delay: 20
 
+User-agent: AhrefsBot
+Crawl-delay: 20
+
+User-agent: MJ12bot
+Crawl-delay: 20
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: PetalBot
+Crawl-delay: 30
+
+# ─── Sitemap ──────────────────────────────────────────────────────────
+Sitemap: https://roxtaxi.com/api/sitemap.xml
 Sitemap: https://roxtaxi.com/sitemap.xml

@@ -49,6 +49,7 @@ import { AuthProvider } from "./lib/auth";
 import { useVisitorBeacon } from "./hooks/useVisitorBeacon";
 import SummerBanner from "./components/SummerBanner";
 import FacebookPixel from "./components/FacebookPixel";
+import SeoVerification from "./components/SeoVerification";
 
 function RouteSkeleton() {
   // Minimal skeleton shown while a lazy chunk is resolving. Deliberately
@@ -78,6 +79,7 @@ function AppRouter() {
   return (
     <>
       <FacebookPixel />
+      <SeoVerification />
       <Suspense fallback={<RouteSkeleton />}>
       <Routes>
       <Route path="/" element={<CustomerShell><Home /></CustomerShell>} />

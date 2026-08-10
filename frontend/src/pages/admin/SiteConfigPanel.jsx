@@ -112,6 +112,46 @@ export default function SiteConfigPanel() {
         <F l="Zelle phone" v={cfg.zelle_phone || ""} on={(v) => setCfg({ ...cfg, zelle_phone: v })} testid="site-zelle-phone" />
         <F l="Contact phone" v={cfg.phone || ""} on={(v) => setCfg({ ...cfg, phone: v })} testid="site-phone" />
 
+        {/* ─── Search-engine verification (SEO) ───
+            Paste each console's meta-tag content here to prove you own the
+            domain. Injected into <head> on every page for search engines
+            to pick up on the next crawl. Blank = tag omitted. */}
+        <div className="pt-4 mt-4 border-t border-[#E2E8F0]">
+          <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold mb-1">Search engine verification</div>
+          <div className="text-[11px] text-[#94a3b8] mb-3 leading-relaxed">
+            Paste the <code className="bg-[#F1F5F9] px-1 py-0.5 rounded">content=""</code> value from each webmaster console (Google, Bing, Yandex, Pinterest, Facebook, Norton). We inject them as <code className="bg-[#F1F5F9] px-1 py-0.5 rounded">&lt;meta&gt;</code> tags so each search engine can verify domain ownership.
+          </div>
+          <div className="space-y-3">
+            <F l="Google Search Console verification code" v={cfg.google_verification || ""} on={(v) => setCfg({ ...cfg, google_verification: v })} testid="seo-google-verification" />
+            <F l="Bing Webmaster verification code (msvalidate.01)" v={cfg.bing_verification || ""} on={(v) => setCfg({ ...cfg, bing_verification: v })} testid="seo-bing-verification" />
+            <F l="Yandex Webmaster verification code" v={cfg.yandex_verification || ""} on={(v) => setCfg({ ...cfg, yandex_verification: v })} testid="seo-yandex-verification" />
+            <F l="Pinterest domain verification code" v={cfg.pinterest_verification || ""} on={(v) => setCfg({ ...cfg, pinterest_verification: v })} testid="seo-pinterest-verification" />
+            <F l="Facebook domain verification code" v={cfg.facebook_verification || ""} on={(v) => setCfg({ ...cfg, facebook_verification: v })} testid="seo-facebook-verification" />
+            <F l="Norton Safe Web verification code" v={cfg.norton_verification || ""} on={(v) => setCfg({ ...cfg, norton_verification: v })} testid="seo-norton-verification" />
+          </div>
+
+          <div className="mt-4 rounded-xl bg-[#F0FDF4] border border-[#BBF7D0] p-3">
+            <div className="text-[11px] font-semibold text-[#166534] uppercase tracking-widest mb-1">Instant re-crawl</div>
+            <div className="text-xs text-[#166534]/80 leading-relaxed mb-2">
+              Push your sitemap to Bing + Yandex + Seznam right now (IndexNow). Handy after a big price update, new tour, or car addition. Google auto-discovers via sitemap.xml — no push needed.
+            </div>
+            <button
+              type="button"
+              data-testid="indexnow-ping-btn"
+              onClick={async () => {
+                try {
+                  const r = await api.post("/admin/seo/indexnow-ping", {});
+                  if (r.data?.ok) toast.success(`Search engines pinged (${r.data.count} URLs).`);
+                  else toast.error("Ping failed. Try again in a minute.");
+                } catch { toast.error("Ping failed."); }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#0B3B5C] text-white text-xs font-bold px-4 py-2 hover:bg-[#122C4B]"
+            >
+              Ping Bing + Yandex now
+            </button>
+          </div>
+        </div>
+
         <div className="pt-4 mt-4 border-t border-[#E2E8F0]">
           <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold mb-3">Notification preferences</div>
           <div className="space-y-2">

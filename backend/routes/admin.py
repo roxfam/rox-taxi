@@ -457,6 +457,15 @@ class SiteConfigUpdate(BaseModel):
     # datalist on the inline reason editor so staff don't have to retype
     # the same string across dozens of ranges.
     blackout_reason_presets: Optional[list] = None
+    # ─── Search-engine verification codes (SEO) ──────────────────────
+    # Pasted by the owner from each webmaster console. Injected as
+    # <meta name="…" content="…"> by frontend/src/components/SeoVerification.jsx.
+    google_verification: Optional[str] = None
+    bing_verification: Optional[str] = None
+    yandex_verification: Optional[str] = None
+    pinterest_verification: Optional[str] = None
+    facebook_verification: Optional[str] = None
+    norton_verification: Optional[str] = None
 
 
 class ContactMessageStatusUpdate(BaseModel):
