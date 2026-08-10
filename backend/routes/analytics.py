@@ -193,6 +193,81 @@ async def visitors_summary(_admin: str = _require(), hours: int = Query(24, ge=1
 
 
 
+@router.get("/admin/analytics/signup-countries")
+async def signup_countries(_admin: str = _require()):
+    """Fraud-watch map data — every country a customer has signed up from,
+    ranked by count with first / latest signup dates and an ISO alpha-3
+    code so the frontend can render each country as a pin on a world map.
+
+    Legacy users (pre-tracking) are stamped `signup_country = "Legacy"`
+    and excluded from the map — they'd otherwise dominate the totals and
+    hide the actual signal.
+    """
+    try:
+        import pycountry  # local import — analytics is lazy
+    except ImportError:  # noqa: BLE001
+        pycountry = None
+
+    pipeline = [
+        {"$match": {
+            "signup_country": {"$exists": True, "$nin": ["", "Unknown", "Legacy"]},
+        }},
+        {"$group": {
+            "_id": "$signup_country",
+            "count": {"$sum": 1},
+            "first_seen": {"$min": "$created_at"},
+            "last_seen": {"$max": "$created_at"},
+            "latest_email": {"$last": "$email"},
+            "sample_city": {"$first": "$signup_city"},
+        }},
+        {"$sort": {"count": -1}},
+    ]
+
+    def _iso3(name: str) -> Optional[str]:
+        if not pycountry or not name:
+            return None
+        try:
+            # First try exact lookup, then fuzzy fallback for common variants
+            c = pycountry.countries.get(name=name)
+            if c:
+                return c.alpha_3
+            c = pycountry.countries.get(common_name=name)
+            if c:
+                return c.alpha_3
+            matches = pycountry.countries.search_fuzzy(name)
+            return matches[0].alpha_3 if matches else None
+        except (LookupError, Exception):  # noqa: BLE001
+            return None
+
+    rows = []
+    total = 0
+    async for r in _db.users.aggregate(pipeline):
+        country = r["_id"]
+        rows.append({
+            "country": country,
+            "iso3": _iso3(country),
+            "count": int(r.get("count") or 0),
+            "first_seen": (r.get("first_seen") or "")[:10],
+            "last_seen": (r.get("last_seen") or "")[:10],
+            "latest_email": r.get("latest_email") or "",
+            "sample_city": r.get("sample_city") or "",
+        })
+        total += int(r.get("count") or 0)
+
+    legacy_count = await _db.users.count_documents({"signup_country": "Legacy"})
+    unknown_count = await _db.users.count_documents({
+        "signup_country": {"$in": ["Unknown", ""]},
+    })
+
+    return {
+        "rows": rows,
+        "total_signups_tracked": total,
+        "unique_countries": len(rows),
+        "legacy_users": legacy_count,
+        "unknown_country_users": unknown_count,
+    }
+
+
 @router.get("/admin/analytics/taxi-addon")
 async def taxi_addon_analytics(_admin: str = _require(), days: int = Query(30, ge=1, le=365)):
     """Attach-rate + revenue for the optional taxi add-on upsell.

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, money, BACKEND_URL } from "../lib/api";
 import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart, Cell } from "recharts";
+import SignupCountriesCard from "./admin/SignupCountriesCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -195,6 +196,11 @@ export default function AdminDashboard() {
 
         {/* Fleet blackout costs — days blocked by reason for the year */}
         <BlackoutReasonCard data={reasonStats} year={reasonYear} onYearChange={setReasonYear} />
+
+        {/* Fraud-watch: signups plotted by country. Fires alerts the first
+            time a brand-new country appears; this card lets the owner see
+            the full pattern before an alert even fires. */}
+        <SignupCountriesCard />
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">

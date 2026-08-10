@@ -5,30 +5,33 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
-### Feb 10 — SEO Ranking Boost (Google + Bing/MSN + Yandex + DuckDuckGo)
-- New `routes/seo.py` router with three endpoints:
-  - `GET /api/sitemap.xml` — dynamic sitemap, rebuilt on every hit from live catalog (tours, rentals, packages) with fresh `lastmod`. 40 URLs on first run.
-  - `POST /api/admin/seo/indexnow-ping` — pushes URLs to Cloudflare/Bing/Yandex/Seznam IndexNow for instant re-crawl. Verified working (HTTP 202 back on test push).
-- IndexNow key file (`9f2c8b4a6e1d7a3f5b9e2c8d4a6f1e7b.txt`) live at site root (HTTP 200).
-- `SiteConfigUpdate` model gained six verification fields: `google_verification`, `bing_verification`, `yandex_verification`, `pinterest_verification`, `facebook_verification`, `norton_verification`.
-- New `<SeoVerification />` React component mounts once at app load, reads `/api/site-config`, injects verification `<meta>` tags into `<head>`.
-- Admin → Site Config panel gained a new "Search engine verification" section + "Ping Bing + Yandex now" button (test IDs: `seo-*-verification`, `indexnow-ping-btn`).
-- Enhanced JSON-LD on `/taxi`, `/tours`, `/rentals`:
-  - Taxi: added `BreadcrumbList` + `AggregateRating` to schema graph.
-  - Rentals: added per-vehicle `Vehicle` schema with brand, seats, price, availability, priceValidUntil → unlocks rich-card pricing snippets in SERPs.
-- Improved `robots.txt`: explicit rules for Googlebot, Bingbot, msnbot, YandexBot, DuckDuckBot, Applebot, GPTBot, Google-Extended, ClaudeBot, PerplexityBot. Blocks SemrushBot / AhrefsBot / DotBot aggressively.
-- Bahamas-specific keyword strengthening on Car Rental page meta (added: "hire car Nassau", "no credit card car rental Nassau", "PayPal car rental Bahamas", "Zelle car rental Nassau", "van rental Bahamas 8 passenger", "cheapest rental Nassau", etc.).
+### Feb 10 — Fraud Watch Map (Admin Signup Geography)
+- New `GET /api/admin/analytics/signup-countries` endpoint — aggregates users by `signup_country`, returns ranked rows with `iso3` (pycountry fuzzy match), count, first/last signup dates, sample city, latest email. Legacy + unknown accounts excluded from the map but surfaced as separate mini-stats.
+- New `<SignupCountriesCard />` component rendered on Admin Dashboard:
+  - Interactive world map (`react-simple-maps` + world-atlas TopoJSON on CDN) with 4-tier amber-to-navy fill scale by signup intensity.
+  - Red pins on each country's centroid, sized by log(count) so single-signup countries stay visible next to clusters.
+  - Ranked table beside the map with country, city, count, first-seen and last-seen dates.
+  - Three mini-stats: unique countries, tracked signups, legacy users.
+- Verified end-to-end (curl + screenshot): 7 countries + 14 pins rendered from seeded demo data; legacy count correctly shown (79).
+- Test IDs added: `signup-countries-card`, `signup-countries-map`, `signup-countries-table`, `stat-unique-countries`, `stat-tracked-signups`, `stat-legacy-users`, `country-row-{slug}`, `country-count-{slug}`.
+
+### Feb 10 — SEO Ranking Boost
+- Dynamic `/api/sitemap.xml` (40 URLs, fresh lastmod).
+- IndexNow push to Bing/Yandex/Seznam (verified HTTP 202) + admin "Ping now" button.
+- 6 verification meta tag fields (Google, Bing, Yandex, Pinterest, Facebook, Norton) — pasted in admin panel, auto-injected into `<head>`.
+- Rich JSON-LD: per-rental Vehicle schema, BreadcrumbList + AggregateRating on Taxi/Rentals.
+- Improved robots.txt with explicit rules for Bingbot/YandexBot/DuckDuckBot/Applebot/GPTBot/ClaudeBot/PerplexityBot; aggressive scrapers throttled.
+- Bahamas-specific keyword strengthening on Car Rental meta.
 
 ### Feb 7 — Suspicious Signup Alert + Turnstile CAPTCHA + Rate Limit Failed Logins
-- Turnstile on signup, login, forgot-password (both frontend widget + backend siteverify).
-- Owner-only fraud-watch alert fires once per country the first time a signup arrives from a country never seen before.
-- 5-strikes-and-15-min-cool-down rate limit on both admin `/auth/login` and customer `/auth/login-email` (`login_failures` Mongo collection, `_check_login_rate_limit` helper).
+- Cloudflare Turnstile on signup, login, forgot-password (frontend widget + backend siteverify).
+- Fraud-watch email alert fires once per country on first-ever signup from that country.
+- 5-strikes-and-15-min-cool-down rate limit on both admin `/auth/login` and customer `/auth/login-email`.
 
-### Earlier (previous session)
-- Optional Taxi Add-on with custom admin pricing & A/B upsell testing
-- Kids pricing UI, Photo Delete in Admin Gallery, Nissan NV200 Cargo Rental
-- Advanced Blackout Date System + Downtime Financial Analytics (Reason Presets, YoY Delta, $ cost, sparklines) + CSV + Insurance-Ready PDF
-- Removed Yacht and Horse tours; new turquoise-boat hero photo
+### Earlier
+- Optional Taxi Add-on with A/B upsell testing, Kids pricing, Photo Delete
+- Advanced Blackout Date System + Downtime Financial Analytics + Insurance PDF + CSV
+- Removed Yacht/Horse tours; new turquoise-boat hero photo; 2017 Nissan NV200 Cargo Rental
 
 ## Prioritized Backlog
 
@@ -36,26 +39,23 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - **Apple Login** — waiting on user's $99/yr Apple Developer account.
 
 ### P1
-- **Google Reviews — real reviews attach** — Started but paused. Two paths agreed: (a) Google Places API auto-sync + (b) Manual paste via admin panel. Need user's Google Cloud API key + Place ID for (a).
-- **Refresh remaining hero slides** (Atlantis, Rose Island, Junkanoo) with proprietary photos.
-- **Verify baseline prices** — audit partner live pages, drift must be < $5.
-- **User Action**: Paste Google / Bing / Yandex verification codes into Admin → Site Config → Search engine verification.
+- **Google Reviews — real reviews attach** — Started but paused. Needs user's Google Cloud API key + Place ID.
+- **Refresh remaining hero slides** (Atlantis, Rose Island, Junkanoo).
+- **User Action**: Paste Google / Bing / Yandex verification codes in Admin → Site Config → Search engine verification.
 - **User Action**: Submit `https://roxtaxi.com/api/sitemap.xml` in Google Search Console + Bing Webmaster.
-- **User Action**: Run `sudo bash scripts/install-backup-cron.sh` on live VPS.
 
 ### P2
-- **Fraud Watch Dashboard** — Map + country table in admin (signup_country field ready).
 - Referral-card test locator.
 - Pin Undo Toast finalization.
 - Split Driver Leaderboard by individual names.
 - Modularize `server.py` (>3900 lines).
 
 ## Third-party Integrations
-- Cloudflare Turnstile (Signup/Login/Reset CAPTCHA)
-- IndexNow (Bing + Yandex + Seznam + Naver instant re-crawl)
-- ip-api.com (IP → country for fraud watch)
+- Cloudflare Turnstile · IndexNow (Bing + Yandex + Seznam)
+- ip-api.com (IP → country) · pycountry (name → ISO)
+- react-simple-maps + world-atlas (fraud map SVG)
 - Claude Sonnet 4.6 (Chat) + 4.5 (Vision) — Emergent LLM Key
-- Stripe (Payments), Twilio (SMS), SendGrid (Email), AviationStack (Flights), Facebook Graph, Mega.io (Backups)
+- Stripe · Twilio · SendGrid · AviationStack · Facebook Graph · Mega.io
 
 ## Test Credentials
 Admin: `roxfam2509@gmail.com` / `admin123`
