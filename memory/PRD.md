@@ -5,31 +5,34 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 10 — Signup Burst Alert (Fraud Watch trigger #2)
+- New `send_signup_burst_alert()` email template in `notifications.py`.
+- New `_maybe_send_signup_burst_alert()` helper in `routes/auth.py` runs alongside the existing first-country alert:
+  - Threshold: >3 signups from the same country inside a rolling 60-minute window.
+  - Dedupe: at most one alert per country per hour (`signup_burst_alerts` collection stores `last_sent_at`).
+  - Email includes: country, count, window, sample city/IP, up to 10 recent burst emails, CTA linking to admin fraud-watch card.
+- Wired into `POST /auth/register` as a fire-and-forget `asyncio.create_task` so signup latency is untouched.
+- Verified end-to-end (4 test cases): 3 signups→no alert · 4th→1 alert with "4 · Nigeria" in subject · 5th/6th during cooldown→no re-alert · after 60min cooldown→re-alert fires.
+
 ### Feb 10 — Fraud Watch Map (Admin Signup Geography)
-- New `GET /api/admin/analytics/signup-countries` endpoint — aggregates users by `signup_country`, returns ranked rows with `iso3` (pycountry fuzzy match), count, first/last signup dates, sample city, latest email. Legacy + unknown accounts excluded from the map but surfaced as separate mini-stats.
-- New `<SignupCountriesCard />` component rendered on Admin Dashboard:
-  - Interactive world map (`react-simple-maps` + world-atlas TopoJSON on CDN) with 4-tier amber-to-navy fill scale by signup intensity.
-  - Red pins on each country's centroid, sized by log(count) so single-signup countries stay visible next to clusters.
-  - Ranked table beside the map with country, city, count, first-seen and last-seen dates.
-  - Three mini-stats: unique countries, tracked signups, legacy users.
-- Verified end-to-end (curl + screenshot): 7 countries + 14 pins rendered from seeded demo data; legacy count correctly shown (79).
-- Test IDs added: `signup-countries-card`, `signup-countries-map`, `signup-countries-table`, `stat-unique-countries`, `stat-tracked-signups`, `stat-legacy-users`, `country-row-{slug}`, `country-count-{slug}`.
+- `GET /api/admin/analytics/signup-countries` aggregates users by country (pycountry ISO-3 fuzzy match).
+- `<SignupCountriesCard />` on Admin Dashboard: interactive world map + amber-to-navy fill + red pins sized by count + ranked table with dates.
 
 ### Feb 10 — SEO Ranking Boost
 - Dynamic `/api/sitemap.xml` (40 URLs, fresh lastmod).
-- IndexNow push to Bing/Yandex/Seznam (verified HTTP 202) + admin "Ping now" button.
-- 6 verification meta tag fields (Google, Bing, Yandex, Pinterest, Facebook, Norton) — pasted in admin panel, auto-injected into `<head>`.
+- IndexNow push to Bing/Yandex/Seznam (verified HTTP 202).
+- 6 verification meta tag fields (Google, Bing, Yandex, Pinterest, Facebook, Norton).
 - Rich JSON-LD: per-rental Vehicle schema, BreadcrumbList + AggregateRating on Taxi/Rentals.
-- Improved robots.txt with explicit rules for Bingbot/YandexBot/DuckDuckBot/Applebot/GPTBot/ClaudeBot/PerplexityBot; aggressive scrapers throttled.
+- Improved robots.txt with explicit rules for 10+ crawlers.
 - Bahamas-specific keyword strengthening on Car Rental meta.
 
-### Feb 7 — Suspicious Signup Alert + Turnstile CAPTCHA + Rate Limit Failed Logins
-- Cloudflare Turnstile on signup, login, forgot-password (frontend widget + backend siteverify).
-- Fraud-watch email alert fires once per country on first-ever signup from that country.
-- 5-strikes-and-15-min-cool-down rate limit on both admin `/auth/login` and customer `/auth/login-email`.
+### Feb 7 — Turnstile CAPTCHA + First-country Signup Alert + Rate Limit Failed Logins
+- Cloudflare Turnstile on signup/login/forgot-password (frontend widget + backend siteverify).
+- Owner-only alert fires once per country on FIRST-ever signup from that country.
+- 5-strikes-and-15-min-cool-down rate limit on both admin/customer login.
 
 ### Earlier
-- Optional Taxi Add-on with A/B upsell testing, Kids pricing, Photo Delete
+- Optional Taxi Add-on with A/B upsell testing, Kids pricing, Photo Delete in Admin Gallery
 - Advanced Blackout Date System + Downtime Financial Analytics + Insurance PDF + CSV
 - Removed Yacht/Horse tours; new turquoise-boat hero photo; 2017 Nissan NV200 Cargo Rental
 

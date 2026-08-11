@@ -838,6 +838,78 @@ def send_new_country_signup_alert(*, to_email: str, new_user_email: str,
     return send_email(to_email, subject, html, text, category="info")
 
 
+def send_signup_burst_alert(*, to_email: str, country: str, burst_count: int,
+                            window_minutes: int, recent_emails: list,
+                            sample_city: str, sample_ip: str,
+                            admin_url: str = "") -> dict:
+    """Owner-only alert: >N signups clustered from a single country in a
+    tight time window. Different signal from the "first-ever country" alert
+    — this one fires when the same country suddenly floods, which is the
+    classic fraud-farm / VPN-abuse pattern. Fires at most once per country
+    per hour so a real spike doesn't create an email storm.
+    """
+    subject = f"[Rox Fraud Watch] Burst — {burst_count} signups from {country or 'Unknown'} in {window_minutes} min"
+    joined = "\n".join(f"  • {e}" for e in (recent_emails or [])[:10])
+    text = (
+        f"Cluster detected — {burst_count} accounts just signed up from\n"
+        f"{country or 'Unknown'} inside a {window_minutes}-minute window.\n\n"
+        f"Sample city : {sample_city or 'unknown'}\n"
+        f"Sample IP   : {sample_ip or 'unknown'}\n\n"
+        f"Recent emails from this burst:\n{joined}\n\n"
+        f"What this usually means:\n"
+        f"  • Fraud farm testing accounts before running stolen cards\n"
+        f"  • VPN/proxy exit node routing many bots through one country\n"
+        f"  • Legit surge if you just ran a targeted ad in that market\n\n"
+        f"What to do next:\n"
+        f"  • Open the Fraud Watch card in Admin → Dashboard\n"
+        f"  • Check if any of these emails already have bookings\n"
+        f"  • If suspicious, freeze the accounts or raise Turnstile\n\n"
+        f"You'll only get this alert once per country per hour — even if\n"
+        f"the burst keeps going, subsequent signups stay quiet until an\n"
+        f"hour has passed.\n\n"
+        f"— Rox Taxi Fraud Watch"
+    )
+    admin_link = admin_url or ""
+    email_rows = "".join(
+        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:#0B3B5C;padding:4px 0;border-bottom:1px dashed #E2E8F0;">{_html_escape(e)}</div>'
+        for e in (recent_emails or [])[:10]
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#DC2626;font-weight:700;">Fraud watch · Burst detected</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:24px;line-height:1.2;">
+        <span style="color:#DC2626;">{burst_count}</span> signups from {_html_escape(country or 'Unknown')} in {window_minutes} min
+      </h1>
+      <p style="color:#64748B;font-size:14px;margin:12px 0 0;">
+        Cluster spotted — this is the classic pattern before a fraud wave. Worth a quick review to rule out card-testing bots.
+      </p>
+
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:20px;margin-top:20px;">
+        <table style="width:100%;font-size:13px;color:#0B3B5C;border-collapse:collapse;">
+          <tr><td style="color:#64748B;padding:5px 0;">Country</td><td style="text-align:right;font-weight:600;">{_html_escape(country or 'Unknown')}</td></tr>
+          <tr><td style="color:#64748B;padding:5px 0;">Signups in window</td><td style="text-align:right;font-weight:700;color:#DC2626;">{burst_count}</td></tr>
+          <tr><td style="color:#64748B;padding:5px 0;">Window</td><td style="text-align:right;font-weight:600;">{window_minutes} minutes</td></tr>
+          <tr><td style="color:#64748B;padding:5px 0;">Sample city</td><td style="text-align:right;font-weight:600;">{_html_escape(sample_city or 'unknown')}</td></tr>
+          <tr><td style="color:#64748B;padding:5px 0;">Sample IP</td><td style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;">{_html_escape(sample_ip or 'unknown')}</td></tr>
+        </table>
+      </div>
+
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:16px 20px;margin-top:14px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.24em;color:#94a3b8;font-weight:700;margin-bottom:8px;">Recent burst emails</div>
+        {email_rows or '<div style="color:#94a3b8;font-size:12px;">(no emails to preview)</div>'}
+      </div>
+
+      {"<div style='margin:22px 0 8px;'><a href='" + _html_escape(admin_link) + "' style='display:inline-block;background:#DC2626;color:#fff;text-decoration:none;font-weight:800;padding:12px 22px;border-radius:999px;font-size:14px;'>Open Fraud Watch · Review burst</a></div>" if admin_link else ""}
+
+      <div style="border-top:1px solid #E2E8F0;padding-top:18px;margin-top:22px;color:#94a3b8;font-size:12px;line-height:1.55;">
+        <strong style="color:#64748B;">Why you're getting this:</strong> More than 3 signups landed from the same country in under an hour. This alert fires at most once per country per hour — a real spike will still be captured but you won't get spammed.
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:18px;">Rox Taxi Fraud Watch · Nassau, Bahamas</p>
+    </div>
+    """
+    return send_email(to_email, subject, html, text, category="info")
+
+
 def send_airport_pre_pickup_reminder(booking: dict, prefs: Optional[dict] = None,
                                      flight_delay_min: Optional[int] = None,
                                      reschedule_url: Optional[str] = None,

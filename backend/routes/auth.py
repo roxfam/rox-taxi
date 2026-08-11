@@ -289,10 +289,6 @@ async def _resolve_geo_upstream(ip: str) -> dict:
 async def _maybe_send_new_country_signup_alert(*, user_id: str, email: str,
                                                name: str, ip: str,
                                                when_iso: str) -> None:
-    """Owner-only fraud-watch alert: fire ONCE per country the first time a
-    signup happens from that country. Stamps the user doc with signup_country
-    so per-user analytics keep working even if we don't alert.
-    """
     try:
         geo = await _resolve_geo_upstream(ip)
         country = (geo.get("country") or "").strip()
@@ -341,6 +337,78 @@ async def _maybe_send_new_country_signup_alert(*, user_id: str, email: str,
             pass
     except Exception:  # noqa: BLE001
         # Never let the alert path break signup itself
+        return
+
+
+async def _maybe_send_signup_burst_alert(*, ip: str) -> None:
+    """Owner-only fraud-watch alert: >N signups from one country inside a
+    rolling 60-minute window is the classic pre-fraud pattern (card
+    testing, VPN abuse, bot farms). Fires at most once per country per
+    hour so a genuine spike doesn't spam the inbox.
+
+    Runs alongside — not instead of — the first-country alert. A brand-new
+    country burst-signing up would trigger BOTH the "first-ever" email
+    (for the first user) AND this "burst" email (for the 4th+ user).
+    """
+    BURST_THRESHOLD = 3          # >3 signups → burst
+    WINDOW_MINUTES = 60
+    REALERT_COOLDOWN_MIN = 60    # only re-alert same country after 60min
+    try:
+        if _db is None:
+            return
+        geo = await _resolve_geo_upstream(ip)
+        country = (geo.get("country") or "").strip()
+        if not country:
+            return
+
+        cutoff = (_now_utc() - timedelta(minutes=WINDOW_MINUTES)).isoformat()
+        recent = await _db.users.find(
+            {"signup_country": country, "created_at": {"$gte": cutoff}},
+            {"email": 1, "signup_ip": 1, "signup_city": 1, "created_at": 1},
+        ).sort("created_at", -1).to_list(20)
+
+        if len(recent) <= BURST_THRESHOLD:
+            return  # not a burst yet
+
+        # Dedupe: has a burst alert already fired for this country in the
+        # cooldown window? Use `signup_burst_alerts` collection keyed by
+        # country.
+        cooldown_cutoff = (_now_utc() - timedelta(minutes=REALERT_COOLDOWN_MIN)).isoformat()
+        last_alert = await _db.signup_burst_alerts.find_one({"country": country})
+        if last_alert and (last_alert.get("last_sent_at") or "") >= cooldown_cutoff:
+            return  # already alerted for this country recently
+
+        if not _admin_email:
+            return
+
+        # Stamp the alert BEFORE sending so a slow SMTP round-trip can't
+        # race two concurrent registers into two duplicate alerts.
+        await _db.signup_burst_alerts.update_one(
+            {"country": country},
+            {"$set": {
+                "country": country,
+                "last_sent_at": _now_iso(),
+                "burst_count": len(recent),
+                "burst_emails": [r.get("email", "") for r in recent[:10]],
+            }},
+            upsert=True,
+        )
+
+        try:
+            from notifications import send_signup_burst_alert
+            send_signup_burst_alert(
+                to_email=_admin_email,
+                country=country,
+                burst_count=len(recent),
+                window_minutes=WINDOW_MINUTES,
+                recent_emails=[r.get("email", "") for r in recent],
+                sample_city=(recent[0].get("signup_city") or geo.get("city") or ""),
+                sample_ip=(recent[0].get("signup_ip") or ip or ""),
+                admin_url=f"{_site_base_url()}/admin#fraud-watch",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    except Exception:  # noqa: BLE001
         return
 
 
@@ -638,6 +706,7 @@ async def customer_register(req: CustomerRegisterRequest, request: Request, resp
             _aio.create_task(_maybe_send_new_country_signup_alert(
                 user_id=user_id, email=email, name=req.name or "", ip=ip, when_iso=ts,
             ))
+            _aio.create_task(_maybe_send_signup_burst_alert(ip=ip))
         except Exception:  # noqa: BLE001
             pass
 
