@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File, Body
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ---- shared state populated by server.py ------------------------------------
@@ -1092,6 +1092,104 @@ async def admin_update_site(req: SiteConfigUpdate, _: str = Depends(_admin_dep))
     cfg = await _db.site_config.find_one({"_id": "main"})
     cfg.pop("_id", None)
     return cfg
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Reviews — real Google Business reviews pasted via admin panel
+# ═══════════════════════════════════════════════════════════════════════════
+class ReviewIn(BaseModel):
+    author_name: str = Field(..., min_length=1, max_length=100)
+    author_url: Optional[str] = Field(None, max_length=500)
+    profile_photo_url: Optional[str] = Field(None, max_length=500)
+    rating: int = Field(..., ge=1, le=5)
+    text: str = Field(..., min_length=1, max_length=2000)
+    relative_time: str = Field("", max_length=60)  # e.g. "2 weeks ago"
+    active: bool = True
+
+
+@router.get("/admin/reviews")
+async def admin_list_reviews(_: str = Depends(_admin_dep)):
+    """List every review pasted so far, newest first."""
+    docs = await _db.reviews.find({}).sort("created_at", -1).to_list(200)
+    return [_clean(d) for d in docs]
+
+
+@router.post("/admin/reviews")
+async def admin_create_review(req: ReviewIn, _: str = Depends(_admin_dep)):
+    """Paste a review from your Google Business dashboard."""
+    import uuid as _uuid
+    review_id = f"rev_{_uuid.uuid4().hex[:12]}"
+    doc = {
+        "id": review_id,
+        **req.model_dump(),
+        "source": "manual",
+        "created_at": _now_iso(),
+    }
+    if not doc.get("profile_photo_url"):
+        # Use a neutral avatar so the card doesn't crash. Google's default
+        # avatar CDN pattern works with any name.
+        first = req.author_name.strip()[:1].upper() or "G"
+        doc["profile_photo_url"] = f"https://ui-avatars.com/api/?name={first}&background=D4A94A&color=fff&size=80&bold=true"
+    await _db.reviews.insert_one(doc)
+    return _clean(doc)
+
+
+@router.put("/admin/reviews/{review_id}")
+async def admin_update_review(review_id: str, req: ReviewIn, _: str = Depends(_admin_dep)):
+    payload = req.model_dump()
+    payload["updated_at"] = _now_iso()
+    r = await _db.reviews.update_one({"id": review_id}, {"$set": payload})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Review not found")
+    doc = await _db.reviews.find_one({"id": review_id})
+    return _clean(doc)
+
+
+@router.delete("/admin/reviews/{review_id}")
+async def admin_delete_review(review_id: str, _: str = Depends(_admin_dep)):
+    r = await _db.reviews.delete_one({"id": review_id})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Review not found")
+    return {"deleted": True, "id": review_id}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Country freeze — one-click "block signups from country X for N hours"
+# ═══════════════════════════════════════════════════════════════════════════
+class CountryFreezeRequest(BaseModel):
+    country: str = Field(..., min_length=1, max_length=80)
+    hours: int = Field(24, ge=0, le=720)  # 0 = unfreeze immediately
+    reason: Optional[str] = Field(None, max_length=200)
+
+
+@router.post("/admin/country-freeze")
+async def admin_country_freeze(req: CountryFreezeRequest, _: str = Depends(_admin_dep)):
+    """Freeze all new signups from `country` for the next N hours (or
+    unfreeze if hours == 0). Enforced inside /auth/register."""
+    from datetime import datetime, timezone, timedelta
+    if req.hours == 0:
+        await _db.country_freezes.delete_one({"country": req.country})
+        return {"country": req.country, "frozen": False}
+    frozen_until = (datetime.now(timezone.utc) + timedelta(hours=req.hours)).isoformat()
+    await _db.country_freezes.update_one(
+        {"country": req.country},
+        {"$set": {
+            "country": req.country,
+            "frozen_until": frozen_until,
+            "reason": req.reason or "",
+            "created_at": _now_iso(),
+        }},
+        upsert=True,
+    )
+    return {"country": req.country, "frozen": True, "frozen_until": frozen_until}
+
+
+@router.get("/admin/country-freezes")
+async def admin_list_country_freezes(_: str = Depends(_admin_dep)):
+    """Return all active freezes so the fraud-watch card can badge them."""
+    now = _now_iso()
+    docs = await _db.country_freezes.find({"frozen_until": {"$gt": now}}).to_list(200)
+    return [_clean(d) for d in docs]
 
 
 # ═══════════════════════════════════════════════════════════════════════════

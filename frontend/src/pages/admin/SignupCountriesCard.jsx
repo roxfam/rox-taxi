@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
-import { Users, MapPin, ShieldAlert } from "lucide-react";
+import { Users, MapPin, ShieldAlert, Lock, Unlock } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "../../lib/api";
 
 // Small, hosted TopoJSON — 110m resolution is plenty for a pin map and
@@ -49,13 +50,33 @@ function fmt(dateStr) {
 export default function SignupCountriesCard() {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(true);
+  const [freezing, setFreezing] = useState(null);
 
-  useEffect(() => {
+  const load = () => {
+    setBusy(true);
     api.get("/admin/analytics/signup-countries")
       .then((r) => setData(r.data))
       .catch(() => setData({ rows: [], unique_countries: 0, total_signups_tracked: 0, legacy_users: 0, unknown_country_users: 0 }))
       .finally(() => setBusy(false));
-  }, []);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const toggleFreeze = async (country, currentlyFrozen) => {
+    if (!currentlyFrozen && !window.confirm(`Freeze all new signups from ${country} for the next 24 hours?\n\nExisting accounts stay active — only new registrations are blocked.`)) return;
+    setFreezing(country);
+    try {
+      await api.post("/admin/country-freeze", {
+        country,
+        hours: currentlyFrozen ? 0 : 24,
+        reason: currentlyFrozen ? null : "Manual freeze from fraud-watch card",
+      });
+      toast.success(currentlyFrozen ? `${country} unfrozen — signups accepted again.` : `${country} frozen for 24h.`);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Freeze failed");
+    } finally { setFreezing(null); }
+  };
 
   // Country → count map for O(1) fill-color lookup while Geographies
   // iterates the whole world. Highlights countries we've had signups from.
@@ -161,24 +182,50 @@ export default function SignupCountriesCard() {
                       <th className="px-3 py-2">Country</th>
                       <th className="px-3 py-2 text-right">Signups</th>
                       <th className="px-3 py-2">First / Last</th>
+                      <th className="px-3 py-2 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(data?.rows || []).map((r) => (
-                      <tr key={r.country} className="border-t border-[#F1F5F9] hover:bg-[#FBF7EF]/40" data-testid={`country-row-${r.country.toLowerCase().replace(/\s+/g,'-')}`}>
+                    {(data?.rows || []).map((r) => {
+                      const isFrozen = !!r.frozen_until;
+                      const slug = r.country.toLowerCase().replace(/\s+/g,'-');
+                      return (
+                      <tr key={r.country} className={`border-t border-[#F1F5F9] hover:bg-[#FBF7EF]/40 ${isFrozen ? 'bg-[#FEF2F2]/40' : ''}`} data-testid={`country-row-${slug}`}>
                         <td className="px-3 py-2">
-                          <div className="font-semibold text-[#0B3B5C]">{r.country}</div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="font-semibold text-[#0B3B5C]">{r.country}</div>
+                            {isFrozen && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[#DC2626] text-white text-[9px] font-bold px-2 py-0.5" data-testid={`country-frozen-badge-${slug}`}>
+                                <Lock className="w-2.5 h-2.5" /> FROZEN
+                              </span>
+                            )}
+                          </div>
                           {r.sample_city && <div className="text-[10px] text-[#94a3b8] mt-0.5">{r.sample_city}</div>}
                         </td>
                         <td className="px-3 py-2 text-right">
-                          <div className="mono font-bold text-[#D4A94A]" data-testid={`country-count-${r.country.toLowerCase().replace(/\s+/g,'-')}`}>{r.count}</div>
+                          <div className="mono font-bold text-[#D4A94A]" data-testid={`country-count-${slug}`}>{r.count}</div>
                         </td>
                         <td className="px-3 py-2 text-[10px] text-[#64748B]">
                           <div>First {fmt(r.first_seen)}</div>
                           {r.last_seen && r.last_seen !== r.first_seen && <div className="text-[#94a3b8]">Last {fmt(r.last_seen)}</div>}
                         </td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            type="button"
+                            onClick={() => toggleFreeze(r.country, isFrozen)}
+                            disabled={freezing === r.country}
+                            data-testid={`country-freeze-btn-${slug}`}
+                            className={`inline-flex items-center gap-1 rounded-full text-[10px] font-bold px-2.5 py-1 transition ${
+                              isFrozen
+                                ? "bg-[#059669] text-white hover:bg-[#047857]"
+                                : "bg-[#0B3B5C]/8 text-[#0B3B5C] hover:bg-[#DC2626] hover:text-white"
+                            } disabled:opacity-50`}
+                          >
+                            {isFrozen ? (<><Unlock className="w-2.5 h-2.5" /> Unfreeze</>) : (<><Lock className="w-2.5 h-2.5" /> Freeze 24h</>)}
+                          </button>
+                        </td>
                       </tr>
-                    ))}
+                    );})}
                   </tbody>
                 </table>
               </div>

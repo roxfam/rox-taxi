@@ -1,0 +1,308 @@
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Star, Trash2, Plus, Save, X, Info, ExternalLink } from "lucide-react";
+import { api } from "../../lib/api";
+import { F } from "./shared";
+
+// Admin panel — paste real Google Business reviews so the public
+// /reviews section stops showing seed data. Rating + total are
+// auto-computed from what you paste; nothing to configure elsewhere.
+const emptyForm = {
+  author_name: "",
+  author_url: "",
+  profile_photo_url: "",
+  rating: 5,
+  text: "",
+  relative_time: "",
+  active: true,
+};
+
+export default function ReviewsPanel() {
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState(emptyForm);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(null); // review id being edited
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get("/admin/reviews");
+      setReviews(data || []);
+    } catch { toast.error("Failed to load reviews"); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const create = async () => {
+    if (!form.author_name.trim() || !form.text.trim()) {
+      return toast.error("Author name and review text are required");
+    }
+    setCreating(true);
+    try {
+      await api.post("/admin/reviews", form);
+      toast.success("Review saved. It's now live on the homepage.");
+      setForm(emptyForm);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Failed to save review");
+    } finally { setCreating(false); }
+  };
+
+  const update = async (id, patch) => {
+    try {
+      await api.put(`/admin/reviews/${id}`, patch);
+      toast.success("Review updated");
+      setEditing(null);
+      load();
+    } catch { toast.error("Update failed"); }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm("Delete this review? It'll disappear from the homepage immediately.")) return;
+    try {
+      await api.delete(`/admin/reviews/${id}`);
+      toast.success("Review deleted");
+      load();
+    } catch { toast.error("Delete failed"); }
+  };
+
+  const avgRating = reviews.length
+    ? (reviews.reduce((a, r) => a + (r.rating || 0), 0) / reviews.length).toFixed(1)
+    : "—";
+
+  return (
+    <div className="space-y-6 max-w-4xl" data-testid="reviews-panel">
+      <div className="rounded-2xl bg-white border border-[#E2E8F0] p-6">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.28em] text-[#D4A94A] font-bold">Homepage</div>
+            <div className="serif text-2xl text-[#0B3B5C] mt-1 leading-tight">Google reviews</div>
+            <div className="text-xs text-[#64748B] mt-2 max-w-xl leading-relaxed">
+              Paste your real Google Business reviews here. The homepage rating and total will match what you paste — no more inflated seed numbers.
+            </div>
+          </div>
+          <div className="flex gap-4 text-right">
+            <div>
+              <div className="text-[9px] uppercase tracking-widest text-[#94a3b8] font-semibold">Avg rating</div>
+              <div className="serif text-3xl text-[#D4A94A] leading-none mt-1" data-testid="reviews-avg-rating">{avgRating}</div>
+            </div>
+            <div>
+              <div className="text-[9px] uppercase tracking-widest text-[#94a3b8] font-semibold">Reviews</div>
+              <div className="serif text-3xl text-[#0B3B5C] leading-none mt-1" data-testid="reviews-total">{reviews.length}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 inline-flex items-start gap-2 rounded-xl border border-[#0B3B5C]/25 bg-[#0B3B5C]/[0.06] px-3 py-2 text-xs text-[#0B3B5C]">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            Copy the exact wording and star rating from your{" "}
+            <a
+              href="https://business.google.com/reviews"
+              target="_blank"
+              rel="noreferrer"
+              className="underline inline-flex items-center gap-1 font-semibold"
+            >
+              Google Business dashboard <ExternalLink className="w-3 h-3" />
+            </a>{" "}
+            — that way your homepage matches what people actually see on Google.
+          </div>
+        </div>
+      </div>
+
+      {/* ── Paste form ────────────────────────────────────────────── */}
+      <div className="rounded-2xl bg-white border border-[#E2E8F0] p-6" data-testid="review-add-form">
+        <div className="flex items-center gap-2 mb-4">
+          <Plus className="w-4 h-4 text-[#059669]" />
+          <div className="text-sm font-bold text-[#0B3B5C]">Paste a new review</div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-3">
+          <F l="Author name" v={form.author_name} on={(v) => setForm({ ...form, author_name: v })} testid="review-author" />
+          <F l="When (e.g. '2 weeks ago')" v={form.relative_time} on={(v) => setForm({ ...form, relative_time: v })} testid="review-when" />
+          <F l="Google profile URL (optional)" v={form.author_url} on={(v) => setForm({ ...form, author_url: v })} testid="review-url" />
+          <F l="Profile photo URL (optional — auto-generates initial if blank)" v={form.profile_photo_url} on={(v) => setForm({ ...form, profile_photo_url: v })} testid="review-photo" />
+        </div>
+
+        <div className="mt-3">
+          <label className="text-[10px] uppercase tracking-widest text-[#64748B] font-semibold">Rating</label>
+          <div className="flex items-center gap-1 mt-1" data-testid="review-stars">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setForm({ ...form, rating: n })}
+                className="p-0.5"
+                data-testid={`review-star-${n}`}
+              >
+                <Star className={`w-6 h-6 ${n <= form.rating ? "text-[#FBBF24] fill-[#FBBF24]" : "text-[#E2E8F0]"}`} />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <label className="text-[10px] uppercase tracking-widest text-[#64748B] font-semibold">Review text</label>
+          <textarea
+            className="w-full mt-1 rounded-xl border border-[#E2E8F0] px-3 py-2 text-sm text-[#0B3B5C] focus:border-[#D4A94A] outline-none min-h-[100px]"
+            placeholder="e.g. Rox picked us up at LPIA on time and got us to Atlantis in 15 min. Cleanest van in Nassau — booked the return same day."
+            value={form.text}
+            onChange={(e) => setForm({ ...form, text: e.target.value })}
+            data-testid="review-text"
+          />
+        </div>
+
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={create}
+            disabled={creating || !form.author_name.trim() || !form.text.trim()}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#0B3B5C] text-white text-xs font-bold px-4 py-2 hover:bg-[#122C4B] disabled:opacity-50"
+            data-testid="review-save-btn"
+          >
+            <Save className="w-3.5 h-3.5" /> {creating ? "Saving…" : "Publish review"}
+          </button>
+          {(form.author_name || form.text) && (
+            <button
+              type="button"
+              onClick={() => setForm(emptyForm)}
+              className="inline-flex items-center gap-1.5 rounded-full text-xs text-[#64748B] px-3 py-2 hover:bg-[#F1F5F9]"
+              data-testid="review-clear-btn"
+            >
+              <X className="w-3.5 h-3.5" /> Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Existing reviews list ─────────────────────────────────── */}
+      <div className="rounded-2xl bg-white border border-[#E2E8F0] overflow-hidden">
+        <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between">
+          <div className="text-sm font-bold text-[#0B3B5C]">Published reviews</div>
+          <div className="text-xs text-[#94a3b8]">{loading ? "Loading…" : `${reviews.length} total`}</div>
+        </div>
+
+        {!loading && reviews.length === 0 && (
+          <div className="p-8 text-center text-sm text-[#94a3b8]" data-testid="reviews-empty">
+            No reviews yet. Paste your first one above — the homepage section will hide itself until you do.
+          </div>
+        )}
+
+        <div className="divide-y divide-[#F1F5F9]">
+          {reviews.map((r) => (
+            <ReviewRow
+              key={r.id}
+              review={r}
+              editing={editing === r.id}
+              onEdit={() => setEditing(r.id)}
+              onCancel={() => setEditing(null)}
+              onSave={(patch) => update(r.id, patch)}
+              onDelete={() => remove(r.id)}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReviewRow({ review, editing, onEdit, onCancel, onSave, onDelete }) {
+  const [draft, setDraft] = useState(review);
+  useEffect(() => { setDraft(review); }, [review, editing]);
+  const testSlug = review.id;
+
+  if (editing) {
+    return (
+      <div className="p-5 bg-[#FBF7EF]/40" data-testid={`review-row-${testSlug}`}>
+        <div className="grid md:grid-cols-2 gap-3">
+          <F l="Author name" v={draft.author_name} on={(v) => setDraft({ ...draft, author_name: v })} testid={`review-edit-author-${testSlug}`} />
+          <F l="When (e.g. '2 weeks ago')" v={draft.relative_time || ""} on={(v) => setDraft({ ...draft, relative_time: v })} testid={`review-edit-when-${testSlug}`} />
+        </div>
+        <div className="mt-2 flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setDraft({ ...draft, rating: n })}
+              className="p-0.5"
+            >
+              <Star className={`w-5 h-5 ${n <= draft.rating ? "text-[#FBBF24] fill-[#FBBF24]" : "text-[#E2E8F0]"}`} />
+            </button>
+          ))}
+        </div>
+        <textarea
+          className="w-full mt-2 rounded-xl border border-[#E2E8F0] px-3 py-2 text-sm text-[#0B3B5C] outline-none min-h-[80px]"
+          value={draft.text}
+          onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+        />
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => onSave({
+              author_name: draft.author_name,
+              author_url: draft.author_url || "",
+              profile_photo_url: draft.profile_photo_url || "",
+              rating: draft.rating,
+              text: draft.text,
+              relative_time: draft.relative_time || "",
+              active: draft.active !== false,
+            })}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#059669] text-white text-xs font-bold px-4 py-2 hover:bg-[#047857]"
+          >
+            <Save className="w-3.5 h-3.5" /> Save changes
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex items-center gap-1.5 rounded-full text-xs text-[#64748B] px-3 py-2 hover:bg-[#F1F5F9]"
+          >
+            <X className="w-3.5 h-3.5" /> Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-5 flex items-start gap-4" data-testid={`review-row-${testSlug}`}>
+      <img
+        src={review.profile_photo_url}
+        alt={review.author_name}
+        className="w-10 h-10 rounded-full border border-[#E2E8F0] shrink-0 mt-0.5"
+      />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="text-sm font-semibold text-[#0B3B5C]">{review.author_name}</div>
+          <div className="flex items-center gap-0.5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star key={i} className={`w-3 h-3 ${i < review.rating ? "text-[#FBBF24] fill-[#FBBF24]" : "text-[#E2E8F0]"}`} />
+            ))}
+          </div>
+          {review.relative_time && <span className="text-xs text-[#94a3b8]">· {review.relative_time}</span>}
+        </div>
+        <p className="text-sm text-[#334155] leading-relaxed mt-1.5">"{review.text}"</p>
+      </div>
+      <div className="flex gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={onEdit}
+          data-testid={`review-edit-btn-${testSlug}`}
+          className="text-xs text-[#0B3B5C] hover:bg-[#F1F5F9] rounded-full px-3 py-1 font-semibold"
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          data-testid={`review-delete-btn-${testSlug}`}
+          className="text-xs text-[#DC2626] hover:bg-[#FEF2F2] rounded-full px-2 py-1"
+          title="Delete review"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}

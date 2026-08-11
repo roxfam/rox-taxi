@@ -655,6 +655,24 @@ async def customer_register(req: CustomerRegisterRequest, request: Request, resp
     if existing and existing.get("password_hash"):
         raise HTTPException(400, "An account with this email already exists. Please sign in.")
 
+    # Country freeze — reject new accounts from admin-frozen regions.
+    # Only applied to brand-new signups; existing users linking their
+    # password aren't blocked.
+    if not existing:
+        signup_ip = _client_ip(request)
+        try:
+            geo_for_freeze = await _resolve_geo_upstream(signup_ip)
+            signup_country = (geo_for_freeze.get("country") or "").strip()
+        except Exception:  # noqa: BLE001
+            signup_country = ""
+        if signup_country:
+            freeze = await _db.country_freezes.find_one({"country": signup_country})
+            if freeze and (freeze.get("frozen_until") or "") > _now_iso():
+                raise HTTPException(
+                    403,
+                    "Signups from your region are temporarily unavailable. Please contact support if you believe this is a mistake.",
+                )
+
     ts = _now_iso()
     referred_by: Optional[str] = None
     if req.referral_code:

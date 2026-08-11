@@ -259,6 +259,22 @@ async def signup_countries(_admin: str = _require()):
         "signup_country": {"$in": ["Unknown", ""]},
     })
 
+    # Overlay active freezes onto each row so the frontend can badge them.
+    now_iso = datetime.now(timezone.utc).isoformat()
+    freezes = {}
+    try:
+        async for f in _db.country_freezes.find({"frozen_until": {"$gt": now_iso}}):
+            freezes[f.get("country", "")] = {
+                "frozen_until": f.get("frozen_until"),
+                "reason": f.get("reason") or "",
+            }
+    except Exception:  # noqa: BLE001
+        pass
+    for r in rows:
+        fr = freezes.get(r["country"])
+        r["frozen_until"] = fr.get("frozen_until") if fr else None
+        r["freeze_reason"] = fr.get("reason") if fr else ""
+
     return {
         "rows": rows,
         "total_signups_tracked": total,

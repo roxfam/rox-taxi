@@ -5,36 +5,34 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
-### Feb 10 — Signup Burst Alert (Fraud Watch trigger #2)
-- New `send_signup_burst_alert()` email template in `notifications.py`.
-- New `_maybe_send_signup_burst_alert()` helper in `routes/auth.py` runs alongside the existing first-country alert:
-  - Threshold: >3 signups from the same country inside a rolling 60-minute window.
-  - Dedupe: at most one alert per country per hour (`signup_burst_alerts` collection stores `last_sent_at`).
-  - Email includes: country, count, window, sample city/IP, up to 10 recent burst emails, CTA linking to admin fraud-watch card.
-- Wired into `POST /auth/register` as a fire-and-forget `asyncio.create_task` so signup latency is untouched.
-- Verified end-to-end (4 test cases): 3 signups→no alert · 4th→1 alert with "4 · Nigeria" in subject · 5th/6th during cooldown→no re-alert · after 60min cooldown→re-alert fires.
+### Feb 11 — Real Google Reviews (Admin Paste) + Fraud Freeze Button
+**Reviews:**
+- New `reviews` MongoDB collection + admin CRUD in `admin.py`:
+  - `GET/POST/PUT/DELETE /api/admin/reviews` with `ReviewIn` model (author_name, rating 1-5, text, relative_time, profile_photo_url, author_url, active).
+  - Public `/api/reviews` now reads from DB and **computes rating + total from actual pasted reviews** (no more inflated 4.9/187 seed data).
+  - Empty state returns `{rating: 0, total: 0, reviews: []}` — the frontend's `GoogleReviews.jsx` already hides the section when data is empty (`if (!data) return null`).
+- New `<ReviewsPanel />` admin component with paste form (5-star selector, textarea, author URL, relative-time chip), live avg-rating stat, deep link to Google Business dashboard.
+- New "Reviews" tab wired into `AdminManage.jsx` between Promotions and Images.
+- Auto-generates a colored initial avatar (`ui-avatars.com`) when profile photo is blank so the homepage card never breaks.
 
-### Feb 10 — Fraud Watch Map (Admin Signup Geography)
-- `GET /api/admin/analytics/signup-countries` aggregates users by country (pycountry ISO-3 fuzzy match).
-- `<SignupCountriesCard />` on Admin Dashboard: interactive world map + amber-to-navy fill + red pins sized by count + ranked table with dates.
+**Country Freeze:**
+- New `country_freezes` Mongo collection with `frozen_until` ISO timestamp.
+- New endpoints: `POST /api/admin/country-freeze` (freeze N hours or hours=0 to unfreeze) + `GET /api/admin/country-freezes` (list active).
+- Signup burst alert card now shows a **red "FROZEN" badge + green "Unfreeze"** or blue "Freeze 24h" button on each country row.
+- `POST /auth/register` checks `country_freezes` before creating an account and returns **HTTP 403** if the signup IP resolves to a frozen country ("Signups from your region are temporarily unavailable").
+- `signup-countries` analytics endpoint now overlays `frozen_until` + `freeze_reason` on each country row.
 
-### Feb 10 — SEO Ranking Boost
-- Dynamic `/api/sitemap.xml` (40 URLs, fresh lastmod).
-- IndexNow push to Bing/Yandex/Seznam (verified HTTP 202).
-- 6 verification meta tag fields (Google, Bing, Yandex, Pinterest, Facebook, Norton).
-- Rich JSON-LD: per-rental Vehicle schema, BreadcrumbList + AggregateRating on Taxi/Rentals.
-- Improved robots.txt with explicit rules for 10+ crawlers.
-- Bahamas-specific keyword strengthening on Car Rental meta.
+### Feb 10 — Signup Burst Alert + Fraud Watch Map + SEO Ranking Boost
+- Burst alert on >3 signups per country per hour (1-alert-per-country-per-hour cooldown).
+- Interactive world map + ranked table on Admin Dashboard.
+- Dynamic sitemap, IndexNow push, verification meta tag fields, rich JSON-LD, improved robots.txt.
 
-### Feb 7 — Turnstile CAPTCHA + First-country Signup Alert + Rate Limit Failed Logins
-- Cloudflare Turnstile on signup/login/forgot-password (frontend widget + backend siteverify).
-- Owner-only alert fires once per country on FIRST-ever signup from that country.
-- 5-strikes-and-15-min-cool-down rate limit on both admin/customer login.
+### Feb 7 — Turnstile CAPTCHA + First-Country Signup Alert + Rate Limit Failed Logins
 
 ### Earlier
-- Optional Taxi Add-on with A/B upsell testing, Kids pricing, Photo Delete in Admin Gallery
+- Optional Taxi Add-on with A/B upsell testing, Kids pricing, Photo Delete
 - Advanced Blackout Date System + Downtime Financial Analytics + Insurance PDF + CSV
-- Removed Yacht/Horse tours; new turquoise-boat hero photo; 2017 Nissan NV200 Cargo Rental
+- Removed Yacht/Horse tours; new turquoise-boat hero photo
 
 ## Prioritized Backlog
 
@@ -42,21 +40,22 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - **Apple Login** — waiting on user's $99/yr Apple Developer account.
 
 ### P1
-- **Google Reviews — real reviews attach** — Started but paused. Needs user's Google Cloud API key + Place ID.
 - **Refresh remaining hero slides** (Atlantis, Rose Island, Junkanoo).
+- **User Action**: Paste real Google Business reviews in Admin → Manage catalog → **Reviews** tab.
 - **User Action**: Paste Google / Bing / Yandex verification codes in Admin → Site Config → Search engine verification.
 - **User Action**: Submit `https://roxtaxi.com/api/sitemap.xml` in Google Search Console + Bing Webmaster.
 
 ### P2
+- Google Places API auto-sync (deferred — user picked manual paste route first).
 - Referral-card test locator.
 - Pin Undo Toast finalization.
-- Split Driver Leaderboard by individual names.
 - Modularize `server.py` (>3900 lines).
 
 ## Third-party Integrations
 - Cloudflare Turnstile · IndexNow (Bing + Yandex + Seznam)
 - ip-api.com (IP → country) · pycountry (name → ISO)
 - react-simple-maps + world-atlas (fraud map SVG)
+- ui-avatars.com (fallback review avatars)
 - Claude Sonnet 4.6 (Chat) + 4.5 (Vision) — Emergent LLM Key
 - Stripe · Twilio · SendGrid · AviationStack · Facebook Graph · Mega.io
 
