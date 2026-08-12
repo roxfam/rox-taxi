@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Send, MessagesSquare, ExternalLink, Copy, Check, Gift } from "lucide-react";
+import { X, Send, MessagesSquare, ExternalLink, Copy, Check, Gift, Flame } from "lucide-react";
 import { api, BACKEND_URL } from "../lib/api";
 
 const SUGGESTIONS = [
@@ -82,6 +82,11 @@ export default function ChatWidget() {
   //                        show a softer "Ready to book with your X% off?"
   //                        nudge instead of the full card.
   const [promoStatus, setPromoStatus] = useState({ has_redeemed: false, has_copied_warm_lead: false });
+  // Evening urgency — server tells us whether we're past 5 PM Nassau time
+  // and how many same-day slots are still available. Only surfaces on the
+  // warm-lead card + nudge to gently pressure returning visitors into
+  // same-day booking instead of "I'll come back tomorrow".
+  const [urgency, setUrgency] = useState(null); // { slots_remaining }
   const [hovered, setHovered] = useState(false);
   const [nudged, setNudged] = useState(false);  // auto-invite bubble ~5s after page load
   // Gentle amber glow on the FAB when a returning visitor lands — plays once
@@ -134,6 +139,10 @@ export default function ChatWidget() {
         has_redeemed: !!d.has_redeemed,
         has_copied_warm_lead: !!d.has_copied_warm_lead,
       });
+    }).catch(() => {});
+    api.get("/booking/urgency").then((r) => {
+      const d = r?.data || {};
+      if (d.show) setUrgency({ slots_remaining: Number(d.slots_remaining) || 1 });
     }).catch(() => {});
   }, []);
 
@@ -498,6 +507,12 @@ export default function ChatWidget() {
                   <div className="text-[11px] text-[#64748B] mt-0.5">
                     Your code <span className="mono font-bold text-[#0B3B5C]">{promo.code}</span> is still saved — just start a booking and it'll auto-apply.
                   </div>
+                  {urgency && (
+                    <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#E86A3C]" data-testid="chat-urgency-nudge">
+                      <Flame className="w-3 h-3" />
+                      Only {urgency.slots_remaining} of 5 slots left today
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -519,6 +534,12 @@ export default function ChatWidget() {
                   ? `Welcome back! Use this code at checkout for ${promo.discount_pct}% off your next booking.`
                   : "Welcome back — here's a little something. Use this code at checkout.")}
               </div>
+              {urgency && (
+                <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-[#FEF2E8] border border-[#E86A3C]/30 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-[#E86A3C]" data-testid="chat-urgency-card">
+                  <Flame className="w-3 h-3" />
+                  Only {urgency.slots_remaining} of 5 slots left today
+                </div>
+              )}
               <button
                 type="button"
                 onClick={copyPromo}

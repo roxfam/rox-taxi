@@ -2155,6 +2155,39 @@ async def _log_promo_redemption(
         pass
 
 
+@api_router.get("/booking/urgency")
+async def booking_urgency():
+    """Public — computes an evening-only "slots left today" whisper for the
+    chat promo card. Returns show=False before 5 PM Nassau time so the
+    urgency line doesn't fire during regular business hours.
+
+    Slot math: 5 same-day slots per driver capacity, minus the count of
+    bookings created today (Nassau clock). Clamped to 1-4 so returning
+    visitors never see "0 left" (creates panic + no-book) or "5 left"
+    (defeats the whole urgency signal).
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        nassau = ZoneInfo("America/Nassau")
+    except Exception:  # noqa: BLE001
+        # zoneinfo missing on very old runtimes → fall back to fixed UTC-5.
+        nassau = timezone(timedelta(hours=-5))
+    now_nassau = datetime.now(nassau)
+    is_evening = now_nassau.hour >= 17
+    if not is_evening:
+        return {"show": False, "slots_remaining": 5, "cutoff_hour": 17}
+    start_of_day = now_nassau.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_iso = start_of_day.astimezone(timezone.utc).isoformat()
+    todays = await db.bookings.count_documents({"created_at": {"$gte": start_iso}})
+    slots_remaining = max(1, min(4, 5 - todays))
+    return {
+        "show": True,
+        "slots_remaining": slots_remaining,
+        "cutoff_hour": 17,
+        "hour": now_nassau.hour,
+    }
+
+
 @api_router.get("/promo/status")
 async def promo_status(request: Request):
     """Public — returns whether the caller has already redeemed ANY promo
