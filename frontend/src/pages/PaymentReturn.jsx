@@ -126,6 +126,16 @@ export function PaymentSuccess() {
             >
               Download PDF
             </a>
+            <a
+              href={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/calendar.ics`}
+              target="_blank" rel="noreferrer"
+              data-testid="payment-success-add-to-calendar"
+              className="inline-flex items-center gap-2 rounded-full border-2 border-[#D4A94A] bg-white text-[#0B3B5C] px-6 py-3 text-sm font-semibold hover:bg-[#FBF7EF] shadow-[0_6px_18px_rgba(212,169,74,0.18)]"
+              title="Adds the pickup (and return leg, if round-trip) to Apple / Google Calendar with driver phone, pickup address, and map link — auto-reminds 30 min before"
+            >
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-br from-[#D4A94A] to-[#b88a2d] text-white text-[10px] font-black">📅</span>
+              Add to Wallet / Calendar
+            </a>
             <button
               onClick={copyShare}
               data-testid="payment-success-share-btn"

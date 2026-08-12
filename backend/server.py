@@ -3493,6 +3493,132 @@ def _build_receipt_pdf(booking: dict) -> bytes:
     return build_receipt_pdf(booking)
 
 
+@api_router.get("/bookings/{booking_id}/calendar.ics")
+async def booking_calendar_ics(booking_id: str):
+    """Generates a universal VCALENDAR (.ics) file for a booking so guests
+    can one-tap-add the trip to Apple Calendar, Google Calendar, Outlook,
+    or any other calendar client. Creates one event for the pickup and — if
+    it's a round-trip taxi with a return_time — a second event for the
+    return leg. The description body includes the confirmation code, the
+    driver's dispatch number, and a Google Maps deep link.
+    Apple Wallet natively surfaces upcoming calendar events on the lock
+    screen, so this doubles as a lightweight wallet pass without needing
+    Apple Developer certs.
+    """
+    from fastapi.responses import Response
+    from urllib.parse import quote_plus
+    booking = await db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+
+    dispatch_phone = (
+        secrets_store.get_secret("ADMIN_SMS_NUMBER")
+        or PHONE_NUMBER
+        or WHATSAPP_NUMBER
+        or "+1 (242) 432-2587"
+    )
+
+    def _fmt(dt: datetime) -> str:
+        """UTC ICS timestamp (YYYYMMDDTHHMMSSZ)."""
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+    def _esc(s: str) -> str:
+        """RFC 5545 escaping — commas, semicolons and newlines all need it."""
+        return (str(s or "")
+                .replace("\\", "\\\\")
+                .replace(";", "\\;")
+                .replace(",", "\\,")
+                .replace("\n", "\\n")
+                .replace("\r", ""))
+
+    try:
+        pickup_dt = _parse_booking_date(booking.get("booking_date", ""))
+        if pickup_dt.tzinfo is None:
+            pickup_dt = pickup_dt.replace(tzinfo=timezone.utc)
+    except Exception:  # noqa: BLE001
+        pickup_dt = datetime.now(timezone.utc)
+    pickup_end = pickup_dt + timedelta(hours=1)
+
+    pickup_location = booking.get("pickup_location") or "Nassau, Bahamas"
+    map_link = f"https://maps.google.com/?q={quote_plus(str(pickup_location))}"
+    now_utc = _fmt(datetime.now(timezone.utc))
+
+    body_lines = (
+        f"Confirmation: {booking['id']}\n"
+        f"Service: {booking.get('item_name','—')}\n"
+        f"Passengers: {booking.get('passengers', 1)}\n"
+        f"Driver dispatch: {dispatch_phone}\n"
+        f"Map: {map_link}\n"
+        f"Track live: https://roxtaxi.com/track?id={booking['id']}"
+    )
+
+    events = [
+        (
+            f"booking-{booking['id']}-pickup@roxtaxi.com",
+            _fmt(pickup_dt),
+            _fmt(pickup_end),
+            f"🚕 Rox Taxi — {booking.get('item_name','Pickup')}",
+            body_lines,
+        )
+    ]
+    # ── Return-leg event (round-trip taxi only) ──────────────────────
+    rt_time = str(booking.get("return_time") or "").strip()
+    if booking.get("round_trip") and rt_time:
+        try:
+            if "T" in rt_time:
+                return_dt = datetime.fromisoformat(rt_time.replace("Z", "+00:00"))
+            else:
+                hh, mm = rt_time.split(":", 1)
+                return_dt = pickup_dt.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
+            if return_dt.tzinfo is None:
+                return_dt = return_dt.replace(tzinfo=timezone.utc)
+            events.append((
+                f"booking-{booking['id']}-return@roxtaxi.com",
+                _fmt(return_dt),
+                _fmt(return_dt + timedelta(hours=1)),
+                f"🚕 Rox Taxi — Return leg ({booking.get('item_name','')})",
+                f"Return pickup at {pickup_location}.\n{body_lines}",
+            ))
+        except Exception:  # noqa: BLE001
+            pass
+
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Rox Taxi//Bookings//EN",
+        "METHOD:PUBLISH",
+        "CALSCALE:GREGORIAN",
+    ]
+    for uid, dtstart, dtend, summary, description in events:
+        lines += [
+            "BEGIN:VEVENT",
+            f"UID:{uid}",
+            f"DTSTAMP:{now_utc}",
+            f"DTSTART:{dtstart}",
+            f"DTEND:{dtend}",
+            f"SUMMARY:{_esc(summary)}",
+            f"LOCATION:{_esc(pickup_location)}",
+            f"DESCRIPTION:{_esc(description)}",
+            "BEGIN:VALARM",
+            "ACTION:DISPLAY",
+            "TRIGGER:-PT30M",
+            f"DESCRIPTION:{_esc('Rox Taxi in 30 minutes — ' + booking['id'])}",
+            "END:VALARM",
+            "END:VEVENT",
+        ]
+    lines.append("END:VCALENDAR")
+    ics_body = "\r\n".join(lines) + "\r\n"
+
+    filename = f"Rox-Booking-{booking['id']}.ics"
+    return Response(
+        content=ics_body,
+        media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @api_router.get("/bookings/{booking_id}/receipt.pdf")
 async def booking_receipt_pdf(booking_id: str):
     from fastapi.responses import Response

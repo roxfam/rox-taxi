@@ -12,6 +12,13 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12i — Add to Wallet / Calendar (.ics) on Booking Confirmation
+- New `GET /api/bookings/{id}/calendar.ics` returns a valid VCALENDAR file with the pickup event and — for round-trip taxis with a `return_time` — a second event for the return leg. Each event carries the confirmation code, driver dispatch number, pickup address, Google Maps deep link, and a 30-min VALARM.
+- Added "📅 Add to Wallet / Calendar" button to:
+  - `PaymentReturn.jsx` (post-payment success page — gold-bordered next to "Copy payment link")
+  - `BookingFlow.jsx` Zelle confirmation step
+- iOS surfaces upcoming calendar events natively on the lock screen and in the Wallet-adjacent event chip, so this doubles as a lightweight wallet pass without any Apple Developer credentials.
+
 ### Feb 12h — Google Maps Deep Link in Guest Return-Leg SMS
 - Guest return-leg SMS now includes a one-tap `https://maps.google.com/?q={pickup}` deep link — opens the pickup address in Maps on iOS/Android/desktop (falls back to web when the native app isn't installed).
 - If the URL encoder ever fails at runtime, the SMS silently drops the map line rather than breaking the send.

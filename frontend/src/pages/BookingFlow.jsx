@@ -783,7 +783,15 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 </p>
               </div>
 
-              <div className="mt-6 flex gap-3 justify-end">
+              <div className="mt-6 flex gap-3 justify-end flex-wrap">
+                <a
+                  href={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/calendar.ics`}
+                  target="_blank" rel="noreferrer"
+                  data-testid="zelle-add-to-calendar"
+                  className="inline-flex items-center gap-2 rounded-full border-2 border-[#D4A94A] bg-white text-[#0B3B5C] px-5 py-2.5 text-sm font-semibold hover:bg-[#FBF7EF]"
+                >
+                  📅 Add to Wallet / Calendar
+                </a>
                 <button onClick={onClose} className="rounded-full border border-[#E2E8F0] px-5 py-2.5 text-sm" data-testid="zelle-close-btn">Close</button>
                 <button
                   onClick={() => nav(`/track?id=${booking.id}`)}
