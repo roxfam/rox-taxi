@@ -5,26 +5,23 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
-### Feb 11 — Real Google Reviews (Admin Paste) + Fraud Freeze Button
-**Reviews:**
-- New `reviews` MongoDB collection + admin CRUD in `admin.py`:
-  - `GET/POST/PUT/DELETE /api/admin/reviews` with `ReviewIn` model (author_name, rating 1-5, text, relative_time, profile_photo_url, author_url, active).
-  - Public `/api/reviews` now reads from DB and **computes rating + total from actual pasted reviews** (no more inflated 4.9/187 seed data).
-  - Empty state returns `{rating: 0, total: 0, reviews: []}` — the frontend's `GoogleReviews.jsx` already hides the section when data is empty (`if (!data) return null`).
-- New `<ReviewsPanel />` admin component with paste form (5-star selector, textarea, author URL, relative-time chip), live avg-rating stat, deep link to Google Business dashboard.
-- New "Reviews" tab wired into `AdminManage.jsx` between Promotions and Images.
-- Auto-generates a colored initial avatar (`ui-avatars.com`) when profile photo is blank so the homepage card never breaks.
+### Feb 12 — Warm-Lead Signal on Chat Widget
+- Client-side session counter (`localStorage.rox_visit_count`, bumped once per browser tab via `sessionStorage` guard) — no backend calls, works offline.
+- Threshold: **3rd+ session** flips the visitor into "warm lead" mode.
+- **Greeting swap** — first message becomes: *"Back again? Ask us anything — returning visitors get priority booking help — I'm Roxi 🌊, and I can pull up live prices…"* (vs generic on first visit).
+- **Gentle 3-second amber glow** on the FAB the FIRST page load per session (guarded by `sessionStorage.rox_warm_glow_played` so navigating around doesn't retrigger).
+- Injected via a scoped `@keyframes rox-warm-glow` stylesheet — fade-in at 15%, hold at 55%, fade-out to 0 by 100%.
+- Accessibility: FAB `aria-label` and `title` swap to "Welcome back — chat with us" for returning visitors; hidden `data-warm-lead` + `data-visit-count` attrs for analytics/testing.
+- Verified: 3rd+ visit → glow visible mid-animation + warm greeting · glow disappears after 3s · 1st visit → no glow + standard greeting.
 
-**Country Freeze:**
-- New `country_freezes` Mongo collection with `frozen_until` ISO timestamp.
-- New endpoints: `POST /api/admin/country-freeze` (freeze N hours or hours=0 to unfreeze) + `GET /api/admin/country-freezes` (list active).
-- Signup burst alert card now shows a **red "FROZEN" badge + green "Unfreeze"** or blue "Freeze 24h" button on each country row.
-- `POST /auth/register` checks `country_freezes` before creating an account and returns **HTTP 403** if the signup IP resolves to a frozen country ("Signups from your region are temporarily unavailable").
-- `signup-countries` analytics endpoint now overlays `frozen_until` + `freeze_reason` on each country row.
+### Feb 11 — Real Google Reviews (Admin Paste) + Fraud Freeze Button
+- Reviews collection + admin CRUD + paste UI (new "Reviews" tab in Manage catalog).
+- Public `/reviews` reads from DB (seed cleared; rating/total computed from real pasted rows).
+- Country freeze — one-click "Freeze 24h" / "Unfreeze" per country on Fraud Watch card; `/auth/register` returns 403 for frozen countries.
 
 ### Feb 10 — Signup Burst Alert + Fraud Watch Map + SEO Ranking Boost
-- Burst alert on >3 signups per country per hour (1-alert-per-country-per-hour cooldown).
-- Interactive world map + ranked table on Admin Dashboard.
+- Burst alert (>3 signups/country/hour, 1-hour cooldown).
+- Interactive world map + ranked table.
 - Dynamic sitemap, IndexNow push, verification meta tag fields, rich JSON-LD, improved robots.txt.
 
 ### Feb 7 — Turnstile CAPTCHA + First-Country Signup Alert + Rate Limit Failed Logins
@@ -40,13 +37,14 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - **Apple Login** — waiting on user's $99/yr Apple Developer account.
 
 ### P1
+- **Google Reviews auto-sync** — user will paste API key + Place ID when ready. Infrastructure not built yet (paused).
+- **Fraud Watch additions** — user asked about this but hasn't picked a subset yet (menu was: booking fraud detection · IP watchlist · email domain blocklist · card-testing detector · chargeback risk score · auto-freeze escalation · dedicated Fraud Watch tab).
 - **Refresh remaining hero slides** (Atlantis, Rose Island, Junkanoo).
-- **User Action**: Paste real Google Business reviews in Admin → Manage catalog → **Reviews** tab.
-- **User Action**: Paste Google / Bing / Yandex verification codes in Admin → Site Config → Search engine verification.
-- **User Action**: Submit `https://roxtaxi.com/api/sitemap.xml` in Google Search Console + Bing Webmaster.
+- **User Action**: Paste real Google reviews in Admin → Reviews tab.
+- **User Action**: Paste Google / Bing / Yandex verification codes in Admin → Site Config.
+- **User Action**: Submit sitemap in Google Search Console + Bing Webmaster.
 
 ### P2
-- Google Places API auto-sync (deferred — user picked manual paste route first).
 - Referral-card test locator.
 - Pin Undo Toast finalization.
 - Modularize `server.py` (>3900 lines).

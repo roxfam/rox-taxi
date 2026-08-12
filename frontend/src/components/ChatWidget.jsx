@@ -28,10 +28,43 @@ function getSessionId() {
   return s;
 }
 
+/**
+ * Warm-lead session counter — bumps ONCE per browser tab session (guarded
+ * by sessionStorage). Returns the visitor's lifetime count. 3+ signals a
+ * proven returning visitor at their peak intent moment; the chat widget
+ * uses it to trigger a subtle amber glow and a warmer greeting.
+ */
+function getVisitCount() {
+  if (typeof window === "undefined") return 1;
+  try {
+    if (sessionStorage.getItem("rox_visit_counted") !== "1") {
+      const prev = parseInt(localStorage.getItem("rox_visit_count") || "0", 10) || 0;
+      const next = prev + 1;
+      localStorage.setItem("rox_visit_count", String(next));
+      sessionStorage.setItem("rox_visit_counted", "1");
+      return next;
+    }
+    return parseInt(localStorage.getItem("rox_visit_count") || "1", 10) || 1;
+  } catch {
+    return 1;
+  }
+}
+
+const WARM_LEAD_THRESHOLD = 3;
+const WARM_LEAD_COPY = "Back again? Ask us anything — returning visitors get priority booking help";
+
 export default function ChatWidget() {
+  const visitCount = useRef(getVisitCount()).current;
+  const isWarmLead = visitCount >= WARM_LEAD_THRESHOLD;
+
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: "assistant", text: "Hey! I'm Roxi 🌊 — ask me anything about taxis, tours or car rentals in the Bahamas. If you'd rather talk to a real human, just tap 'Continue on WhatsApp' below." },
+    {
+      role: "assistant",
+      text: isWarmLead
+        ? `${WARM_LEAD_COPY} — I'm Roxi 🌊, and I can pull up live prices, book you in, or hand you off to a real driver on WhatsApp any time.`
+        : "Hey! I'm Roxi 🌊 — ask me anything about taxis, tours or car rentals in the Bahamas. If you'd rather talk to a real human, just tap 'Continue on WhatsApp' below.",
+    },
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,6 +72,9 @@ export default function ChatWidget() {
   const [waUrl, setWaUrl] = useState("");
   const [hovered, setHovered] = useState(false);
   const [nudged, setNudged] = useState(false);  // auto-invite bubble ~5s after page load
+  // Gentle amber glow on the FAB when a returning visitor lands — plays once
+  // per session for 3 seconds so it catches the eye without being naggy.
+  const [warmGlow, setWarmGlow] = useState(false);
   const [tipIndex, setTipIndex] = useState(() => Math.floor(Math.random() * HOVER_TIPS.length));
   const scrollRef = useRef(null);
   const sessionId = useRef(getSessionId()).current;
@@ -76,6 +112,22 @@ export default function ChatWidget() {
   useEffect(() => {
     if (hovered) setTipIndex((i) => (i + 1) % HOVER_TIPS.length);
   }, [hovered]);
+
+  // Warm-lead pulse — trigger a 3-second amber glow on the FAB the FIRST
+  // time a returning visitor (3rd+ session) lands. Once per session so we
+  // don't hammer them if they navigate between pages. React StrictMode
+  // double-mounts in dev; we always arm the cleanup timer so state ends up
+  // false regardless of whether this mount was the one that first fired.
+  useEffect(() => {
+    if (!isWarmLead || typeof window === "undefined") return;
+    const alreadyPlayed = sessionStorage.getItem("rox_warm_glow_played") === "1";
+    if (!alreadyPlayed) {
+      setWarmGlow(true);
+      sessionStorage.setItem("rox_warm_glow_played", "1");
+    }
+    const t = setTimeout(() => setWarmGlow(false), 3000);
+    return () => clearTimeout(t);
+  }, [isWarmLead]);
 
   const handoffContext = () => {
     // Compose a short prefill referencing the visitor's latest question(s) so the
@@ -235,17 +287,33 @@ export default function ChatWidget() {
         </div>
 
         <button
-          onClick={() => { setOpen((v) => !v); setUnread(false); setNudged(false); }}
+          onClick={() => { setOpen((v) => !v); setUnread(false); setNudged(false); setWarmGlow(false); }}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           onFocus={() => setHovered(true)}
           onBlur={() => setHovered(false)}
           data-testid="chat-fab"
-          aria-label="Chat with us"
-          title="Chat with us"
+          data-warm-lead={isWarmLead ? "true" : "false"}
+          data-visit-count={visitCount}
+          aria-label={isWarmLead ? "Chat with us — welcome back" : "Chat with us"}
+          title={isWarmLead ? "Welcome back — chat with us" : "Chat with us"}
           className="group relative"
         >
           <span className={`absolute inset-0 rounded-full bg-[#D4A94A]/40 ${(unread || nudged) && !open ? "animate-ping" : ""}`} />
+          {/* Warm-lead amber glow — soft outer halo that fades in/out over
+              3 seconds when a 3rd+ visit visitor lands. Separate layer from
+              the ping ring so effects don't stack. */}
+          {warmGlow && !open && (
+            <span
+              data-testid="chat-fab-warm-glow"
+              aria-hidden
+              className="absolute -inset-2 rounded-full pointer-events-none"
+              style={{
+                background: "radial-gradient(circle, rgba(212,169,74,0.55) 0%, rgba(212,169,74,0) 70%)",
+                animation: "rox-warm-glow 3s ease-out forwards",
+              }}
+            />
+          )}
           <span className="relative w-16 h-16 rounded-full bg-gradient-to-br from-[#0B192C] via-[#0B3B5C] to-[#0B192C] ring-2 ring-[#D4A94A]/60 group-hover:ring-[#D4A94A] group-hover:scale-105 active:scale-95 transition-all duration-200 shadow-[0_16px_40px_rgba(11,25,44,0.55)] flex items-center justify-center overflow-hidden">
             {open ? (
               <X className="w-6 h-6 text-white" />
@@ -382,4 +450,21 @@ function Dot({ d = 0 }) {
       style={{ animationDelay: `${d}s` }}
     />
   );
+}
+
+// Global keyframes for the warm-lead amber glow. Injected once on module
+// load so the CSS lives next to the component instead of leaking into a
+// shared stylesheet. `forwards` lets us fade out cleanly on the last frame.
+if (typeof document !== "undefined" && !document.getElementById("rox-warm-glow-style")) {
+  const s = document.createElement("style");
+  s.id = "rox-warm-glow-style";
+  s.textContent = `
+    @keyframes rox-warm-glow {
+      0%   { opacity: 0;    transform: scale(0.9); }
+      15%  { opacity: 0.85; transform: scale(1.05); }
+      55%  { opacity: 0.75; transform: scale(1.08); }
+      100% { opacity: 0;    transform: scale(1.15); }
+    }
+  `;
+  document.head.appendChild(s);
 }
