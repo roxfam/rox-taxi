@@ -12,6 +12,11 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12h — Google Maps Deep Link in Guest Return-Leg SMS
+- Guest return-leg SMS now includes a one-tap `https://maps.google.com/?q={pickup}` deep link — opens the pickup address in Maps on iOS/Android/desktop (falls back to web when the native app isn't installed).
+- If the URL encoder ever fails at runtime, the SMS silently drops the map line rather than breaking the send.
+- Verified via unit test: SMS body includes `Map the pickup: https://maps.google.com/?q=Junkanoo+Beach%2C+Nassau` for a Junkanoo Beach pickup.
+
 ### Feb 12g — Guest Return-Leg Heads-Up SMS
 - Extended `send_return_leg_nudge()` to also SMS the guest at the same 30-min-before moment: "Hi {first_name}! Your Rox driver is heading back for you 🌊 — arriving in 30 min at {pickup} for the {return_time} pickup. Time to grab your towels! Booking #{id}."
 - Respects the site-wide `notify_sms_enabled` admin toggle — falls back gracefully with a clear `error` reason on the report.

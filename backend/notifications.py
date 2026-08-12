@@ -493,12 +493,22 @@ def send_return_leg_nudge(booking: dict, driver_number: Optional[str] = None, pr
     if sms_enabled and guest_phone:
         pickup = booking.get("pickup_location") or "the pickup spot"
         first_name = (booking.get("customer_name") or "").split(" ")[0] or "there"
+        # Google Maps universal deep-link — one tap on iOS/Android/desktop
+        # opens the pickup address in Maps. Uses the /?q= form because it
+        # works even when Maps.app isn't installed (falls back to web).
+        try:
+            from urllib.parse import quote_plus as _qp
+            maps_link = f"https://maps.google.com/?q={_qp(str(pickup))}"
+        except Exception:  # noqa: BLE001
+            maps_link = ""
         guest_sms = (
             f"Hi {first_name}! Your Rox driver is heading back for you 🌊 — "
             f"arriving in 30 min at {pickup} for the {return_time} pickup. "
-            f"Time to grab your towels! Booking #{booking['id']}. "
-            f"Reply here or WhatsApp us: wa.me/12424322587"
+            f"Time to grab your towels! Booking #{booking['id']}."
         )
+        if maps_link:
+            guest_sms += f"\nMap the pickup: {maps_link}"
+        guest_sms += "\nWhatsApp us: wa.me/12424322587"
         report["guest_sms"].update(send_sms(guest_phone, guest_sms))
     else:
         report["guest_sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
