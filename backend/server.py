@@ -20,7 +20,7 @@ from emergentintegrations.payments.stripe.checkout import (
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 from fastapi.responses import StreamingResponse, HTMLResponse
-from notifications import notify_booking_confirmed, notify_booking_received, notify_owner_booking_created, send_booking_reminder, send_rental_return_reminder, send_photo_share_nudge
+from notifications import notify_booking_confirmed, notify_booking_received, notify_owner_booking_created, send_booking_reminder, send_rental_return_reminder, send_photo_share_nudge, send_return_leg_nudge
 from facebook import post_gallery_photo_to_facebook, facebook_status
 import paypal_client
 from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS, HOME_SLIDES_SEED
@@ -1023,6 +1023,56 @@ async def _run_reminder_tick() -> int:
             log.info("rental return reminder sent for %s (return=%s)", b["id"], return_dt.date())
         except Exception as e:  # noqa: BLE001
             log.warning("return reminder send fail for %s: %s", b.get("id"), e)
+
+    # ── Round-trip return-leg driver nudge — fire 30 min before pickup ──
+    # For any taxi booking with round_trip=True AND a return_time set, we
+    # SMS the driver ~30 min before the return pickup so no swing-back is
+    # ever missed. Idempotent via `return_leg_nudge_sent_at`. Guest is
+    # intentionally NOT re-pinged — this is a driver-only whisper.
+    if driver_number:
+        rt_lower = now
+        rt_upper = now + timedelta(minutes=30)
+        cur_rt = db.bookings.find({
+            "service_type": "taxi",
+            "round_trip": True,
+            "return_time": {"$exists": True, "$ne": ""},
+            "status": {"$nin": ["cancelled", "completed"]},
+            "return_leg_nudge_sent_at": {"$exists": False},
+        })
+        async for b in cur_rt:
+            try:
+                # Combine booking_date's calendar date with the return_time
+                # (HH:MM). Fallback to skipping if either parses badly.
+                base_dt = _parse_booking_date(b.get("booking_date", ""))
+                if base_dt.tzinfo is None:
+                    base_dt = base_dt.replace(tzinfo=timezone.utc)
+                rt_str = str(b.get("return_time") or "").strip()
+                # Accept HH:MM or a full ISO datetime string
+                if "T" in rt_str:
+                    return_dt_full = datetime.fromisoformat(rt_str.replace("Z", "+00:00"))
+                    if return_dt_full.tzinfo is None:
+                        return_dt_full = return_dt_full.replace(tzinfo=timezone.utc)
+                else:
+                    hh, mm = rt_str.split(":", 1)
+                    return_dt_full = base_dt.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
+            except Exception:  # noqa: BLE001
+                continue
+            # Fire when the return pickup is within [now, now+30m].
+            if not (rt_lower <= return_dt_full <= rt_upper):
+                continue
+            try:
+                report = send_return_leg_nudge(b, driver_number=driver_number)
+                await db.bookings.update_one(
+                    {"id": b["id"]},
+                    {"$set": {
+                        "return_leg_nudge_sent_at": now.isoformat(),
+                        "return_leg_nudge_result": report,
+                    }},
+                )
+                sent += 1
+                log.info("return-leg driver nudge sent for %s (return_time=%s)", b["id"], rt_str)
+            except Exception as e:  # noqa: BLE001
+                log.warning("return-leg nudge send fail for %s: %s", b.get("id"), e)
 
     # ── Post-trip photo-share nudge — A/B split on send window ────────────
     # Variant A ("24h" / control): fire 22-48h after trip's pickup time.

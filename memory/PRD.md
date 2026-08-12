@@ -12,6 +12,12 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12f — Driver Return-Leg SMS Nudge (30-min-before)
+- New `send_return_leg_nudge()` in `notifications.py` — driver-only SMS (no guest ping) that says "⏰ RETURN LEG in 30 min · Booking {id} · Return pickup: {return_time} today · Guest: {name/phone} · Was: {dropoff} → back to {pickup} · Pax: {n}".
+- Background reminder loop in `server.py` now scans for taxi bookings with `round_trip=True + return_time`, not cancelled/completed, no `return_leg_nudge_sent_at`. When the return timestamp (booking_date's calendar day + return_time) falls in [now, now+30m], the driver SMS fires and the doc is stamped.
+- Uses the same 10-min interval + ADMIN_SMS_NUMBER as the existing day-of reminder loop — no new cron needed.
+- Verified end-to-end: seeded a booking with return_time 15 min out → tick sent the driver SMS + stamped `return_leg_nudge_sent_at`.
+
 ### Feb 12e — Round-Trip Return-Time Picker
 - New `return_time` field on `BookingCreate` model (backend) — stored on the booking doc when `round_trip=True` so drivers know exactly when to swing back for pickup.
 - Frontend `Taxi.jsx`: right below the round-trip toggle, a gold-bordered "RETURN PICKUP TIME" card appears (fade-in animation) with a native `<input type="time">` picker + explainer copy ("we'll radio the driver so they swing back on the dot. Leave blank if flexible.").
