@@ -3590,6 +3590,14 @@ async def booking_calendar_ics(booking_id: str):
         "PRODID:-//Rox Taxi//Bookings//EN",
         "METHOD:PUBLISH",
         "CALSCALE:GREGORIAN",
+        # ── Brand-colour tags ───────────────────────────────────────────
+        # Apple Calendar reads X-APPLE-CALENDAR-COLOR at the VCALENDAR
+        # level; individual events also carry COLOR + CATEGORIES so the
+        # month view shows a gold Rox tag among the guest's other plans.
+        # Non-supporting clients (Outlook web, some Android) safely
+        # ignore these X- extensions.
+        "X-APPLE-CALENDAR-COLOR:#D4A94A",
+        "X-WR-CALNAME:Rox Taxi Bookings",
     ]
     for uid, dtstart, dtend, summary, description in events:
         lines += [
@@ -3601,6 +3609,9 @@ async def booking_calendar_ics(booking_id: str):
             f"SUMMARY:{_esc(summary)}",
             f"LOCATION:{_esc(pickup_location)}",
             f"DESCRIPTION:{_esc(description)}",
+            # Event-level colour + category for Apple Calendar month-view.
+            "COLOR:#D4A94A",
+            "CATEGORIES:Rox Taxi",
             "BEGIN:VALARM",
             "ACTION:DISPLAY",
             "TRIGGER:-PT30M",

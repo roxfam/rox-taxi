@@ -12,6 +12,11 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12j — Gold Rox Colour Badge on Calendar Events
+- Added `X-APPLE-CALENDAR-COLOR:#D4A94A` + `X-WR-CALNAME:Rox Taxi Bookings` at the VCALENDAR level, plus `COLOR:#D4A94A` + `CATEGORIES:Rox Taxi` on every event.
+- In Apple Calendar month view the pickup/return events now render with a gold dot instead of the default blue — instantly recognisable among the guest's other plans. Non-supporting clients (Outlook web, some Android) ignore the X- extensions gracefully.
+- Verified: ICS output contains all 4 colour/category lines with the correct hex.
+
 ### Feb 12i — Add to Wallet / Calendar (.ics) on Booking Confirmation
 - New `GET /api/bookings/{id}/calendar.ics` returns a valid VCALENDAR file with the pickup event and — for round-trip taxis with a `return_time` — a second event for the return leg. Each event carries the confirmation code, driver dispatch number, pickup address, Google Maps deep link, and a 30-min VALARM.
 - Added "📅 Add to Wallet / Calendar" button to:
