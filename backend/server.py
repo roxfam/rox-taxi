@@ -3651,6 +3651,16 @@ async def booking_driver_checkin(booking_id: str, req: DriverCheckinRequest):
                         or ""
                     ).strip()
                     tel_line = f"\nCall driver: tel:{driver_phone}" if driver_phone else ""
+                    # Magic focus link — opens Admin scrolled to this booking
+                    # row so the owner can reassign in one motion. The Admin
+                    # route already requires a login wall, so the ?focus param
+                    # doesn't need its own HMAC.
+                    base = (
+                        secrets_store.get_secret("PUBLIC_SITE_URL", "")
+                        or os.environ.get("PUBLIC_SITE_URL", "")
+                        or "https://roxtaxi.com"
+                    ).rstrip("/")
+                    focus_link = f"{base}/admin?focus={b['id']}"
                     from notifications import send_sms as _send_sms
                     _send_sms(
                         admin_sms,
@@ -3660,7 +3670,7 @@ async def booking_driver_checkin(booking_id: str, req: DriverCheckinRequest):
                             f"Booked pickup: {(b.get('pickup_location','—') or '—')[:60]}\n"
                             f"Driver checked in {round(d_m/1000, 1)} km away."
                             f"{tel_line}\n"
-                            f"Audit: roxtaxi.com/admin (Pickup GPS card)"
+                            f"Reassign: {focus_link}"
                         ),
                     )
                     await db.bookings.update_one(

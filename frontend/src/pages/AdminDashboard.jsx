@@ -75,6 +75,28 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Magic-link focus — when the owner taps the "Reassign" link in a
+  // driver-GPS-mismatch alert SMS, we land here with `?focus=BOOKING_ID`.
+  // Once bookings have finished loading, scroll the matching row into view
+  // and flash an amber highlight ring so it's obvious which one to act on.
+  useEffect(() => {
+    if (loading || !bookings.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const focusId = (params.get("focus") || "").toUpperCase();
+    if (!focusId) return;
+    const el = document.querySelector(`[data-testid="admin-row-${focusId}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.style.transition = "background-color 400ms ease, box-shadow 400ms ease";
+    el.style.backgroundColor = "#FEF9E7";
+    el.style.boxShadow = "inset 0 0 0 2px #D4A94A";
+    const t = setTimeout(() => {
+      el.style.backgroundColor = "";
+      el.style.boxShadow = "";
+    }, 3600);
+    return () => clearTimeout(t);
+  }, [loading, bookings]);
+
   const changeStatus = async (id, status) => {
     try {
       await api.patch(`/admin/bookings/${id}/status`, { status });

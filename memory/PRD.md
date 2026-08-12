@@ -12,6 +12,11 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12p — Reassign Magic-Link in Owner GPS Alert SMS
+- The alert SMS body now ends with `Reassign: {PUBLIC_URL}/admin?focus={booking_id}` — a one-tap link that opens the Admin dashboard already scrolled to the mismatched booking row with a 3.6-second amber highlight so the owner can reassign in one motion.
+- `AdminDashboard.jsx` now reads `?focus=BOOKING_ID` on mount, waits for bookings to finish loading, then `scrollIntoView` + flashes the row via inline `backgroundColor` + `boxShadow` (auto-clears after 3.6s).
+- Admin auth-wall already protects the route, so the focus param doesn't need its own HMAC.
+
 ### Feb 12o — Tel: Link in Owner GPS Mismatch Alert SMS
 - The >2km driver GPS mismatch alert SMS now includes a one-tap `tel:{driver_phone}` line. On iOS/Android the number renders as a big blue call button — owner can dial the driver instantly from the notification without hunting through contacts.
 - Driver phone resolution: `DRIVER_PHONE` secret first (new, roster-specific), falls back to `ADMIN_SMS_NUMBER` so this works today even before a separate driver secret is set.
