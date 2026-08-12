@@ -6,6 +6,7 @@ import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, Shield
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart, Cell } from "recharts";
 import SignupCountriesCard from "./admin/SignupCountriesCard";
 import WarmLeadCard from "./admin/WarmLeadCard";
+import PickupAuditCard from "./admin/PickupAuditCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -207,6 +208,12 @@ export default function AdminDashboard() {
             visit visitors vs first-timers. Confirms the amber-glow nudge
             is actually converting the intent it's designed to capture. */}
         <WarmLeadCard />
+
+        {/* Driver check-in GPS audit — every QR scan-and-confirm stamps
+            a lat/lng on the booking. This card compares those to the
+            booked pickup anchor and red-flags check-ins that landed
+            >500m away from where the trip was supposed to start. */}
+        <PickupAuditCard />
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">

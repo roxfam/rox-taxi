@@ -1328,6 +1328,103 @@ async def chat_track_promo_copy(req: PromoCopyEvent, request: Request):
     return {"tracked": True}
 
 
+@router.get("/admin/analytics/pickup-audit")
+async def admin_pickup_audit(_: str = Depends(_admin_dep)):
+    """Driver check-in GPS audit — for every booking with `driver_pickup_lat/lng`
+    stamped, computes the great-circle distance to the closest known Nassau
+    anchor keyword-matched from the booked `pickup_location`. Any check-in
+    that lands >500m away is flagged for admin review.
+
+    Keeps the audit self-contained (no external Google Places lookups) via a
+    small anchor table. Bookings whose pickup text doesn't match any anchor
+    fall back to the general Nassau centroid as a coarse sanity check.
+    """
+    import math
+    from datetime import datetime, timezone, timedelta
+
+    # Common Nassau meeting spots we ship taxis to/from. Coordinates are
+    # rough but well within the 500m tolerance for their surrounding area.
+    ANCHORS = [
+        ("cruise", 25.0785, -77.3395, "Cruise Port / Prince George Wharf"),
+        ("prince george", 25.0785, -77.3395, "Cruise Port / Prince George Wharf"),
+        ("downtown", 25.0785, -77.3400, "Downtown Nassau"),
+        ("bay street", 25.0782, -77.3396, "Bay Street"),
+        ("lpia", 25.0393, -77.4661, "LPIA Airport"),
+        ("airport", 25.0393, -77.4661, "LPIA Airport"),
+        ("cable beach", 25.0808, -77.4059, "Cable Beach"),
+        ("baha mar", 25.0782, -77.4126, "Baha Mar"),
+        ("atlantis", 25.0834, -77.3199, "Atlantis Paradise Island"),
+        ("paradise island", 25.0850, -77.3200, "Paradise Island"),
+        ("junkanoo", 25.0824, -77.3435, "Junkanoo Beach"),
+        ("love beach", 25.0770, -77.4650, "Love Beach"),
+        ("arawak", 25.0778, -77.3625, "Arawak Cay / Fish Fry"),
+        ("fish fry", 25.0778, -77.3625, "Arawak Cay / Fish Fry"),
+        ("lyford", 25.0180, -77.5195, "Lyford Cay"),
+    ]
+    NASSAU_CENTROID = (25.0602, -77.3450, "Nassau (approx.)")
+    FLAG_METERS = 500
+
+    def _haversine_m(a_lat, a_lng, b_lat, b_lng):
+        R = 6371000.0
+        p1 = math.radians(a_lat); p2 = math.radians(b_lat)
+        dp = math.radians(b_lat - a_lat); dl = math.radians(b_lng - a_lng)
+        x = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+        return R * 2 * math.asin(min(1.0, math.sqrt(x)))
+
+    def _anchor_for(pickup_text: str):
+        s = (pickup_text or "").lower()
+        for kw, lat, lng, label in ANCHORS:
+            if kw in s:
+                return lat, lng, label
+        return NASSAU_CENTROID
+
+    since = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+    cur = _db.bookings.find({
+        "driver_pickup_lat": {"$exists": True, "$ne": None},
+        "driver_pickup_lng": {"$exists": True, "$ne": None},
+        "driver_checked_in_at": {"$gte": since},
+    }, {
+        "id": 1, "customer_name": 1, "pickup_location": 1,
+        "driver_pickup_lat": 1, "driver_pickup_lng": 1,
+        "driver_pickup_accuracy_m": 1, "driver_checked_in_at": 1,
+        "driver_confirmed_pickup_location": 1, "item_name": 1,
+    }).sort("driver_checked_in_at", -1).limit(200)
+
+    rows = []
+    flagged = 0
+    async for b in cur:
+        pickup_text = b.get("driver_confirmed_pickup_location") or b.get("pickup_location") or ""
+        exp_lat, exp_lng, exp_label = _anchor_for(pickup_text)
+        d_m = _haversine_m(exp_lat, exp_lng, float(b["driver_pickup_lat"]), float(b["driver_pickup_lng"]))
+        is_flagged = d_m > FLAG_METERS
+        if is_flagged:
+            flagged += 1
+        rows.append({
+            "booking_id": b.get("id"),
+            "customer_name": b.get("customer_name", ""),
+            "item_name": b.get("item_name", ""),
+            "pickup_location": pickup_text,
+            "expected_anchor_label": exp_label,
+            "expected_lat": exp_lat,
+            "expected_lng": exp_lng,
+            "driver_lat": float(b["driver_pickup_lat"]),
+            "driver_lng": float(b["driver_pickup_lng"]),
+            "accuracy_m": b.get("driver_pickup_accuracy_m"),
+            "distance_m": round(d_m, 1),
+            "distance_km": round(d_m / 1000, 2),
+            "flagged": is_flagged,
+            "at": b.get("driver_checked_in_at"),
+        })
+
+    return {
+        "window_days": 60,
+        "flag_threshold_m": FLAG_METERS,
+        "total": len(rows),
+        "flagged": flagged,
+        "rows": rows,
+    }
+
+
 @router.get("/admin/analytics/warm-lead")
 async def admin_warm_lead_stats(_: str = Depends(_admin_dep)):
     """Aggregate warm-lead engagement — visitors who opened the chat on

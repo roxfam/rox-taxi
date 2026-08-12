@@ -12,6 +12,11 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12m — Admin Driver Pickup GPS Audit
+- New `GET /api/admin/analytics/pickup-audit` — 60-day window of every driver-scan check-in with `driver_pickup_lat/lng`. Uses haversine distance against a small keyword-matched anchor table (LPIA, Cruise Port, Cable Beach, Atlantis, Baha Mar, Junkanoo, Love Beach, Arawak Cay, Lyford Cay). Any ping >500m from the closest anchor is flagged.
+- New Admin `PickupAuditCard` — clean vs flagged count pills at top, then a table with booking id, booked pickup, anchor, distance badge (green ≤500m, orange >500m), accuracy_m, and check-in timestamp. Flagged rows use the coral background so they jump out.
+- Rendered on the Admin dashboard right below the WarmLeadCard.
+
 ### Feb 12l — Mobile Nav Category Dropdowns + EasyDrive Direct-Booking Banner + Driver GPS Stamp on Check-in
 - **Mobile nav dropdowns**: Taxi / Tours / Car Rentals rows in the mobile drawer now have a chevron toggle that reveals a sub-menu (Airport transfers · Beach runs · Blue Lagoon · Compact · Luxury · EasyDrive direct · etc). Tapping the label still routes to the section landing page; only the chevron opens the panel. Desktop nav is untouched.
 - **EasyDrive banner** on `/rentals` — gold-bordered card between the sort bar and fleet grid: "Prefer booking direct? Reserve on **easydrivecarrental.com** — prices match, no markup" with an external CTA (`easydrive-external-btn`).
