@@ -3493,6 +3493,136 @@ def _build_receipt_pdf(booking: dict) -> bytes:
     return build_receipt_pdf(booking)
 
 
+@api_router.get("/bookings/{booking_id}/qr.png")
+async def booking_qr_png(booking_id: str):
+    """Returns a PNG QR code that encodes the driver check-in URL for this
+    booking. Guest displays it on their phone → driver scans with their
+    camera → phone opens `/driver/scan?b=ID&t=TOKEN` → driver taps confirm.
+    Token is HMAC-signed with JWT_SECRET so IDs can't be brute-forced."""
+    from fastapi.responses import Response
+    import qrcode
+    from io import BytesIO
+    booking = await db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    token = _booking_qr_token(booking["id"])
+    base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
+    scan_url = f"{base}/driver/scan?b={booking['id']}&t={token}"
+    img = qrcode.make(scan_url, box_size=10, border=2)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return Response(
+        content=buf.getvalue(),
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=300"},
+    )
+
+
+def _booking_qr_token(booking_id: str) -> str:
+    """HMAC-SHA256 short token — first 24 hex chars — that scopes a QR link
+    to a specific booking id. Not time-limited on purpose so the same QR
+    stays valid until the trip is completed; server-side we still refuse
+    to check-in a booking that's already `completed` or `cancelled`."""
+    import hmac, hashlib
+    key = os.environ.get("JWT_SECRET", "rox-fallback-secret").encode()
+    return hmac.new(key, f"driver-scan:{booking_id}".encode(), hashlib.sha256).hexdigest()[:24]
+
+
+def _verify_qr_token(booking_id: str, token: str) -> bool:
+    import hmac
+    return hmac.compare_digest(_booking_qr_token(booking_id), (token or "").strip())
+
+
+@api_router.get("/bookings/{booking_id}/scan-preview")
+async def booking_scan_preview(booking_id: str, t: str = ""):
+    """Public — used by the driver's `/driver/scan` page to load booking
+    summary before confirming. Returns 401 if the HMAC token is invalid so
+    randomly guessed booking IDs can't be inspected."""
+    if not _verify_qr_token(booking_id.upper(), t):
+        raise HTTPException(401, "Invalid or expired scan link.")
+    b = await db.bookings.find_one({"id": booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    # Slim payload — no financials, no admin fields; driver only needs
+    # dispatch info to complete the pickup.
+    return {
+        "id": b["id"],
+        "status": b.get("status", "pending"),
+        "customer_name": b.get("customer_name", ""),
+        "customer_phone": b.get("customer_phone", ""),
+        "item_name": b.get("item_name", ""),
+        "booking_date": b.get("booking_date", ""),
+        "booking_time": b.get("booking_time", ""),
+        "pickup_location": b.get("pickup_location", ""),
+        "dropoff_location": b.get("dropoff_location", ""),
+        "passengers": b.get("passengers", 1),
+        "billed_passengers": b.get("billed_passengers"),
+        "return_time": b.get("return_time"),
+        "round_trip": b.get("round_trip", False),
+    }
+
+
+class DriverCheckinRequest(BaseModel):
+    token: str = Field(..., min_length=8, max_length=128)
+    confirmed_pickup_time: Optional[str] = Field(None, max_length=32)
+    confirmed_pickup_location: Optional[str] = Field(None, max_length=256)
+    # ── Driver-phone GPS ping (optional) ──────────────────────────────
+    # The scan page asks for browser Geolocation permission on confirm and
+    # stamps lat/lng here so admins can audit that check-ins truly happened
+    # at the meeting spot instead of from a driver's home. Missing/denied
+    # values are fine — the check-in still proceeds without them.
+    driver_pickup_lat: Optional[float] = Field(None, ge=-90, le=90)
+    driver_pickup_lng: Optional[float] = Field(None, ge=-180, le=180)
+    driver_pickup_accuracy_m: Optional[float] = Field(None, ge=0, le=100000)
+
+
+@api_router.post("/bookings/{booking_id}/driver-checkin")
+async def booking_driver_checkin(booking_id: str, req: DriverCheckinRequest):
+    """Fires when the driver taps Confirm on the QR scan page. Marks the
+    booking status as `picked_up`, stamps who confirmed + when, and lets
+    the driver override pickup_time / pickup_location on the doc (useful
+    when the meeting spot changes at the port). Idempotent — repeated
+    checkins are no-ops after the first."""
+    if not _verify_qr_token(booking_id.upper(), req.token):
+        raise HTTPException(401, "Invalid or expired scan link.")
+    b = await db.bookings.find_one({"id": booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    if b.get("status") in ("cancelled", "completed"):
+        raise HTTPException(400, f"Booking is {b['status']} — cannot check in.")
+
+    updates = {
+        "status": "picked_up",
+        "driver_checked_in_at": now_iso(),
+    }
+    if req.confirmed_pickup_time and req.confirmed_pickup_time != b.get("booking_time"):
+        updates["driver_confirmed_pickup_time"] = req.confirmed_pickup_time.strip()[:32]
+    if req.confirmed_pickup_location and req.confirmed_pickup_location != b.get("pickup_location"):
+        updates["driver_confirmed_pickup_location"] = req.confirmed_pickup_location.strip()[:256]
+    if req.driver_pickup_lat is not None and req.driver_pickup_lng is not None:
+        updates["driver_pickup_lat"] = float(req.driver_pickup_lat)
+        updates["driver_pickup_lng"] = float(req.driver_pickup_lng)
+        if req.driver_pickup_accuracy_m is not None:
+            updates["driver_pickup_accuracy_m"] = float(req.driver_pickup_accuracy_m)
+
+    await db.bookings.update_one({"id": b["id"]}, {"$set": updates})
+
+    # Guest heads-up SMS — fire-and-forget, respect admin toggle. Kept short
+    # so it lands on the lock screen without a preview cutoff.
+    try:
+        cfg = await db.site_config.find_one({"_id": "main"}) or {}
+        if cfg.get("notify_sms_enabled", True) is not False and b.get("customer_phone"):
+            from notifications import send_sms as _send_sms
+            _send_sms(
+                b["customer_phone"],
+                f"Rox: your driver has you checked in ✅ · Booking {b['id']}. Enjoy the ride!",
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {"ok": True, "booking": {**b, **updates, "_id": None}}
+
+
 @api_router.get("/bookings/{booking_id}/calendar.ics")
 async def booking_calendar_ics(booking_id: str):
     """Generates a universal VCALENDAR (.ics) file for a booking so guests
@@ -3551,6 +3681,7 @@ async def booking_calendar_ics(booking_id: str):
         f"Passengers: {booking.get('passengers', 1)}\n"
         f"Driver dispatch: {dispatch_phone}\n"
         f"Map: {map_link}\n"
+        f"Show driver (QR check-in): https://roxtaxi.com/track?id={booking['id']}\n"
         f"Track live: https://roxtaxi.com/track?id={booking['id']}"
     )
 

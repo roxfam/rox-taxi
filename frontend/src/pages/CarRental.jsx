@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
 import Seo from "../components/Seo";
-import { Users, ArrowRight, CalendarX, Info, ArrowUpDown } from "lucide-react";
+import { Users, ArrowRight, CalendarX, Info, ArrowUpDown, MapPinned } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
 // Sort options mirror the /tours page so the shopper's mental model carries
@@ -153,6 +153,38 @@ export default function CarRental() {
               </button>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── EasyDrive direct-rental banner ────────────────────────────────
+          Some guests prefer booking directly on our fleet-partner's site.
+          Prices are matched, so this is purely a convenience escape hatch —
+          not an upsell. Placed above the fleet grid so it's the first thing
+          guests scanning for "book now" see, but below sort controls so it
+          doesn't push our own conversions off-screen. */}
+      <section id="easydrive" className="max-w-7xl mx-auto px-6 lg:px-10 pb-6">
+        <div className="rounded-3xl border-2 border-dashed border-[#D4A94A]/40 bg-gradient-to-br from-[#FEF9E7] via-white to-[#FBF7EF] p-6 lg:p-7 flex flex-col md:flex-row items-start md:items-center gap-5" data-testid="easydrive-banner">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#D4A94A] to-[#b88a2d] text-white flex items-center justify-center shadow-[0_10px_25px_rgba(212,169,74,0.35)] shrink-0">
+            <MapPinned className="w-7 h-7" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black">Prefer booking direct?</div>
+            <h3 className="serif text-xl lg:text-2xl text-[#0B3B5C] leading-tight mt-1">
+              Reserve on <span className="text-[#D4A94A]">easydrivecarrental.com</span>
+            </h3>
+            <p className="text-sm text-[#64748B] mt-1.5 leading-relaxed">
+              Our fleet partner's site — <span className="font-semibold text-[#0B3B5C]">prices match, no markup</span>. Book any of the vehicles above directly on their portal if you'd rather manage the trip there.
+            </p>
+          </div>
+          <a
+            href="https://easydrivecarrental.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="easydrive-external-btn"
+            className="btn-shine inline-flex items-center gap-2 rounded-full bg-[#0B3B5C] hover:bg-[#132a4a] text-white px-6 py-3 text-sm font-semibold whitespace-nowrap shrink-0"
+          >
+            Book on EasyDrive →
+          </a>
         </div>
       </section>
 

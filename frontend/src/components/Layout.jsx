@@ -28,6 +28,34 @@ const NAV = [
   { to: "/contact", label: "Contact", icon: MessageCircle },
 ];
 
+// Category dropdown submenus for the mobile nav — tapping the parent
+// row expands a small chip list of common quick-links instead of
+// jumping straight to the section landing page. Kept off the desktop
+// path so the top bar stays clean.
+const NAV_SUB = {
+  "/taxi": [
+    { to: "/taxi#airport",       label: "Airport transfers" },
+    { to: "/taxi#cruise-port",   label: "Cruise port pickups" },
+    { to: "/taxi#beach-runs",    label: "Beach runs (per-person)" },
+    { to: "/taxi#hourly",        label: "Hourly charter" },
+    { to: "/taxi#custom",        label: "Custom quote" },
+  ],
+  "/tours": [
+    { to: "/tours/blue-lagoon",  label: "Blue Lagoon Island" },
+    { to: "/tours/atlantis",     label: "Atlantis Aquaventure" },
+    { to: "/tours/ardastra",     label: "Ardastra Gardens" },
+    { to: "/tours/baha-mar",     label: "Baha Mar Resort day" },
+    { to: "/tours",              label: "All tours & excursions" },
+  ],
+  "/rentals": [
+    { to: "/rentals#compact",    label: "Compact & economy" },
+    { to: "/rentals#suv",        label: "SUV & mid-size" },
+    { to: "/rentals#luxury",     label: "Luxury & premium" },
+    { to: "/rentals#van",        label: "Van / group vehicles" },
+    { to: "/rentals#easydrive",  label: "EasyDrive direct (prices match)" },
+  ],
+};
+
 const NAV_DESKTOP = NAV.filter(n => n.label !== "About");
 
 export default function Layout({ children }) {
@@ -413,37 +441,44 @@ export default function Layout({ children }) {
 
               <nav className="flex-1 overflow-y-auto p-4">
                 <ul className="flex flex-col gap-1.5">
-                  {NAV.map((n, idx) => (
-                    <motion.li
-                      key={n.to}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.05 + idx * 0.05 }}
-                    >
-                      <NavLink
-                        to={n.to}
-                        end={n.to === "/"}
-                        data-testid={`mobile-nav-${n.label.toLowerCase()}`}
-                        className={({ isActive }) =>
-                          `flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-colors ${
-                            isActive
-                              ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] text-white shadow-[0_10px_25px_rgba(11,25,44,0.15)]"
-                              : "text-[#0B3B5C] hover:bg-[#F1F5F9]"
-                          }`
-                        }
+                  {NAV.map((n, idx) => {
+                    const sub = NAV_SUB[n.to] || null;
+                    return (
+                      <motion.li
+                        key={n.to}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.05 + idx * 0.05 }}
                       >
-                        {({ isActive }) => (
-                          <>
-                            <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${isActive ? "bg-white/15" : "bg-[#F1F5F9]"}`}>
-                              <n.icon className="w-4 h-4" />
-                            </span>
-                            <span className="font-semibold">{n.label}</span>
-                            {isActive && <span className="ml-auto text-xs opacity-70">Now</span>}
-                          </>
+                        {sub ? (
+                          <MobileNavCategory item={n} sub={sub} onNavigate={() => setOpen(false)} />
+                        ) : (
+                          <NavLink
+                            to={n.to}
+                            end={n.to === "/"}
+                            data-testid={`mobile-nav-${n.label.toLowerCase()}`}
+                            className={({ isActive }) =>
+                              `flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-colors ${
+                                isActive
+                                  ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] text-white shadow-[0_10px_25px_rgba(11,25,44,0.15)]"
+                                  : "text-[#0B3B5C] hover:bg-[#F1F5F9]"
+                              }`
+                            }
+                          >
+                            {({ isActive }) => (
+                              <>
+                                <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${isActive ? "bg-white/15" : "bg-[#F1F5F9]"}`}>
+                                  <n.icon className="w-4 h-4" />
+                                </span>
+                                <span className="font-semibold">{n.label}</span>
+                                {isActive && <span className="ml-auto text-xs opacity-70">Now</span>}
+                              </>
+                            )}
+                          </NavLink>
                         )}
-                      </NavLink>
-                    </motion.li>
-                  ))}
+                      </motion.li>
+                    );
+                  })}
                 </ul>
 
                 <motion.div
@@ -732,6 +767,72 @@ export default function Layout({ children }) {
       </footer>
 
       <ChatWidget />
+    </div>
+  );
+}
+
+// ─── Mobile nav category with expandable sub-links ────────────────────
+// Tapping the parent chevron reveals a small dropdown of common quick-
+// links for that section (e.g. Taxi → "Airport transfers", "Beach runs"
+// etc). Tapping the label itself still routes to the section landing
+// page — the chevron is the affordance for the submenu. Keeps top-level
+// navigation predictable while surfacing deep-linked shortcuts.
+function MobileNavCategory({ item, sub, onNavigate }) {
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+  const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + "/");
+  const Icon = item.icon;
+  return (
+    <div>
+      <div
+        className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-colors ${
+          isActive
+            ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] text-white shadow-[0_10px_25px_rgba(11,25,44,0.15)]"
+            : "text-[#0B3B5C] hover:bg-[#F1F5F9]"
+        }`}
+      >
+        <Link
+          to={item.to}
+          onClick={onNavigate}
+          data-testid={`mobile-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+          className="flex items-center gap-4 flex-1 min-w-0"
+        >
+          <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${isActive ? "bg-white/15" : "bg-[#F1F5F9]"}`}>
+            <Icon className="w-4 h-4" />
+          </span>
+          <span className="font-semibold">{item.label}</span>
+        </Link>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+          aria-expanded={open}
+          aria-label={`Show ${item.label} categories`}
+          data-testid={`mobile-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}-toggle`}
+          className={`p-1.5 rounded-lg transition-colors ${isActive ? "hover:bg-white/10" : "hover:bg-[#EFE7D5]"}`}
+        >
+          <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+      <div
+        className={`grid transition-all duration-300 ease-out ${open ? "grid-rows-[1fr] opacity-100 mt-1.5" : "grid-rows-[0fr] opacity-0 mt-0"}`}
+        data-testid={`mobile-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}-panel`}
+      >
+        <div className="overflow-hidden">
+          <div className="ml-14 pl-2 border-l-2 border-[#EFE7D5] space-y-0.5">
+            {sub.map((s) => (
+              <Link
+                key={s.to}
+                to={s.to}
+                onClick={onNavigate}
+                data-testid={`mobile-nav-sub-${s.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                className="block rounded-lg px-3 py-2 text-sm text-[#0B3B5C] hover:bg-[#FBF7EF] hover:text-[#D4A94A] transition-colors"
+              >
+                {s.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

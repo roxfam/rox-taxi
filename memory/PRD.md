@@ -12,6 +12,20 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12l — Mobile Nav Category Dropdowns + EasyDrive Direct-Booking Banner + Driver GPS Stamp on Check-in
+- **Mobile nav dropdowns**: Taxi / Tours / Car Rentals rows in the mobile drawer now have a chevron toggle that reveals a sub-menu (Airport transfers · Beach runs · Blue Lagoon · Compact · Luxury · EasyDrive direct · etc). Tapping the label still routes to the section landing page; only the chevron opens the panel. Desktop nav is untouched.
+- **EasyDrive banner** on `/rentals` — gold-bordered card between the sort bar and fleet grid: "Prefer booking direct? Reserve on **easydrivecarrental.com** — prices match, no markup" with an external CTA (`easydrive-external-btn`).
+- **Driver GPS ping on check-in**: `DriverScan.jsx` now requests one-shot browser Geolocation on tap of Confirm and posts `driver_pickup_lat/lng/accuracy_m` to the check-in endpoint. Values are optional — denied/timed-out permissions still let the driver complete the check-in. Backend stores them on the booking doc so admins can audit that check-ins actually happened at the meeting spot.
+- Toast confirms "Pickup confirmed with GPS" when the ping succeeded, plain "Pickup confirmed" otherwise.
+
+### Feb 12k — Driver QR Check-in (scan + confirm pickup time & location)
+- Added `GET /api/bookings/{id}/qr.png` — returns a PNG QR code encoding `{PUBLIC_URL}/driver/scan?b={id}&t={hmac}`; HMAC-SHA256 (24-char) uses `JWT_SECRET` so IDs can't be brute-forced.
+- Added `GET /api/bookings/{id}/scan-preview` — token-gated slim booking payload for the driver page (no financials).
+- Added `POST /api/bookings/{id}/driver-checkin` — verifies HMAC token, marks status `picked_up`, stamps `driver_checked_in_at`, and lets the driver override `driver_confirmed_pickup_time` + `driver_confirmed_pickup_location` (useful when the meeting spot changes at the cruise port berth). Rejects if booking is cancelled/completed. Auto-sends the guest a "you've been checked in ✅" SMS (respects admin toggle).
+- New `/driver/scan` frontend page (`DriverScan.jsx`) — dark boarding-pass style layout, loads booking via `?b=&t=`, exposes editable time + location inputs, and a big gold "Confirm pickup" button. Shows a green success banner + Track deep-link after check-in.
+- `Track.jsx` renders the QR code inline (gold-bordered card, "Show driver on arrival") so guests can flash their phone at the driver.
+- Calendar `.ics` DESCRIPTION now includes a "Show driver (QR check-in): …/track?id=…" line so the QR is always one tap away from the guest's calendar event.
+
 ### Feb 12j — Gold Rox Colour Badge on Calendar Events
 - Added `X-APPLE-CALENDAR-COLOR:#D4A94A` + `X-WR-CALNAME:Rox Taxi Bookings` at the VCALENDAR level, plus `COLOR:#D4A94A` + `CATEGORIES:Rox Taxi` on every event.
 - In Apple Calendar month view the pickup/return events now render with a gold dot instead of the default blue — instantly recognisable among the guest's other plans. Non-supporting clients (Outlook web, some Android) ignore the X- extensions gracefully.

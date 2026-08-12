@@ -173,6 +173,28 @@ export default function Track() {
               <InfoRow icon={<MapPin className="w-4 h-4" />} label="Service" value={booking.item_name} />
             </div>
 
+            {/* Driver check-in QR — guest shows this to the driver on arrival.
+                Driver scans with their camera → opens /driver/scan with an
+                HMAC-signed token that lets them mark the booking picked up
+                and confirm the exact pickup time + location. */}
+            {booking.status !== "cancelled" && booking.status !== "completed" && (
+              <div className="mt-6 rounded-2xl border border-[#D4A94A]/40 bg-gradient-to-br from-[#FBF7EF] to-white p-5 flex items-center gap-5" data-testid="track-driver-qr-card">
+                <img
+                  src={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/qr.png`}
+                  alt={`Driver scan QR for booking ${booking.id}`}
+                  className="w-28 h-28 rounded-xl bg-white p-2 border border-[#EFE7D5] shrink-0"
+                  data-testid="track-driver-qr-img"
+                />
+                <div>
+                  <div className="text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black">Show driver on arrival</div>
+                  <div className="text-sm text-[#0B3B5C] font-semibold mt-1 leading-tight">Instant check-in</div>
+                  <div className="text-xs text-[#64748B] mt-1.5 leading-relaxed">
+                    Your driver scans this QR to verify you're the right guest and confirm the pickup — no typing your booking code.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <DriverLiveBanner bookingId={booking.id} status={booking.status} />
 
             {/* Stepper */}
