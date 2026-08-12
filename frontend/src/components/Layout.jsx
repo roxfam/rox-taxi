@@ -280,6 +280,34 @@ export default function Layout({ children }) {
               </AnimatePresence>
             </div>
 
+            {/* Mobile login button — visible below md so mobile users
+                don't have to open the drawer just to sign in. Icon-only
+                for space; the drawer still has the full "Sign in" pill. */}
+            {user ? (
+              <Link
+                to="/my-bookings"
+                data-testid="mobile-header-account-btn"
+                title={user.name || user.email}
+                className="md:hidden w-11 h-11 rounded-full bg-white/70 backdrop-blur-md border border-white/80 flex items-center justify-center text-[#D4A94A] hover:bg-[#D4A94A] hover:text-white transition-all shadow-[0_4px_12px_rgba(212,169,74,0.15)] overflow-hidden"
+              >
+                {user.picture ? (
+                  <img src={user.picture} alt={user.name || "You"} className="w-full h-full object-cover" />
+                ) : (
+                  <UserIcon className="w-[18px] h-[18px]" />
+                )}
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                data-testid="mobile-header-login-btn"
+                title="Sign in"
+                aria-label="Sign in"
+                className="md:hidden w-11 h-11 rounded-full bg-white/70 backdrop-blur-md border border-white/80 flex items-center justify-center text-[#0B3B5C] hover:bg-[#0B3B5C] hover:text-white transition-all shadow-[0_4px_12px_rgba(11,59,92,0.08)]"
+              >
+                <UserIcon className="w-[18px] h-[18px]" />
+              </Link>
+            )}
+
             {/* Modern animated hamburger */}
             <button
               onClick={() => setOpen((v) => !v)}
@@ -597,6 +625,7 @@ export default function Layout({ children }) {
                 <li><Link to="/tours" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Tours &amp; Excursions</Link></li>
                 <li><Link to="/rentals" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Car Rentals</Link></li>
                 <li><Link to="/track" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Track a Booking</Link></li>
+                <li><Link to="/gallery" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors" data-testid="footer-gallery-link"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Island Gallery</Link></li>
                 <li><Link to="/travel-to-nassau" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Travel to Nassau Guide</Link></li>
                 <li><Link to="/cruise-groups-nassau" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Cruise Groups (10% off)</Link></li>
               </ul>
