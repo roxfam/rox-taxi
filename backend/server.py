@@ -1061,7 +1061,7 @@ async def _run_reminder_tick() -> int:
             if not (rt_lower <= return_dt_full <= rt_upper):
                 continue
             try:
-                report = send_return_leg_nudge(b, driver_number=driver_number)
+                report = send_return_leg_nudge(b, driver_number=driver_number, prefs=prefs)
                 await db.bookings.update_one(
                     {"id": b["id"]},
                     {"$set": {

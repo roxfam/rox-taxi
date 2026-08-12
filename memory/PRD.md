@@ -12,6 +12,11 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12g — Guest Return-Leg Heads-Up SMS
+- Extended `send_return_leg_nudge()` to also SMS the guest at the same 30-min-before moment: "Hi {first_name}! Your Rox driver is heading back for you 🌊 — arriving in 30 min at {pickup} for the {return_time} pickup. Time to grab your towels! Booking #{id}."
+- Respects the site-wide `notify_sms_enabled` admin toggle — falls back gracefully with a clear `error` reason on the report.
+- Verified live: seeded RTNUDGE2 with return_time 15 min out → tick sent **both** legs via Twilio (driver + guest).
+
 ### Feb 12f — Driver Return-Leg SMS Nudge (30-min-before)
 - New `send_return_leg_nudge()` in `notifications.py` — driver-only SMS (no guest ping) that says "⏰ RETURN LEG in 30 min · Booking {id} · Return pickup: {return_time} today · Guest: {name/phone} · Was: {dropoff} → back to {pickup} · Pax: {n}".
 - Background reminder loop in `server.py` now scans for taxi bookings with `round_trip=True + return_time`, not cancelled/completed, no `return_leg_nudge_sent_at`. When the return timestamp (booking_date's calendar day + return_time) falls in [now, now+30m], the driver SMS fires and the doc is stamped.

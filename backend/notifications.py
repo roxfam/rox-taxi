@@ -447,38 +447,62 @@ def send_booking_reminder(booking: dict, prefs: Optional[dict] = None, driver_nu
     return report
 
 
-def send_return_leg_nudge(booking: dict, driver_number: Optional[str] = None) -> dict:
+def send_return_leg_nudge(booking: dict, driver_number: Optional[str] = None, prefs: Optional[dict] = None) -> dict:
     """Fires 30 minutes before a round-trip taxi booking's return_time so
-    the driver never misses the swing-back pickup. Driver SMS only — no
-    guest ping to keep it low-noise.
+    the driver never misses the swing-back pickup AND the guest gets a
+    light heads-up to start wrapping up. Two SMS legs — no email (this is
+    time-sensitive, SMS-only).
 
     Skips cancellations, missing driver numbers, and any booking without
-    both `round_trip=True` AND a `return_time` field.
+    both `round_trip=True` AND a `return_time` field. Guest SMS respects
+    the admin's site-wide `notify_sms_enabled` toggle.
 
-    Returns: {"kind": "return_leg_nudge", "driver_sms": {sent, provider, error, enabled}}.
+    Returns: {"kind": "return_leg_nudge",
+              "driver_sms": {sent, provider, error, enabled},
+              "guest_sms":  {sent, provider, error, enabled}}.
     """
+    prefs = prefs or {}
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+    guest_phone = booking.get("customer_phone") or ""
     report = {
         "kind": "return_leg_nudge",
         "driver_sms": {"sent": False, "provider": "none", "error": None, "enabled": bool(driver_number)},
+        "guest_sms":  {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled and bool(guest_phone)},
     }
-    if not driver_number:
-        report["driver_sms"]["error"] = "No driver number configured"
-        return report
 
     return_time = str(booking.get("return_time") or "").strip()
     if not return_time:
         report["driver_sms"]["error"] = "No return_time on booking"
+        report["guest_sms"]["error"]  = "No return_time on booking"
         return report
 
-    driver_sms = (
-        f"⏰ RETURN LEG in 30 min · Booking {booking['id']}\n"
-        f"Return pickup: {return_time} today\n"
-        f"Guest: {booking['customer_name']} · {booking.get('customer_phone','')}\n"
-        f"Was: {booking.get('dropoff_location','—')} → back to {booking.get('pickup_location','—')}\n"
-        f"Pax: {booking.get('passengers', 1)}"
-    )
-    result = send_sms(driver_number, driver_sms)
-    report["driver_sms"].update(result)
+    # ── Driver leg — dispatch details, keeps the swing-back on time. ──
+    if driver_number:
+        driver_sms = (
+            f"⏰ RETURN LEG in 30 min · Booking {booking['id']}\n"
+            f"Return pickup: {return_time} today\n"
+            f"Guest: {booking['customer_name']} · {guest_phone}\n"
+            f"Was: {booking.get('dropoff_location','—')} → back to {booking.get('pickup_location','—')}\n"
+            f"Pax: {booking.get('passengers', 1)}"
+        )
+        report["driver_sms"].update(send_sms(driver_number, driver_sms))
+    else:
+        report["driver_sms"]["error"] = "No driver number configured"
+
+    # ── Guest leg — friendly heads-up, no dispatch noise. ──
+    if sms_enabled and guest_phone:
+        pickup = booking.get("pickup_location") or "the pickup spot"
+        first_name = (booking.get("customer_name") or "").split(" ")[0] or "there"
+        guest_sms = (
+            f"Hi {first_name}! Your Rox driver is heading back for you 🌊 — "
+            f"arriving in 30 min at {pickup} for the {return_time} pickup. "
+            f"Time to grab your towels! Booking #{booking['id']}. "
+            f"Reply here or WhatsApp us: wa.me/12424322587"
+        )
+        report["guest_sms"].update(send_sms(guest_phone, guest_sms))
+    else:
+        report["guest_sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+
     return report
 
 
