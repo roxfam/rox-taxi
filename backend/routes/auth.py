@@ -655,6 +655,47 @@ async def customer_register(req: CustomerRegisterRequest, request: Request, resp
     if existing and existing.get("password_hash"):
         raise HTTPException(400, "An account with this email already exists. Please sign in.")
 
+    # ── Duplicate-signup guard (per-IP + per-name) ──────────────────────
+    # Blocks the classic fraud/spam pattern of someone signing up multiple
+    # accounts with slightly different emails from the same device. The
+    # match is case-insensitive on `name` AND scoped to the caller's IP so
+    # a legitimate family sharing one home network can still each have
+    # their own account (different names). We also hard-cap raw signup
+    # volume from a single IP to 3 in a rolling 90-day window as a
+    # backstop against bot farms.
+    if not existing:
+        _dup_ip = _client_ip(request)
+        _dup_name = (req.name or "").strip().lower()
+        if _dup_ip:
+            if _dup_name:
+                # Same IP + same name = same person trying to double-dip.
+                dup = await _db.users.find_one({
+                    "signup_ip": _dup_ip,
+                    "name_lower": _dup_name,
+                })
+                if dup:
+                    raise HTTPException(
+                        400,
+                        "An account with this name has already been created from your network. Please sign in with your existing account or contact support.",
+                    )
+            # Hard cap: max 3 signups per IP in a rolling 90-day window.
+            try:
+                from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+                cutoff = (_dt.now(_tz.utc) - _td(days=90)).isoformat()
+                ip_count = await _db.users.count_documents({
+                    "signup_ip": _dup_ip,
+                    "created_at": {"$gte": cutoff},
+                })
+                if ip_count >= 3:
+                    raise HTTPException(
+                        400,
+                        "Too many accounts have been created from your network recently. Please contact support if you believe this is a mistake.",
+                    )
+            except HTTPException:
+                raise
+            except Exception:  # noqa: BLE001
+                pass
+
     # Disposable-email blocklist — throwaway providers rarely convert and
     # are the #1 fraud-farm signal. Same check for country freeze runs below.
     if not existing:
@@ -714,11 +755,17 @@ async def customer_register(req: CustomerRegisterRequest, request: Request, resp
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         insert_doc = {
-            "user_id": user_id, "email": email, "name": req.name, "picture": "",
+            "user_id": user_id, "email": email, "name": req.name,
+            # Lowercased duplicate — indexed lookup path for the duplicate-
+            # signup guard above (avoids case-insensitive regex on every
+            # register call).
+            "name_lower": (req.name or "").strip().lower(),
+            "picture": "",
             "password_hash": _hash_password(req.password), "provider": "email",
             "referral_code": _new_referral_code(),
             "credit_balance": 0.0,
             "created_at": ts,
+            "signup_ip": _client_ip(request),
         }
         if referred_by:
             insert_doc["referred_by"] = referred_by

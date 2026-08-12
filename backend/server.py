@@ -2077,8 +2077,115 @@ async def site_config():
 
 # ---------------- Bookings ----------------
 
+def _client_ip_from_request(request: Request) -> str:
+    """Extract the client IP the same way auth.py does — prefer the first
+    entry in X-Forwarded-For, fall back to request.client.host. Truncated
+    to 64 chars for DB safety."""
+    if request is None:
+        return ""
+    xff = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    ip = xff or (request.client.host if request.client else "")
+    return (ip or "")[:64]
+
+
+async def _resolve_optional_user_id(request: Request) -> Optional[str]:
+    """Best-effort — try to resolve a logged-in customer's user_id from
+    the session cookie or bearer token. Returns None if unauthenticated
+    or session expired. Never raises."""
+    try:
+        token = request.cookies.get("session_token") if request else None
+        if not token and request:
+            auth = request.headers.get("authorization", "")
+            if auth.startswith("Bearer "):
+                token = auth.split(" ", 1)[1]
+        if not token:
+            return None
+        session = await db.user_sessions.find_one({"session_token": token}, {"user_id": 1})
+        return (session or {}).get("user_id")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+async def _promo_already_redeemed(
+    promo_id: Optional[str],
+    ip: str,
+    user_id: Optional[str],
+    email: Optional[str],
+) -> bool:
+    """Returns True if this promo has already been redeemed by any of the
+    three identity signals — matching IP, logged-in user_id, or booking
+    email. Any single match burns the code for that identity."""
+    if not promo_id:
+        return False
+    or_terms = []
+    if ip:
+        or_terms.append({"ip": ip})
+    if user_id:
+        or_terms.append({"user_id": user_id})
+    if email:
+        or_terms.append({"email": email.lower().strip()})
+    if not or_terms:
+        return False
+    doc = await db.promo_redemptions.find_one({"promo_id": promo_id, "$or": or_terms})
+    return doc is not None
+
+
+async def _log_promo_redemption(
+    promo_id: str,
+    booking_id: str,
+    ip: str,
+    user_id: Optional[str],
+    email: Optional[str],
+    discount_amount: float,
+) -> None:
+    """Records a successful promo application. Safe to await from booking
+    creation — never raises, so a redemption logging failure never blocks
+    the booking response."""
+    try:
+        await db.promo_redemptions.insert_one({
+            "promo_id": promo_id,
+            "booking_id": booking_id,
+            "ip": (ip or "")[:64],
+            "user_id": user_id or None,
+            "email": (email or "").lower().strip() or None,
+            "discount_amount": float(discount_amount),
+            "at": now_iso(),
+        })
+    except Exception:  # noqa: BLE001
+        pass
+
+
+@api_router.get("/promo/status")
+async def promo_status(request: Request):
+    """Public — returns whether the caller has already redeemed ANY promo
+    (used to hide the site-wide promo banner + warm-lead chat card once
+    they've claimed one), and whether they've copied the warm-lead code
+    without booking yet (used to show a softer 'ready to book?' nudge)."""
+    ip = _client_ip_from_request(request)
+    user_id = await _resolve_optional_user_id(request)
+    or_terms = []
+    if ip:
+        or_terms.append({"ip": ip})
+    if user_id:
+        or_terms.append({"user_id": user_id})
+    has_redeemed = False
+    if or_terms:
+        has_redeemed = await db.promo_redemptions.find_one({"$or": or_terms}) is not None
+    has_copied_warm_lead = False
+    if ip:
+        has_copied_warm_lead = await db.promo_copy_events.find_one({"ip": ip}) is not None
+    return {
+        "has_redeemed": has_redeemed,
+        "has_copied_warm_lead": has_copied_warm_lead,
+    }
+
+
 @api_router.post("/bookings")
-async def create_booking(req: BookingCreate):
+async def create_booking(req: BookingCreate, request: Request):
+    # Stash the raw request in a local so downstream helpers (promo redemption
+    # de-dupe) can read IP + auth without threading an extra arg through the
+    # full 200-line booking pipeline.
+    _current_request = request
     _validate_open_day(req.service_type, req.booking_date, req.days or 1)
     # Taxi bookings must include a pickup location — drivers can't dispatch without it.
     if req.service_type == "taxi" and not (req.pickup_location or "").strip():
@@ -2281,8 +2388,21 @@ async def create_booking(req: BookingCreate):
     # start/end window, apply the largest discount. Percent promos are
     # applied to the pre-discount base (before rental discount); fixed
     # promos come off the computed_total directly. Excludes deposit + tip.
+    #
+    # Enforcement: every promo is one-time per user, keyed on IP AND
+    # optional user_id AND booking email. If any of those three identities
+    # has already redeemed this promo, we skip it silently (booking still
+    # goes through at full price). The redemption is logged after the
+    # booking doc is inserted below so cancelled/failed inserts don't burn
+    # the code prematurely.
+    _customer_ip = _client_ip_from_request(_current_request) if _current_request else ""
+    _customer_user_id = await _resolve_optional_user_id(_current_request) if _current_request else None
     promo = await _best_active_promo(req.service_type)
     promo_discount = 0.0
+    if promo and await _promo_already_redeemed(promo.get("id"), _customer_ip, _customer_user_id, req.customer_email):
+        # Skip — this identity has already used this promo. Booking
+        # proceeds at full price without the discount.
+        promo = None
     if promo:
         discountable = round(max(0.0, computed_total - deposit_amount - tip_amount), 2)
         if promo.get("discount_type") == "percent":

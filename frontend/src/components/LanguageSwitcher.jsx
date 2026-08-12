@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Globe, Check } from "lucide-react";
+import { Globe, Check, ChevronDown } from "lucide-react";
 
 // English + 7 requested languages. Uses Google Translate's cookie-driven
 // widget so every string on every page auto-translates without maintenance.
@@ -52,27 +52,16 @@ export default function LanguageSwitcher({ variant = "desktop" }) {
   const currentLang = LANGS.find((l) => l.code === current) || LANGS[0];
 
   if (variant === "mobile") {
+    // Collapsed-by-default tab so the language grid doesn't dominate the
+    // mobile menu footer. Tapping the header row expands the grid; state
+    // resets when the drawer re-mounts, which is fine because most guests
+    // only need this once per visit.
     return (
-      <div>
-        <div className="text-[10px] tracking-[0.3em] uppercase text-[#94a3b8] font-semibold mb-3 text-center">Language</div>
-        <div className="grid grid-cols-2 gap-2 notranslate" translate="no" data-testid="lang-switcher-mobile">
-          {LANGS.map((l) => (
-            <button
-              key={l.code}
-              type="button"
-              onClick={() => applyLang(l.code)}
-              data-testid={`lang-mobile-${l.code}`}
-              className={`rounded-2xl border px-3 py-2.5 text-xs font-semibold transition ${
-                current === l.code
-                  ? "border-[#D4A94A] bg-[#D4A94A]/12 text-[#D4A94A]"
-                  : "border-[#EFE7D5] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"
-              }`}
-            >
-              {l.native}
-            </button>
-          ))}
-        </div>
-      </div>
+      <MobileLanguageTab
+        current={current}
+        currentLang={currentLang}
+        applyLang={applyLang}
+      />
     );
   }
 
@@ -128,6 +117,61 @@ export default function LanguageSwitcher({ variant = "desktop" }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Collapsible mobile variant — tapping the summary row expands/collapses
+// the language grid. Kept as a separate small component so the state
+// (open/closed) is local and doesn't affect the desktop path.
+function MobileLanguageTab({ current, currentLang, applyLang }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="notranslate" translate="no" data-testid="lang-switcher-mobile-tab">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls="lang-switcher-mobile-panel"
+        data-testid="lang-switcher-mobile-toggle"
+        className="w-full flex items-center justify-between rounded-2xl border border-[#EFE7D5] bg-white px-4 py-3 hover:border-[#D4A94A] transition"
+      >
+        <span className="flex items-center gap-2.5">
+          <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#FBF7EF] text-[#D4A94A]">
+            <Globe className="w-4 h-4" />
+          </span>
+          <span className="flex flex-col items-start leading-tight">
+            <span className="text-[9px] tracking-[0.28em] uppercase text-[#94a3b8] font-semibold">Language</span>
+            <span className="text-sm font-semibold text-[#0B3B5C]" data-testid="lang-mobile-current-label">{currentLang.native}</span>
+          </span>
+        </span>
+        <ChevronDown className={`w-4 h-4 text-[#0B3B5C] transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+      </button>
+      <div
+        id="lang-switcher-mobile-panel"
+        aria-hidden={!open}
+        className={`grid transition-all duration-300 ease-out ${open ? "grid-rows-[1fr] opacity-100 mt-2" : "grid-rows-[0fr] opacity-0 mt-0"}`}
+      >
+        <div className="overflow-hidden">
+          <div className="grid grid-cols-2 gap-2" data-testid="lang-switcher-mobile">
+            {LANGS.map((l) => (
+              <button
+                key={l.code}
+                type="button"
+                onClick={() => applyLang(l.code)}
+                data-testid={`lang-mobile-${l.code}`}
+                className={`rounded-2xl border px-3 py-2.5 text-xs font-semibold transition ${
+                  current === l.code
+                    ? "border-[#D4A94A] bg-[#D4A94A]/12 text-[#D4A94A]"
+                    : "border-[#EFE7D5] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"
+                }`}
+              >
+                {l.native}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

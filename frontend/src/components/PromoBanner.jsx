@@ -13,6 +13,11 @@ const DISMISS_KEY = "rox-promo-banner-dismissed";
 export default function PromoBanner() {
   const [promo, setPromo] = useState(null);
   const [dismissed, setDismissed] = useState(false);
+  // One-time-per-user enforcement — the moment the backend sees this
+  // visitor has redeemed ANY promo (matched by IP or user_id), we hide
+  // the banner permanently for them. Keeps the strip honest instead of
+  // teasing a discount they can't use again.
+  const [hasRedeemed, setHasRedeemed] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && sessionStorage.getItem(DISMISS_KEY)) {
@@ -23,9 +28,12 @@ export default function PromoBanner() {
         if (Array.isArray(data) && data.length > 0) setPromo(data[0]);
       })
       .catch(() => {});
+    api.get("/promo/status")
+      .then(({ data }) => { if (data?.has_redeemed) setHasRedeemed(true); })
+      .catch(() => {});
   }, []);
 
-  if (!promo || dismissed) return null;
+  if (!promo || dismissed || hasRedeemed) return null;
 
   const label = promo.discount_type === "percent"
     ? `${promo.discount_value}% OFF`

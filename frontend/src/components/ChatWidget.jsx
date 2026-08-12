@@ -74,6 +74,14 @@ export default function ChatWidget() {
   // the admin has flipped `warm_lead_promo_enabled` AND provided a code.
   const [promo, setPromo] = useState(null); // { code, discount_pct, description }
   const [promoCopied, setPromoCopied] = useState(false);
+  // Per-user promo status — mirrors /api/promo/status.
+  //   has_redeemed=true  → hide the card entirely (they've already booked
+  //                        with a discount code so a repeat would be a
+  //                        fraud/double-dip).
+  //   has_copied         → they've copied the code but haven't booked yet;
+  //                        show a softer "Ready to book with your X% off?"
+  //                        nudge instead of the full card.
+  const [promoStatus, setPromoStatus] = useState({ has_redeemed: false, has_copied_warm_lead: false });
   const [hovered, setHovered] = useState(false);
   const [nudged, setNudged] = useState(false);  // auto-invite bubble ~5s after page load
   // Gentle amber glow on the FAB when a returning visitor lands — plays once
@@ -117,6 +125,15 @@ export default function ChatWidget() {
           description: (d.warm_lead_promo_description || "").trim(),
         });
       }
+    }).catch(() => {});
+    // Per-user promo state — powers both the "hide when redeemed" branch
+    // and the softer "ready to book?" nudge branch below.
+    api.get("/promo/status").then((r) => {
+      const d = r?.data || {};
+      setPromoStatus({
+        has_redeemed: !!d.has_redeemed,
+        has_copied_warm_lead: !!d.has_copied_warm_lead,
+      });
     }).catch(() => {});
   }, []);
 
@@ -455,45 +472,71 @@ export default function ChatWidget() {
           ))}
         </div>
 
-        {/* Warm-lead promo card — only for returning visitors when the admin
-            has enabled a promo. Slots in above the suggestion chips so it's
-            the first thing they see after the intro message. Copy button
-            triggers a track-promo-copy analytics event. */}
-        {isWarmLead && promo && (
-          <div
-            className="mx-5 mt-1 mb-2 rounded-2xl border border-[#D4A94A]/50 bg-gradient-to-br from-[#FEF9E7] via-white to-[#FBF7EF] p-3 shadow-[0_10px_25px_rgba(212,169,74,0.18)] animate-in fade-in slide-in-from-bottom-2 duration-500"
-            data-testid="chat-warm-lead-promo"
-          >
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-[#D4A94A] to-[#b88a2d] text-white shadow-inner">
-                <Gift className="w-3.5 h-3.5" />
-              </span>
-              <div className="text-[10px] uppercase tracking-[0.22em] font-black text-[#D4A94A]">
-                {promo.discount_pct ? `${promo.discount_pct}% off` : "Returning-guest perk"} · Just for you
+        {/* Warm-lead promo — three states, chosen by /api/promo/status:
+            1) has_redeemed=true → hide entirely (they've already booked
+               with a promo; showing it again would double-dip).
+            2) has_copied_warm_lead=true → they copied the code but never
+               booked; render a softer "ready to book?" nudge instead of
+               the full card so we don't waste real estate re-teaching them
+               the code they already grabbed.
+            3) Fresh warm lead → full copyable promo card with the amber
+               gift badge. */}
+        {isWarmLead && promo && !promoStatus.has_redeemed && (
+          promoStatus.has_copied_warm_lead && !promoCopied ? (
+            <div
+              className="mx-5 mt-1 mb-2 rounded-2xl border border-[#D4A94A]/40 bg-gradient-to-br from-[#FEF9E7] via-white to-[#FBF7EF] px-4 py-3 shadow-[0_6px_18px_rgba(212,169,74,0.14)] animate-in fade-in slide-in-from-bottom-2 duration-500"
+              data-testid="chat-warm-lead-nudge"
+            >
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-[#D4A94A] to-[#b88a2d] text-white shadow-inner shrink-0">
+                  <Gift className="w-3.5 h-3.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-bold text-[#0B3B5C] leading-tight">
+                    Ready to book with your {promo.discount_pct ? `${promo.discount_pct}% off` : "returning-guest"} code?
+                  </div>
+                  <div className="text-[11px] text-[#64748B] mt-0.5">
+                    Your code <span className="mono font-bold text-[#0B3B5C]">{promo.code}</span> is still saved — just start a booking and it'll auto-apply.
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="text-[12px] text-[#0B3B5C] leading-snug mb-2">
-              {promo.description || (promo.discount_pct
-                ? `Welcome back! Use this code at checkout for ${promo.discount_pct}% off your next booking.`
-                : "Welcome back — here's a little something. Use this code at checkout.")}
-            </div>
-            <button
-              type="button"
-              onClick={copyPromo}
-              data-testid="chat-promo-copy-btn"
-              aria-label={`Copy promo code ${promo.code}`}
-              className={`w-full inline-flex items-center justify-between gap-2 rounded-xl border-2 border-dashed px-3 py-2 text-sm font-black tracking-widest transition-all ${
-                promoCopied
-                  ? "border-[#22c55e] bg-[#DCFCE7] text-[#166534]"
-                  : "border-[#D4A94A] bg-white text-[#0B3B5C] hover:bg-[#FEF9E7] active:scale-[0.98]"
-              }`}
+          ) : (
+            <div
+              className="mx-5 mt-1 mb-2 rounded-2xl border border-[#D4A94A]/50 bg-gradient-to-br from-[#FEF9E7] via-white to-[#FBF7EF] p-3 shadow-[0_10px_25px_rgba(212,169,74,0.18)] animate-in fade-in slide-in-from-bottom-2 duration-500"
+              data-testid="chat-warm-lead-promo"
             >
-              <span className="mono truncate" data-testid="chat-promo-code">{promo.code}</span>
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
-                {promoCopied ? (<><Check className="w-3.5 h-3.5" /> Copied</>) : (<><Copy className="w-3.5 h-3.5" /> Tap to copy</>)}
-              </span>
-            </button>
-          </div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-[#D4A94A] to-[#b88a2d] text-white shadow-inner">
+                  <Gift className="w-3.5 h-3.5" />
+                </span>
+                <div className="text-[10px] uppercase tracking-[0.22em] font-black text-[#D4A94A]">
+                  {promo.discount_pct ? `${promo.discount_pct}% off` : "Returning-guest perk"} · Just for you
+                </div>
+              </div>
+              <div className="text-[12px] text-[#0B3B5C] leading-snug mb-2">
+                {promo.description || (promo.discount_pct
+                  ? `Welcome back! Use this code at checkout for ${promo.discount_pct}% off your next booking.`
+                  : "Welcome back — here's a little something. Use this code at checkout.")}
+              </div>
+              <button
+                type="button"
+                onClick={copyPromo}
+                data-testid="chat-promo-copy-btn"
+                aria-label={`Copy promo code ${promo.code}`}
+                className={`w-full inline-flex items-center justify-between gap-2 rounded-xl border-2 border-dashed px-3 py-2 text-sm font-black tracking-widest transition-all ${
+                  promoCopied
+                    ? "border-[#22c55e] bg-[#DCFCE7] text-[#166534]"
+                    : "border-[#D4A94A] bg-white text-[#0B3B5C] hover:bg-[#FEF9E7] active:scale-[0.98]"
+                }`}
+              >
+                <span className="mono truncate" data-testid="chat-promo-code">{promo.code}</span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
+                  {promoCopied ? (<><Check className="w-3.5 h-3.5" /> Copied</>) : (<><Copy className="w-3.5 h-3.5" /> Tap to copy</>)}
+                </span>
+              </button>
+            </div>
+          )
         )}
 
         {messages.length <= 1 && (
