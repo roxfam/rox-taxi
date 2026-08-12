@@ -67,15 +67,26 @@ async def cron_sync_google_reviews(
 
 
 async def _sync_google_reviews_bg() -> None:
-    """Background worker — pulls up to 5 latest Google reviews via Places
-    API (New) and upserts them into `reviews` with source='google'. Skips
-    silently if the API key or place_id isn't configured yet."""
+    """Background worker — pulls the latest Google reviews via Places API
+    (New) and upserts them into `reviews`, but only when they are 4 stars
+    or higher (low-star ones make the homepage feel less trustworthy and
+    the owner wanted quality over completeness). Skips silently if
+    credentials aren't configured yet.
+
+    Credential source priority: ENV VAR first (GOOGLE_PLACES_API_KEY /
+    GOOGLE_PLACE_ID) so ops can pin them via .env without exposing them
+    in the admin panel; falls back to site_config for zero-code-deploy
+    convenience.
+    """
     try:
+        env_key = (os.environ.get("GOOGLE_PLACES_API_KEY") or "").strip()
+        env_place = (os.environ.get("GOOGLE_PLACE_ID") or "").strip()
+
         cfg = await _db.site_config.find_one({"_id": "main"}) or {}
-        api_key = (cfg.get("google_places_api_key") or "").strip()
-        place_id = (cfg.get("google_place_id") or "").strip()
+        api_key = env_key or (cfg.get("google_places_api_key") or "").strip()
+        place_id = env_place or (cfg.get("google_place_id") or "").strip()
         if not api_key or not place_id:
-            return  # dormant — owner hasn't set keys yet
+            return  # dormant — neither env nor site_config has credentials
 
         url = f"https://places.googleapis.com/v1/places/{place_id}"
         headers = {
@@ -96,9 +107,22 @@ async def _sync_google_reviews_bg() -> None:
         data = r.json() or {}
         upstream_reviews = data.get("reviews") or []
         upserted = 0
+        skipped_low_rating = 0
         for rev in upstream_reviews[:5]:
             google_id = rev.get("name") or ""
             if not google_id:
+                continue
+            rating = int(rev.get("rating") or 0)
+            if rating < 4:
+                skipped_low_rating += 1
+                # If this review already sits in our DB (from an earlier
+                # sync when it was ≥4), soft-hide it so the homepage
+                # reflects the latest star drift too.
+                await _db.reviews.update_one(
+                    {"google_review_id": google_id},
+                    {"$set": {"active": False, "hidden_reason": "below_4_stars",
+                              "rating": rating, "synced_at": _now_iso()}},
+                )
                 continue
             author = rev.get("authorAttribution", {}) or {}
             text_obj = rev.get("originalText") or rev.get("text") or {}
@@ -108,10 +132,11 @@ async def _sync_google_reviews_bg() -> None:
                 "author_name": author.get("displayName", "Google reviewer"),
                 "author_url": author.get("uri", ""),
                 "profile_photo_url": author.get("photoUri", ""),
-                "rating": int(rev.get("rating") or 5),
+                "rating": rating,
                 "text": (text_obj.get("text") if isinstance(text_obj, dict) else str(text_obj))[:2000],
                 "relative_time": rev.get("relativePublishTimeDescription", ""),
                 "active": True,
+                "hidden_reason": "",
                 "source": "google",
                 "synced_at": _now_iso(),
             }
@@ -124,6 +149,7 @@ async def _sync_google_reviews_bg() -> None:
         await _db.cron_runs.update_one(
             {"kind": "google_reviews"},
             {"$set": {"last_success_at": _now_iso(), "last_upserted": upserted,
+                      "last_skipped_low_rating": skipped_low_rating,
                       "last_upstream_rating": data.get("rating"),
                       "last_upstream_count": data.get("userRatingCount")}},
             sort=[("started_at", -1)],

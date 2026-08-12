@@ -5,35 +5,17 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 12b — Google Reviews Auto-Sync: 4-Star Quality Filter + ENV Priority
+- `_sync_google_reviews_bg()` reads `GOOGLE_PLACES_API_KEY` + `GOOGLE_PLACE_ID` from env FIRST (falls back to `site_config` for admin-panel convenience).
+- **Only reviews with rating ≥ 4 are stored as active**; 1–3 star reviews counted in `last_skipped_low_rating` but never surface on the homepage.
+- If a previously-kept review drops below 4★ on a later sync, the existing DB row is soft-hidden (`active=false`, `hidden_reason="below_4_stars"`) so the homepage reflects the star drift automatically.
+- Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
+- Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
+
 ### Feb 12 — Google Reviews Auto-Sync + Email Blocklist + Warm-Lead Analytics
-**Google Reviews Auto-Sync (Places API + 6-hour cron):**
-- `.emergent/crons.yml` runs `POST /api/cron/sync-google-reviews` every 6 hours (`0 */6 * * *`).
-- `WEBHOOK_CRON_SECRET` added to `backend/.env`; cron endpoint verifies bearer via `hmac.compare_digest` (401 without / 200 with).
-- New `routes/cron.py` with the endpoint + background worker `_sync_google_reviews_bg()` — calls Places API (New) `GET https://places.googleapis.com/v1/places/{placeId}` with `X-Goog-FieldMask: reviews,rating,userRatingCount`.
-- Upserts each review into `reviews` with `source="google"`, dedupe key `google_review_id`. Success/error tracked in `cron_runs` collection.
-- Two new fields on `SiteConfigUpdate`: `google_places_api_key`, `google_place_id` — pasted in Admin → Site Config → **Google Places auto-sync**. Sync stays dormant until BOTH are set.
-- Manual **"Sync from Google now"** button in Admin → Reviews panel triggers `POST /api/admin/reviews/sync-google-now` (same background worker).
-
-**Email Domain Blocklist (Fraud Watch addition):**
-- 33 disposable-email providers seeded (mailinator, tempmail, guerrillamail, yopmail…).
-- New endpoints: `GET/POST/DELETE /api/admin/email-blocklist`. Custom entries stored in `blocked_email_domains`; seed defaults can be whitelisted per-entry without a code push.
-- `is_email_domain_blocked()` helper wired into `POST /auth/register` — returns 400 with friendly message before the account is created.
-- Verified: signup with `test@tempmail.com` → blocked; signup with `test@gmail.com` → passes.
-
-**Warm-Lead Analytics:**
-- Public `POST /api/chat/track-open` (called once per session by `ChatWidget.jsx` — sessionStorage-guarded).
-- New `GET /api/admin/analytics/warm-lead` — 30-day window: warm opens, first-timer opens, unique visitors, engagement rates, `warm_vs_first_lift_pct`.
-- New `<WarmLeadCard />` on Admin Dashboard: 4 stat tiles + colored lift badge (green ↑ / red ↓). Empty-state copy when no warm-lead traffic yet.
-- Verified end-to-end with seeded data: 8 warm opens / 12 first-timer opens → +120.6% lift badge rendered.
-
 ### Feb 12 — Warm-Lead Signal on Chat Widget
-- Client-side session counter (localStorage + sessionStorage guard, StrictMode-safe).
-- 3rd+ session → chat greeting swaps to "Back again? Ask us anything — returning visitors get priority booking help" + 3-second amber FAB glow.
-
 ### Feb 11 — Real Google Reviews (Admin Paste) + Fraud Freeze Button
-
 ### Feb 10 — Signup Burst Alert + Fraud Watch Map + SEO Ranking Boost
-
 ### Feb 7 — Turnstile CAPTCHA + First-Country Signup Alert + Rate Limit Failed Logins
 
 ### Earlier
@@ -48,27 +30,24 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ### P1
 - **Refresh remaining hero slides** (Atlantis, Rose Island, Junkanoo).
-- **User Action**: Paste Google Cloud Places API key + Place ID in Admin → Site Config → Google Places auto-sync (enables 6-hourly auto-refresh).
+- **User Action**: Fill `GOOGLE_PLACES_API_KEY` + `GOOGLE_PLACE_ID` in `backend/.env` (or Admin → Site Config) to activate 6-hourly auto-sync.
 - **User Action**: Paste Google / Bing / Yandex verification codes in Admin → Site Config.
 - **User Action**: Submit sitemap in Google Search Console + Bing Webmaster.
 
 ### P2
-- **More Fraud Watch additions** (deferred from menu): booking fraud detection · IP watchlist · card-testing detector · chargeback risk score · auto-freeze escalation · dedicated Fraud Watch tab.
-- Referral-card test locator.
-- Pin Undo Toast finalization.
+- More Fraud Watch additions (booking fraud detection · IP watchlist · card-testing detector · chargeback risk score · dedicated Fraud Watch tab).
+- Warm-Lead Discount Nudge.
 - Modularize `server.py` (>3900 lines).
 
 ## Third-party Integrations
-- Google Places API (New) — auto-sync reviews (user-owned key)
+- Google Places API (New) — auto-sync via env `GOOGLE_PLACES_API_KEY` (4+ star filter)
 - Cloudflare Turnstile · IndexNow (Bing + Yandex + Seznam)
-- ip-api.com (IP → country) · pycountry (name → ISO)
-- react-simple-maps + world-atlas (fraud map SVG)
-- ui-avatars.com (fallback review avatars)
+- ip-api.com · pycountry · react-simple-maps · ui-avatars.com
 - Claude Sonnet 4.6 (Chat) + 4.5 (Vision) — Emergent LLM Key
 - Stripe · Twilio · SendGrid · AviationStack · Facebook Graph · Mega.io
 
 ## Scheduled Tasks (`.emergent/crons.yml`)
-- `sync-google-reviews` — every 6h, pulls Places API top-5 reviews
+- `sync-google-reviews` — every 6h; keeps only 4+ star reviews
 
 ## Test Credentials
 Admin: `roxfam2509@gmail.com` / `admin123`
