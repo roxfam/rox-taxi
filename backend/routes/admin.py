@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File, Body
+from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File, Body, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -466,6 +466,11 @@ class SiteConfigUpdate(BaseModel):
     pinterest_verification: Optional[str] = None
     facebook_verification: Optional[str] = None
     norton_verification: Optional[str] = None
+    # ─── Google Places API (real-reviews auto-sync) ──────────────────
+    # Populated by the owner. The 6-hourly cron only fires when BOTH are
+    # set; otherwise the sync path stays dormant with no upstream call.
+    google_places_api_key: Optional[str] = None
+    google_place_id: Optional[str] = None
 
 
 class ContactMessageStatusUpdate(BaseModel):
@@ -1190,6 +1195,143 @@ async def admin_list_country_freezes(_: str = Depends(_admin_dep)):
     now = _now_iso()
     docs = await _db.country_freezes.find({"frozen_until": {"$gt": now}}).to_list(200)
     return [_clean(d) for d in docs]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Email domain blocklist — disposable-mail providers that never convert
+# ═══════════════════════════════════════════════════════════════════════════
+# Curated seed list of the most-abused throwaway providers. The admin panel
+# lets you add/remove entries; the check runs inside /auth/register and
+# returns HTTP 400 with a friendly message before creating the account.
+_DEFAULT_BLOCKED_DOMAINS = [
+    "mailinator.com", "guerrillamail.com", "10minutemail.com", "tempmail.com",
+    "temp-mail.org", "yopmail.com", "throwawaymail.com", "sharklasers.com",
+    "dispostable.com", "getnada.com", "trashmail.com", "maildrop.cc",
+    "fakeinbox.com", "mohmal.com", "mytemp.email", "spamgourmet.com",
+    "spam4.me", "temporaryemail.net", "tempinbox.com", "moakt.com",
+    "email-fake.com", "emlhub.com", "wegwerfemail.de", "einrot.com",
+    "grr.la", "guerrillamailblock.com", "pokemail.net", "spam.la",
+    "trbvm.com", "byom.de", "dispomail.eu", "burnermail.io", "harakirimail.com",
+]
+
+
+class EmailBlocklistEntry(BaseModel):
+    domain: str = Field(..., min_length=3, max_length=120)
+
+
+@router.get("/admin/email-blocklist")
+async def admin_email_blocklist(_: str = Depends(_admin_dep)):
+    """Merged view: seed defaults + admin-added entries. Frontend uses this
+    to render the CRUD table."""
+    custom_docs = await _db.blocked_email_domains.find({}).sort("added_at", -1).to_list(500)
+    custom = [{"domain": d["domain"], "added_at": d.get("added_at", ""), "custom": True} for d in custom_docs]
+    seeds = [{"domain": d, "added_at": "", "custom": False} for d in _DEFAULT_BLOCKED_DOMAINS if
+             not any(c["domain"] == d for c in custom)]
+    return {"blocklist": custom + seeds, "seed_count": len(_DEFAULT_BLOCKED_DOMAINS)}
+
+
+@router.post("/admin/email-blocklist")
+async def admin_email_blocklist_add(req: EmailBlocklistEntry, _: str = Depends(_admin_dep)):
+    domain = req.domain.strip().lower().lstrip("@")
+    if "." not in domain or " " in domain:
+        raise HTTPException(400, "Invalid domain format (e.g. tempmail.com)")
+    await _db.blocked_email_domains.update_one(
+        {"domain": domain},
+        {"$set": {"domain": domain, "added_at": _now_iso()}},
+        upsert=True,
+    )
+    return {"domain": domain, "added": True}
+
+
+@router.delete("/admin/email-blocklist/{domain}")
+async def admin_email_blocklist_remove(domain: str, _: str = Depends(_admin_dep)):
+    domain = domain.strip().lower()
+    # If it's a seed default, "removing" means creating a whitelist override.
+    if domain in _DEFAULT_BLOCKED_DOMAINS:
+        await _db.blocked_email_domains.update_one(
+            {"domain": domain},
+            {"$set": {"domain": domain, "whitelisted": True, "added_at": _now_iso()}},
+            upsert=True,
+        )
+        return {"domain": domain, "whitelisted": True}
+    r = await _db.blocked_email_domains.delete_one({"domain": domain})
+    return {"domain": domain, "deleted": r.deleted_count > 0}
+
+
+async def is_email_domain_blocked(email: str) -> bool:
+    """Called by /auth/register — returns True if the email's domain is on
+    the blocklist (seed + custom, minus whitelisted overrides)."""
+    if not email or "@" not in email:
+        return False
+    domain = email.split("@", 1)[1].lower().strip()
+    if not domain:
+        return False
+    # Whitelist override on a seed domain?
+    row = await _db.blocked_email_domains.find_one({"domain": domain})
+    if row:
+        if row.get("whitelisted"):
+            return False
+        return True
+    return domain in _DEFAULT_BLOCKED_DOMAINS
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Warm-lead analytics — how often returning visitors open the chat vs first-timers
+# ═══════════════════════════════════════════════════════════════════════════
+class ChatOpenEvent(BaseModel):
+    visit_count: int = Field(1, ge=1, le=999)
+    warm_lead: bool = False
+
+
+@router.post("/chat/track-open")
+async def chat_track_open(req: ChatOpenEvent, request: Request):
+    """Public — client-side POST when the chat widget opens. Rate-limited
+    trivially by the sessionStorage guard on the frontend."""
+    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+        request.client.host if request.client else "")
+    await _db.chat_open_events.insert_one({
+        "visit_count": req.visit_count,
+        "warm_lead": bool(req.warm_lead),
+        "ip": (ip or "")[:64],
+        "at": _now_iso(),
+    })
+    return {"tracked": True}
+
+
+@router.get("/admin/analytics/warm-lead")
+async def admin_warm_lead_stats(_: str = Depends(_admin_dep)):
+    """Aggregate warm-lead engagement — visitors who opened the chat on
+    their 3rd+ session vs first-timers. Returns 30-day window counts +
+    a simple conversion ratio comparison."""
+    from datetime import datetime, timezone, timedelta
+    since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    q = {"at": {"$gte": since}}
+    total_opens = await _db.chat_open_events.count_documents(q)
+    warm_opens = await _db.chat_open_events.count_documents({**q, "warm_lead": True})
+    first_opens = await _db.chat_open_events.count_documents({**q, "warm_lead": False})
+
+    # Approximate unique visitors via distinct IPs — good enough signal
+    warm_ips = len(await _db.chat_open_events.distinct("ip", {**q, "warm_lead": True}))
+    first_ips = len(await _db.chat_open_events.distinct("ip", {**q, "warm_lead": False}))
+
+    # Simple "engagement rate" — chat opens per unique visitor. Warm-lead
+    # visitors typically show 2-3x this ratio in reality; we render the
+    # comparison as a visible lift indicator on the admin card.
+    warm_rate = round(warm_opens / warm_ips, 2) if warm_ips else 0.0
+    first_rate = round(first_opens / first_ips, 2) if first_ips else 0.0
+    lift = round(((warm_rate / first_rate) - 1) * 100, 1) if first_rate else 0.0
+
+    return {
+        "window_days": 30,
+        "total_opens": total_opens,
+        "warm_opens": warm_opens,
+        "first_opens": first_opens,
+        "warm_unique_visitors": warm_ips,
+        "first_unique_visitors": first_ips,
+        "warm_engagement_rate": warm_rate,
+        "first_engagement_rate": first_rate,
+        "warm_vs_first_lift_pct": lift,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════

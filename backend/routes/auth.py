@@ -655,6 +655,21 @@ async def customer_register(req: CustomerRegisterRequest, request: Request, resp
     if existing and existing.get("password_hash"):
         raise HTTPException(400, "An account with this email already exists. Please sign in.")
 
+    # Disposable-email blocklist — throwaway providers rarely convert and
+    # are the #1 fraud-farm signal. Same check for country freeze runs below.
+    if not existing:
+        try:
+            from routes.admin import is_email_domain_blocked
+            if await is_email_domain_blocked(email):
+                raise HTTPException(
+                    400,
+                    "This email provider isn't supported. Please use a permanent email (Gmail, iCloud, Outlook, your work address, etc.).",
+                )
+        except HTTPException:
+            raise
+        except Exception:  # noqa: BLE001
+            pass
+
     # Country freeze — reject new accounts from admin-frozen regions.
     # Only applied to brand-new signups; existing users linking their
     # password aren't blocked.

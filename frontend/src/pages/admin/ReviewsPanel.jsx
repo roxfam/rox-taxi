@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Star, Trash2, Plus, Save, X, Info, ExternalLink } from "lucide-react";
+import { Star, Trash2, Plus, Save, X, Info, ExternalLink, RefreshCw } from "lucide-react";
 import { api } from "../../lib/api";
 import { F } from "./shared";
 
@@ -109,6 +109,25 @@ export default function ReviewsPanel() {
             </a>{" "}
             — that way your homepage matches what people actually see on Google.
           </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2 items-center">
+          <button
+            type="button"
+            data-testid="reviews-sync-google-now"
+            onClick={async () => {
+              try {
+                const r = await api.post("/admin/reviews/sync-google-now", {});
+                if (r.data?.accepted) toast.success("Google sync queued — refresh in ~10s to see new reviews.");
+                else toast.error("Sync failed — check your API key + Place ID in Site Config");
+                setTimeout(load, 10000);
+              } catch { toast.error("Sync failed — check your API key + Place ID in Site Config"); }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#0B3B5C] text-white text-xs font-bold px-4 py-2 hover:bg-[#122C4B]"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Sync from Google now
+          </button>
+          <span className="text-[10px] text-[#94a3b8]">Auto-runs every 6 hours when API key is set</span>
         </div>
       </div>
 

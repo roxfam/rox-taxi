@@ -83,6 +83,17 @@ export default function ChatWidget() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
 
+  // Track chat-open events on the backend so admin analytics can compare
+  // warm-lead vs first-timer engagement. Fires ONCE per session (guarded
+  // by sessionStorage) — one open counts, subsequent toggles don't inflate.
+  useEffect(() => {
+    if (!open) return;
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem("rox_chat_opened_tracked") === "1") return;
+    sessionStorage.setItem("rox_chat_opened_tracked", "1");
+    api.post("/chat/track-open", { visit_count: visitCount, warm_lead: isWarmLead }).catch(() => {});
+  }, [open, visitCount, isWarmLead]);
+
   // Pull the WhatsApp number from site-config and build the wa.me deep-link.
   // We route ALL "talk to a human" hand-offs through WhatsApp — one channel,
   // one inbox, one owner-side app. Messenger is retired here per business ask.

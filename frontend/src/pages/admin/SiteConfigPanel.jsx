@@ -152,6 +152,21 @@ export default function SiteConfigPanel() {
           </div>
         </div>
 
+        {/* ─── Google Places API (real-review auto-sync) ───
+            Both fields must be set for the 6-hourly cron to pull real
+            reviews. Leave blank to keep the sync dormant (manual paste
+            in the Reviews tab still works). */}
+        <div className="pt-4 mt-4 border-t border-[#E2E8F0]">
+          <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold mb-1">Google Places auto-sync</div>
+          <div className="text-[11px] text-[#94a3b8] mb-3 leading-relaxed">
+            Paste both values below and a cron pulls your latest 5 Google Business reviews every 6 hours — you never have to paste manually again. Get the key from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="underline">Google Cloud Console</a> (enable "Places API (New)") and your Place ID from <a href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank" rel="noreferrer" className="underline">the finder tool</a>.
+          </div>
+          <div className="space-y-3">
+            <F l="Google Cloud API key (starts with AIza…)" v={cfg.google_places_api_key || ""} on={(v) => setCfg({ ...cfg, google_places_api_key: v })} testid="google-places-api-key" />
+            <F l="Google Place ID (starts with ChIJ…)" v={cfg.google_place_id || ""} on={(v) => setCfg({ ...cfg, google_place_id: v })} testid="google-place-id" />
+          </div>
+        </div>
+
         <div className="pt-4 mt-4 border-t border-[#E2E8F0]">
           <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold mb-3">Notification preferences</div>
           <div className="space-y-2">

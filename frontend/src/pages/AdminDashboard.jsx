@@ -5,6 +5,7 @@ import { api, money, BACKEND_URL } from "../lib/api";
 import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart, Cell } from "recharts";
 import SignupCountriesCard from "./admin/SignupCountriesCard";
+import WarmLeadCard from "./admin/WarmLeadCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -201,6 +202,11 @@ export default function AdminDashboard() {
             time a brand-new country appears; this card lets the owner see
             the full pattern before an alert even fires. */}
         <SignupCountriesCard />
+
+        {/* Warm-lead engagement — 30-day comparison of chat opens by 3rd+
+            visit visitors vs first-timers. Confirms the amber-glow nudge
+            is actually converting the intent it's designed to capture. */}
+        <WarmLeadCard />
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">

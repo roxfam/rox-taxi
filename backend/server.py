@@ -34,6 +34,7 @@ from routes import licenses as licenses_module
 from routes import auth as auth_module
 from routes import customer as customer_module
 from routes import analytics as analytics_module
+from routes import cron as cron_module
 from routes import seo as seo_module
 import secrets_store
 
@@ -3861,6 +3862,10 @@ seo_module.configure(
     indexnow_key="9f2c8b4a6e1d7a3f5b9e2c8d4a6f1e7b",
 )
 api_router.include_router(seo_module.router)
+
+# Cron endpoints — scheduled work fired by the platform on .emergent/crons.yml.
+cron_module.configure(db=db, now_iso=now_iso)
+api_router.include_router(cron_module.router)
 
 app.include_router(api_router)
 

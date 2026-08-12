@@ -5,24 +5,34 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 12 — Google Reviews Auto-Sync + Email Blocklist + Warm-Lead Analytics
+**Google Reviews Auto-Sync (Places API + 6-hour cron):**
+- `.emergent/crons.yml` runs `POST /api/cron/sync-google-reviews` every 6 hours (`0 */6 * * *`).
+- `WEBHOOK_CRON_SECRET` added to `backend/.env`; cron endpoint verifies bearer via `hmac.compare_digest` (401 without / 200 with).
+- New `routes/cron.py` with the endpoint + background worker `_sync_google_reviews_bg()` — calls Places API (New) `GET https://places.googleapis.com/v1/places/{placeId}` with `X-Goog-FieldMask: reviews,rating,userRatingCount`.
+- Upserts each review into `reviews` with `source="google"`, dedupe key `google_review_id`. Success/error tracked in `cron_runs` collection.
+- Two new fields on `SiteConfigUpdate`: `google_places_api_key`, `google_place_id` — pasted in Admin → Site Config → **Google Places auto-sync**. Sync stays dormant until BOTH are set.
+- Manual **"Sync from Google now"** button in Admin → Reviews panel triggers `POST /api/admin/reviews/sync-google-now` (same background worker).
+
+**Email Domain Blocklist (Fraud Watch addition):**
+- 33 disposable-email providers seeded (mailinator, tempmail, guerrillamail, yopmail…).
+- New endpoints: `GET/POST/DELETE /api/admin/email-blocklist`. Custom entries stored in `blocked_email_domains`; seed defaults can be whitelisted per-entry without a code push.
+- `is_email_domain_blocked()` helper wired into `POST /auth/register` — returns 400 with friendly message before the account is created.
+- Verified: signup with `test@tempmail.com` → blocked; signup with `test@gmail.com` → passes.
+
+**Warm-Lead Analytics:**
+- Public `POST /api/chat/track-open` (called once per session by `ChatWidget.jsx` — sessionStorage-guarded).
+- New `GET /api/admin/analytics/warm-lead` — 30-day window: warm opens, first-timer opens, unique visitors, engagement rates, `warm_vs_first_lift_pct`.
+- New `<WarmLeadCard />` on Admin Dashboard: 4 stat tiles + colored lift badge (green ↑ / red ↓). Empty-state copy when no warm-lead traffic yet.
+- Verified end-to-end with seeded data: 8 warm opens / 12 first-timer opens → +120.6% lift badge rendered.
+
 ### Feb 12 — Warm-Lead Signal on Chat Widget
-- Client-side session counter (`localStorage.rox_visit_count`, bumped once per browser tab via `sessionStorage` guard) — no backend calls, works offline.
-- Threshold: **3rd+ session** flips the visitor into "warm lead" mode.
-- **Greeting swap** — first message becomes: *"Back again? Ask us anything — returning visitors get priority booking help — I'm Roxi 🌊, and I can pull up live prices…"* (vs generic on first visit).
-- **Gentle 3-second amber glow** on the FAB the FIRST page load per session (guarded by `sessionStorage.rox_warm_glow_played` so navigating around doesn't retrigger).
-- Injected via a scoped `@keyframes rox-warm-glow` stylesheet — fade-in at 15%, hold at 55%, fade-out to 0 by 100%.
-- Accessibility: FAB `aria-label` and `title` swap to "Welcome back — chat with us" for returning visitors; hidden `data-warm-lead` + `data-visit-count` attrs for analytics/testing.
-- Verified: 3rd+ visit → glow visible mid-animation + warm greeting · glow disappears after 3s · 1st visit → no glow + standard greeting.
+- Client-side session counter (localStorage + sessionStorage guard, StrictMode-safe).
+- 3rd+ session → chat greeting swaps to "Back again? Ask us anything — returning visitors get priority booking help" + 3-second amber FAB glow.
 
 ### Feb 11 — Real Google Reviews (Admin Paste) + Fraud Freeze Button
-- Reviews collection + admin CRUD + paste UI (new "Reviews" tab in Manage catalog).
-- Public `/reviews` reads from DB (seed cleared; rating/total computed from real pasted rows).
-- Country freeze — one-click "Freeze 24h" / "Unfreeze" per country on Fraud Watch card; `/auth/register` returns 403 for frozen countries.
 
 ### Feb 10 — Signup Burst Alert + Fraud Watch Map + SEO Ranking Boost
-- Burst alert (>3 signups/country/hour, 1-hour cooldown).
-- Interactive world map + ranked table.
-- Dynamic sitemap, IndexNow push, verification meta tag fields, rich JSON-LD, improved robots.txt.
 
 ### Feb 7 — Turnstile CAPTCHA + First-Country Signup Alert + Rate Limit Failed Logins
 
@@ -37,25 +47,28 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - **Apple Login** — waiting on user's $99/yr Apple Developer account.
 
 ### P1
-- **Google Reviews auto-sync** — user will paste API key + Place ID when ready. Infrastructure not built yet (paused).
-- **Fraud Watch additions** — user asked about this but hasn't picked a subset yet (menu was: booking fraud detection · IP watchlist · email domain blocklist · card-testing detector · chargeback risk score · auto-freeze escalation · dedicated Fraud Watch tab).
 - **Refresh remaining hero slides** (Atlantis, Rose Island, Junkanoo).
-- **User Action**: Paste real Google reviews in Admin → Reviews tab.
+- **User Action**: Paste Google Cloud Places API key + Place ID in Admin → Site Config → Google Places auto-sync (enables 6-hourly auto-refresh).
 - **User Action**: Paste Google / Bing / Yandex verification codes in Admin → Site Config.
 - **User Action**: Submit sitemap in Google Search Console + Bing Webmaster.
 
 ### P2
+- **More Fraud Watch additions** (deferred from menu): booking fraud detection · IP watchlist · card-testing detector · chargeback risk score · auto-freeze escalation · dedicated Fraud Watch tab.
 - Referral-card test locator.
 - Pin Undo Toast finalization.
 - Modularize `server.py` (>3900 lines).
 
 ## Third-party Integrations
+- Google Places API (New) — auto-sync reviews (user-owned key)
 - Cloudflare Turnstile · IndexNow (Bing + Yandex + Seznam)
 - ip-api.com (IP → country) · pycountry (name → ISO)
 - react-simple-maps + world-atlas (fraud map SVG)
 - ui-avatars.com (fallback review avatars)
 - Claude Sonnet 4.6 (Chat) + 4.5 (Vision) — Emergent LLM Key
 - Stripe · Twilio · SendGrid · AviationStack · Facebook Graph · Mega.io
+
+## Scheduled Tasks (`.emergent/crons.yml`)
+- `sync-google-reviews` — every 6h, pulls Places API top-5 reviews
 
 ## Test Credentials
 Admin: `roxfam2509@gmail.com` / `admin123`
