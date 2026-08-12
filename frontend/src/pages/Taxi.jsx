@@ -233,7 +233,12 @@ export default function Taxi() {
             <h3 className="serif text-2xl text-[#0B3B5C] mt-4 leading-tight">{s.name}</h3>
             <p className="text-sm text-[#64748B] mt-2 leading-relaxed">{s.description}</p>
             <div className="mt-5 flex items-center justify-between">
-              <PromoPrice price={s.price} promo={s.promo} />
+              <div className="flex items-baseline gap-1.5">
+                <PromoPrice price={s.price} promo={s.promo} />
+                {(s.pricing_mode || "").toLowerCase() === "per_person" && (
+                  <span className="text-[10px] uppercase tracking-widest font-black text-[#94a3b8]" data-testid={`taxi-per-person-${s.id}`}>/ person</span>
+                )}
+              </div>
               <button
                 onClick={() => bookService(s)}
                 data-testid={`taxi-book-btn-${s.id}`}

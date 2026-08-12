@@ -12,7 +12,18 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
-### Feb 12c — Warm-Lead Discount Nudge + One-Time-Per-User Codes + Duplicate-Signup Guard + Collapsible Mobile Language Tab
+### Feb 12d — Per-Person Beach Taxi Fares + 2-Person Minimum + Round-Trip Support
+- Added 4 new taxi services with `pricing_mode: "per_person"`:
+  - `port-love-beach` — Downtown/Cruise Port → Love Beach @ $20/person
+  - `port-cable-beach` — Downtown/Cruise Port → Cable Beach @ $10/person
+  - `port-arawak-beach` — Downtown/Cruise Port → Arawak Cay Beach @ $7/person
+  - `paradise-love-beach` — Paradise Island → Love Beach @ $30/person
+- **2-person minimum enforcement**: solo travelers on any per-person route are billed at the 2-person rate (base = price × max(2, pax)). Booking flow adds a `billed_passengers` field and a note explaining the minimum. UI shows an orange "2-person minimum — you'll be billed as 2 passengers" line while pax=1, then grey "Priced per passenger · billed for N" from 2 upward.
+- Booking flow (backend `create_booking` + frontend `BookingFlow.jsx`) reads `pricing_mode` on the taxi service — for `per_person` routes, base = price × max(2, passengers) and the flat-fare extra-passenger surcharge is skipped so guests aren't double-charged.
+- Round-trip discount (10% off both legs) applies to per-person routes exactly like flat-fare routes — the checkbox already lives on every taxi booking modal.
+- Taxi page cards show "/ person" suffix next to the price on the 4 new services.
+
+### Feb 12c — Warm-Lead Discount Nudge + One-Time-Per-User Codes + Duplicate-Signup Guard + Collapsible Mobile Language Tab + Evening Urgency Whisper
 - **Warm-lead promo card**: 4 admin-editable fields (`warm_lead_promo_enabled`, `warm_lead_promo_code`, `warm_lead_promo_discount_pct`, `warm_lead_promo_description`) surface a gold-bordered promo card inside the chat panel for returning visitors (3rd+ session). Copy-to-clipboard button, `chat-warm-lead-promo` testid.
 - **Evening urgency whisper** (`GET /api/booking/urgency`): fires only past 5 PM Nassau time; renders a small "🔥 Only X of 5 slots left today" line inside the promo card AND the softer nudge state. Slot count = clamp(1, 5 − today's bookings, 4) so returning visitors always feel gentle scarcity in prime same-day-booking window.
 - **`POST /api/chat/track-promo-copy`** — records each copy with IP + visit count; surfaced on `admin/analytics/warm-lead` as `promo_copies` + `promo_copy_uniques`.

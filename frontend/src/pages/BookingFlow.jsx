@@ -98,6 +98,10 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const ROUND_TRIP_DISCOUNT_PCT = 0.10;
   const isRoundTrip = serviceType === "taxi" && !!form.round_trip;
   const singleFare = Number(item?.price || 0);
+  // Per-person taxi routes (beach runs) — fare × pax instead of flat.
+  // The extra-passenger surcharge is skipped for these routes because
+  // each rider already pays their own share.
+  const isPerPersonTaxi = serviceType === "taxi" && (item?.pricing_mode || "flat").toLowerCase() === "per_person";
 
   // Per-person pricing (e.g. Nassau City Tour) — activates only when the
   // catalog item ships a `child_price`. Adults × fare + Kids × child_price
@@ -121,20 +125,33 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const groupDiscountActive = hasChildPricing && payingPassengers >= GROUP_DISCOUNT_MIN_PAX;
   const groupDiscount = groupDiscountActive ? (perPersonBase * GROUP_DISCOUNT_PCT) : 0;
 
+  // Per-person taxi routes have a 2-person minimum — solo travelers still
+  // pay for 2 seats so the trip stays economical for the driver. The UI
+  // shows a small "2-person minimum" note on the passenger picker.
+  const PER_PERSON_TAXI_MIN_PAX = 2;
+  const perPersonBilledPax = isPerPersonTaxi
+    ? Math.max(PER_PERSON_TAXI_MIN_PAX, Number(form.passengers || 1))
+    : Number(form.passengers || 1);
+  const perPersonTaxiBase = isPerPersonTaxi
+    ? singleFare * perPersonBilledPax
+    : null;
   const rawBase = hasChildPricing
     ? perPersonBase
     : serviceType === "rental"
       ? singleFare * Math.max(1, Number(form.days || 1))
-      : isRoundTrip
-        ? singleFare * 2
-        : singleFare;
+      : isPerPersonTaxi
+        ? (isRoundTrip ? perPersonTaxiBase * 2 : perPersonTaxiBase)
+        : isRoundTrip
+          ? singleFare * 2
+          : singleFare;
   // Round-trip discount doesn't apply to per-person tours — they're not routes.
   const roundTripDiscount = (isRoundTrip && !hasChildPricing) ? rawBase * ROUND_TRIP_DISCOUNT_PCT : 0;
   const base = rawBase - roundTripDiscount - groupDiscount;
   const luggageFee = serviceType === "taxi" && !hasChildPricing ? Number(form.extra_luggage || 0) * LUGGAGE_FEE : 0;
-  // The extra-passenger fee (+$5/pax over 2) only applies to fixed-fare
-  // taxi routes — per-person tours already price each passenger explicitly.
-  const passengerFee = serviceType === "taxi" && !hasChildPricing && Number(form.passengers || 0) > PASSENGER_INCLUDED
+  // Extra-passenger surcharge (+$5/pax over 2) only applies to flat-fare
+  // taxi routes. Per-person routes skip it because each rider already
+  // pays their own share.
+  const passengerFee = serviceType === "taxi" && !hasChildPricing && !isPerPersonTaxi && Number(form.passengers || 0) > PASSENGER_INCLUDED
     ? (Number(form.passengers) - PASSENGER_INCLUDED) * PASSENGER_FEE
     : 0;
   const rentalDeposit = serviceType === "rental" ? RENTAL_DEPOSIT : 0;
@@ -381,8 +398,18 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                       <button type="button" onClick={() => setForm({ ...form, passengers: Math.max(1, Number(form.passengers) - 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95" data-testid="pax-minus">−</button>
                       <input type="number" min={1} max={20} required value={form.passengers} onChange={(e) => setForm({ ...form, passengers: Math.max(1, Math.min(20, parseInt(e.target.value || "1"))) })} className="w-20 text-center rounded-xl border border-[#E2E8F0] py-2.5 text-sm mono" data-testid="booking-passengers" />
                       <button type="button" onClick={() => setForm({ ...form, passengers: Math.min(20, Number(form.passengers) + 1) })} className="w-10 h-10 rounded-full border border-[#E2E8F0] text-lg hover:border-[#0B3B5C] active:scale-95" data-testid="pax-plus">+</button>
-                      {serviceType === "taxi" && Number(form.passengers) > PASSENGER_INCLUDED && (
+                      {serviceType === "taxi" && !isPerPersonTaxi && Number(form.passengers) > PASSENGER_INCLUDED && (
                         <span className="text-xs text-[#E86A3C] font-semibold" data-testid="pax-fee-note">+ ${(Number(form.passengers) - PASSENGER_INCLUDED) * PASSENGER_FEE} · {Number(form.passengers) - PASSENGER_INCLUDED} extra passenger(s) × ${PASSENGER_FEE}</span>
+                      )}
+                      {isPerPersonTaxi && (
+                        <span
+                          className={`text-xs font-semibold ${Number(form.passengers) < PER_PERSON_TAXI_MIN_PAX ? "text-[#E86A3C]" : "text-[#64748B]"}`}
+                          data-testid="per-person-min-note"
+                        >
+                          {Number(form.passengers) < PER_PERSON_TAXI_MIN_PAX
+                            ? `2-person minimum — you'll be billed as ${PER_PERSON_TAXI_MIN_PAX} passengers`
+                            : `Priced per passenger · billed for ${perPersonBilledPax}`}
+                        </span>
                       )}
                     </div>
                   )}

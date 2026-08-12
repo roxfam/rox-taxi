@@ -2261,7 +2261,9 @@ async def create_booking(req: BookingCreate, request: Request):
     booking["created_at"] = now_iso()
     booking["updated_at"] = now_iso()
 
-    # Base: taxi/tour = fixed price; rental = price * days
+    # Base: taxi/tour = fixed price; rental = price * days.
+    # Per-person taxi routes multiply base by passenger count (see the
+    # per_person block right after the tour section below).
     base = float(req.price) * max(1, req.days or 1)
     round_trip_fare_addition = 0.0
     round_trip_discount = 0.0
@@ -2325,13 +2327,32 @@ async def create_booking(req: BookingCreate, request: Request):
             booking["taxi_addon_variant"] = req.taxi_addon_variant
 
     if req.service_type == "taxi":
+        # Per-person taxi routes — beach runs like port→Cable Beach, port→
+        # Love Beach etc. Fare is quoted per passenger so we multiply the
+        # flat base by pax count. Extra-passenger surcharge is intentionally
+        # skipped for these routes because each pax already pays their own
+        # share (no double-charge).
+        _svc_doc = await db.taxi_services.find_one({"id": req.item_id}) or {}
+        _pricing_mode = (_svc_doc.get("pricing_mode") or "flat").lower()
+        _per_person_taxi = _pricing_mode == "per_person"
+        if _per_person_taxi:
+            # 2-person minimum — solo travelers still pay for 2 seats so the
+            # driver's trip is economically viable. Mirrors what the Nassau
+            # tariff sheet does for its shuttle routes.
+            _pax_billed = max(2, int(req.passengers or 1))
+            base = round(float(req.price) * _pax_billed, 2)
+            booking["taxi_pricing_mode"] = "per_person"
+            booking["billed_passengers"] = _pax_billed
+            if int(req.passengers or 1) < 2:
+                booking["notes"] = ((str(req.notes or "").strip() + " · " if req.notes else "")
+                                    + "Solo traveler — billed at the 2-person minimum for this route.").strip(" ·")
         if req.flight_number:
             booking["flight_number"] = req.flight_number.strip().upper().replace(" ", "")
         extra = max(0, min(int(req.extra_luggage or 0), LUGGAGE_MAX))
         luggage_fee = extra * LUGGAGE_FEE_USD
         booking["luggage_fee"] = luggage_fee
         booking["extra_luggage"] = extra
-        if int(req.passengers) > EXTRA_PASSENGER_INCLUDED:
+        if not _per_person_taxi and int(req.passengers) > EXTRA_PASSENGER_INCLUDED:
             passenger_fee = (int(req.passengers) - EXTRA_PASSENGER_INCLUDED) * EXTRA_PASSENGER_FEE_USD
         booking["passenger_fee"] = passenger_fee
         # Auto-add $2 Paradise Island bridge toll for any taxi trip crossing the
