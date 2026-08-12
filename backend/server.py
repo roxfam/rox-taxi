@@ -3641,6 +3641,16 @@ async def booking_driver_checkin(booking_id: str, req: DriverCheckinRequest):
             if d_m > 2000:
                 admin_sms = (secrets_store.get_secret("ADMIN_SMS_NUMBER") or "").strip()
                 if admin_sms:
+                    # Driver's callable number — separate roster secret so
+                    # the alert recipient (owner) can one-tap-dial without
+                    # hunting through contacts. Falls back to the admin SMS
+                    # roster when a dedicated DRIVER_PHONE isn't set.
+                    driver_phone = (
+                        secrets_store.get_secret("DRIVER_PHONE")
+                        or secrets_store.get_secret("ADMIN_SMS_NUMBER")
+                        or ""
+                    ).strip()
+                    tel_line = f"\nCall driver: tel:{driver_phone}" if driver_phone else ""
                     from notifications import send_sms as _send_sms
                     _send_sms(
                         admin_sms,
@@ -3648,7 +3658,8 @@ async def booking_driver_checkin(booking_id: str, req: DriverCheckinRequest):
                             f"⚠ Rox driver GPS mismatch · Booking {b['id']}\n"
                             f"Guest: {b.get('customer_name','')} · {b.get('customer_phone','')}\n"
                             f"Booked pickup: {(b.get('pickup_location','—') or '—')[:60]}\n"
-                            f"Driver checked in {round(d_m/1000, 1)} km away.\n"
+                            f"Driver checked in {round(d_m/1000, 1)} km away."
+                            f"{tel_line}\n"
                             f"Audit: roxtaxi.com/admin (Pickup GPS card)"
                         ),
                     )

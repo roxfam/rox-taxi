@@ -12,6 +12,10 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12o — Tel: Link in Owner GPS Mismatch Alert SMS
+- The >2km driver GPS mismatch alert SMS now includes a one-tap `tel:{driver_phone}` line. On iOS/Android the number renders as a big blue call button — owner can dial the driver instantly from the notification without hunting through contacts.
+- Driver phone resolution: `DRIVER_PHONE` secret first (new, roster-specific), falls back to `ADMIN_SMS_NUMBER` so this works today even before a separate driver secret is set.
+
 ### Feb 12n — Owner SMS Alert on >2km Driver Check-in Mismatch
 - Extended `POST /api/bookings/{id}/driver-checkin` — after stamping the GPS ping, computes haversine distance to the closest anchor (same table as the Admin audit card). If the ping is >2km away, an owner alert SMS is sent to `ADMIN_SMS_NUMBER` via Twilio: "⚠ Rox driver GPS mismatch · Booking {id} · Driver checked in X.Y km away · Audit: roxtaxi.com/admin (Pickup GPS card)".
 - Fire-and-forget — never blocks the check-in response. Records `driver_gps_alert_sent_at` + `driver_gps_alert_distance_m` on the booking doc so the same booking never double-alerts (if the driver re-scans, they only get one SMS).
