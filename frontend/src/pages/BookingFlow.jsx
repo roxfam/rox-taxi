@@ -68,6 +68,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     additional_drivers: 0,
     baby_seats: 0,
     round_trip: false,
+    return_time: "",
     flight_number: "",
     notes: "",
     taxi_addon_selected: false,
@@ -254,6 +255,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         notes: form.notes || null,
         payment_method: payMethod,
         round_trip: !!form.round_trip,
+        return_time: form.round_trip ? (form.return_time || "") : "",
         flight_number: form.flight_number ? form.flight_number.trim().toUpperCase().replace(/\s+/g, "") : null,
       };
       const { data: b } = await api.post("/bookings", payload);

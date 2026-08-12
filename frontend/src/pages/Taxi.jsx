@@ -308,6 +308,27 @@ export default function Taxi() {
                 </span>
               </label>
 
+              {form.round_trip && (
+                <div
+                  className="rounded-xl border border-[#D4A94A]/50 bg-[#FBF7EF] p-4 -mt-2 animate-in fade-in slide-in-from-top-1 duration-300"
+                  data-testid="taxi-return-time-block"
+                >
+                  <label className="block">
+                    <span className="block text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black mb-1.5">Return pickup time</span>
+                    <input
+                      type="time"
+                      value={form.return_time || ""}
+                      onChange={(e) => setForm({ ...form, return_time: e.target.value })}
+                      data-testid="taxi-return-time-input"
+                      className="w-full rounded-xl border border-[#EFE7D5] bg-white px-3.5 py-2.5 text-sm text-[#0B3B5C] focus:border-[#D4A94A] focus:outline-none focus:ring-2 focus:ring-[#D4A94A]/20 mono"
+                    />
+                    <span className="block text-[11px] text-[#64748B] mt-1.5 leading-relaxed">
+                      Tell us when you'd like to be picked up on the return leg — we'll radio the driver so they swing back on the dot. Leave blank if flexible.
+                    </span>
+                  </label>
+                </div>
+              )}
+
               <FlightTrackerCard
                 value={form.flight_number}
                 onChange={(v) => setForm({ ...form, flight_number: v })}

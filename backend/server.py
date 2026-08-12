@@ -156,6 +156,11 @@ class BookingCreate(BaseModel):
     notes: Optional[str] = None
     payment_method: str
     round_trip: Optional[bool] = False  # taxi: same-day return, 10% off both legs
+    # When round_trip=True the guest can pick a return time so the driver
+    # knows exactly when to swing back for pickup. Stored as HH:MM (24h)
+    # or a datetime-local string — no strict validation because drivers
+    # accept ranges like "16:30-ish" too.
+    return_time: Optional[str] = Field(None, max_length=32)
     tip_amount: Optional[float] = Field(0, ge=0, le=1000)
     flight_number: Optional[str] = Field(None, max_length=12)
     gift_code: Optional[str] = Field(None, max_length=32)
@@ -2372,6 +2377,10 @@ async def create_booking(req: BookingCreate, request: Request):
             round_trip_discount = round((base * 2) * ROUND_TRIP_DISCOUNT_PCT, 2)
             booking["round_trip"] = True
             booking["round_trip_discount"] = round_trip_discount
+            # Optional return time — helps the driver plan the double-run and
+            # lets the guest see it on their confirmation.
+            if req.return_time:
+                booking["return_time"] = req.return_time.strip()[:32]
     if req.service_type == "rental":
         deposit_amount = RENTAL_DEPOSIT_USD
         booking["deposit_amount"] = deposit_amount

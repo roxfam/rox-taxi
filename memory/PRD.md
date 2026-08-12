@@ -12,6 +12,11 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12e — Round-Trip Return-Time Picker
+- New `return_time` field on `BookingCreate` model (backend) — stored on the booking doc when `round_trip=True` so drivers know exactly when to swing back for pickup.
+- Frontend `Taxi.jsx`: right below the round-trip toggle, a gold-bordered "RETURN PICKUP TIME" card appears (fade-in animation) with a native `<input type="time">` picker + explainer copy ("we'll radio the driver so they swing back on the dot. Leave blank if flexible.").
+- Verified end-to-end: booked port-love-beach with round-trip + return_time=16:30 → booking doc persisted `return_time: 16:30` alongside `round_trip_discount: $8.00`.
+
 ### Feb 12d — Per-Person Beach Taxi Fares + 2-Person Minimum + Round-Trip Support
 - Added 4 new taxi services with `pricing_mode: "per_person"`:
   - `port-love-beach` — Downtown/Cruise Port → Love Beach @ $20/person
