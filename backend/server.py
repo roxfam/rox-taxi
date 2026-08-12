@@ -3607,6 +3607,58 @@ async def booking_driver_checkin(booking_id: str, req: DriverCheckinRequest):
 
     await db.bookings.update_one({"id": b["id"]}, {"$set": updates})
 
+    # ── >2km-away alert (owner SMS) ───────────────────────────────────
+    # If the driver's GPS ping is more than 2km from the closest Nassau
+    # anchor keyword-matched from the pickup text, wake the owner with an
+    # instant Twilio SMS so they can call the driver before the guest gets
+    # stranded. Uses the same anchor table + haversine math as the Admin
+    # audit card. Fire-and-forget — never blocks the check-in response.
+    if req.driver_pickup_lat is not None and req.driver_pickup_lng is not None:
+        try:
+            import math
+            ANCHORS = [
+                ("cruise", 25.0785, -77.3395), ("prince george", 25.0785, -77.3395),
+                ("downtown", 25.0785, -77.3400), ("bay street", 25.0782, -77.3396),
+                ("lpia", 25.0393, -77.4661), ("airport", 25.0393, -77.4661),
+                ("cable beach", 25.0808, -77.4059), ("baha mar", 25.0782, -77.4126),
+                ("atlantis", 25.0834, -77.3199), ("paradise island", 25.0850, -77.3200),
+                ("junkanoo", 25.0824, -77.3435), ("love beach", 25.0770, -77.4650),
+                ("arawak", 25.0778, -77.3625), ("fish fry", 25.0778, -77.3625),
+                ("lyford", 25.0180, -77.5195),
+            ]
+            pickup_text = (updates.get("driver_confirmed_pickup_location") or b.get("pickup_location") or "").lower()
+            anchor_lat, anchor_lng = 25.0602, -77.3450  # Nassau centroid fallback
+            for kw, la, ln in ANCHORS:
+                if kw in pickup_text:
+                    anchor_lat, anchor_lng = la, ln
+                    break
+            R = 6371000.0
+            p1 = math.radians(anchor_lat); p2 = math.radians(float(req.driver_pickup_lat))
+            dp = math.radians(float(req.driver_pickup_lat) - anchor_lat)
+            dl = math.radians(float(req.driver_pickup_lng) - anchor_lng)
+            x = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+            d_m = R * 2 * math.asin(min(1.0, math.sqrt(x)))
+            if d_m > 2000:
+                admin_sms = (secrets_store.get_secret("ADMIN_SMS_NUMBER") or "").strip()
+                if admin_sms:
+                    from notifications import send_sms as _send_sms
+                    _send_sms(
+                        admin_sms,
+                        (
+                            f"⚠ Rox driver GPS mismatch · Booking {b['id']}\n"
+                            f"Guest: {b.get('customer_name','')} · {b.get('customer_phone','')}\n"
+                            f"Booked pickup: {(b.get('pickup_location','—') or '—')[:60]}\n"
+                            f"Driver checked in {round(d_m/1000, 1)} km away.\n"
+                            f"Audit: roxtaxi.com/admin (Pickup GPS card)"
+                        ),
+                    )
+                    await db.bookings.update_one(
+                        {"id": b["id"]},
+                        {"$set": {"driver_gps_alert_sent_at": now_iso(), "driver_gps_alert_distance_m": round(d_m, 1)}},
+                    )
+        except Exception:  # noqa: BLE001
+            pass
+
     # Guest heads-up SMS — fire-and-forget, respect admin toggle. Kept short
     # so it lands on the lock screen without a preview cutoff.
     try:

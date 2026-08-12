@@ -12,6 +12,10 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12n — Owner SMS Alert on >2km Driver Check-in Mismatch
+- Extended `POST /api/bookings/{id}/driver-checkin` — after stamping the GPS ping, computes haversine distance to the closest anchor (same table as the Admin audit card). If the ping is >2km away, an owner alert SMS is sent to `ADMIN_SMS_NUMBER` via Twilio: "⚠ Rox driver GPS mismatch · Booking {id} · Driver checked in X.Y km away · Audit: roxtaxi.com/admin (Pickup GPS card)".
+- Fire-and-forget — never blocks the check-in response. Records `driver_gps_alert_sent_at` + `driver_gps_alert_distance_m` on the booking doc so the same booking never double-alerts (if the driver re-scans, they only get one SMS).
+
 ### Feb 12m — Admin Driver Pickup GPS Audit
 - New `GET /api/admin/analytics/pickup-audit` — 60-day window of every driver-scan check-in with `driver_pickup_lat/lng`. Uses haversine distance against a small keyword-matched anchor table (LPIA, Cruise Port, Cable Beach, Atlantis, Baha Mar, Junkanoo, Love Beach, Arawak Cay, Lyford Cay). Any ping >500m from the closest anchor is flagged.
 - New Admin `PickupAuditCard` — clean vs flagged count pills at top, then a table with booking id, booked pickup, anchor, distance badge (green ≤500m, orange >500m), accuracy_m, and check-in timestamp. Flagged rows use the coral background so they jump out.
