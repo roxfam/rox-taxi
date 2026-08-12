@@ -471,6 +471,15 @@ class SiteConfigUpdate(BaseModel):
     # set; otherwise the sync path stays dormant with no upstream call.
     google_places_api_key: Optional[str] = None
     google_place_id: Optional[str] = None
+    # ─── Warm-lead discount nudge (returning-visitor promo) ──────────
+    # Surfaced inside the chat panel when a visitor's session count is 3+
+    # (see ChatWidget.jsx warm-lead logic). All four fields are optional;
+    # when `warm_lead_promo_enabled` is False (or the code is blank), the
+    # card is hidden client-side and no impression is tracked.
+    warm_lead_promo_enabled: Optional[bool] = None
+    warm_lead_promo_code: Optional[str] = None
+    warm_lead_promo_discount_pct: Optional[int] = None
+    warm_lead_promo_description: Optional[str] = None
 
 
 class ContactMessageStatusUpdate(BaseModel):
@@ -1298,6 +1307,27 @@ async def chat_track_open(req: ChatOpenEvent, request: Request):
     return {"tracked": True}
 
 
+class PromoCopyEvent(BaseModel):
+    code: str = Field(..., min_length=1, max_length=32)
+    visit_count: int = Field(1, ge=1, le=999)
+
+
+@router.post("/chat/track-promo-copy")
+async def chat_track_promo_copy(req: PromoCopyEvent, request: Request):
+    """Public — fires when a warm-lead visitor copies the promo code from
+    the chat panel. Lets admins see which returning visitors actually
+    engaged with the discount (vs just seeing it)."""
+    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+        request.client.host if request.client else "")
+    await _db.promo_copy_events.insert_one({
+        "code": (req.code or "")[:32].upper(),
+        "visit_count": req.visit_count,
+        "ip": (ip or "")[:64],
+        "at": _now_iso(),
+    })
+    return {"tracked": True}
+
+
 @router.get("/admin/analytics/warm-lead")
 async def admin_warm_lead_stats(_: str = Depends(_admin_dep)):
     """Aggregate warm-lead engagement — visitors who opened the chat on
@@ -1321,6 +1351,13 @@ async def admin_warm_lead_stats(_: str = Depends(_admin_dep)):
     first_rate = round(first_opens / first_ips, 2) if first_ips else 0.0
     lift = round(((warm_rate / first_rate) - 1) * 100, 1) if first_rate else 0.0
 
+    # ─── Promo-copy counters ──────────────────────────────────────────
+    # Same 30-day window. Only reflects clicks on the chat-panel promo
+    # card, which is only rendered for warm leads when the admin has an
+    # active promo configured.
+    promo_copies = await _db.promo_copy_events.count_documents(q)
+    promo_copy_uniques = len(await _db.promo_copy_events.distinct("ip", q))
+
     return {
         "window_days": 30,
         "total_opens": total_opens,
@@ -1331,6 +1368,8 @@ async def admin_warm_lead_stats(_: str = Depends(_admin_dep)):
         "warm_engagement_rate": warm_rate,
         "first_engagement_rate": first_rate,
         "warm_vs_first_lift_pct": lift,
+        "promo_copies": promo_copies,
+        "promo_copy_uniques": promo_copy_uniques,
     }
 
 

@@ -167,6 +167,31 @@ export default function SiteConfigPanel() {
           </div>
         </div>
 
+        {/* ─── Warm-lead discount nudge (returning-visitor promo) ───
+            Shown inside the chat panel when a visitor's session count is 3+.
+            Toggle off to hide the promo card entirely; empty code = hidden too. */}
+        <div className="pt-4 mt-4 border-t border-[#E2E8F0]">
+          <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold mb-1">Warm-lead discount nudge</div>
+          <div className="text-[11px] text-[#94a3b8] mb-3 leading-relaxed">
+            When a returning visitor opens the chat (3rd+ session), show a promo card with a one-click copy-to-clipboard code. Perfect for nudging warm leads over the booking finish line.
+          </div>
+          <div className="space-y-3">
+            <Toggle
+              label="Enable warm-lead promo card in chat"
+              hint="When OFF, the card is hidden and no impressions are tracked — even if the code below is filled in."
+              checked={cfg.warm_lead_promo_enabled === true}
+              onChange={(v) => setCfg({ ...cfg, warm_lead_promo_enabled: v })}
+              testid="warm-lead-promo-toggle"
+            />
+            <F l="Promo code (uppercase; e.g. WELCOME10)" v={cfg.warm_lead_promo_code || ""} on={(v) => setCfg({ ...cfg, warm_lead_promo_code: (v || "").toUpperCase().slice(0, 32) })} testid="warm-lead-promo-code" />
+            <F l="Discount % (0-100; used in the promo copy)" v={cfg.warm_lead_promo_discount_pct ?? ""} on={(v) => {
+              const n = parseInt(String(v || "").replace(/[^\d]/g, ""), 10);
+              setCfg({ ...cfg, warm_lead_promo_discount_pct: Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null });
+            }} testid="warm-lead-promo-discount" type="number" />
+            <F l="Short description (optional — appears under the code)" v={cfg.warm_lead_promo_description || ""} on={(v) => setCfg({ ...cfg, warm_lead_promo_description: v })} testid="warm-lead-promo-description" />
+          </div>
+        </div>
+
         <div className="pt-4 mt-4 border-t border-[#E2E8F0]">
           <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold mb-3">Notification preferences</div>
           <div className="space-y-2">

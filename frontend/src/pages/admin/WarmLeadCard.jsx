@@ -88,6 +88,21 @@ export default function WarmLeadCard() {
         />
       </div>
 
+      {typeof data.promo_copies === "number" && (
+        <div className="mt-4 grid grid-cols-2 gap-3" data-testid="warm-lead-promo-stats">
+          <Stat
+            label="Promo code copies"
+            value={data.promo_copies}
+            detail={`${data.promo_copy_uniques} unique visitors`}
+            tone="#D4A94A"
+            testid="stat-promo-copies"
+          />
+          <div className="rounded-xl bg-[#FBF7EF] border border-dashed border-[#D4A94A]/40 px-4 py-3 text-[11px] text-[#64748B] leading-relaxed" data-testid="warm-lead-promo-hint">
+            <span className="font-semibold text-[#0B3B5C]">How to boost this:</span> tune the promo code, discount %, or copy in Admin → Site config → Warm-lead discount nudge. Leave the toggle off to hide the card entirely.
+          </div>
+        </div>
+      )}
+
       {noWarmTraffic && (
         <div className="mt-4 rounded-xl bg-[#FBF7EF] border border-[#E2E8F0] px-4 py-3 text-xs text-[#64748B]" data-testid="warm-lead-empty">
           <span className="font-semibold text-[#0B3B5C]">No warm-lead traffic yet.</span> Data will start showing up once a real visitor returns for their 3rd session and opens the chat. Give it a few days.

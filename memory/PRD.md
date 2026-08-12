@@ -12,6 +12,15 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12c — Warm-Lead Discount Nudge (admin-configurable promo in chat)
+- Added 4 new admin-editable fields on `site_config`: `warm_lead_promo_enabled`, `warm_lead_promo_code`, `warm_lead_promo_discount_pct`, `warm_lead_promo_description`.
+- New Admin → Site Config → "Warm-lead discount nudge" section with a Toggle + code/discount/description inputs (auto-uppercase code, discount clamped to 0-100).
+- `ChatWidget.jsx` pulls the promo from `/api/site-config` on mount; when `isWarmLead` (visit_count ≥ 3) AND `enabled` AND code is set, renders a gold-bordered card inside the chat panel above suggestion chips.
+- Card shows "X% OFF · JUST FOR YOU" badge + admin description + one-click Copy-to-clipboard button that flips to a green "COPIED" state for 2.2s.
+- New public endpoint `POST /api/chat/track-promo-copy` logs each copy event with IP + visit count.
+- `GET /api/admin/analytics/warm-lead` now returns `promo_copies` + `promo_copy_uniques` (30-day window); WarmLeadCard renders a 5th stat block.
+- Verified end-to-end: PUT config → GET public config → simulated warm-lead visit → clicked Copy → analytics returned `promo_copies: 1`.
+
 ### Feb 12 — Google Reviews Auto-Sync + Email Blocklist + Warm-Lead Analytics
 ### Feb 12 — Warm-Lead Signal on Chat Widget
 ### Feb 11 — Real Google Reviews (Admin Paste) + Fraud Freeze Button
@@ -35,8 +44,7 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - **User Action**: Submit sitemap in Google Search Console + Bing Webmaster.
 
 ### P2
-- More Fraud Watch additions (booking fraud detection · IP watchlist · card-testing detector · chargeback risk score · dedicated Fraud Watch tab).
-- Warm-Lead Discount Nudge.
+- More Fraud Watch additions (auto-freeze at threshold · VPN/proxy detection · device fingerprint · signup velocity chart · booking fraud detection · IP watchlist · card-testing detector · chargeback risk score · dedicated Fraud Watch tab).
 - Modularize `server.py` (>3900 lines).
 
 ## Third-party Integrations

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Send, MessagesSquare, ExternalLink } from "lucide-react";
+import { X, Send, MessagesSquare, ExternalLink, Copy, Check, Gift } from "lucide-react";
 import { api, BACKEND_URL } from "../lib/api";
 
 const SUGGESTIONS = [
@@ -70,6 +70,10 @@ export default function ChatWidget() {
   const [busy, setBusy] = useState(false);
   const [unread, setUnread] = useState(false);
   const [waUrl, setWaUrl] = useState("");
+  // Warm-lead promo state — pulled from /site-config. Only rendered when
+  // the admin has flipped `warm_lead_promo_enabled` AND provided a code.
+  const [promo, setPromo] = useState(null); // { code, discount_pct, description }
+  const [promoCopied, setPromoCopied] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [nudged, setNudged] = useState(false);  // auto-invite bubble ~5s after page load
   // Gentle amber glow on the FAB when a returning visitor lands — plays once
@@ -99,8 +103,20 @@ export default function ChatWidget() {
   // one inbox, one owner-side app. Messenger is retired here per business ask.
   useEffect(() => {
     api.get("/site-config").then((r) => {
-      const num = (r?.data?.whatsapp_number || "").replace(/[^\d]/g, "");
+      const d = r?.data || {};
+      const num = (d.whatsapp_number || "").replace(/[^\d]/g, "");
       if (num) setWaUrl(`https://wa.me/${num}`);
+      // Warm-lead promo — only surface when explicitly enabled AND a code
+      // is set. Description is optional; when the discount % is non-zero
+      // we auto-generate friendly fallback copy.
+      const code = (d.warm_lead_promo_code || "").trim().toUpperCase();
+      if (d.warm_lead_promo_enabled === true && code) {
+        setPromo({
+          code,
+          discount_pct: Number.isFinite(d.warm_lead_promo_discount_pct) ? d.warm_lead_promo_discount_pct : null,
+          description: (d.warm_lead_promo_description || "").trim(),
+        });
+      }
     }).catch(() => {});
   }, []);
 
@@ -147,6 +163,45 @@ export default function ChatWidget() {
     return lastUser
       ? `Hi Rox! I was just chatting on your website about: "${lastUser.text}". Can you help me finish the booking?`
       : "Hi Rox! Sending this from your website chat — can you help me?";
+  };
+
+  const copyPromo = () => {
+    if (!promo?.code) return;
+    const code = promo.code;
+    const done = () => {
+      setPromoCopied(true);
+      setTimeout(() => setPromoCopied(false), 2200);
+      // Fire-and-forget tracking — admin analytics counts this as engagement.
+      api.post("/chat/track-promo-copy", { code, visit_count: visitCount }).catch(() => {});
+    };
+    try {
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(code).then(done).catch(() => {
+          // Fallback path for browsers/contexts without clipboard permission.
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = code;
+            ta.style.position = "fixed";
+            ta.style.left = "-9999px";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            done();
+          } catch { /* ignore */ }
+        });
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = code;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        done();
+      }
+    } catch { /* ignore */ }
   };
 
   const openHandoff = () => {
@@ -399,6 +454,47 @@ export default function ChatWidget() {
             </div>
           ))}
         </div>
+
+        {/* Warm-lead promo card — only for returning visitors when the admin
+            has enabled a promo. Slots in above the suggestion chips so it's
+            the first thing they see after the intro message. Copy button
+            triggers a track-promo-copy analytics event. */}
+        {isWarmLead && promo && (
+          <div
+            className="mx-5 mt-1 mb-2 rounded-2xl border border-[#D4A94A]/50 bg-gradient-to-br from-[#FEF9E7] via-white to-[#FBF7EF] p-3 shadow-[0_10px_25px_rgba(212,169,74,0.18)] animate-in fade-in slide-in-from-bottom-2 duration-500"
+            data-testid="chat-warm-lead-promo"
+          >
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-[#D4A94A] to-[#b88a2d] text-white shadow-inner">
+                <Gift className="w-3.5 h-3.5" />
+              </span>
+              <div className="text-[10px] uppercase tracking-[0.22em] font-black text-[#D4A94A]">
+                {promo.discount_pct ? `${promo.discount_pct}% off` : "Returning-guest perk"} · Just for you
+              </div>
+            </div>
+            <div className="text-[12px] text-[#0B3B5C] leading-snug mb-2">
+              {promo.description || (promo.discount_pct
+                ? `Welcome back! Use this code at checkout for ${promo.discount_pct}% off your next booking.`
+                : "Welcome back — here's a little something. Use this code at checkout.")}
+            </div>
+            <button
+              type="button"
+              onClick={copyPromo}
+              data-testid="chat-promo-copy-btn"
+              aria-label={`Copy promo code ${promo.code}`}
+              className={`w-full inline-flex items-center justify-between gap-2 rounded-xl border-2 border-dashed px-3 py-2 text-sm font-black tracking-widest transition-all ${
+                promoCopied
+                  ? "border-[#22c55e] bg-[#DCFCE7] text-[#166534]"
+                  : "border-[#D4A94A] bg-white text-[#0B3B5C] hover:bg-[#FEF9E7] active:scale-[0.98]"
+              }`}
+            >
+              <span className="mono truncate" data-testid="chat-promo-code">{promo.code}</span>
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
+                {promoCopied ? (<><Check className="w-3.5 h-3.5" /> Copied</>) : (<><Copy className="w-3.5 h-3.5" /> Tap to copy</>)}
+              </span>
+            </button>
+          </div>
+        )}
 
         {messages.length <= 1 && (
           <div className="px-5 pb-3 flex flex-wrap gap-2" data-testid="chat-suggestions">
