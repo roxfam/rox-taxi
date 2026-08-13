@@ -480,6 +480,12 @@ class SiteConfigUpdate(BaseModel):
     warm_lead_promo_code: Optional[str] = None
     warm_lead_promo_discount_pct: Optional[int] = None
     warm_lead_promo_description: Optional[str] = None
+    # ─── Backup driver roster (fleet reassign roster) ────────────────
+    # List of {name, phone} entries. The Admin "Reassign to backup"
+    # button reads this list, lets the owner pick one on the spot, and
+    # texts the chosen driver a fresh dispatch SMS. Scales the fleet
+    # without any code changes when new drivers join or leave.
+    backup_drivers: Optional[List[Dict[str, str]]] = None
 
 
 class ContactMessageStatusUpdate(BaseModel):

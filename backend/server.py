@@ -2422,11 +2422,23 @@ async def create_booking(req: BookingCreate, request: Request):
             _toll_note = f"⚠ Includes ${PARADISE_BRIDGE_TOLL_USD:.0f} Paradise Island bridge toll pass (round-trip). Toll billed to driver at the crossing and reimbursed on this booking."
             booking["notes"] = (_existing + " · " + _toll_note).strip(" ·") if _existing else _toll_note
         # Round-trip: charge the fare twice, then apply 10% off both legs.
+        # UNLESS the service has a `round_trip_price_override` (e.g. Queen's
+        # Staircase where the driver-wait cost is priced into a flat $30 RT),
+        # in which case we use that override as the base — no auto-discount.
         if req.round_trip:
-            round_trip_fare_addition = base
-            round_trip_discount = round((base * 2) * ROUND_TRIP_DISCOUNT_PCT, 2)
-            booking["round_trip"] = True
-            booking["round_trip_discount"] = round_trip_discount
+            _rt_override = float(_svc_doc.get("round_trip_price_override") or 0.0) if not _per_person_taxi else 0.0
+            if _rt_override > 0:
+                # Base becomes the override; extra-passenger surcharge still
+                # applies below. Skip the auto discount + fare doubling.
+                round_trip_fare_addition = round(_rt_override - base, 2)
+                round_trip_discount = 0.0
+                booking["round_trip"] = True
+                booking["round_trip_price_override"] = _rt_override
+            else:
+                round_trip_fare_addition = base
+                round_trip_discount = round((base * 2) * ROUND_TRIP_DISCOUNT_PCT, 2)
+                booking["round_trip"] = True
+                booking["round_trip_discount"] = round_trip_discount
             # Optional return time — helps the driver plan the double-run and
             # lets the guest see it on their confirmation.
             if req.return_time:
@@ -3493,8 +3505,20 @@ def _build_receipt_pdf(booking: dict) -> bytes:
     return build_receipt_pdf(booking)
 
 
+class ReassignBackupRequest(BaseModel):
+    # Optional pick from the roster (see `backup_drivers` in site_config).
+    # When omitted, falls back to the legacy `BACKUP_DRIVER_PHONE` secret so
+    # existing installs keep working before the roster is populated.
+    driver_name: Optional[str] = Field(None, max_length=64)
+    driver_phone: Optional[str] = Field(None, max_length=32)
+
+
 @api_router.post("/admin/bookings/{booking_id}/reassign-backup")
-async def admin_reassign_backup(booking_id: str, _admin: str = Depends(require_admin)):
+async def admin_reassign_backup(
+    booking_id: str,
+    req: Optional[ReassignBackupRequest] = None,
+    _admin: str = Depends(require_admin),
+):
     """Owner-triggered: sends a fresh dispatch SMS to the standby driver
     (`BACKUP_DRIVER_PHONE` secret) with the guest details, so a mismatched
     check-in can be reassigned in two taps from the original alert SMS.
@@ -3508,10 +3532,35 @@ async def admin_reassign_backup(booking_id: str, _admin: str = Depends(require_a
     if b.get("reassigned_to_backup_at"):
         raise HTTPException(400, "Trip already reassigned to backup driver.")
 
-    backup = (secrets_store.get_secret("BACKUP_DRIVER_PHONE") or "").strip()
-    if not backup:
-        raise HTTPException(400, "No BACKUP_DRIVER_PHONE configured in Site Config secrets.")
+    # ── Backup driver resolution ─────────────────────────────────────
+    # Precedence: 1) explicit phone in request body 2) roster entry that
+    # matches request driver_name 3) first roster entry 4) legacy
+    # BACKUP_DRIVER_PHONE secret. The chosen name is echoed back in the
+    # response so the frontend can show a "✓ Dispatched to Sam" confirmation.
+    backup_phone = ""
+    backup_name = ""
+    if req and req.driver_phone:
+        backup_phone = req.driver_phone.strip()
+        backup_name = (req.driver_name or "").strip() or "backup driver"
+    else:
+        cfg = await db.site_config.find_one({"_id": "main"}) or {}
+        roster = cfg.get("backup_drivers") or []
+        if req and req.driver_name:
+            match = next((d for d in roster if (d.get("name") or "").strip().lower() == req.driver_name.strip().lower()), None)
+            if match:
+                backup_phone = (match.get("phone") or "").strip()
+                backup_name = (match.get("name") or "").strip()
+        if not backup_phone and roster:
+            backup_phone = (roster[0].get("phone") or "").strip()
+            backup_name = (roster[0].get("name") or "").strip()
+        if not backup_phone:
+            backup_phone = (secrets_store.get_secret("BACKUP_DRIVER_PHONE") or "").strip()
+            backup_name = backup_name or "backup driver"
 
+    if not backup_phone:
+        raise HTTPException(400, "No backup driver configured. Add one in Admin → Site Config → Backup driver roster.")
+
+    backup = (secrets_store.get_secret("BACKUP_DRIVER_PHONE") or "").strip()
     pickup_text = b.get("driver_confirmed_pickup_location") or b.get("pickup_location") or "—"
     from urllib.parse import quote_plus
     map_link = f"https://maps.google.com/?q={quote_plus(str(pickup_text))}"
@@ -3525,16 +3574,18 @@ async def admin_reassign_backup(booking_id: str, _admin: str = Depends(require_a
         f"Please confirm receipt with dispatch."
     )
     from notifications import send_sms as _send_sms
-    result = _send_sms(backup, body)
+    result = _send_sms(backup_phone, body)
 
     await db.bookings.update_one(
         {"id": b["id"]},
         {"$set": {
             "reassigned_to_backup_at": now_iso(),
             "reassigned_to_backup_result": result,
+            "reassigned_to_backup_name": backup_name,
+            "reassigned_to_backup_phone": backup_phone,
         }},
     )
-    return {"ok": True, "backup_sms": result}
+    return {"ok": True, "backup_sms": result, "backup_name": backup_name}
 
 
 @api_router.get("/bookings/{booking_id}/qr.png")

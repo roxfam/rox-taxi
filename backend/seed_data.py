@@ -196,6 +196,15 @@ TAXI_SERVICES: List[Dict] = [
      "pricing_mode": "per_person",
      "description": f"{_TARIFF_NOTE} Cross the bridge and head west to Love Beach — bridge toll included. $30 per person · round-trip option available.",
      "image_url": _TAXI_IMG},
+    # ── Queen's Staircase flat fare with custom round-trip override ────
+    # Flat $15 covers the first 2 passengers ($5 each additional). Round
+    # trip is a fixed $30 for 2 (no auto 10% off) because the extra-hour
+    # wait at the site is priced into the doubled base.
+    {"id": "port-queens-staircase", "name": "Downtown / Cruise Port → Queen's Staircase",
+     "price": 15.0, "round_trip_price_override": 30.0,
+     "route": "Downtown / Cruise Port → Queen's Staircase", "featured": True,
+     "description": f"{_TARIFF_NOTE} Historic 66-step limestone stairway carved by slaves in the 1790s — 8 min from the port. $15 for 2 passengers · +$5 each additional · $30 round-trip (with driver wait) back to your pickup point.",
+     "image_url": _TAXI_IMG},
     {"id": "grocery-run", "name": "Grocery Pick-Up & Drop-Off (hourly)", "price": 55.0,
      "route": "Hotel/Villa ↔ Supermarket (by the hour)", "featured": True,
      "description": "Private driver waits while you shop and helps load groceries. Billed at the standard $55/hr hourly charter rate — 1-hour minimum, then pro-rata after. Popular stops: Solomon's, Super Value, Robin Hood, Family Value, Cost Right (Cable Beach & Baha Mar villas).",

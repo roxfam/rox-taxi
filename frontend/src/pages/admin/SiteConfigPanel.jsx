@@ -7,8 +7,7 @@ import ImagePickerModal from "./ImagePickerModal";
 
 // Central site-wide configuration — brand logo, social links, Zelle details,
 // contact phone, and notification (email/SMS) toggles.
-export default function SiteConfigPanel() {
-  const [cfg, setCfg] = useState({ facebook_url: "", zelle_email: "", zelle_phone: "", phone: "", logo_url: "" });
+export default function SiteConfigPanel() {  const [cfg, setCfg] = useState({ facebook_url: "", zelle_email: "", zelle_phone: "", phone: "", logo_url: "" });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pickingLogo, setPickingLogo] = useState(false);
@@ -190,6 +189,22 @@ export default function SiteConfigPanel() {
             }} testid="warm-lead-promo-discount" type="number" />
             <F l="Short description (optional — appears under the code)" v={cfg.warm_lead_promo_description || ""} on={(v) => setCfg({ ...cfg, warm_lead_promo_description: v })} testid="warm-lead-promo-description" />
           </div>
+        </div>
+
+        {/* ─── Backup driver roster ────────────────────────────────
+            When a driver check-in lands >2km from the booked pickup,
+            the Admin dashboard's "🚨 Reassign to backup" button reads
+            this roster and lets the owner pick who to text on the spot.
+            First row is the default when the picker is skipped. */}
+        <div className="pt-4 mt-4 border-t border-[#E2E8F0]">
+          <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold mb-1">Backup driver roster</div>
+          <div className="text-[11px] text-[#94a3b8] mb-3 leading-relaxed">
+            Fleet of standby drivers the "Reassign" button can text. Add as many as you like — when a mismatch alert fires you'll pick one on the spot. The first entry is used as the default fallback.
+          </div>
+          <BackupDriverRoster
+            drivers={Array.isArray(cfg.backup_drivers) ? cfg.backup_drivers : []}
+            onChange={(list) => setCfg({ ...cfg, backup_drivers: list })}
+          />
         </div>
 
         <div className="pt-4 mt-4 border-t border-[#E2E8F0]">
@@ -388,6 +403,63 @@ function BlackoutDatesSection() {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+// ─── Backup driver roster editor ──────────────────────────────────────
+// Small inline table for adding / editing / deleting standby drivers.
+// Kept as a sibling component so the main SiteConfigPanel stays readable.
+function BackupDriverRoster({ drivers, onChange }) {
+  const add = () => onChange([...(drivers || []), { name: "", phone: "" }]);
+  const update = (idx, key, value) => {
+    const next = drivers.slice();
+    next[idx] = { ...next[idx], [key]: value };
+    onChange(next);
+  };
+  const remove = (idx) => onChange(drivers.filter((_, i) => i !== idx));
+  return (
+    <div className="space-y-2" data-testid="backup-driver-roster">
+      {(drivers || []).length === 0 && (
+        <div className="text-[11px] text-[#94a3b8] italic px-3 py-2">No standby drivers yet — add your first below.</div>
+      )}
+      {(drivers || []).map((d, idx) => (
+        <div key={idx} className="flex items-center gap-2" data-testid={`backup-driver-row-${idx}`}>
+          <input
+            type="text"
+            placeholder="Name (e.g. Sam)"
+            value={d.name || ""}
+            onChange={(e) => update(idx, "name", e.target.value)}
+            data-testid={`backup-driver-name-${idx}`}
+            className="flex-1 rounded-xl border border-[#EFE7D5] px-3 py-2 text-sm text-[#0B3B5C] focus:border-[#D4A94A] focus:outline-none"
+          />
+          <input
+            type="tel"
+            placeholder="+1 242 555 1234"
+            value={d.phone || ""}
+            onChange={(e) => update(idx, "phone", e.target.value)}
+            data-testid={`backup-driver-phone-${idx}`}
+            className="flex-1 rounded-xl border border-[#EFE7D5] px-3 py-2 text-sm text-[#0B3B5C] focus:border-[#D4A94A] focus:outline-none mono"
+          />
+          <button
+            type="button"
+            onClick={() => remove(idx)}
+            data-testid={`backup-driver-delete-${idx}`}
+            className="p-2 rounded-lg text-[#E86A3C] hover:bg-[#FEF2E8]"
+            aria-label="Remove driver"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        data-testid="backup-driver-add"
+        className="inline-flex items-center gap-1.5 rounded-full border-2 border-dashed border-[#D4A94A]/50 text-[#D4A94A] px-4 py-2 text-xs font-black uppercase tracking-widest hover:bg-[#FBF7EF]"
+      >
+        <Plus className="w-3.5 h-3.5" /> Add backup driver
+      </button>
     </div>
   );
 }

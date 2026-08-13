@@ -100,10 +100,35 @@ export default function AdminDashboard() {
   }, [loading, bookings]);
 
   const reassignBackup = async (id) => {
-    if (!window.confirm(`Text the backup driver a fresh dispatch for ${id}?`)) return;
+    // Pull the live roster so the owner can pick who to text on the spot.
+    // Falls through to the legacy single-driver flow if the roster is empty.
+    let picked = null;
     try {
-      await api.post(`/admin/bookings/${id}/reassign-backup`);
-      toast.success(`Backup driver notified for ${id}`);
+      const { data } = await api.get("/site-config");
+      const roster = Array.isArray(data?.backup_drivers) ? data.backup_drivers.filter((d) => d.phone) : [];
+      if (roster.length === 0) {
+        if (!window.confirm(`Text the standby backup driver a fresh dispatch for ${id}?`)) return;
+      } else if (roster.length === 1) {
+        if (!window.confirm(`Text ${roster[0].name || "backup driver"} (${roster[0].phone}) a fresh dispatch for ${id}?`)) return;
+        picked = roster[0];
+      } else {
+        const labels = roster.map((d, i) => `${i + 1}. ${d.name || "(no name)"} — ${d.phone}`).join("\n");
+        const raw = window.prompt(`Pick backup driver for ${id}:\n${labels}\n\nEnter number 1-${roster.length}:`, "1");
+        if (raw == null) return;
+        const idx = parseInt(raw, 10) - 1;
+        if (Number.isNaN(idx) || idx < 0 || idx >= roster.length) {
+          toast.error("Invalid pick");
+          return;
+        }
+        picked = roster[idx];
+      }
+    } catch {
+      if (!window.confirm(`Text the backup driver a fresh dispatch for ${id}?`)) return;
+    }
+    try {
+      const body = picked ? { driver_name: picked.name || "", driver_phone: picked.phone } : {};
+      const { data } = await api.post(`/admin/bookings/${id}/reassign-backup`, body);
+      toast.success(`Dispatched to ${data.backup_name || "backup driver"} for ${id}`);
       load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Reassignment failed");

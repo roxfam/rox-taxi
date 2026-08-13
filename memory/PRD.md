@@ -12,6 +12,19 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12s — Queen's Staircase Route + Round-Trip Price Override
+- Added new taxi service `port-queens-staircase` — Downtown/Cruise Port → Queen's Staircase @ **$15 for first 2 passengers + $5 each additional**.
+- **Round-trip price override**: new `round_trip_price_override` field on taxi services. When set, the RT base becomes exactly that value (no auto 10% off) — e.g. Queen's Staircase RT = **$30 flat** because the driver-wait cost is priced in. Extra-passenger surcharge ($5/pax over 2) still layers on top.
+- Backend `create_booking` + frontend `BookingFlow.jsx` both honour the override; when the service doesn't ship one, standard `base×2 × 0.9` round-trip math applies.
+- Verified via curl: 2 pax booking $15 one-way → `total_amount=$15`; 2 pax RT → base becomes $30 (no discount); 3 pax RT → $30 + $5 = $35.
+
+### Feb 12r — Live Backup Driver Roster + On-Spot Picker
+- New `backup_drivers` field on `site_config` — list of `{name, phone}` entries editable inline from Admin → Site Config → **Backup driver roster**. Add / edit / delete rows without touching code.
+- `POST /api/admin/bookings/{id}/reassign-backup` now accepts an optional `driver_name` + `driver_phone` body. Resolution precedence: explicit phone → roster name match → first roster entry → legacy `BACKUP_DRIVER_PHONE` secret.
+- `AdminDashboard.jsx` reassign flow: fetches the roster on click. Empty → single confirm; 1 driver → confirm with name/phone; 2+ drivers → prompt with numbered picker so owner picks one on the spot.
+- Booking doc now stamps `reassigned_to_backup_name` + `reassigned_to_backup_phone` alongside the existing timestamp so admins can audit who took the trip.
+- Removed horse-tour verification confirmed: 0 horse-related tours in the catalog (only "workhorse" string was in a taxi tagline, unrelated).
+
 ### Feb 12q — "Reassign to Backup Driver" Two-Tap Escalation
 - New `POST /api/admin/bookings/{id}/reassign-backup` (admin-only) — texts the standby driver (`BACKUP_DRIVER_PHONE` secret) a fresh dispatch SMS with guest name, phone, pickup, service, pax count, and Google Maps link. Stamps `reassigned_to_backup_at` + `reassigned_to_backup_result` on the booking so the button fires only once.
 - `AdminDashboard.jsx`: when a row is opened via `?focus=BOOKING_ID` (from the alert SMS magic-link), the focused row now exposes a big coral "🚨 Reassign to backup" button inline. Confirm dialog before firing. On success the button is replaced by a green "✓ Backup dispatched" badge.
