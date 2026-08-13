@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money } from "../lib/api";
-import { Phone, MessageCircle, MapPin, ArrowRight, RefreshCw, LogOut, Calendar, User, Navigation, Trophy, Zap } from "lucide-react";
+import { Phone, MessageCircle, MapPin, ArrowRight, RefreshCw, LogOut, Calendar, User, Navigation, Trophy, Zap, Users } from "lucide-react";
 
 // Mobile-first "today's runs" screen for the driver / dispatcher.
 // Auth: reuses the admin JWT — the owner IS the primary driver here.
@@ -151,7 +151,12 @@ export default function DriverManifest() {
 
       <div className="px-4 pt-4 space-y-3">
         {leaderboard && leaderboard.this_month?.total > 0 && (
-          <LeaderboardCard data={leaderboard} />
+          <>
+            <LeaderboardCard data={leaderboard} />
+            {Array.isArray(leaderboard.per_driver) && leaderboard.per_driver.length > 0 && (
+              <PerDriverBreakdown drivers={leaderboard.per_driver} />
+            )}
+          </>
         )}
         {bookings.length === 0 ? (
           <div className="text-center py-24 text-white/50" data-testid="driver-manifest-empty">
@@ -328,3 +333,65 @@ function LeaderboardCard({ data }) {
     </div>
   );
 }
+
+
+// ── Per-Driver Breakdown card ────────────────────────────────────────
+// Splits the team's on-time % by individual driver name so each driver
+// gets bragging rights. Unassigned bookings fold to the bottom.
+function PerDriverBreakdown({ drivers }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!drivers || drivers.length === 0) return null;
+  const display = expanded ? drivers : drivers.slice(0, 3);
+  const topName = drivers.find((d) => d.driver_name !== "Unassigned")?.driver_name;
+  return (
+    <div
+      className="mt-3 rounded-2xl bg-white border border-[#D4A94A]/25 p-4 shadow-[0_10px_30px_rgba(11,25,44,0.05)]"
+      data-testid="per-driver-leaderboard"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black">
+          <Users className="w-3.5 h-3.5" /> By driver · this month
+        </div>
+        {drivers.length > 3 && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            data-testid="per-driver-toggle"
+            className="text-[10px] uppercase tracking-widest text-[#64748B] hover:text-[#D4A94A] font-bold"
+          >
+            {expanded ? "Show top 3" : `Show all ${drivers.length}`}
+          </button>
+        )}
+      </div>
+      <div className="space-y-2">
+        {display.map((d, i) => {
+          const tone = d.on_time_pct >= 90 ? "#059669" : d.on_time_pct >= 75 ? "#D4A94A" : "#E86A3C";
+          const isTop = i === 0 && d.driver_name === topName;
+          return (
+            <div
+              key={d.driver_name}
+              data-testid={`per-driver-row-${d.driver_name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${isTop ? "bg-[#FBF7EF]" : "bg-[#F8FAFC]"}`}
+            >
+              <span
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${
+                  isTop ? "bg-[#D4A94A] text-white" : "bg-white border border-[#E2E8F0] text-[#0B3B5C]"
+                }`}
+              >
+                {isTop ? <Trophy className="w-3.5 h-3.5" /> : i + 1}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-semibold text-[#0B3B5C] truncate">{d.driver_name}</span>
+                <span className="block text-[10px] text-[#94a3b8]">{d.total} run{d.total === 1 ? "" : "s"} · {d.on_time} on-time · {d.late} late</span>
+              </span>
+              <span className="mono font-bold text-sm shrink-0" style={{ color: tone }}>
+                {d.on_time_pct}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+

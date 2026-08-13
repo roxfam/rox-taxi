@@ -176,6 +176,10 @@ class BookingCreate(BaseModel):
     # A/B variant shown to the guest ("A" or "B"). Recorded verbatim so the
     # analytics chart can compute per-variant attach rate.
     taxi_addon_variant: Optional[str] = Field(None, max_length=1)
+    # Popular Add-ons picker (taxi bookings only). List of add-on ids the
+    # guest ticked. Server re-hydrates each id against the taxi service's
+    # `addons` catalog so the fee/label can't be spoofed.
+    selected_addon_ids: Optional[List[str]] = None
 
 
 LUGGAGE_FEE_USD = 3.0
@@ -2331,6 +2335,7 @@ async def create_booking(req: BookingCreate, request: Request):
     additional_driver_fee = 0.0
     bridge_toll_fee = 0.0
     taxi_addon_fee = 0.0
+    taxi_extras_fee = 0.0  # popular add-ons picked on the taxi page
 
     # ── Tour: per-person kids/toddlers pricing + optional taxi add-on ────
     if req.service_type == "tour":
@@ -2443,6 +2448,35 @@ async def create_booking(req: BookingCreate, request: Request):
             # lets the guest see it on their confirmation.
             if req.return_time:
                 booking["return_time"] = req.return_time.strip()[:32]
+        # ── Popular Add-ons picker ─────────────────────────────────────
+        # Guest may have checked one or more extras on the taxi card /
+        # booking modal. Each add-on id is looked up against the service's
+        # own `addons` catalog and re-priced server-side so the total
+        # can't be spoofed from the client.
+        if req.selected_addon_ids:
+            catalog_addons = _svc_doc.get("addons") or []
+            catalog_by_id = {a.get("id"): a for a in catalog_addons if a.get("id")}
+            _pax_for_addon = int(req.passengers or 1)
+            picked = []
+            for aid in req.selected_addon_ids:
+                addon = catalog_by_id.get(aid)
+                if not addon:
+                    continue
+                _amode = (addon.get("price_mode") or "flat").lower()
+                _aprice = float(addon.get("price") or 0.0)
+                _fee = round(_aprice * max(1, _pax_for_addon), 2) if _amode == "per_person" else round(_aprice, 2)
+                if _fee > 0:
+                    taxi_extras_fee += _fee
+                    picked.append({
+                        "id": aid,
+                        "label": addon.get("label", ""),
+                        "price": _aprice,
+                        "price_mode": _amode,
+                        "fee": _fee,
+                    })
+            if picked:
+                booking["addons_selected"] = picked
+                booking["addons_fee"] = round(taxi_extras_fee, 2)
     if req.service_type == "rental":
         deposit_amount = RENTAL_DEPOSIT_USD
         booking["deposit_amount"] = deposit_amount
@@ -2504,7 +2538,8 @@ async def create_booking(req: BookingCreate, request: Request):
     computed_total = round(
         base + round_trip_fare_addition - round_trip_discount - rental_discount
         + luggage_fee + passenger_fee + deposit_amount + additional_driver_fee
-        + bridge_toll_fee + tip_amount + taxi_addon_fee + booking.get("baby_seat_fee", 0.0),
+        + bridge_toll_fee + tip_amount + taxi_addon_fee + taxi_extras_fee
+        + booking.get("baby_seat_fee", 0.0),
         2,
     )
 
@@ -4187,6 +4222,46 @@ async def driver_leaderboard(_: str = Depends(require_admin)):
         if v: streak += 1
         else: break
 
+    # ── Per-driver breakdown (this month) ────────────────────────────
+    # Groups arrivals by `driver_name` (case-preserved, trimmed) so the
+    # team can see individual bragging-rights numbers instead of just
+    # the collective. Unassigned bookings (no driver_name) fold into a
+    # single "Unassigned" row so they don't disappear from the total.
+    per_driver_agg: Dict[str, Dict[str, int]] = {}
+    cursor = db.bookings.find({
+        "arrived_at": {"$exists": True, "$ne": None},
+        "booking_date": {"$gte": month_start.isoformat(), "$lt": now.isoformat()},
+    })
+    async for b in cursor:
+        v = _classify(b)
+        if v is None:
+            continue
+        name = (b.get("driver_name") or "").strip() or "Unassigned"
+        row = per_driver_agg.setdefault(name, {"on_time": 0, "late": 0})
+        if v:
+            row["on_time"] += 1
+        else:
+            row["late"] += 1
+    per_driver = []
+    for name, row in per_driver_agg.items():
+        total_runs = row["on_time"] + row["late"]
+        pct = round((row["on_time"] / total_runs) * 100, 1) if total_runs > 0 else 0.0
+        per_driver.append({
+            "driver_name": name,
+            "total": total_runs,
+            "on_time": row["on_time"],
+            "late": row["late"],
+            "on_time_pct": pct,
+        })
+    # Sort: highest on-time %, then most runs (tie-breaker). Unassigned
+    # always sinks to the bottom so real drivers are the headline.
+    per_driver.sort(key=lambda d: (
+        d["driver_name"] == "Unassigned",
+        -d["on_time_pct"],
+        -d["total"],
+        d["driver_name"].lower(),
+    ))
+
     return {
         "on_time_tolerance_min": ON_TIME_TOLERANCE_MIN,
         "this_month": this_month,
@@ -4194,6 +4269,7 @@ async def driver_leaderboard(_: str = Depends(require_admin)):
         "delta_pct": round(this_month["on_time_pct"] - last_month["on_time_pct"], 1),
         "streak": streak,
         "trend": trend,
+        "per_driver": per_driver,
         "generated_at": now_iso(),
     }
 

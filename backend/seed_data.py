@@ -71,39 +71,82 @@ TOURS_SEED: List[Dict] = [
 _TARIFF_NOTE = "Official Nassau tariff. First 2 passengers. +$5 per extra passenger. Paradise Island bridge toll ($2) included where applicable."
 _TAXI_IMG = "https://images.unsplash.com/photo-1736742482023-03f3be60875e?crop=entropy&cs=srgb&fm=jpg&q=85"
 
+# ── Popular Add-ons (per-route quick-add extras) ────────────────────────
+# Each taxi service can ship a `addons` list of small quick-add extras.
+# `price_mode` supports "flat" (whole booking) or "per_person" (× pax).
+# Surfaced as a horizontal chip strip below each taxi card and re-listed
+# inside the booking modal as toggle checkboxes.
+_ADDON_QUEENS = [
+    {"id": "fort-fincastle", "label": "Fort Fincastle side-stop", "price": 10.0, "price_mode": "flat",
+     "description": "Add a 10-min photo stop at the hilltop fort next door."},
+    {"id": "graycliff-coffee", "label": "Graycliff coffee stop (15 min)", "price": 8.0, "price_mode": "flat",
+     "description": "Detour by Graycliff estate for a quick espresso to-go."},
+]
+_ADDON_ATLANTIS = [
+    {"id": "casino-wait-30", "label": "Casino drop-off wait (30 min)", "price": 15.0, "price_mode": "flat",
+     "description": "Driver waits 30 minutes at the Atlantis casino entrance."},
+    {"id": "marina-village", "label": "Marina Village photo stop", "price": 8.0, "price_mode": "flat",
+     "description": "Sunset photo stop at Atlantis Marina Village on the way in."},
+]
+_ADDON_AIRPORT = [
+    {"id": "meet-greet-sign", "label": "Meet-with-sign at arrivals", "price": 5.0, "price_mode": "flat",
+     "description": "Driver waits inside arrivals with your name on a placard."},
+    {"id": "luggage-handling", "label": "Extra luggage assistance", "price": 5.0, "price_mode": "flat",
+     "description": "Curbside porter help for 3+ bags — no fumbling."},
+]
+_ADDON_CRUISE = [
+    {"id": "wharf-greeter", "label": "Meet-with-sign at Prince George Wharf", "price": 5.0, "price_mode": "flat",
+     "description": "Driver waits with a Rox placard at the cruise-port taxi stand."},
+    {"id": "cold-drinks", "label": "Chilled Kalik + water pack", "price": 6.0, "price_mode": "flat",
+     "description": "Ice-cold Kalik beer + bottled water waiting in the cab."},
+]
+_ADDON_BEACH = [
+    {"id": "cooler-towels", "label": "Cooler + towels loaner", "price": 8.0, "price_mode": "flat",
+     "description": "Rox-branded cooler and 4 beach towels waiting in the trunk (returned on pickup)."},
+    {"id": "beach-picnic", "label": "Bahamian picnic snack pack", "price": 12.0, "price_mode": "per_person",
+     "description": "Conch fritters, Bahamian mac, and a fresh coconut per person."},
+]
+_ADDON_HOURLY = [
+    {"id": "bottled-water", "label": "Bottled water package", "price": 5.0, "price_mode": "flat",
+     "description": "Cold bottled water for everyone in the vehicle."},
+    {"id": "narration", "label": "Local narration during drive", "price": 15.0, "price_mode": "flat",
+     "description": "Driver adds guided commentary on Nassau history + landmarks."},
+]
+
+
 TAXI_SERVICES: List[Dict] = [
     {"id": "airport-nassau", "name": "LPIA Airport → Downtown Nassau", "price": 40.0,
      "route": "LPIA → Downtown Nassau", "featured": True,
      "description": f"{_TARIFF_NOTE} Meet & greet at arrivals, luggage help, air-conditioned.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_AIRPORT},
     {"id": "airport-cablebeach", "name": "LPIA Airport → Cable Beach", "price": 35.0,
      "route": "LPIA → Cable Beach", "featured": True,
      "description": f"{_TARIFF_NOTE} Includes SuperClubs Breezes, Melia, Sandals Royal Bahamian.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_AIRPORT},
     {"id": "airport-bahamar", "name": "LPIA Airport → Baha Mar / SLS / Grand Hyatt / Rosewood", "price": 35.0,
      "route": "LPIA → Baha Mar", "featured": True,
      "description": f"{_TARIFF_NOTE} Baha Mar resort complex on Cable Beach.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_AIRPORT},
     {"id": "airport-paradise", "name": "LPIA Airport → Paradise Island / Atlantis", "price": 45.0,
      "route": "LPIA → Paradise Island", "featured": True,
      "description": f"{_TARIFF_NOTE} Paradise Island $2 bridge toll included.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_AIRPORT + _ADDON_ATLANTIS},
     {"id": "airport-cruiseport", "name": "LPIA Airport → Nassau Cruise Port (Festival Place)", "price": 40.0,
      "route": "LPIA → Cruise Port", "featured": True,
      "description": f"{_TARIFF_NOTE} Direct to Prince George Wharf for embarkation.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_AIRPORT},
     {"id": "port-paradise", "name": "Nassau Cruise Port → Paradise Island / Atlantis", "price": 20.0,
      "route": "Cruise Port → Paradise Island", "featured": True,
      "description": f"{_TARIFF_NOTE} Bridge toll included.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_CRUISE + _ADDON_ATLANTIS},
     {"id": "port-bahamar", "name": "Nassau Cruise Port → Baha Mar / Cable Beach", "price": 25.0,
      "route": "Cruise Port → Baha Mar", "featured": True,
      "description": f"{_TARIFF_NOTE} Straight from Prince George Wharf to Cable Beach resorts.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_CRUISE},
     {"id": "downtown-paradise", "name": "Downtown Nassau ↔ Paradise Island", "price": 20.0,
      "route": "Downtown ↔ Paradise Island", "featured": True,
      "description": f"{_TARIFF_NOTE} Bay Street shopping, Fish Fry, Atlantis casino runs. Bridge toll included.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_ATLANTIS},
     {"id": "paradise-montague", "name": "Paradise Island → Montague Beach", "price": 20.0,
      "route": "Paradise Island → Montague Beach", "featured": True,
      "description": f"{_TARIFF_NOTE} Cross the bridge for a quick east-Nassau beach hop. $20 for the first 2 passengers · +$5 each additional passenger. Bridge toll included.",
@@ -135,7 +178,7 @@ TAXI_SERVICES: List[Dict] = [
     {"id": "hourly-charter", "name": "Nassau / Paradise Island Hourly Charter", "price": 55.0,
      "route": "By the hour (2-hour min)", "featured": False,
      "description": "Private driver by the hour, 2-hour minimum. Perfect for shopping, sightseeing, or errands.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_HOURLY},
     {"id": "van-group", "name": "Group Van Transfer (up to 8 pax) — Nassau + Paradise Island", "price": 90.0,
      "route": "Anywhere on Nassau / PI", "featured": False,
      "description": "Weddings, families, cruise groups. Airport, hotel, cruise port pickups & drop-offs.",
@@ -180,22 +223,22 @@ TAXI_SERVICES: List[Dict] = [
      "route": "Downtown / Cruise Port → Love Beach", "featured": True,
      "pricing_mode": "per_person",
      "description": f"{_TARIFF_NOTE} West-end white-sand beach — 25 minutes past Cable Beach. $20 per person · round-trip option available at checkout.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_BEACH + _ADDON_CRUISE},
     {"id": "port-cable-beach", "name": "Downtown / Cruise Port → Cable Beach", "price": 10.0,
      "route": "Downtown / Cruise Port → Cable Beach", "featured": True,
      "pricing_mode": "per_person",
      "description": f"{_TARIFF_NOTE} Straight run to Cable Beach — Melia, SuperClubs, Sandals Royal Bahamian, Baha Mar. $10 per person · round-trip option available.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_BEACH + _ADDON_CRUISE},
     {"id": "port-arawak-beach", "name": "Downtown / Cruise Port → Arawak Cay Beach", "price": 7.0,
      "route": "Downtown / Cruise Port → Arawak Cay", "featured": True,
      "pricing_mode": "per_person",
      "description": f"{_TARIFF_NOTE} Quick hop to Arawak Cay Fish Fry beach — the strip of native seafood shacks. $7 per person · round-trip option available.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_BEACH + _ADDON_CRUISE},
     {"id": "paradise-love-beach", "name": "Paradise Island → Love Beach", "price": 30.0,
      "route": "Paradise Island → Love Beach", "featured": True,
      "pricing_mode": "per_person",
      "description": f"{_TARIFF_NOTE} Cross the bridge and head west to Love Beach — bridge toll included. $30 per person · round-trip option available.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_BEACH},
     # ── Queen's Staircase flat fare with custom round-trip override ────
     # Flat $15 covers the first 2 passengers ($5 each additional). Round
     # trip is a fixed $30 for 2 (no auto 10% off) because the extra-hour
@@ -204,7 +247,7 @@ TAXI_SERVICES: List[Dict] = [
      "price": 15.0, "round_trip_price_override": 30.0,
      "route": "Downtown / Cruise Port → Queen's Staircase", "featured": True,
      "description": f"{_TARIFF_NOTE} Historic 66-step limestone stairway carved by slaves in the 1790s — 8 min from the port. $15 for 2 passengers · +$5 each additional · $30 round-trip (with driver wait) back to your pickup point.",
-     "image_url": _TAXI_IMG},
+     "image_url": _TAXI_IMG, "addons": _ADDON_QUEENS + _ADDON_CRUISE},
     {"id": "grocery-run", "name": "Grocery Pick-Up & Drop-Off (hourly)", "price": 55.0,
      "route": "Hotel/Villa ↔ Supermarket (by the hour)", "featured": True,
      "description": "Private driver waits while you shop and helps load groceries. Billed at the standard $55/hr hourly charter rate — 1-hour minimum, then pro-rata after. Popular stops: Solomon's, Super Value, Robin Hood, Family Value, Cost Right (Cable Beach & Baha Mar villas).",
@@ -280,4 +323,3 @@ HOME_SLIDES_SEED: List[Dict[str, Any]] = [
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/ouo8o6m9_47-bmot-nassau-5fb1775b59eaf-1500x643.jpg",
      "link_url": "https://ardastra.com/", "link_label": "Book at Ardastra Gardens", "order": 10, "active": True},
 ]
-

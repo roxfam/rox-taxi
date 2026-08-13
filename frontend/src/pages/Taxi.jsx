@@ -62,7 +62,7 @@ function pickServiceFor(destName, services) {
 export default function Taxi() {
   const [services, setServices] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [prefill, setPrefill] = useState({ dropoff: "", pickup: "" });
+  const [prefill, setPrefill] = useState({ dropoff: "", pickup: "", addonIds: [] });
 
   useEffect(() => {
     api.get("/taxi-services").then((r) => setServices(r.data)).catch(() => {});
@@ -72,12 +72,12 @@ export default function Taxi() {
     // find a service whose name/description contains the match keyword
     const svc = pickServiceFor(dest.match, services) || services[0];
     if (!svc) return;
-    setPrefill({ dropoff: dest.name, pickup: "" });
+    setPrefill({ dropoff: dest.name, pickup: "", addonIds: [] });
     setSelected(svc);
   };
 
-  const bookService = (svc) => {
-    setPrefill({ dropoff: "", pickup: "" });
+  const bookService = (svc, addonIds = []) => {
+    setPrefill({ dropoff: "", pickup: "", addonIds });
     setSelected(svc);
   };
 
@@ -247,6 +247,34 @@ export default function Taxi() {
                 Book <ArrowRight className="w-4 h-4" />
               </button>
             </div>
+            {Array.isArray(s.addons) && s.addons.length > 0 && (
+              <div
+                className="mt-5 pt-4 border-t border-dashed border-[#EFE7D5]"
+                data-testid={`taxi-addons-strip-${s.id}`}
+              >
+                <div className="text-[10px] tracking-[0.25em] uppercase text-[#94a3b8] font-black mb-2 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#D4A94A]" /> Popular add-ons
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {s.addons.slice(0, 4).map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => bookService(s, [a.id])}
+                      title={a.description || a.label}
+                      data-testid={`taxi-addon-chip-${s.id}-${a.id}`}
+                      className="group inline-flex items-center gap-1.5 rounded-full border border-[#EFE7D5] bg-[#FBF7EF] hover:bg-white hover:border-[#D4A94A] hover:shadow-[0_4px_12px_rgba(212,169,74,0.18)] active:scale-95 text-xs text-[#0B3B5C] px-3 py-1.5 transition-all"
+                    >
+                      <span className="mono font-bold text-[#E86A3C]">+${Number(a.price).toFixed(0)}</span>
+                      <span className="text-[#0B3B5C]/85 group-hover:text-[#0B3B5C] truncate max-w-[180px]">{a.label}</span>
+                      {(a.price_mode || "flat").toLowerCase() === "per_person" && (
+                        <span className="text-[9px] uppercase tracking-widest text-[#94a3b8] font-black">/pax</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </section>
@@ -257,7 +285,8 @@ export default function Taxi() {
           serviceType="taxi"
           initialDropoff={prefill.dropoff}
           initialPickup={prefill.pickup}
-          onClose={() => { setSelected(null); setPrefill({ dropoff: "", pickup: "" }); }}
+          initialAddonIds={prefill.addonIds}
+          onClose={() => { setSelected(null); setPrefill({ dropoff: "", pickup: "", addonIds: [] }); }}
           extraFields={(form, setForm) => (
             <>
               <div className="grid sm:grid-cols-2 gap-4" data-testid="taxi-route-selector">

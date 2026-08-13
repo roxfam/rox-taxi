@@ -12,9 +12,18 @@ We test the worker in isolation against an in-memory dict so we don't need
 a Mongo instance or actual SendGrid/FB creds.
 """
 import asyncio
+import os
+import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
+# Test harness runs from /app so the backend/ package layout imports as
+# `backend.routes.gallery`. Add /app/backend to sys.path so plain
+# `from routes import gallery` also resolves (mirrors how server.py runs).
+_BACKEND_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _BACKEND_ROOT not in sys.path:
+    sys.path.insert(0, _BACKEND_ROOT)
 
 
 class FakeDB:

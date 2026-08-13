@@ -767,7 +767,115 @@ export default function Layout({ children }) {
       </footer>
 
       <ChatWidget />
+      <StickyMobileBookNow open={open} pathname={pathname} />
     </div>
+  );
+}
+
+// ── Sticky Mobile "Book Now" pill ────────────────────────────────────
+// Floating bottom-right CTA visible only on mobile. Hidden on admin,
+// driver, booking-flow, checkout, and reset routes so it never covers
+// primary CTAs on those flows. Fades in after 240px scroll so it
+// doesn't crowd the hero on first paint.
+function StickyMobileBookNow({ open, pathname }) {
+  const [showBook, setShowBook] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  const HIDE_PREFIXES = ["/admin", "/driver", "/reset-password", "/payment"];
+  const hidden =
+    open ||
+    HIDE_PREFIXES.some((p) => pathname.startsWith(p));
+
+  useEffect(() => {
+    if (hidden) return;
+    const onScroll = () => setScrolled(window.scrollY > 240);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [hidden]);
+
+  useEffect(() => {
+    if (!showBook) return;
+    const onEsc = (e) => { if (e.key === "Escape") setShowBook(false); };
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, [showBook]);
+
+  if (hidden) return null;
+  return (
+    <>
+      <AnimatePresence>
+        {scrolled && (
+          <motion.button
+            initial={{ y: 96, opacity: 0, scale: 0.9 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 96, opacity: 0, scale: 0.9 }}
+            transition={{ type: "spring", stiffness: 320, damping: 26 }}
+            onClick={() => setShowBook(true)}
+            className="lg:hidden fixed bottom-5 right-5 z-[70] inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#E86A3C] to-[#d55a30] text-white pl-4 pr-5 py-3.5 text-sm font-bold shadow-[0_18px_40px_rgba(232,106,60,0.45)] hover:shadow-[0_20px_45px_rgba(232,106,60,0.55)] active:scale-95 transition-all"
+            data-testid="mobile-sticky-book-now"
+            aria-label="Book a ride now"
+          >
+            <span className="relative flex w-2 h-2">
+              <span className="absolute inset-0 rounded-full bg-white/80 animate-ping" />
+              <span className="relative w-2 h-2 rounded-full bg-white" />
+            </span>
+            Book Now
+            <ChevronDown className="w-4 h-4 -rotate-90" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showBook && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="lg:hidden fixed inset-0 z-[75] bg-[#0B192C]/60 backdrop-blur-sm flex items-end"
+            onClick={() => setShowBook(false)}
+            data-testid="mobile-sticky-book-sheet"
+          >
+            <motion.div
+              initial={{ y: 300 }}
+              animate={{ y: 0 }}
+              exit={{ y: 300 }}
+              transition={{ type: "spring", stiffness: 320, damping: 30 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full bg-white rounded-t-3xl p-5 pb-8 shadow-[0_-20px_60px_rgba(11,25,44,0.35)]"
+            >
+              <div className="w-10 h-1.5 rounded-full bg-[#E2E8F0] mx-auto mb-4" />
+              <div className="text-[10px] tracking-[0.3em] uppercase text-[#94a3b8] font-black text-center mb-3" data-testid="mobile-sticky-book-label">
+                What are you booking?
+              </div>
+              <div className="grid gap-2">
+                {BOOK_OPTIONS.map((opt) => (
+                  <Link
+                    key={opt.to}
+                    to={opt.to}
+                    onClick={() => setShowBook(false)}
+                    data-testid={`mobile-sticky-book-${opt.to.replace("/", "")}`}
+                    className="group flex items-center gap-3 rounded-2xl border border-[#EFE7D5] bg-white hover:bg-[#FBF7EF] transition-all px-4 py-3.5"
+                  >
+                    <span
+                      className="w-11 h-11 rounded-xl flex items-center justify-center text-white shadow-md"
+                      style={{ background: `linear-gradient(135deg, ${opt.color}, ${opt.color}cc)` }}
+                    >
+                      <opt.Icon className="w-5 h-5" />
+                    </span>
+                    <span className="flex-1">
+                      <span className="block text-sm font-semibold text-[#0B3B5C]">{opt.label}</span>
+                      <span className="block text-[11px] text-[#64748B]">{opt.sub}</span>
+                    </span>
+                    <ChevronDown className="w-4 h-4 -rotate-90 text-[#94a3b8] group-hover:text-[#E86A3C] group-hover:translate-x-1 transition-all" />
+                  </Link>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 

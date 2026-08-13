@@ -33,7 +33,7 @@ function isClosedDate(dateStr, days = 1) {
  *  - defaultDays?: number
  *  - onClose: () => void
  */
-export default function BookingModal({ item, serviceType, extraFields, defaultDays = 1, initialDropoff = "", initialPickup = "", onClose }) {
+export default function BookingModal({ item, serviceType, extraFields, defaultDays = 1, initialDropoff = "", initialPickup = "", initialAddonIds = [], onClose }) {
   const nav = useNavigate();
   // Prefill adults from a "group size" chosen on the marketing banner (e.g. the
   // "Groups of 6+ save 10%" quick-picker on /tours). sessionStorage key is set
@@ -72,6 +72,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     flight_number: "",
     notes: "",
     taxi_addon_selected: false,
+    selected_addon_ids: Array.isArray(initialAddonIds) ? [...initialAddonIds] : [],
   });
   const LUGGAGE_FEE = 3;
   const PASSENGER_FEE = 5;
@@ -204,10 +205,23 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     ? (addonMode === "per_person" ? addonPrice * Math.max(1, totalPaxForAddon) : addonPrice)
     : 0;
 
+  // ── Popular Add-ons (taxi only). Server re-prices these from the
+  // service's own `addons` catalog so this only drives the UI + total.
+  const taxiAddonsCatalog = serviceType === "taxi" && Array.isArray(item?.addons) ? item.addons : [];
+  const selectedAddonIds = Array.isArray(form.selected_addon_ids) ? form.selected_addon_ids : [];
+  const taxiPaxForAddons = Number(form.passengers || 1);
+  const taxiExtrasFee = taxiAddonsCatalog
+    .filter((a) => selectedAddonIds.includes(a.id))
+    .reduce((sum, a) => {
+      const price = Number(a.price || 0);
+      const mode = (a.price_mode || "flat").toLowerCase();
+      return sum + (mode === "per_person" ? price * Math.max(1, taxiPaxForAddons) : price);
+    }, 0);
+
   // Processing fee — 3% on the whole transaction (base + extras + deposit)
   // to cover Stripe/PayPal card fees. Shown to the customer as its own line.
   const PROCESSING_FEE_PCT = 0.03;
-  const subtotal = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee + babySeatFee + taxiAddonFee;
+  const subtotal = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee + babySeatFee + taxiAddonFee + taxiExtrasFee;
   const processingFee = subtotal * PROCESSING_FEE_PCT;
   const total = subtotal + processingFee;
 
@@ -265,6 +279,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         round_trip: !!form.round_trip,
         return_time: form.round_trip ? (form.return_time || "") : "",
         flight_number: form.flight_number ? form.flight_number.trim().toUpperCase().replace(/\s+/g, "") : null,
+        selected_addon_ids: serviceType === "taxi" ? selectedAddonIds : undefined,
       };
       const { data: b } = await api.post("/bookings", payload);
       setBooking(b);
@@ -426,6 +441,81 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 </div>
               </div>
               {extraFields && extraFields(form, setForm)}
+
+              {/* Popular Add-ons picker — taxi only, when the service ships
+                  an `addons` catalog. Selecting/unselecting recomputes the
+                  total live. Server re-prices from the catalog on submit. */}
+              {serviceType === "taxi" && taxiAddonsCatalog.length > 0 && (
+                <div
+                  className="rounded-2xl border border-[#EFE7D5] bg-gradient-to-br from-[#FBF7EF] to-white p-4"
+                  data-testid="taxi-popular-addons"
+                >
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <div className="text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#D4A94A]" /> Popular add-ons
+                      </div>
+                      <div className="text-xs text-[#64748B] mt-0.5 leading-relaxed">
+                        Bolt on small extras — driver handles the rest.
+                      </div>
+                    </div>
+                    {taxiExtrasFee > 0 && (
+                      <span
+                        className="mono font-bold text-[#E86A3C] text-sm shrink-0"
+                        data-testid="taxi-addons-total"
+                      >
+                        +${taxiExtrasFee.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {taxiAddonsCatalog.map((a) => {
+                      const picked = selectedAddonIds.includes(a.id);
+                      const mode = (a.price_mode || "flat").toLowerCase();
+                      const price = Number(a.price || 0);
+                      const lineFee = mode === "per_person" ? price * Math.max(1, taxiPaxForAddons) : price;
+                      return (
+                        <label
+                          key={a.id}
+                          className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
+                            picked
+                              ? "border-[#D4A94A] bg-white shadow-[0_6px_18px_rgba(212,169,74,0.15)]"
+                              : "border-[#EFE7D5] bg-white/70 hover:border-[#D4A94A]/60 hover:bg-white"
+                          }`}
+                          data-testid={`taxi-addon-row-${a.id}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={picked}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? [...selectedAddonIds, a.id]
+                                : selectedAddonIds.filter((x) => x !== a.id);
+                              setForm({ ...form, selected_addon_ids: next });
+                            }}
+                            className="mt-1 w-4 h-4 accent-[#D4A94A] shrink-0"
+                            data-testid={`taxi-addon-checkbox-${a.id}`}
+                          />
+                          <span className="flex-1 min-w-0">
+                            <span className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="text-sm font-semibold text-[#0B3B5C]">{a.label}</span>
+                              <span className="mono font-semibold text-[#E86A3C] text-sm shrink-0">
+                                +${lineFee.toFixed(2)}
+                                {mode === "per_person" && <span className="ml-1 text-[9px] uppercase tracking-widest text-[#94a3b8]">/pax × {Math.max(1, taxiPaxForAddons)}</span>}
+                              </span>
+                            </span>
+                            {a.description && (
+                              <span className="block text-[11px] text-[#64748B] mt-0.5 leading-relaxed">
+                                {a.description}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Optional taxi add-on — surfaces on tours only, when master
                   switch + per-tour toggle are both ON. Forced mode auto-adds
