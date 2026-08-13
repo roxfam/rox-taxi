@@ -3493,6 +3493,50 @@ def _build_receipt_pdf(booking: dict) -> bytes:
     return build_receipt_pdf(booking)
 
 
+@api_router.post("/admin/bookings/{booking_id}/reassign-backup")
+async def admin_reassign_backup(booking_id: str, _admin: str = Depends(require_admin)):
+    """Owner-triggered: sends a fresh dispatch SMS to the standby driver
+    (`BACKUP_DRIVER_PHONE` secret) with the guest details, so a mismatched
+    check-in can be reassigned in two taps from the original alert SMS.
+
+    Stamps `reassigned_to_backup_at` on the booking so the button only
+    fires once and admins can audit which trips got escalated.
+    """
+    b = await db.bookings.find_one({"id": booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    if b.get("reassigned_to_backup_at"):
+        raise HTTPException(400, "Trip already reassigned to backup driver.")
+
+    backup = (secrets_store.get_secret("BACKUP_DRIVER_PHONE") or "").strip()
+    if not backup:
+        raise HTTPException(400, "No BACKUP_DRIVER_PHONE configured in Site Config secrets.")
+
+    pickup_text = b.get("driver_confirmed_pickup_location") or b.get("pickup_location") or "—"
+    from urllib.parse import quote_plus
+    map_link = f"https://maps.google.com/?q={quote_plus(str(pickup_text))}"
+    body = (
+        f"🚨 REASSIGN · Booking {b['id']}\n"
+        f"Guest: {b.get('customer_name','')} · {b.get('customer_phone','')}\n"
+        f"Pickup: {pickup_text}\n"
+        f"Service: {b.get('item_name','—')}\n"
+        f"Pax: {b.get('passengers', 1)}\n"
+        f"Map: {map_link}\n"
+        f"Please confirm receipt with dispatch."
+    )
+    from notifications import send_sms as _send_sms
+    result = _send_sms(backup, body)
+
+    await db.bookings.update_one(
+        {"id": b["id"]},
+        {"$set": {
+            "reassigned_to_backup_at": now_iso(),
+            "reassigned_to_backup_result": result,
+        }},
+    )
+    return {"ok": True, "backup_sms": result}
+
+
 @api_router.get("/bookings/{booking_id}/qr.png")
 async def booking_qr_png(booking_id: str):
     """Returns a PNG QR code that encodes the driver check-in URL for this

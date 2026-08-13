@@ -12,6 +12,11 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 - Homepage `<GoogleReviews />` already reads from `/api/reviews` (DB-backed) — 4+ star filter applies transparently.
 - Verified end-to-end with mocked Places API: 5-review payload (5·4·3·5·2 stars) → **only 5 and 4-star ones stored**; simulated star drop → previously-kept row soft-hidden.
 
+### Feb 12q — "Reassign to Backup Driver" Two-Tap Escalation
+- New `POST /api/admin/bookings/{id}/reassign-backup` (admin-only) — texts the standby driver (`BACKUP_DRIVER_PHONE` secret) a fresh dispatch SMS with guest name, phone, pickup, service, pax count, and Google Maps link. Stamps `reassigned_to_backup_at` + `reassigned_to_backup_result` on the booking so the button fires only once.
+- `AdminDashboard.jsx`: when a row is opened via `?focus=BOOKING_ID` (from the alert SMS magic-link), the focused row now exposes a big coral "🚨 Reassign to backup" button inline. Confirm dialog before firing. On success the button is replaced by a green "✓ Backup dispatched" badge.
+- End-to-end flow from a mismatched GPS check-in: tap alert SMS "Reassign" link → Admin dashboard scrolled to the row → tap coral button → backup driver's phone lights up. Two taps.
+
 ### Feb 12p — Reassign Magic-Link in Owner GPS Alert SMS
 - The alert SMS body now ends with `Reassign: {PUBLIC_URL}/admin?focus={booking_id}` — a one-tap link that opens the Admin dashboard already scrolled to the mismatched booking row with a 3.6-second amber highlight so the owner can reassign in one motion.
 - `AdminDashboard.jsx` now reads `?focus=BOOKING_ID` on mount, waits for bookings to finish loading, then `scrollIntoView` + flashes the row via inline `backgroundColor` + `boxShadow` (auto-clears after 3.6s).

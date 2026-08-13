@@ -22,6 +22,7 @@ export default function AdminDashboard() {
   const [bookings, setBookings] = useState([]);
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(false);
+  const [focusedId, setFocusedId] = useState("");
   const [depositModal, setDepositModal] = useState(null); // { booking, action: 'released'|'forfeited' }
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [authMethods, setAuthMethods] = useState(null);
@@ -84,6 +85,7 @@ export default function AdminDashboard() {
     const params = new URLSearchParams(window.location.search);
     const focusId = (params.get("focus") || "").toUpperCase();
     if (!focusId) return;
+    setFocusedId(focusId);
     const el = document.querySelector(`[data-testid="admin-row-${focusId}"]`);
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -96,6 +98,17 @@ export default function AdminDashboard() {
     }, 3600);
     return () => clearTimeout(t);
   }, [loading, bookings]);
+
+  const reassignBackup = async (id) => {
+    if (!window.confirm(`Text the backup driver a fresh dispatch for ${id}?`)) return;
+    try {
+      await api.post(`/admin/bookings/${id}/reassign-backup`);
+      toast.success(`Backup driver notified for ${id}`);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Reassignment failed");
+    }
+  };
 
   const changeStatus = async (id, status) => {
     try {
@@ -276,7 +289,25 @@ export default function AdminDashboard() {
                   const meta = DEPOSIT_META[dstatus] || DEPOSIT_META.held;
                   return (
                     <tr key={b.id} className="border-t border-[#E2E8F0] hover:bg-[#F8FAFC] align-top" data-testid={`admin-row-${b.id}`}>
-                      <td className="px-4 py-3 mono text-[#0B3B5C] font-semibold">{b.id}</td>
+                      <td className="px-4 py-3 mono text-[#0B3B5C] font-semibold">
+                        {b.id}
+                        {focusedId === b.id && !b.reassigned_to_backup_at && (
+                          <button
+                            type="button"
+                            onClick={() => reassignBackup(b.id)}
+                            data-testid={`admin-reassign-backup-${b.id}`}
+                            className="mt-2 block w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#E86A3C] to-[#d55a30] text-white px-3 py-2 text-[11px] font-black uppercase tracking-widest shadow hover:from-[#d55a30] hover:to-[#c04d24] transition"
+                            title="Text the backup driver a fresh dispatch SMS with this booking's guest details"
+                          >
+                            🚨 Reassign to backup
+                          </button>
+                        )}
+                        {b.reassigned_to_backup_at && (
+                          <div className="mt-1 text-[9px] uppercase tracking-widest text-emerald-600 font-black" data-testid={`admin-reassigned-badge-${b.id}`}>
+                            ✓ Backup dispatched
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="text-[#0B3B5C] font-medium">{b.customer_name}</div>
                         <div className="text-xs text-[#64748B]">{b.customer_email}</div>
