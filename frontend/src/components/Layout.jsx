@@ -170,34 +170,43 @@ export default function Layout({ children }) {
             </div>
           </Link>
 
-          {/* Desktop nav — pill with sliding indicator */}
+          {/* Desktop nav — pill with sliding indicator. Booking rows
+              (/taxi, /tours, /rentals) get an additional hover-menu
+              dropdown next to the label so returning guests can pick
+              a service and jump straight into the booking modal. */}
           <nav className="hidden lg:flex items-center gap-1 rounded-full bg-white/60 backdrop-blur-md border border-white/70 p-1.5 shadow-[0_10px_30px_rgba(11,25,44,0.05)]">
-            {NAV.map((n) => (
-              <NavLink
-                key={n.to}
-                to={n.to}
-                end={n.to === "/"}
-                data-testid={`nav-${n.label.toLowerCase()}`}
-                className={({ isActive }) =>
-                  `relative px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
-                    isActive ? "text-white" : "text-[#0B3B5C] hover:text-[#D4A94A]"
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    {isActive && (
-                      <motion.span
-                        layoutId="nav-active-pill"
-                        className="absolute inset-0 rounded-full bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] shadow-[0_6px_16px_rgba(11,25,44,0.25)]"
-                        transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                      />
-                    )}
-                    <span className="relative flex items-center gap-1.5">{n.label}</span>
-                  </>
-                )}
-              </NavLink>
-            ))}
+            {NAV.map((n) => {
+              const options = pickerOptions[n.to];
+              const hasPicker = BOOKING_NAV_ROUTES.has(n.to) && Array.isArray(options) && options.length > 0;
+              return hasPicker ? (
+                <DesktopNavPicker key={n.to} item={n} options={options} />
+              ) : (
+                <NavLink
+                  key={n.to}
+                  to={n.to}
+                  end={n.to === "/"}
+                  data-testid={`nav-${n.label.toLowerCase()}`}
+                  className={({ isActive }) =>
+                    `relative px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
+                      isActive ? "text-white" : "text-[#0B3B5C] hover:text-[#D4A94A]"
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
+                        <motion.span
+                          layoutId="nav-active-pill"
+                          className="absolute inset-0 rounded-full bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] shadow-[0_6px_16px_rgba(11,25,44,0.25)]"
+                          transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                        />
+                      )}
+                      <span className="relative flex items-center gap-1.5">{n.label}</span>
+                    </>
+                  )}
+                </NavLink>
+              );
+            })}
           </nav>
 
           {/* Right actions */}
@@ -897,6 +906,113 @@ function StickyMobileBookNow({ open, pathname }) {
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+// ─── Desktop nav "Quick pick" dropdown ───────────────────────────────
+// Wraps a booking-category NavLink (/taxi, /tours, /rentals) so that:
+//  • Clicking the label still routes to the section landing page.
+//  • Hovering (or keyboard-focusing) the label reveals a compact menu
+//    of the top services with live prices. Picking one deep-links to
+//    the section with `?book=<id>` so the target page auto-opens its
+//    BookingModal — matching the mobile drawer behaviour.
+// Kept CSS-driven (group + focus-within) so we don't add state juggling
+// or portal complexity for what's essentially a hover popover.
+function DesktopNavPicker({ item, options }) {
+  const location = useLocation();
+  const nav = useNavigate();
+  const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + "/");
+  const slug = item.label.toLowerCase().replace(/\s+/g, "-");
+  const pickerLabel = {
+    "/taxi": "Quick pick a route",
+    "/tours": "Quick pick a tour",
+    "/rentals": "Quick pick a car",
+  }[item.to] || "Quick pick";
+
+  const formatPrice = (n, suffix = "") => {
+    if (typeof n !== "number" || Number.isNaN(n) || n <= 0) return "";
+    const s = n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${Math.round(n)}`;
+    return `${s}${suffix}`;
+  };
+
+  const top = options.slice(0, 8);
+
+  return (
+    <div className="relative group" data-testid={`nav-desktop-picker-${slug}`}>
+      <NavLink
+        to={item.to}
+        end={item.to === "/"}
+        data-testid={`nav-${item.label.toLowerCase()}`}
+        className={({ isActive: a }) =>
+          `relative px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors duration-200 inline-flex items-center gap-1 ${
+            a ? "text-white" : "text-[#0B3B5C] hover:text-[#D4A94A]"
+          }`
+        }
+      >
+        {({ isActive: a }) => (
+          <>
+            {a && (
+              <motion.span
+                layoutId="nav-active-pill"
+                className="absolute inset-0 rounded-full bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] shadow-[0_6px_16px_rgba(11,25,44,0.25)]"
+                transition={{ type: "spring", stiffness: 400, damping: 32 }}
+              />
+            )}
+            <span className="relative flex items-center gap-1">
+              {item.label}
+              <ChevronDown className="w-3.5 h-3.5 opacity-70 transition-transform duration-300 group-hover:rotate-180" />
+            </span>
+          </>
+        )}
+      </NavLink>
+
+      {/* Hover menu — CSS-only reveal. Padded top gap keeps the pointer
+          from falling into a dead zone between the label and the panel. */}
+      <div className="absolute left-1/2 -translate-x-1/2 top-full pt-3 opacity-0 pointer-events-none translate-y-1 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 transition-all duration-200 ease-out z-[90]">
+        <div
+          role="menu"
+          data-testid={`nav-desktop-picker-${slug}-menu`}
+          className="w-[340px] rounded-2xl bg-white/95 backdrop-blur-xl border border-white/80 shadow-[0_25px_60px_rgba(11,25,44,0.18)] overflow-hidden"
+        >
+          <div className="px-5 py-3 border-b border-[#F1F5F9] flex items-center justify-between">
+            <div className="text-[10px] tracking-[0.3em] uppercase text-[#94a3b8] font-semibold">{pickerLabel}</div>
+            <span className="text-[10px] font-black text-[#D4A94A] tracking-wider">LIVE</span>
+          </div>
+          <ul className="p-2 max-h-[380px] overflow-y-auto">
+            {top.map((o, i) => (
+              <li key={o.id}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => nav(`${item.to}?book=${encodeURIComponent(o.id)}`)}
+                  data-testid={`nav-desktop-picker-${slug}-opt-${o.id}`}
+                  className="w-full group/opt flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[#FBF7EF] transition-colors text-left"
+                >
+                  <span className="w-7 h-7 rounded-full bg-[#F1F5F9] group-hover/opt:bg-[#D4A94A]/15 flex items-center justify-center text-[11px] font-black text-[#0B3B5C] shrink-0">
+                    {i + 1}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-[#0B3B5C] truncate">{o.name}</span>
+                  </span>
+                  {formatPrice(o.price, o.priceSuffix) && (
+                    <span className="mono font-bold text-sm text-[#E86A3C] shrink-0">
+                      {formatPrice(o.price, o.priceSuffix)}
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <Link
+            to={item.to}
+            className="block px-5 py-3 border-t border-[#F1F5F9] text-xs uppercase tracking-widest font-black text-[#D4A94A] hover:bg-[#FBF7EF] transition-colors text-center"
+            data-testid={`nav-desktop-picker-${slug}-see-all`}
+          >
+            {`See all ${item.label.toLowerCase()} →`}
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }
 
