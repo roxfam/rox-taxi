@@ -1,5 +1,5 @@
-import { Link, NavLink, useLocation } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Facebook, Phone, MapPin, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart, ChevronDown, User as UserIcon, Images, Users } from "lucide-react";
 import { useAuth } from "../lib/auth";
@@ -28,33 +28,12 @@ const NAV = [
   { to: "/contact", label: "Contact", icon: MessageCircle },
 ];
 
-// Category dropdown submenus for the mobile nav — tapping the parent
-// row expands a small chip list of common quick-links instead of
-// jumping straight to the section landing page. Kept off the desktop
-// path so the top bar stays clean.
-const NAV_SUB = {
-  "/taxi": [
-    { to: "/taxi#airport",       label: "Airport transfers" },
-    { to: "/taxi#cruise-port",   label: "Cruise port pickups" },
-    { to: "/taxi#beach-runs",    label: "Beach runs (per-person)" },
-    { to: "/taxi#hourly",        label: "Hourly charter" },
-    { to: "/taxi#custom",        label: "Custom quote" },
-  ],
-  "/tours": [
-    { to: "/tours/blue-lagoon",  label: "Blue Lagoon Island" },
-    { to: "/tours/atlantis",     label: "Atlantis Aquaventure" },
-    { to: "/tours/ardastra",     label: "Ardastra Gardens" },
-    { to: "/tours/baha-mar",     label: "Baha Mar Resort day" },
-    { to: "/tours",              label: "All tours & excursions" },
-  ],
-  "/rentals": [
-    { to: "/rentals#compact",    label: "Compact & economy" },
-    { to: "/rentals#suv",        label: "SUV & mid-size" },
-    { to: "/rentals#luxury",     label: "Luxury & premium" },
-    { to: "/rentals#van",        label: "Van / group vehicles" },
-    { to: "/rentals#easydrive",  label: "EasyDrive direct (prices match)" },
-  ],
-};
+// The three "booking" nav rows (Taxi / Tours / Car Rentals) get a
+// native <select> picker rendered inline on the parent row so mobile
+// users can pick one option directly and land inside its booking
+// modal. Populated at runtime from the live catalog; falls back to a
+// plain nav link if the fetch fails.
+const BOOKING_NAV_ROUTES = new Set(["/taxi", "/tours", "/rentals"]);
 
 const NAV_DESKTOP = NAV.filter(n => n.label !== "About");
 
@@ -63,6 +42,11 @@ export default function Layout({ children }) {
   const [scrolled, setScrolled] = useState(false);
   const [bookOpen, setBookOpen] = useState(false);
   const [config, setConfig] = useState({ facebook_url: "https://www.facebook.com/roxtaxiservice/" });
+  // Live catalog for the mobile drawer dropdowns — populated after mount
+  // so the sub-menu rows show real service names + current prices
+  // instead of static hash placeholders. Falls back to NAV_SUB_FALLBACK
+  // if any fetch fails so the menu never renders empty.
+  const [navCatalog, setNavCatalog] = useState({ taxi: null, tours: null, rentals: null });
   const bookRef = useRef(null);
   const { pathname } = useLocation();
   const { user } = useAuth();
@@ -86,6 +70,42 @@ export default function Layout({ children }) {
   useEffect(() => {
     api.get("/site-config").then((r) => setConfig(r.data)).catch(() => {});
   }, []);
+
+  // Pull taxi / tours / rentals once for the mobile drawer dropdowns.
+  // Failures are silent — NAV_SUB_FALLBACK covers rendering.
+  useEffect(() => {
+    Promise.all([
+      api.get("/taxi-services").catch(() => ({ data: null })),
+      api.get("/tours").catch(() => ({ data: null })),
+      api.get("/rentals").catch(() => ({ data: null })),
+    ]).then(([t, o, r]) => {
+      setNavCatalog({ taxi: t.data, tours: o.data, rentals: r.data });
+    });
+  }, []);
+
+  // Turn the raw catalog rows into flat picker options { id, name,
+  // price, priceSuffix }. Featured items surface first so the OS
+  // picker wheel starts with the most popular routes. Rentals show
+  // "/day" suffix; tours + taxi are per-item flat.
+  const pickerOptions = useMemo(() => {
+    const build = (rows, priceSuffix = "") => {
+      if (!Array.isArray(rows) || rows.length === 0) return [];
+      const active = rows.filter((r) => r.active !== false);
+      const featured = active.filter((r) => r.featured);
+      const rest = active.filter((r) => !r.featured);
+      return [...featured, ...rest].map((r) => ({
+        id: r.id,
+        name: r.name || r.title || r.id,
+        price: typeof r.price === "number" ? r.price : Number(r.price || 0),
+        priceSuffix,
+      }));
+    };
+    return {
+      "/taxi":    build(navCatalog.taxi),
+      "/tours":   build(navCatalog.tours),
+      "/rentals": build(navCatalog.rentals, "/day"),
+    };
+  }, [navCatalog]);
 
   useEffect(() => setOpen(false), [pathname]);
 
@@ -442,7 +462,8 @@ export default function Layout({ children }) {
               <nav className="flex-1 overflow-y-auto p-4">
                 <ul className="flex flex-col gap-1.5">
                   {NAV.map((n, idx) => {
-                    const sub = NAV_SUB[n.to] || null;
+                    const options = pickerOptions[n.to];
+                    const showPicker = BOOKING_NAV_ROUTES.has(n.to) && options && options.length > 0;
                     return (
                       <motion.li
                         key={n.to}
@@ -450,8 +471,8 @@ export default function Layout({ children }) {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.05 + idx * 0.05 }}
                       >
-                        {sub ? (
-                          <MobileNavCategory item={n} sub={sub} onNavigate={() => setOpen(false)} />
+                        {showPicker ? (
+                          <MobileNavCategory item={n} options={options} onNavigate={() => setOpen(false)} />
                         ) : (
                           <NavLink
                             to={n.to}
@@ -879,67 +900,91 @@ function StickyMobileBookNow({ open, pathname }) {
   );
 }
 
-// ─── Mobile nav category with expandable sub-links ────────────────────
-// Tapping the parent chevron reveals a small dropdown of common quick-
-// links for that section (e.g. Taxi → "Airport transfers", "Beach runs"
-// etc). Tapping the label itself still routes to the section landing
-// page — the chevron is the affordance for the submenu. Keeps top-level
-// navigation predictable while surfacing deep-linked shortcuts.
-function MobileNavCategory({ item, sub, onNavigate }) {
-  const [open, setOpen] = useState(false);
+// ─── Mobile nav category with an inline picker dropdown ───────────────
+// Booking sections (Taxi / Tours / Car Rentals) render as a compact row
+// with a NATIVE <select> "Pick a …" pill on the right. Tapping the
+// pill opens the mobile OS's native picker with every service listed
+// (name + price). Selecting one navigates to the section with
+// `?book=<id>` so the target page auto-opens its BookingModal for that
+// service. Native selects give the cleanest mobile UX — full-height
+// scroll wheel, momentum flick, OS-consistent theming.
+// Non-booking sections (Home, Gallery, About, etc.) render as a plain
+// row link — no picker, no expansion.
+function MobileNavCategory({ item, options, onNavigate }) {
   const location = useLocation();
+  const nav = useNavigate();
   const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + "/");
+  const slug = item.label.toLowerCase().replace(/\s+/g, "-");
   const Icon = item.icon;
+
+  const formatPrice = (n, suffix = "") => {
+    if (typeof n !== "number" || Number.isNaN(n) || n <= 0) return "";
+    const s = n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${Math.round(n)}`;
+    return `${s}${suffix}`;
+  };
+
+  const pickerLabel = {
+    "/taxi": "Pick a route",
+    "/tours": "Pick a tour",
+    "/rentals": "Pick a car",
+  }[item.to] || "Pick";
+
+  const onPick = (e) => {
+    const id = e.target.value;
+    if (!id) return;
+    if (onNavigate) onNavigate();
+    nav(`${item.to}?book=${encodeURIComponent(id)}`);
+  };
+
   return (
-    <div>
-      <div
-        className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-colors ${
-          isActive
-            ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] text-white shadow-[0_10px_25px_rgba(11,25,44,0.15)]"
-            : "text-[#0B3B5C] hover:bg-[#F1F5F9]"
-        }`}
+    <div
+      className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors ${
+        isActive
+          ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] text-white shadow-[0_10px_25px_rgba(11,25,44,0.15)]"
+          : "text-[#0B3B5C] hover:bg-[#F1F5F9]"
+      }`}
+    >
+      <Link
+        to={item.to}
+        onClick={onNavigate}
+        data-testid={`mobile-nav-${slug}`}
+        className="flex items-center gap-3 min-w-0"
       >
-        <Link
-          to={item.to}
-          onClick={onNavigate}
-          data-testid={`mobile-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-          className="flex items-center gap-4 flex-1 min-w-0"
+        <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isActive ? "bg-white/15" : "bg-[#F1F5F9]"}`}>
+          <Icon className="w-4 h-4" />
+        </span>
+        <span className="font-semibold whitespace-nowrap">{item.label}</span>
+      </Link>
+
+      {/* Native picker dropdown — a real <select> so mobile browsers
+          show the OS-native picker wheel. Kept invisible on top of the
+          styled pill so the tap surface matches what the user sees. */}
+      <div className="ml-auto relative shrink-0">
+        <div
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold pointer-events-none border ${
+            isActive
+              ? "bg-white/15 border-white/25 text-white"
+              : "bg-[#FBF7EF] border-[#EFE7D5] text-[#0B3B5C]"
+          }`}
+          data-testid={`mobile-nav-${slug}-picker-pill`}
         >
-          <span className={`w-10 h-10 rounded-xl flex items-center justify-center ${isActive ? "bg-white/15" : "bg-[#F1F5F9]"}`}>
-            <Icon className="w-4 h-4" />
-          </span>
-          <span className="font-semibold">{item.label}</span>
-        </Link>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-          aria-expanded={open}
-          aria-label={`Show ${item.label} categories`}
-          data-testid={`mobile-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}-toggle`}
-          className={`p-1.5 rounded-lg transition-colors ${isActive ? "hover:bg-white/10" : "hover:bg-[#EFE7D5]"}`}
-        >
-          <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
-        </button>
-      </div>
-      <div
-        className={`grid transition-all duration-300 ease-out ${open ? "grid-rows-[1fr] opacity-100 mt-1.5" : "grid-rows-[0fr] opacity-0 mt-0"}`}
-        data-testid={`mobile-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}-panel`}
-      >
-        <div className="overflow-hidden">
-          <div className="ml-14 pl-2 border-l-2 border-[#EFE7D5] space-y-0.5">
-            {sub.map((s) => (
-              <Link
-                key={s.to}
-                to={s.to}
-                onClick={onNavigate}
-                data-testid={`mobile-nav-sub-${s.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
-                className="block rounded-lg px-3 py-2 text-sm text-[#0B3B5C] hover:bg-[#FBF7EF] hover:text-[#D4A94A] transition-colors"
-              >
-                {s.label}
-              </Link>
-            ))}
-          </div>
+          {pickerLabel}
+          <ChevronDown className="w-3.5 h-3.5" />
         </div>
+        <select
+          onChange={onPick}
+          value=""
+          aria-label={`${pickerLabel} — ${item.label}`}
+          data-testid={`mobile-nav-${slug}-picker`}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        >
+          <option value="" disabled>{pickerLabel}…</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}{formatPrice(o.price, o.priceSuffix) ? ` — ${formatPrice(o.price, o.priceSuffix)}` : ""}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );

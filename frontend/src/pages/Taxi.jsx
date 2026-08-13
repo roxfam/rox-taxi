@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, money } from "../lib/api";
 import BookingModal from "./BookingFlow";
 import RouteQuoteWidget from "../components/RouteQuoteWidget";
@@ -63,9 +64,27 @@ export default function Taxi() {
   const [services, setServices] = useState([]);
   const [selected, setSelected] = useState(null);
   const [prefill, setPrefill] = useState({ dropoff: "", pickup: "", addonIds: [] });
+  const [params, setParams] = useSearchParams();
 
   useEffect(() => {
-    api.get("/taxi-services").then((r) => setServices(r.data)).catch(() => {});
+    api.get("/taxi-services").then((r) => {
+      setServices(r.data);
+      // Deep-link support: /taxi?book=<service-id> pops the booking
+      // modal for that service automatically. Used by the mobile-drawer
+      // Native <select> picker so guests can pick a route and land
+      // directly inside its booking flow.
+      const bookId = params.get("book");
+      if (bookId) {
+        const svc = r.data.find((x) => x.id === bookId);
+        if (svc) {
+          setPrefill({ dropoff: "", pickup: "", addonIds: [] });
+          setSelected(svc);
+        }
+        // Strip the query so a refresh doesn't re-pop the modal.
+        params.delete("book");
+        setParams(params, { replace: true });
+      }
+    }).catch(() => {});
   }, []);
 
   const bookDestination = (dest) => {

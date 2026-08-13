@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
 import Seo from "../components/Seo";
@@ -20,6 +21,7 @@ export default function CarRental() {
   const [selected, setSelected] = useState(null);
   const [availability, setAvailability] = useState({});
   const [sortKey, setSortKey] = useState("default");
+  const [params, setParams] = useSearchParams();
 
   useEffect(() => {
     (async () => {
@@ -30,6 +32,16 @@ export default function CarRental() {
         data.map((r) => api.get(`/rentals/${r.id}/availability`).then((x) => [r.id, x.data.blackouts]).catch(() => [r.id, []])),
       );
       setAvailability(Object.fromEntries(results));
+      // Deep-link support: /rentals?book=<rental-id> auto-opens the
+      // booking modal for that rental. Powers the mobile drawer's
+      // native <select> "Pick a car" picker.
+      const bookId = params.get("book");
+      if (bookId) {
+        const car = data.find((x) => x.id === bookId);
+        if (car) setSelected(car);
+        params.delete("book");
+        setParams(params, { replace: true });
+      }
     })();
   }, []);
 
