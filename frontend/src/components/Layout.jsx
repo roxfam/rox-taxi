@@ -1,7 +1,7 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Facebook, Phone, MapPin, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart, ChevronDown, User as UserIcon, Images, Users } from "lucide-react";
+import { Menu, X, Facebook, Phone, MapPin, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart, ChevronDown, User as UserIcon, Images, Users, History } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
 const BOOK_OPTIONS = [
@@ -34,6 +34,34 @@ const NAV = [
 // modal. Populated at runtime from the live catalog; falls back to a
 // plain nav link if the fetch fails.
 const BOOKING_NAV_ROUTES = new Set(["/taxi", "/tours", "/rentals"]);
+
+// ─── Recently-picked cache (per-section, browser-local) ───────────────
+// The nav quick-pick dropdown remembers the last 3 services a returning
+// guest chose so those pin to the top on their next visit — turning the
+// dropdown into a lightly-personalised shortcut. Stored in localStorage
+// under `rox.recent.<section>` as an ordered [{id, name, price,
+// priceSuffix, ts}] list. Never leaves the browser, no PII involved.
+const RECENT_MAX = 3;
+const RECENT_STORAGE_KEY = (section) => `rox.recent.${section.replace(/^\//, "") || "root"}`;
+
+function readRecentPicks(section) {
+  try {
+    const raw = localStorage.getItem(RECENT_STORAGE_KEY(section));
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.slice(0, RECENT_MAX) : [];
+  } catch { return []; }
+}
+
+function pushRecentPick(section, pick) {
+  try {
+    if (!pick || !pick.id) return;
+    const list = readRecentPicks(section);
+    const deduped = list.filter((x) => x.id !== pick.id);
+    deduped.unshift({ ...pick, ts: Date.now() });
+    localStorage.setItem(RECENT_STORAGE_KEY(section), JSON.stringify(deduped.slice(0, RECENT_MAX)));
+  } catch { /* ignore quota / SSR */ }
+}
 
 const NAV_DESKTOP = NAV.filter(n => n.label !== "About");
 
@@ -923,6 +951,7 @@ function DesktopNavPicker({ item, options }) {
   const nav = useNavigate();
   const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + "/");
   const slug = item.label.toLowerCase().replace(/\s+/g, "-");
+  const [recent, setRecent] = useState(() => readRecentPicks(item.to));
   const pickerLabel = {
     "/taxi": "Quick pick a route",
     "/tours": "Quick pick a tour",
@@ -935,7 +964,30 @@ function DesktopNavPicker({ item, options }) {
     return `${s}${suffix}`;
   };
 
-  const top = options.slice(0, 8);
+  // Hydrate recents on mount + rehydrate when the tab regains focus so
+  // picks made in another tab are reflected without a hard reload.
+  useEffect(() => {
+    const rehydrate = () => setRecent(readRecentPicks(item.to));
+    window.addEventListener("focus", rehydrate);
+    window.addEventListener("storage", rehydrate);
+    return () => {
+      window.removeEventListener("focus", rehydrate);
+      window.removeEventListener("storage", rehydrate);
+    };
+  }, [item.to]);
+
+  const onPick = (o) => {
+    pushRecentPick(item.to, {
+      id: o.id, name: o.name, price: o.price, priceSuffix: o.priceSuffix || "",
+    });
+    setRecent(readRecentPicks(item.to));
+    nav(`${item.to}?book=${encodeURIComponent(o.id)}`);
+  };
+
+  // Merge recents on top (deduped) then the featured/all list.
+  const recentIds = new Set(recent.map((r) => r.id));
+  const merged = [...recent, ...options.filter((o) => !recentIds.has(o.id))];
+  const top = merged.slice(0, 8);
 
   return (
     <div className="relative group" data-testid={`nav-desktop-picker-${slug}`}>
@@ -972,19 +1024,54 @@ function DesktopNavPicker({ item, options }) {
         <div
           role="menu"
           data-testid={`nav-desktop-picker-${slug}-menu`}
-          className="w-[340px] rounded-2xl bg-white/95 backdrop-blur-xl border border-white/80 shadow-[0_25px_60px_rgba(11,25,44,0.18)] overflow-hidden"
+          className="w-[360px] rounded-2xl bg-white/95 backdrop-blur-xl border border-white/80 shadow-[0_25px_60px_rgba(11,25,44,0.18)] overflow-hidden"
         >
           <div className="px-5 py-3 border-b border-[#F1F5F9] flex items-center justify-between">
             <div className="text-[10px] tracking-[0.3em] uppercase text-[#94a3b8] font-semibold">{pickerLabel}</div>
             <span className="text-[10px] font-black text-[#D4A94A] tracking-wider">LIVE</span>
           </div>
-          <ul className="p-2 max-h-[380px] overflow-y-auto">
-            {top.map((o, i) => (
+          {recent.length > 0 && (
+            <div
+              className="px-3 pt-2.5 pb-1 bg-gradient-to-b from-[#FBF7EF] to-transparent"
+              data-testid={`nav-desktop-picker-${slug}-recent`}
+            >
+              <div className="flex items-center gap-1.5 px-2 mb-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#D4A94A] shadow-[0_0_8px_rgba(212,169,74,0.6)]" />
+                <span className="text-[9px] tracking-[0.28em] uppercase text-[#D4A94A] font-black">Recently viewed</span>
+              </div>
+              <ul>
+                {recent.map((o) => (
+                  <li key={`recent-${o.id}`}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => onPick(o)}
+                      data-testid={`nav-desktop-picker-${slug}-recent-${o.id}`}
+                      className="w-full group/opt flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white transition-colors text-left"
+                    >
+                      <span className="w-7 h-7 rounded-full bg-[#D4A94A]/15 flex items-center justify-center text-[#D4A94A] shrink-0">
+                        <History className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="flex-1 min-w-0 text-sm font-semibold text-[#0B3B5C] truncate">{o.name}</span>
+                      {formatPrice(o.price, o.priceSuffix) && (
+                        <span className="mono font-bold text-sm text-[#E86A3C] shrink-0">
+                          {formatPrice(o.price, o.priceSuffix)}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-1 mb-1 mx-3 h-px bg-gradient-to-r from-transparent via-[#EFE7D5] to-transparent" />
+            </div>
+          )}
+          <ul className="p-2 max-h-[340px] overflow-y-auto">
+            {top.filter((o) => !recentIds.has(o.id)).map((o, i) => (
               <li key={o.id}>
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => nav(`${item.to}?book=${encodeURIComponent(o.id)}`)}
+                  onClick={() => onPick(o)}
                   data-testid={`nav-desktop-picker-${slug}-opt-${o.id}`}
                   className="w-full group/opt flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[#FBF7EF] transition-colors text-left"
                 >
@@ -1032,6 +1119,17 @@ function MobileNavCategory({ item, options, onNavigate }) {
   const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + "/");
   const slug = item.label.toLowerCase().replace(/\s+/g, "-");
   const Icon = item.icon;
+  const [recent, setRecent] = useState(() => readRecentPicks(item.to));
+
+  useEffect(() => {
+    const rehydrate = () => setRecent(readRecentPicks(item.to));
+    window.addEventListener("focus", rehydrate);
+    window.addEventListener("storage", rehydrate);
+    return () => {
+      window.removeEventListener("focus", rehydrate);
+      window.removeEventListener("storage", rehydrate);
+    };
+  }, [item.to]);
 
   const formatPrice = (n, suffix = "") => {
     if (typeof n !== "number" || Number.isNaN(n) || n <= 0) return "";
@@ -1048,9 +1146,17 @@ function MobileNavCategory({ item, options, onNavigate }) {
   const onPick = (e) => {
     const id = e.target.value;
     if (!id) return;
+    const chosen = options.find((o) => o.id === id) || recent.find((r) => r.id === id);
+    if (chosen) {
+      pushRecentPick(item.to, {
+        id: chosen.id, name: chosen.name, price: chosen.price, priceSuffix: chosen.priceSuffix || "",
+      });
+    }
     if (onNavigate) onNavigate();
     nav(`${item.to}?book=${encodeURIComponent(id)}`);
   };
+
+  const recentIds = new Set(recent.map((r) => r.id));
 
   return (
     <div
@@ -1073,8 +1179,9 @@ function MobileNavCategory({ item, options, onNavigate }) {
       </Link>
 
       {/* Native picker dropdown — a real <select> so mobile browsers
-          show the OS-native picker wheel. Kept invisible on top of the
-          styled pill so the tap surface matches what the user sees. */}
+          show the OS-native picker wheel. Recently-picked options are
+          grouped at the top via <optgroup> so returning guests see
+          their favourites first. */}
       <div className="ml-auto relative shrink-0">
         <div
           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold pointer-events-none border ${
@@ -1084,6 +1191,9 @@ function MobileNavCategory({ item, options, onNavigate }) {
           }`}
           data-testid={`mobile-nav-${slug}-picker-pill`}
         >
+          {recent.length > 0 && (
+            <History className={`w-3 h-3 ${isActive ? "text-[#D4A94A]" : "text-[#D4A94A]"}`} />
+          )}
           {pickerLabel}
           <ChevronDown className="w-3.5 h-3.5" />
         </div>
@@ -1095,11 +1205,22 @@ function MobileNavCategory({ item, options, onNavigate }) {
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         >
           <option value="" disabled>{pickerLabel}…</option>
-          {options.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.name}{formatPrice(o.price, o.priceSuffix) ? ` — ${formatPrice(o.price, o.priceSuffix)}` : ""}
-            </option>
-          ))}
+          {recent.length > 0 && (
+            <optgroup label="Recently viewed">
+              {recent.map((o) => (
+                <option key={`recent-${o.id}`} value={o.id}>
+                  {o.name}{formatPrice(o.price, o.priceSuffix) ? ` — ${formatPrice(o.price, o.priceSuffix)}` : ""}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <optgroup label={recent.length > 0 ? "All options" : ""}>
+            {options.filter((o) => !recentIds.has(o.id)).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}{formatPrice(o.price, o.priceSuffix) ? ` — ${formatPrice(o.price, o.priceSuffix)}` : ""}
+              </option>
+            ))}
+          </optgroup>
         </select>
       </div>
     </div>
