@@ -36,6 +36,7 @@ from routes import auth as auth_module
 from routes import customer as customer_module
 from routes import analytics as analytics_module
 from routes import cron as cron_module
+from routes import tip_topup as tip_topup_module
 from routes import seo as seo_module
 import secrets_store
 
@@ -4612,6 +4613,13 @@ api_router.include_router(customer_module.router)
 
 # Wire up the SEO router (dynamic sitemap.xml + IndexNow ping to
 # Bing/Yandex/Seznam/Naver for instant re-crawl).
+tip_topup_module.configure(
+    db=db,
+    now_iso=now_iso,
+    public_base_url=(os.environ.get("PUBLIC_SITE_URL") or os.environ.get("SITE_BASE_URL") or "https://roxtaxi.com"),
+)
+api_router.include_router(tip_topup_module.router)
+
 seo_module.configure(
     db=db,
     require_admin=require_admin,

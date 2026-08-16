@@ -48,6 +48,63 @@ def _require_admin_placeholder(authorization: Optional[str] = Header(None)):
     return _require_admin(authorization) if callable(_require_admin) else None
 
 
+# ── Referral Analytics (admin) ──────────────────────────────────────────────
+@router.get("/admin/referrals/leaderboard")
+async def referral_leaderboard(
+    _: str = Depends(_require_admin_placeholder),
+    month: Optional[str] = None,
+):
+    """Aggregates public /refer conversions by sharer name for a given
+    calendar month (defaults to current). Excludes cancelled bookings.
+    Returns top 20 sharers sorted by conversions then revenue."""
+    now = datetime.now(timezone.utc)
+    if month:
+        try:
+            year, mo = [int(x) for x in month.split("-")]
+            if not (1 <= mo <= 12) or year < 2020 or year > 2100:
+                raise ValueError
+        except Exception:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    else:
+        year, mo = now.year, now.month
+    start = datetime(year, mo, 1, tzinfo=timezone.utc)
+    end = datetime(year + (1 if mo == 12 else 0), (1 if mo == 12 else mo + 1), 1, tzinfo=timezone.utc)
+
+    pipeline = [
+        {"$match": {
+            "referral_code": {"$exists": True, "$nin": [None, ""]},
+            "created_at": {"$gte": start.isoformat(), "$lt": end.isoformat()},
+            "status": {"$nin": ["cancelled"]},
+        }},
+        {"$group": {
+            "_id": "$referred_by_name",
+            "conversions": {"$sum": 1},
+            "total_revenue": {"$sum": "$total"},
+            "total_discount_given": {"$sum": "$referral_discount"},
+            "unique_codes": {"$addToSet": "$referral_code"},
+            "last_at": {"$max": "$created_at"},
+        }},
+        {"$project": {
+            "_id": 0,
+            "name": {"$ifNull": ["$_id", "a friend"]},
+            "conversions": 1,
+            "total_revenue": {"$round": ["$total_revenue", 2]},
+            "total_discount_given": {"$round": ["$total_discount_given", 2]},
+            "codes_used": {"$size": "$unique_codes"},
+            "last_at": 1,
+        }},
+        {"$sort": {"conversions": -1, "total_revenue": -1}},
+        {"$limit": 20},
+    ]
+    rows = await _db.bookings.aggregate(pipeline).to_list(20)
+    return {
+        "month": f"{year:04d}-{mo:02d}",
+        "leaderboard": rows,
+        "total_conversions": sum(r.get("conversions", 0) for r in rows),
+        "total_revenue": round(sum(float(r.get("total_revenue") or 0) for r in rows), 2),
+    }
+
+
 
 # ═══ Payments panel + Content panel endpoints ═════════════════════════════
 # Added for the /admin/manage "Payments" and "Content" tabs. Kept in this

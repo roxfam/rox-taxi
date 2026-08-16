@@ -14,15 +14,16 @@ import { motion } from "framer-motion";
 // SVG viewBox 800×420. Coordinates are illustrative — chosen to keep the
 // route legible, not GPS-accurate. Stops ordered as they appear on the tour.
 const STOPS = [
-  { n: 1, x: 300, y: 195, name: "Fort Fincastle",     cat: "included",  labelPos: "left" },
-  { n: 2, x: 260, y: 220, name: "Graycliff",          cat: "paid",      labelPos: "left" },
-  { n: 3, x: 355, y: 240, name: "Bay Street",         cat: "included",  labelPos: "bottom" },
-  { n: 4, x: 205, y: 285, name: "Fish Fry",           cat: "paid",      labelPos: "bottom" },
-  { n: 5, x: 165, y: 340, name: "Ardastra Gardens",   cat: "paid",      labelPos: "bottom" },
-  { n: 6, x: 95,  y: 265, name: "Cable Beach",        cat: "optional",  labelPos: "left" },
-  { n: 7, x: 415, y: 235, name: "Rum Cake Factory",   cat: "paid",      labelPos: "bottom" },
-  { n: 8, x: 545, y: 265, name: "Fort Montagu",       cat: "included",  labelPos: "bottom" },
-  { n: 9, x: 645, y: 130, name: "Atlantis",           cat: "included",  labelPos: "top" },
+  { n: 1,  x: 300, y: 195, name: "Fort Fincastle",     cat: "included",  labelPos: "left" },
+  { n: 2,  x: 260, y: 220, name: "Graycliff",          cat: "paid",      labelPos: "left" },
+  { n: 3,  x: 355, y: 240, name: "Bay Street",         cat: "included",  labelPos: "bottom" },
+  { n: 4,  x: 250, y: 260, name: "Fort Charlotte",     cat: "paid",      labelPos: "top" },
+  { n: 5,  x: 205, y: 300, name: "Fish Fry",           cat: "paid",      labelPos: "bottom" },
+  { n: 6,  x: 165, y: 345, name: "Ardastra Gardens",   cat: "paid",      labelPos: "bottom" },
+  { n: 7,  x: 95,  y: 265, name: "Cable Beach",        cat: "optional",  labelPos: "left" },
+  { n: 8,  x: 415, y: 235, name: "Rum Cake Factory",   cat: "paid",      labelPos: "bottom" },
+  { n: 9,  x: 545, y: 265, name: "Fort Montagu",       cat: "included",  labelPos: "bottom" },
+  { n: 10, x: 645, y: 130, name: "Atlantis",           cat: "included",  labelPos: "top" },
 ];
 
 // Route line as an SVG path — hits every stop in tour order with gentle
@@ -32,12 +33,13 @@ const ROUTE_PATH = [
   "M 300 195",             // 1 Fort Fincastle
   "Q 280 205 260 220",     // → 2 Graycliff (short SW hop, downtown-west)
   "Q 300 235 355 240",     // → 3 Bay Street (east strip)
-  "Q 275 265 205 285",     // → 4 Fish Fry (west swing)
-  "Q 175 315 165 340",     // → 5 Ardastra (SW dip)
-  "Q 120 315 95 265",      // → 6 Cable Beach (further west, NW to coast)
-  "Q 260 260 415 235",     // → 7 Rum Cake Factory (big east swing back)
-  "Q 490 250 545 265",     // → 8 Fort Montagu (further east)
-  "Q 620 200 645 130",     // → 9 Atlantis (NE, over Paradise Bridge)
+  "Q 305 255 250 260",     // → 4 Fort Charlotte (SW along West Bay St)
+  "Q 220 285 205 300",     // → 5 Fish Fry (short W hop)
+  "Q 180 325 165 345",     // → 6 Ardastra (SW dip)
+  "Q 115 315 95 265",      // → 7 Cable Beach (NW to coast)
+  "Q 260 260 415 235",     // → 8 Rum Cake Factory (big east swing back)
+  "Q 490 250 545 265",     // → 9 Fort Montagu (further east)
+  "Q 620 200 645 130",     // → 10 Atlantis (NE, over Paradise Bridge)
 ].join(" ");
 
 const PIN_COLOR = {
@@ -245,7 +247,7 @@ export default function ReaganRouteMap() {
           </div>
           <div className="flex items-center gap-2">
             <span className="inline-block w-5 h-[3px] bg-[#E86A3C] rounded-full" style={{ backgroundImage: "repeating-linear-gradient(90deg, #E86A3C 0 6px, transparent 6px 10px)" }} />
-            <span className="text-[#334155]">Route order (1 → 9)</span>
+            <span className="text-[#334155]">Route order (1 → 10)</span>
           </div>
         </div>
 

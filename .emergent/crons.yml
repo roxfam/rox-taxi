@@ -4,5 +4,11 @@ crons:
     cron: "0 * * * *"
     endpoint: "{{BASE_URL}}/api/cron/sync-google-reviews"
     method: POST
-    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
+
+  - name: send-tip-bump-sms
+    description: "15 minutes after a taxi/tour booking flips to completed, SMS the guest a signed link to top up the driver's tip. Runs every 5 min."
+    cron: "*/5 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/send-tip-bump-sms"
+    method: POST
     enabled: true

@@ -9,6 +9,7 @@ import WarmLeadCard from "./admin/WarmLeadCard";
 import PickupAuditCard from "./admin/PickupAuditCard";
 import AttachRateCard from "./admin/AttachRateCard";
 import ReviewsInboxCard from "./admin/ReviewsInboxCard";
+import ReferralLeaderboardCard from "./admin/ReferralLeaderboardCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -254,6 +255,11 @@ export default function AdminDashboard() {
             AI-drafted thank-you ready to fire. Auto-hides when the
             inbox is empty so it doesn't dominate the dashboard. */}
         <ReviewsInboxCard />
+
+        {/* Refer-a-friend leaderboard — which sharer names have driven
+            the most `/refer` conversions this month. Auto-hides when
+            there are no conversions to show. */}
+        <ReferralLeaderboardCard />
 
         {/* Post-trip photo-nudge funnel — proves the email nudge is driving
             submissions to fill the "Recent group tours" strip on
