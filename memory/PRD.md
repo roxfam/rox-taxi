@@ -5,6 +5,12 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 16 (late) — Refer-a-Friend Public Share Flow
+- **New `/refer` page** (`ReferFriend.jsx`) — public share hub with sharer-name input, optional 240-char personal note, deterministic `FRIEND-{initials}-{4-char hash}` code, live message preview, and 6 share channels (WhatsApp, Email, Facebook, X/Twitter, Copy Link, Native Share).
+- **Referral catcher** (`ReferralCatcher.jsx`, mounted globally in Layout) — parses `?ref=<code>&from=<name>` on every navigation, persists to `localStorage.rox_referral`, and shows a dismissible floating "10% off from {name}" ribbon on landing.
+- **BookingFlow integration** — reads `rox_referral` on mount and applies a 10% "Friend-of-{name}" discount line on the pre-tip subtotal. Sends `referral_code`, `referred_by_name`, `referral_discount` in the `/bookings` POST payload for admin attribution.
+- **Footer link** — "Refer a friend · 10% off" added to Services column, styled in brand gold to draw the eye.
+
 ### Feb 16 — Signature Tour Cross-Links + Rotating Reviews + Reagan Tour Refresh
 - **Cross-linked `/nassau-with-reagan`** so the page finally gets internal traffic:
   - New "Signature Tour" callout card under the hero on `/drivers/reagan` (text + $225 flat, links to `/nassau-with-reagan`).

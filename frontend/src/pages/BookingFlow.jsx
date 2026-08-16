@@ -230,7 +230,24 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   // Processing fee — 3% on the whole transaction (base + extras + deposit
   // + tip) to cover Stripe/PayPal card fees. Shown to the customer as its own line.
   const PROCESSING_FEE_PCT = 0.03;
-  const subtotal = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee + babySeatFee + taxiAddonFee + taxiExtrasFee;
+  const rawSubtotal = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee + babySeatFee + taxiAddonFee + taxiExtrasFee;
+
+  // ── Friend-of-friend referral discount ──────────────────────────────
+  // Captured by <ReferralCatcher> in Layout when the guest lands via
+  // `/?ref=<code>&from=<name>`. We deduct 10% off the pre-tip subtotal
+  // as a "Friend-of-{name}" line item and pass the code + sharer name
+  // into the booking payload so admin can see attribution.
+  const referral = (() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = localStorage.getItem("rox_referral");
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      return data?.code ? data : null;
+    } catch { return null; }
+  })();
+  const referralDiscount = referral ? Math.round(rawSubtotal * 0.10 * 100) / 100 : 0;
+  const subtotal = Math.max(0, rawSubtotal - referralDiscount);
 
   // ── Driver gratuity ─────────────────────────────────────────────────
   // Optional tip pre-charged with the booking so the driver takes home
@@ -334,6 +351,9 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         selected_addon_ids: serviceType === "taxi" ? selectedAddonIds : undefined,
         requested_driver: serviceType === "taxi" && form.requested_driver ? form.requested_driver.trim() : undefined,
         tip_amount: tipAmount > 0 ? Number(tipAmount.toFixed(2)) : 0,
+        referral_code: referral?.code || undefined,
+        referred_by_name: referral?.from || undefined,
+        referral_discount: referralDiscount > 0 ? Number(referralDiscount.toFixed(2)) : 0,
       };
       const { data: b } = await api.post("/bookings", payload);
       setBooking(b);
@@ -855,7 +875,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
 
               {/* Group discount + processing fee — shown for every booking so
                   customers see the exact total before they hit "Continue to Payment". */}
-              {(groupDiscountActive || processingFee > 0) && (
+              {(groupDiscountActive || processingFee > 0 || referralDiscount > 0) && (
                 <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 space-y-2 text-xs" data-testid="fees-summary">
                   {groupDiscountActive && (
                     <div className="flex justify-between" data-testid="group-discount-line">
@@ -863,6 +883,14 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                         Group discount ({payingPassengers} paying passengers, 10% off)
                       </span>
                       <span className="mono font-bold text-[#059669]">−{money(groupDiscount)}</span>
+                    </div>
+                  )}
+                  {referralDiscount > 0 && (
+                    <div className="flex justify-between" data-testid="referral-discount-line">
+                      <span className="text-[#065f46] font-semibold">
+                        Friend-of-{referral?.from || "friend"} discount (10% off)
+                      </span>
+                      <span className="mono font-bold text-[#059669]">−{money(referralDiscount)}</span>
                     </div>
                   )}
                   {tipAmount > 0 && (

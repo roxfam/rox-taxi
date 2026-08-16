@@ -15,6 +15,7 @@ import PromoBanner from "./PromoBanner";
 import LanguageSwitcher from "./LanguageSwitcher";
 import LiveStatsBadge from "./LiveStatsBadge"; // eslint-disable-line no-unused-vars
 import { WhatsAppIcon, TripAdvisorIcon } from "./BrandIcons";
+import ReferralCatcher from "./ReferralCatcher";
 
 const NAV = [
   { to: "/", label: "Home", icon: HomeIcon },
@@ -651,6 +652,7 @@ export default function Layout({ children }) {
       </AnimatePresence>
 
       <main className="flex-1">{children}</main>
+      <ReferralCatcher />
 
       <footer className="relative bg-[#0B192C] text-white/80 mt-32 overflow-hidden" data-testid="site-footer">
         {/* Elegant top accent */}
@@ -721,6 +723,7 @@ export default function Layout({ children }) {
                 <li><Link to="/gallery" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors" data-testid="footer-gallery-link"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Island Gallery</Link></li>
                 <li><Link to="/travel-to-nassau" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Travel to Nassau Guide</Link></li>
                 <li><Link to="/cruise-groups-nassau" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Cruise Groups (10% off)</Link></li>
+                <li><Link to="/refer" data-testid="footer-refer-link" className="group inline-flex items-center gap-2 text-[#D4A94A] font-bold hover:text-[#F5E1A4] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Refer a friend · 10% off</Link></li>
               </ul>
             </div>
             <div className="md:col-span-1">
