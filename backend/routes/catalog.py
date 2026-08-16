@@ -136,7 +136,13 @@ async def list_reviews():
     """Real reviews pasted via admin. Rating + total are computed from the
     actual pasted rows (no more inflated seed numbers). Returns an empty
     list when no reviews have been pasted yet — the frontend hides the
-    section in that case."""
+    section in that case.
+
+    Reviews that name-drop a driver from the tag roster (see
+    site_config.driver_name_tags) are pinned to the front of the list
+    so returning guests + guests booking with that driver see the
+    proof point immediately.
+    """
     docs = await _db.reviews.find({"active": {"$ne": False}}).sort("created_at", -1).to_list(60)
     reviews = [_clean(d) for d in docs]
     if not reviews:
@@ -147,6 +153,10 @@ async def list_reviews():
             "source": "Google",
             "reviews": [],
         }
+    # Sort tagged reviews first while preserving each subset's order
+    tagged = [r for r in reviews if r.get("driver_tags")]
+    untagged = [r for r in reviews if not r.get("driver_tags")]
+    reviews = tagged + untagged
     avg = sum(int(r.get("rating") or 0) for r in reviews) / len(reviews)
     return {
         "place": "Rox Taxi Service & Tours",

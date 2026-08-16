@@ -14,7 +14,7 @@ import os
 from typing import Callable, Optional
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Header
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 
 # ── Optional Claude-drafted owner-reply (fresh 5-star reviews only) ──
 # Wrapped in try/except so a missing SDK never breaks the sync — the
@@ -24,6 +24,49 @@ try:
     _LLM_AVAILABLE = True
 except Exception:  # noqa: BLE001
     _LLM_AVAILABLE = False
+
+
+async def _extract_driver_tags(text: str, db) -> list:
+    """Scan a review body for driver-name mentions so the /reviews API
+    can pin "driver-tagged" reviews with a subtle gold ribbon on the
+    homepage. Reads the tag roster from `site_config.driver_name_tags`
+    with a sensible default that catches the common misspellings of
+    Reagan (the current lead driver whom guests keep name-dropping).
+
+    Match rules:
+      • Case-insensitive
+      • Word-boundary anchored (won't tag "Reggie" as "Regan")
+      • Returns a de-duped list preserving canonical spelling from
+        the config (`{canonical: "Reagan", aliases: ["Regan","Reggan"]}`)
+    """
+    if not text:
+        return []
+    try:
+        cfg = await db.site_config.find_one({"_id": "main"}) or {}
+    except Exception:  # noqa: BLE001
+        cfg = {}
+    roster = cfg.get("driver_name_tags") or [
+        {"canonical": "Reagan", "aliases": ["Reagan", "Regan", "Reggan"]},
+    ]
+    import re as _re
+    found: list = []
+    seen: set = set()
+    body = text.lower()
+    for entry in roster:
+        if not isinstance(entry, dict):
+            continue
+        canon = (entry.get("canonical") or "").strip()
+        aliases = entry.get("aliases") or ([canon] if canon else [])
+        for a in aliases:
+            a = (a or "").strip()
+            if not a:
+                continue
+            if _re.search(rf"\b{_re.escape(a.lower())}\b", body):
+                if canon.lower() not in seen:
+                    seen.add(canon.lower())
+                    found.append(canon)
+                break
+    return found
 
 
 async def generate_review_reply_draft(review: dict) -> str:
@@ -66,7 +109,7 @@ async def generate_review_reply_draft(review: dict) -> str:
         reply = ("".join(parts)).strip()
         return reply or static
     except Exception:  # noqa: BLE001
-        return static, HTTPException, Request
+        return static
 
 
 _db = None
@@ -186,6 +229,8 @@ async def _sync_google_reviews_bg() -> None:
                 continue
             author = rev.get("authorAttribution", {}) or {}
             text_obj = rev.get("originalText") or rev.get("text") or {}
+            review_body = (text_obj.get("text") if isinstance(text_obj, dict) else str(text_obj))[:2000]
+            driver_tags = await _extract_driver_tags(review_body, _db)
             doc = {
                 "id": f"google_{google_id.split('/')[-1]}",
                 "google_review_id": google_id,
@@ -193,11 +238,12 @@ async def _sync_google_reviews_bg() -> None:
                 "author_url": author.get("uri", ""),
                 "profile_photo_url": author.get("photoUri", ""),
                 "rating": rating,
-                "text": (text_obj.get("text") if isinstance(text_obj, dict) else str(text_obj))[:2000],
+                "text": review_body,
                 "relative_time": rev.get("relativePublishTimeDescription", ""),
                 "active": True,
                 "hidden_reason": "",
                 "source": "google",
+                "driver_tags": driver_tags,
                 "synced_at": _now_iso(),
             }
             existing = await _db.reviews.find_one({"google_review_id": google_id})

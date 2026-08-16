@@ -496,6 +496,14 @@ class GroupInquiryStatusUpdate(BaseModel):
     status: str
 
 
+# ---- Dependency shim so this router can reuse server.py's require_admin ----
+# Defined UP HERE (before any endpoint) so `Depends(_admin_dep)` in
+# decorator signatures further down resolves at module import time.
+def _admin_dep(authorization: Optional[str] = Header(None)) -> str:
+    if _require_admin is None:
+        raise HTTPException(500, "Admin dependency not configured")
+    return _require_admin(authorization)
+
 
 @router.get("/admin/analytics/addon-attach-rate")
 async def admin_addon_attach_rate(days: int = 30, _: str = Depends(_admin_dep)):
@@ -638,13 +646,6 @@ async def admin_save_reply_draft(review_id: str, req: ReplyDraftUpdate, _: str =
     if res.matched_count == 0:
         raise HTTPException(404, "Review not found")
     return {"review_id": review_id, "saved": True}
-
-
-# ---- Dependency shim so this router can reuse server.py's require_admin ----
-def _admin_dep(authorization: Optional[str] = Header(None)) -> str:
-    if _require_admin is None:
-        raise HTTPException(500, "Admin dependency not configured")
-    return _require_admin(authorization)
 
 
 # ============================================================================

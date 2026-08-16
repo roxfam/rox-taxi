@@ -5,6 +5,12 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 12x — Reagan-Tagged Reviews + Attach-Rate Dashboard + Auto-Reply Drafter
+- **Driver-tagged reviews** — sync now scans each review body for driver-name mentions (roster in `site_config.driver_name_tags`, default catches Reagan/Regan/Reggan). Tagged reviews get pinned to the front of the /reviews API list and render a gold "REAGAN DROVE THEM" ribbon on the homepage. 4 of our 5 Google reviews name-drop Reagan and now pin visibly.
+- **Owner reply auto-drafter** — every fresh 5-star sync fires a Claude Sonnet 4.6 prompt that composes a warm, 2-sentence public reply mentioning the reviewer's first name (and driver if named). Draft persists on the review doc as `owner_reply_draft`. Admin ReviewsPanel exposes 4-button widget: **Copy** (clipboard), **Open on Google** (business.google.com/reviews), **Re-draft** (regenerate), **Save edit** (persist manual tweak). Falls back to a static template if the LLM key is missing.
+- **Attach-Rate Dashboard** — `GET /api/admin/analytics/addon-attach-rate?days=N` groups the last N days of taxi bookings by service and counts add-on picks. Winners (≥25% attach + ≥4 attaches) auto-earn a gold **"Top pick"** ribbon on the public /taxi chip strip via a 10-min in-memory recommended-decorator cache on `/taxi-services`. New `AttachRateCard` under Admin Dashboard with day-range picker, Winners/All rows/Never-attached filter, revenue totals.
+- Cleaned up admin.py load order — moved `_admin_dep` shim above endpoint definitions to fix `Depends()` resolution at module import time.
+
 ### Feb 12w — Google Reviews Live + Recently-Viewed Nav Dropdown
 - **Google Reviews syncing live** — 5 five-star reviews now pulled from Google Places API (New) and rendering on the homepage "Reviews from real riders" section. Rating: 5.0 · 5+ reviews. Business: ROX TAXI SERVICE (`ChIJVXxKZCKt7gMR61X4WUuKbow`).
 - **Root cause of prior silent failure**: API key had HTTP-referrer restrictions but the backend calls server-to-server (no referrer). Fixed by sending `Referer: https://roxtaxi.com/` header from the sync worker — matches the owner's Google Cloud referrer allowlist. Falls back gracefully if the site_config `site_url` is set to a different domain.

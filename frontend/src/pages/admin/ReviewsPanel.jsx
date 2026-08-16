@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Star, Trash2, Plus, Save, X, Info, ExternalLink, RefreshCw } from "lucide-react";
+import { Star, Trash2, Plus, Save, X, Info, ExternalLink, RefreshCw, Copy, Sparkles, Trophy } from "lucide-react";
 import { api } from "../../lib/api";
 import { F } from "./shared";
 
@@ -300,8 +300,20 @@ function ReviewRow({ review, editing, onEdit, onCancel, onSave, onDelete }) {
             ))}
           </div>
           {review.relative_time && <span className="text-xs text-[#94a3b8]">· {review.relative_time}</span>}
+          {Array.isArray(review.driver_tags) && review.driver_tags.length > 0 && (
+            <span
+              data-testid={`review-driver-tag-${testSlug}`}
+              className="inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-black text-white bg-gradient-to-r from-[#D4A94A] to-[#c99738] px-2 py-0.5 rounded-full"
+              title={`Driver named in this review`}
+            >
+              <Trophy className="w-2.5 h-2.5" /> {review.driver_tags.join(" · ")}
+            </span>
+          )}
         </div>
         <p className="text-sm text-[#334155] leading-relaxed mt-1.5">"{review.text}"</p>
+        {review.rating >= 5 && (
+          <OwnerReplyDraft review={review} testSlug={testSlug} />
+        )}
       </div>
       <div className="flex gap-1 shrink-0">
         <button
@@ -322,6 +334,120 @@ function ReviewRow({ review, editing, onEdit, onCancel, onSave, onDelete }) {
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── OwnerReplyDraft ─────────────────────────────────────────────────
+// Compact widget under every 5-star review. Shows the pre-generated
+// owner reply, exposes 1-tap Copy, Regenerate (asks Claude again), and
+// Save (persists an owner tweak). "Open on Google" jumps straight to
+// the business reviews inbox so the owner pastes and posts.
+function OwnerReplyDraft({ review, testSlug }) {
+  const [draft, setDraft] = useState(review.owner_reply_draft || "");
+  const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(!!review.owner_reply_draft);
+
+  const copy = () => {
+    if (!draft) return;
+    navigator.clipboard.writeText(draft).then(
+      () => toast.success("Reply copied — paste it on Google!"),
+      () => toast.error("Copy failed"),
+    );
+  };
+
+  const regenerate = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/admin/reviews/${review.id}/reply-draft/regenerate`);
+      setDraft(data?.owner_reply_draft || "");
+      setExpanded(true);
+      toast.success("Fresh draft ready");
+    } catch { toast.error("Draft failed — LLM key may be unset"); }
+    finally { setBusy(false); }
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.put(`/admin/reviews/${review.id}/reply-draft`, { owner_reply_draft: draft });
+      toast.success("Draft saved");
+    } catch { toast.error("Save failed"); }
+    finally { setBusy(false); }
+  };
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={regenerate}
+        disabled={busy}
+        data-testid={`review-draft-generate-${testSlug}`}
+        className="mt-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-black text-[#D4A94A] hover:text-[#c99738] disabled:opacity-40"
+      >
+        <Sparkles className="w-3 h-3" /> {busy ? "Drafting…" : "Draft a thank-you reply"}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className="mt-3 rounded-xl border border-[#EFE7D5] bg-gradient-to-br from-[#FBF7EF] to-white p-3"
+      data-testid={`review-draft-${testSlug}`}
+    >
+      <div className="flex items-center gap-1.5 mb-2 text-[10px] uppercase tracking-widest text-[#D4A94A] font-black">
+        <Sparkles className="w-3 h-3" /> Owner reply · draft
+      </div>
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        data-testid={`review-draft-textarea-${testSlug}`}
+        className="w-full rounded-lg border border-[#EFE7D5] bg-white px-3 py-2 text-sm text-[#0B3B5C] outline-none focus:border-[#D4A94A] min-h-[80px] leading-relaxed"
+        placeholder="Thank the reviewer here…"
+      />
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={copy}
+          disabled={busy || !draft}
+          data-testid={`review-draft-copy-${testSlug}`}
+          className="inline-flex items-center gap-1 rounded-full bg-[#0B3B5C] text-white text-[11px] font-bold px-3 py-1.5 hover:bg-[#132a4a] disabled:opacity-40"
+        >
+          <Copy className="w-3 h-3" /> Copy
+        </button>
+        <a
+          href="https://business.google.com/reviews"
+          target="_blank"
+          rel="noreferrer"
+          data-testid={`review-draft-open-google-${testSlug}`}
+          className="inline-flex items-center gap-1 rounded-full bg-white border border-[#E2E8F0] text-[#0B3B5C] text-[11px] font-bold px-3 py-1.5 hover:border-[#D4A94A]"
+        >
+          <ExternalLink className="w-3 h-3" /> Open on Google
+        </a>
+        <button
+          type="button"
+          onClick={regenerate}
+          disabled={busy}
+          data-testid={`review-draft-regen-${testSlug}`}
+          className="inline-flex items-center gap-1 rounded-full bg-[#FBF7EF] border border-[#EFE7D5] text-[#0B3B5C] text-[11px] font-bold px-3 py-1.5 hover:border-[#D4A94A] disabled:opacity-40"
+        >
+          <RefreshCw className={`w-3 h-3 ${busy ? "animate-spin" : ""}`} /> Re-draft
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy}
+          data-testid={`review-draft-save-${testSlug}`}
+          className="inline-flex items-center gap-1 rounded-full bg-[#059669] text-white text-[11px] font-bold px-3 py-1.5 hover:bg-[#047857] disabled:opacity-40"
+        >
+          <Save className="w-3 h-3" /> Save edit
+        </button>
+      </div>
+      {review.owner_reply_generated_at && (
+        <div className="mt-1 text-[9px] text-[#94a3b8]">
+          drafted {new Date(review.owner_reply_generated_at).toLocaleString()}
+        </div>
+      )}
     </div>
   );
 }

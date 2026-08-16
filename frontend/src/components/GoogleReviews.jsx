@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Star } from "lucide-react";
+import { Star, Trophy } from "lucide-react";
 import { api } from "../lib/api";
 
 export default function GoogleReviews() {
@@ -38,34 +38,52 @@ export default function GoogleReviews() {
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {data.reviews.map((r, i) => (
-            <motion.article
-              key={r.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.07 }}
-              data-testid={`google-review-${r.id}`}
-              className="bg-white rounded-2xl border border-[#E2E8F0] p-6 hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(212,169,74,0.08)] transition-transform"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <img src={r.profile_photo_url} alt={r.author_name} className="w-10 h-10 rounded-full border border-[#E2E8F0]" />
-                  <div>
-                    <div className="text-sm font-semibold text-[#0B3B5C]">{r.author_name}</div>
-                    <div className="text-xs text-[#64748B]">{r.relative_time}</div>
+          {data.reviews.map((r, i) => {
+            const tags = Array.isArray(r.driver_tags) ? r.driver_tags : [];
+            const isTagged = tags.length > 0;
+            return (
+              <motion.article
+                key={r.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.07 }}
+                data-testid={`google-review-${r.id}`}
+                className={`relative rounded-2xl border p-6 hover:-translate-y-1 transition-transform ${
+                  isTagged
+                    ? "bg-gradient-to-br from-white to-[#FBF7EF] border-[#D4A94A] shadow-[0_16px_32px_rgba(212,169,74,0.15)] hover:shadow-[0_20px_40px_rgba(212,169,74,0.25)]"
+                    : "bg-white border-[#E2E8F0] hover:shadow-[0_20px_40px_rgba(212,169,74,0.08)]"
+                }`}
+              >
+                {isTagged && (
+                  <span
+                    data-testid={`google-review-${r.id}-driver-tag`}
+                    className="absolute -top-2.5 left-4 inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-black text-white bg-gradient-to-r from-[#D4A94A] to-[#c99738] px-2.5 py-1 rounded-full shadow-[0_6px_14px_rgba(212,169,74,0.4)]"
+                    title={`${tags.join(", ")} was named in this review`}
+                  >
+                    <Trophy className="w-2.5 h-2.5" />
+                    {tags.length === 1 ? `${tags[0]} drove them` : `${tags.join(" · ")} named`}
+                  </span>
+                )}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <img src={r.profile_photo_url} alt={r.author_name} className="w-10 h-10 rounded-full border border-[#E2E8F0]" />
+                    <div>
+                      <div className="text-sm font-semibold text-[#0B3B5C]">{r.author_name}</div>
+                      <div className="text-xs text-[#64748B]">{r.relative_time}</div>
+                    </div>
                   </div>
+                  <GoogleG size={18} />
                 </div>
-                <GoogleG size={18} />
-              </div>
-              <div className="mt-3 flex items-center gap-0.5">
-                {Array.from({ length: 5 }).map((_, idx) => (
-                  <Star key={idx} className={`w-4 h-4 ${idx < r.rating ? "text-[#FBBF24] fill-[#FBBF24]" : "text-[#E2E8F0]"}`} />
-                ))}
-              </div>
-              <p className="mt-3 text-sm text-[#334155] leading-relaxed">"{r.text}"</p>
-            </motion.article>
-          ))}
+                <div className="mt-3 flex items-center gap-0.5">
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <Star key={idx} className={`w-4 h-4 ${idx < r.rating ? "text-[#FBBF24] fill-[#FBBF24]" : "text-[#E2E8F0]"}`} />
+                  ))}
+                </div>
+                <p className="mt-3 text-sm text-[#334155] leading-relaxed">"{r.text}"</p>
+              </motion.article>
+            );
+          })}
         </div>
 
         <div className="mt-10 text-center">
