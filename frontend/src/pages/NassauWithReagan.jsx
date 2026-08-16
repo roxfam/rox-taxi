@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Clock, MapPin, Users, Star, Shell, Camera, ShoppingBag, Utensils, Trophy, Sparkles, Palmtree, Info, Wallet, Waves, Landmark, Cake, Factory } from "lucide-react";
+import { ArrowRight, Clock, MapPin, Users, Star, Shell, Camera, ShoppingBag, Utensils, Trophy, Sparkles, Palmtree, Info, Wallet, Waves, Landmark, Cake, Factory, Umbrella } from "lucide-react";
 import ReaganRouteMap from "../components/ReaganRouteMap";
 
 /**
@@ -21,13 +21,6 @@ const STOPS = [
     minutes: 30,
   },
   {
-    icon: ShoppingBag,
-    title: "Bay Street strip",
-    body:
-      "Straw Market, colonial architecture, and the pastel row where every cruise-day photo happens. I know which shops give a real haggle vs the ones selling factory-made 'Bahamian' straw.",
-    minutes: 30,
-  },
-  {
     icon: Factory,
     title: "Graycliff Cigar & Chocolate Factory",
     body:
@@ -40,16 +33,11 @@ const STOPS = [
     },
   },
   {
-    icon: Cake,
-    title: "Bahamas Rum Cake Factory",
+    icon: ShoppingBag,
+    title: "Bay Street strip",
     body:
-      "A quick walk through the working bakery at 602 East Bay Street where they've been small-batch baking and rum-curing cakes since 1978. Free samples at the counter across a dozen flavours — Original, Pineapple, Chocolate, Key Lime, Kentucky Bourbon, Irish Cream and more. Every cake is vacuum-sealed and cleared for carry-on.",
-    minutes: 20,
-    included_note: "Walk-in free · tasting samples included",
-    paid_separately: {
-      label: "Cakes to take home are pay-as-you-go",
-      detail: "Singles from $7 (12+ flavours) · 4 oz six-pack samplers ~$37.75 · 20 oz two-pack bundles ~$39.58. Vacuum-sealed for the plane home — no refrigeration needed. Cash or card at the counter.",
-    },
+      "Straw Market, colonial architecture, and the pastel row where every cruise-day photo happens. I know which shops give a real haggle vs the ones selling factory-made 'Bahamian' straw.",
+    minutes: 30,
   },
   {
     icon: Utensils,
@@ -71,6 +59,27 @@ const STOPS = [
     paid_separately: {
       label: "Admission paid separately",
       detail: "Adults $18 · Children (4–12) $9 · Under 4 free. Pay at the gate on the day. We help you time the 10:15 AM · 2:15 PM · 4:15 PM flamingo march.",
+    },
+  },
+  {
+    icon: Umbrella,
+    title: "Cable Beach (optional)",
+    body:
+      "Nassau's most photographed public beach — three miles of soft white sand fronting the Baha Mar resort strip. Just say the word and Reagan swings in for a 20-minute barefoot walk, sunset selfie, or quick swim. Skip it and we head straight for the return leg.",
+    minutes: 20,
+    optional: true,
+    included_note: "Free public beach · included when you opt in",
+  },
+  {
+    icon: Cake,
+    title: "Bahamas Rum Cake Factory",
+    body:
+      "A quick walk through the working bakery at 602 East Bay Street where they've been small-batch baking and rum-curing cakes since 1978. Free samples at the counter across a dozen flavours — Original, Pineapple, Chocolate, Key Lime, Kentucky Bourbon, Irish Cream and more. Every cake is vacuum-sealed and cleared for carry-on.",
+    minutes: 20,
+    included_note: "Walk-in free · tasting samples included",
+    paid_separately: {
+      label: "Cakes to take home are pay-as-you-go",
+      detail: "Singles from $7 (12+ flavours) · 4 oz six-pack samplers ~$37.75 · 20 oz two-pack bundles ~$39.58. Vacuum-sealed for the plane home — no refrigeration needed. Cash or card at the counter.",
     },
   },
   {
@@ -97,7 +106,7 @@ const STOPS = [
 
 export default function NassauWithReagan() {
   useEffect(() => {
-    document.title = "Nassau with Reagan · Signature 8-stop city tour · Rox Taxi";
+    document.title = "Nassau with Reagan · Signature 9-stop city loop · Rox Taxi";
   }, []);
 
   return (
@@ -125,7 +134,7 @@ export default function NassauWithReagan() {
               Nassau,<br />the way <span className="text-[#D4A94A]">Reagan</span> tells it.
             </h1>
             <p className="mt-6 max-w-2xl text-lg text-white/85 leading-relaxed">
-              About four hours. Eight stops. One driver who's spent a decade turning cruise-day guests into repeat customers — and gets his name dropped in half the Google reviews we get.
+              About four hours. A full downtown-out-and-back loop with eight core stops and one optional beach detour. One driver who's spent a decade turning cruise-day guests into repeat customers — and gets his name dropped in half the Google reviews we get.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <Link
@@ -160,7 +169,7 @@ export default function NassauWithReagan() {
           The route
         </div>
         <h2 className="serif text-5xl lg:text-6xl text-[#0B3B5C] mt-2 leading-tight">
-          Eight stops. Zero tourist traps.
+          Downtown → west → east → back. Zero tourist traps.
         </h2>
         <p className="mt-4 text-[#334155] max-w-2xl leading-relaxed">
           Reagan builds this route around whichever of you shows up — kids, foodies, first-timers, repeat cruisers. Timings flex; the flavours don't.
@@ -181,8 +190,16 @@ export default function NassauWithReagan() {
                 <s.icon className="w-7 h-7" />
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-black">
-                  Stop {i + 1}
+                <div className="text-[10px] uppercase tracking-widest text-[#94a3b8] font-black flex items-center gap-2">
+                  <span>Stop {i + 1}</span>
+                  {s.optional && (
+                    <span
+                      data-testid={`nassau-reagan-stop-${i}-optional-chip`}
+                      className="inline-flex items-center gap-1 rounded-full bg-[#0B3B5C] text-white text-[9px] uppercase tracking-widest font-black px-2 py-0.5"
+                    >
+                      Optional
+                    </span>
+                  )}
                 </div>
                 <h3 className="serif text-2xl text-[#0B3B5C] mt-1 leading-tight">{s.title}</h3>
                 <p className="text-sm text-[#334155] mt-2 leading-relaxed">{s.body}</p>
@@ -239,11 +256,11 @@ export default function NassauWithReagan() {
               </p>
             </div>
 
-            {/* Paid-separately callout — Fish Fry meals + Ardastra admission
-                + optional Atlantis aquarium are not bundled into the $225 flat
-                so families can opt in per head. Fort Montagu + the Atlantis
-                self-walk + the Rum Cake Factory tasting are always included.
-                Keeps the flat rate honest. */}
+            {/* Paid-separately callout — Graycliff purchases + Fish Fry meals
+                + Ardastra admission + optional Atlantis aquarium are not bundled
+                into the $225 flat so families can opt in per head. Fort Montagu,
+                Cable Beach, the Atlantis self-walk, and the Rum Cake Factory
+                tasting are always free / included. Keeps the flat rate honest. */}
             <div
               className="mt-6 rounded-2xl bg-[#FBF7EF] border border-[#D4A94A]/40 p-5"
               data-testid="nassau-reagan-paid-separately-callout"
@@ -289,7 +306,7 @@ export default function NassauWithReagan() {
               </ul>
               <p className="mt-3 text-xs text-[#64748B] leading-relaxed">
                 Skip any stop and Reagan swaps in a beach photo op or a straw-market run — no
-                penalty, no repricing. Fort Montagu + the Atlantis self-walk are always free.
+                penalty, no repricing. Cable Beach, Fort Montagu + the Atlantis self-walk are always free.
               </p>
             </div>
 

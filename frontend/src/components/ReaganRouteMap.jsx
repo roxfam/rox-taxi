@@ -14,32 +14,38 @@ import { motion } from "framer-motion";
 // SVG viewBox 800×420. Coordinates are illustrative — chosen to keep the
 // route legible, not GPS-accurate. Stops ordered as they appear on the tour.
 const STOPS = [
-  { n: 1, x: 300, y: 195, name: "Fort Fincastle", cat: "included",  labelPos: "left" },
-  { n: 2, x: 355, y: 240, name: "Bay Street",     cat: "included",  labelPos: "bottom" },
-  { n: 3, x: 260, y: 220, name: "Graycliff",      cat: "paid",      labelPos: "left" },
-  { n: 4, x: 415, y: 225, name: "Rum Cake Factory", cat: "paid",    labelPos: "bottom" },
-  { n: 5, x: 205, y: 285, name: "Fish Fry",       cat: "paid",      labelPos: "bottom" },
-  { n: 6, x: 165, y: 340, name: "Ardastra Gardens", cat: "paid",    labelPos: "bottom" },
-  { n: 7, x: 545, y: 260, name: "Fort Montagu",   cat: "included",  labelPos: "bottom" },
-  { n: 8, x: 645, y: 130, name: "Atlantis",       cat: "included",  labelPos: "top" },
+  { n: 1, x: 300, y: 195, name: "Fort Fincastle",     cat: "included",  labelPos: "left" },
+  { n: 2, x: 260, y: 220, name: "Graycliff",          cat: "paid",      labelPos: "left" },
+  { n: 3, x: 355, y: 240, name: "Bay Street",         cat: "included",  labelPos: "bottom" },
+  { n: 4, x: 205, y: 285, name: "Fish Fry",           cat: "paid",      labelPos: "bottom" },
+  { n: 5, x: 165, y: 340, name: "Ardastra Gardens",   cat: "paid",      labelPos: "bottom" },
+  { n: 6, x: 95,  y: 265, name: "Cable Beach",        cat: "optional",  labelPos: "left" },
+  { n: 7, x: 415, y: 235, name: "Rum Cake Factory",   cat: "paid",      labelPos: "bottom" },
+  { n: 8, x: 545, y: 265, name: "Fort Montagu",       cat: "included",  labelPos: "bottom" },
+  { n: 9, x: 645, y: 130, name: "Atlantis",           cat: "included",  labelPos: "top" },
 ];
 
 // Route line as an SVG path — hits every stop in tour order with gentle
-// curves so it looks like a scenic drive rather than straight lines.
+// curves so it looks like a scenic drive: downtown → west sweep (with
+// optional beach detour) → back east → Paradise Island via bridge.
 const ROUTE_PATH = [
-  "M 300 195",           // stop 1
-  "Q 335 210 355 240",   // → stop 2
-  "Q 305 235 260 220",   // → stop 3
-  "Q 340 200 415 225",   // → stop 4
-  "Q 300 260 205 285",   // → stop 5
-  "Q 175 315 165 340",   // → stop 6
-  "Q 355 320 545 260",   // → stop 7
-  "Q 615 205 645 130",   // → stop 8
+  "M 300 195",             // 1 Fort Fincastle
+  "Q 280 205 260 220",     // → 2 Graycliff (short SW hop, downtown-west)
+  "Q 300 235 355 240",     // → 3 Bay Street (east strip)
+  "Q 275 265 205 285",     // → 4 Fish Fry (west swing)
+  "Q 175 315 165 340",     // → 5 Ardastra (SW dip)
+  "Q 120 315 95 265",      // → 6 Cable Beach (further west, NW to coast)
+  "Q 260 260 415 235",     // → 7 Rum Cake Factory (big east swing back)
+  "Q 490 250 545 265",     // → 8 Fort Montagu (further east)
+  "Q 620 200 645 130",     // → 9 Atlantis (NE, over Paradise Bridge)
 ].join(" ");
 
 const PIN_COLOR = {
   included: { fill: "#059669", ring: "#A7F3D0" },
   paid:     { fill: "#D4A94A", ring: "#F5E1A4" },
+  // Optional stops render with a dashed outer ring so guests can tell
+  // "opt-in" apart from mandatory route pins at a glance.
+  optional: { fill: "#0B3B5C", ring: "#CBD5E1" },
 };
 
 export default function ReaganRouteMap() {
@@ -52,10 +58,10 @@ export default function ReaganRouteMap() {
         The route, at a glance
       </div>
       <h2 className="serif text-4xl lg:text-5xl text-[#0B3B5C] mt-2 leading-tight">
-        Eight stops. One loop.
+        Downtown → west → east → back.
       </h2>
       <p className="mt-3 text-[#334155] max-w-2xl leading-relaxed">
-        A rough map of how the day flows — downtown Nassau, over to the Fish Fry, out to the flamingos, east to Fort Montagu, then across the bridge to Paradise Island.
+        A rough map of how the day flows — start downtown, sweep west to the Fish Fry, dip south to the flamingos (with an optional Cable Beach detour), then loop back east to Fort Montagu and over the Paradise Bridge to Atlantis.
       </p>
 
       <div className="mt-8 rounded-3xl bg-gradient-to-br from-[#FBF7EF] via-white to-[#FBF7EF] border border-[#D4A94A]/30 p-4 sm:p-6 shadow-[0_20px_45px_rgba(212,169,74,0.08)]">
@@ -152,9 +158,12 @@ export default function ReaganRouteMap() {
             transition={{ duration: 2.4, ease: "easeInOut" }}
           />
 
-          {/* Numbered pins + labels — pins render on top of the route line */}
+          {/* Numbered pins + labels — pins render on top of the route line.
+              Optional stops get a dashed outer ring for at-a-glance opt-in
+              hierarchy vs the mandatory route pins. */}
           {STOPS.map((s, i) => {
             const c = PIN_COLOR[s.cat];
+            const isOptional = s.cat === "optional";
             let lx = s.x;
             let ly = s.y;
             let anchor = "middle";
@@ -171,8 +180,17 @@ export default function ReaganRouteMap() {
                 transition={{ duration: 0.4, delay: 0.4 + i * 0.15 }}
                 data-testid={`reagan-route-pin-${s.n}`}
               >
-                {/* Halo ring for hierarchy */}
-                <circle cx={s.x} cy={s.y} r="14" fill={c.ring} opacity="0.75" />
+                {/* Halo ring — dashed for optional stops */}
+                <circle
+                  cx={s.x}
+                  cy={s.y}
+                  r="14"
+                  fill={c.ring}
+                  opacity={isOptional ? 0.9 : 0.75}
+                  stroke={isOptional ? "#0B3B5C" : "none"}
+                  strokeWidth={isOptional ? 1.2 : 0}
+                  strokeDasharray={isOptional ? "3 2" : ""}
+                />
                 {/* Main pin */}
                 <circle cx={s.x} cy={s.y} r="10" fill={c.fill} stroke="white" strokeWidth="2.5" />
                 <text
@@ -217,8 +235,17 @@ export default function ReaganRouteMap() {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <span
+              className="inline-block w-3 h-3 rounded-full bg-[#0B3B5C] border-2 border-white"
+              style={{ boxShadow: "0 0 0 1px #0B3B5C", borderStyle: "dashed" }}
+            />
+            <span className="text-[#334155]">
+              <span className="font-bold text-[#0B3B5C]">Cable Beach</span> — opt in on the day
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
             <span className="inline-block w-5 h-[3px] bg-[#E86A3C] rounded-full" style={{ backgroundImage: "repeating-linear-gradient(90deg, #E86A3C 0 6px, transparent 6px 10px)" }} />
-            <span className="text-[#334155]">Route order (1 → 8)</span>
+            <span className="text-[#334155]">Route order (1 → 9)</span>
           </div>
         </div>
 
