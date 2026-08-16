@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, Clock, MapPin, Users, Star, Shell, Camera, ShoppingBag, Utensils, Trophy, Sparkles, Palmtree, Info, Wallet, Waves, Landmark, Cake, Factory } from "lucide-react";
+import ReaganRouteMap from "../components/ReaganRouteMap";
 
 /**
  * NassauWithReagan — signature 4-hour city tour built around our best
@@ -214,6 +215,10 @@ export default function NassauWithReagan() {
           ))}
         </div>
       </section>
+
+      {/* Illustrated route map — hand-drawn schematic showing the 8-stop
+          loop so guests can visualise the day before booking. */}
+      <ReaganRouteMap />
 
       {/* Pricing + What's Included */}
       <section className="bg-white py-20">

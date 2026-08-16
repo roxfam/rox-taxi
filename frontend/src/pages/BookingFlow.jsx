@@ -237,9 +237,31 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   // 100% (business absorbs no card-fee gap — Stripe processes tip inside
   // the same PaymentIntent). Rentals don't offer tipping (no driver).
   // Custom values are capped at $1000 to match backend Pydantic bound.
+  //
+  // Default policy: FIRST-TIME visitors land on 18% pre-selected so most
+  // guests tip without thinking; RETURNING visitors see whatever they
+  // picked on their last booking (persisted to localStorage on submit).
+  // `rox_last_tip` = "0" | "15" | "18" | "20" | "custom". If "custom"
+  // is stored, we also restore the exact custom $ value from
+  // `rox_last_tip_custom`.
   const supportsTip = serviceType !== "rental";
-  const [tipMode, setTipMode] = useState(0); // 0 | 15 | 18 | 20 | "custom"
-  const [customTip, setCustomTip] = useState("");
+  const [tipMode, setTipMode] = useState(() => {
+    if (!supportsTip) return 0;
+    if (typeof window === "undefined") return 18;
+    try {
+      const stored = localStorage.getItem("rox_last_tip");
+      if (stored === null) return 18; // first-timer default
+      if (stored === "custom") return "custom";
+      const n = Number(stored);
+      if ([0, 15, 18, 20].includes(n)) return n;
+    } catch { /* ignore private-mode failures */ }
+    return 18;
+  });
+  const [customTip, setCustomTip] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try { return localStorage.getItem("rox_last_tip_custom") || ""; }
+    catch { return ""; }
+  });
   const tipAmount = (() => {
     if (!supportsTip) return 0;
     if (tipMode === "custom") {
@@ -315,6 +337,22 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
       };
       const { data: b } = await api.post("/bookings", payload);
       setBooking(b);
+
+      // Persist the tip choice so returning guests see the same default
+      // next time (first-timers stay on the 18% starter until they change
+      // it explicitly). Runs only after a successful booking POST so
+      // failed submissions don't stick a bad default.
+      if (supportsTip && typeof window !== "undefined") {
+        try {
+          const persistedMode = tipMode === "custom" ? "custom" : String(Number(tipMode) || 0);
+          localStorage.setItem("rox_last_tip", persistedMode);
+          if (tipMode === "custom") {
+            localStorage.setItem("rox_last_tip_custom", String(customTip || ""));
+          } else {
+            localStorage.removeItem("rox_last_tip_custom");
+          }
+        } catch { /* ignore private-mode failures */ }
+      }
 
       // Meta Pixel — visitor completed the booking form. Fires once per
       // successful booking (regardless of payment method chosen next).
