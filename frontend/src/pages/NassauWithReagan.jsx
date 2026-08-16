@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Clock, MapPin, Users, Star, Shell, Camera, ShoppingBag, Utensils, Trophy, Sparkles, Palmtree } from "lucide-react";
+import { ArrowRight, Clock, MapPin, Users, Star, Shell, Camera, ShoppingBag, Utensils, Trophy, Sparkles, Palmtree, Info, Wallet, Waves, Landmark } from "lucide-react";
 
 /**
  * NassauWithReagan — signature 4-hour city tour built around our best
@@ -32,6 +32,10 @@ const STOPS = [
     body:
       "Native seafood shacks on stilts over the water. Twin Brothers or Oh Andros — I'll rank them for you honestly. Conch fritters, cracked lobster, Kalik cold enough to hurt your teeth.",
     minutes: 60,
+    paid_separately: {
+      label: "Food + drinks paid separately",
+      detail: "Typical plates run $15–$35 per person at the shack. Cash preferred; most take card. Order at your own pace.",
+    },
   },
   {
     icon: Palmtree,
@@ -39,12 +43,36 @@ const STOPS = [
     body:
       "The marching flamingo show has run since 1957 and it still stops kids in their tracks. Best photo op on the island — we hit the 2 PM performance if timing works.",
     minutes: 45,
+    paid_separately: {
+      label: "Admission paid separately",
+      detail: "Adults $18 · Children (4–12) $9 · Under 4 free. Pay at the gate on the day. We help you time the 10:15 AM · 2:15 PM · 4:15 PM flamingo march.",
+    },
+  },
+  {
+    icon: Landmark,
+    title: "Fort Montagu + beach",
+    body:
+      "The oldest fort on New Providence (1741) — quieter than Fincastle, and the crescent beach next to it is where locals actually swim. Great for wading kids and a 20-minute stretch of your legs.",
+    minutes: 30,
+    included_note: "Free to visit · included in the tour",
+  },
+  {
+    icon: Waves,
+    title: "Atlantis self-tour (Paradise Island)",
+    body:
+      "Reagan drops you at the Coral Tower entrance and points you through the free public spaces — the Great Hall of Waters lobby, the grand staircase, Marina Village, and the beach boardwalk. Meet back at the van in 30 minutes with time to spare.",
+    minutes: 30,
+    included_note: "Free lobby + public areas · included in the tour",
+    paid_separately: {
+      label: "Marine Habitat (aquarium) admission is separate",
+      detail: "If you want to see the Ruins Lagoon, sharks and rays, day passes run $50+ per person at the guest-services desk — optional, book on-site.",
+    },
   },
 ];
 
 export default function NassauWithReagan() {
   useEffect(() => {
-    document.title = "Nassau with Reagan · 4-hour signature city tour · Rox Taxi";
+    document.title = "Nassau with Reagan · Signature 6-stop city tour · Rox Taxi";
   }, []);
 
   return (
@@ -72,7 +100,7 @@ export default function NassauWithReagan() {
               Nassau,<br />the way <span className="text-[#D4A94A]">Reagan</span> tells it.
             </h1>
             <p className="mt-6 max-w-2xl text-lg text-white/85 leading-relaxed">
-              Four hours. Four stops. One driver who's spent a decade turning cruise-day guests into repeat customers — and gets his name dropped in half the Google reviews we get.
+              Around five hours. Six stops. One driver who's spent a decade turning cruise-day guests into repeat customers — and gets his name dropped in half the Google reviews we get.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <Link
@@ -92,7 +120,7 @@ export default function NassauWithReagan() {
             </div>
 
             <div className="mt-10 flex flex-wrap gap-6 text-sm">
-              <Fact icon={Clock} label="4 hours" />
+              <Fact icon={Clock} label="~5 hours" />
               <Fact icon={Users} label="Up to 4 guests" />
               <Fact icon={MapPin} label="Pickup: your hotel or cruise port" />
               <Fact icon={Star} label="5.0★ on Google" />
@@ -104,10 +132,10 @@ export default function NassauWithReagan() {
       {/* Itinerary */}
       <section className="max-w-5xl mx-auto px-6 lg:px-10 py-20">
         <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">
-          The 4-hour route
+          The route
         </div>
         <h2 className="serif text-5xl lg:text-6xl text-[#0B3B5C] mt-2 leading-tight">
-          Four stops. Zero tourist traps.
+          Six stops. Zero tourist traps.
         </h2>
         <p className="mt-4 text-[#334155] max-w-2xl leading-relaxed">
           Reagan builds this route around whichever of you shows up — kids, foodies, first-timers, repeat cruisers. Timings flex; the flavours don't.
@@ -133,6 +161,26 @@ export default function NassauWithReagan() {
                 </div>
                 <h3 className="serif text-2xl text-[#0B3B5C] mt-1 leading-tight">{s.title}</h3>
                 <p className="text-sm text-[#334155] mt-2 leading-relaxed">{s.body}</p>
+                {s.included_note && (
+                  <div
+                    data-testid={`nassau-reagan-stop-${i}-included`}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#059669]/10 border border-[#059669]/30 px-3 py-1 text-[10px] uppercase tracking-widest font-black text-[#047857]"
+                  >
+                    <Sparkles className="w-3 h-3" /> {s.included_note}
+                  </div>
+                )}
+                {s.paid_separately && (
+                  <div
+                    data-testid={`nassau-reagan-stop-${i}-paid-separately`}
+                    className="mt-3 flex items-start gap-2.5 rounded-xl bg-[#FBF7EF] border border-[#D4A94A]/30 px-3 py-2.5"
+                  >
+                    <Wallet className="w-4 h-4 text-[#D4A94A] shrink-0 mt-0.5" />
+                    <div className="text-xs text-[#334155] leading-relaxed">
+                      <span className="font-bold text-[#0B3B5C]">{s.paid_separately.label}.</span>{" "}
+                      {s.paid_separately.detail}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="text-right">
                 <div className="mono font-bold text-2xl text-[#D4A94A]">~{s.minutes}m</div>
@@ -155,11 +203,54 @@ export default function NassauWithReagan() {
             </h2>
             <div className="mt-4 space-y-3 text-[#334155] leading-relaxed">
               <p>
-                Four hours of private driving, up to 4 guests. Not $99-per-person that tacks on to $600 for a family — one flat rate, one driver, one honest handshake.
+                Around five hours of private driving, up to 4 guests. Not $99-per-person that tacks on to $600 for a family — one flat rate, one driver, one honest handshake.
               </p>
               <p>
                 <span className="mono font-bold text-[#E86A3C]">+$30</span> for each extra guest above 4 (up to 6 total in an SUV).
-                <span className="mono font-bold text-[#E86A3C] block mt-1">+$25</span> if you want us to time the Ardastra flamingo show (limited daily slots).
+              </p>
+            </div>
+
+            {/* Paid-separately callout — Fish Fry meals + Ardastra admission
+                + optional Atlantis aquarium are not bundled into the $220 flat
+                so families can opt in per head. Fort Montagu + the Atlantis
+                self-tour are always included. Keeps the flat rate honest. */}
+            <div
+              className="mt-6 rounded-2xl bg-[#FBF7EF] border border-[#D4A94A]/40 p-5"
+              data-testid="nassau-reagan-paid-separately-callout"
+            >
+              <div className="flex items-center gap-2 text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black">
+                <Info className="w-3 h-3" /> Paid separately (per person)
+              </div>
+              <ul className="mt-3 space-y-2.5 text-sm text-[#334155]">
+                <li className="flex items-start gap-2.5">
+                  <Utensils className="w-4 h-4 text-[#D4A94A] shrink-0 mt-0.5" />
+                  <span>
+                    <span className="font-bold text-[#0B3B5C]">Fish Fry meals & drinks</span>{" "}
+                    — order what you want at the shack. Plates run{" "}
+                    <span className="mono font-bold text-[#E86A3C]">$15–$35</span> per person.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <Palmtree className="w-4 h-4 text-[#D4A94A] shrink-0 mt-0.5" />
+                  <span>
+                    <span className="font-bold text-[#0B3B5C]">Ardastra Gardens admission</span>{" "}
+                    — <span className="mono font-bold text-[#E86A3C]">$18</span> adults ·{" "}
+                    <span className="mono font-bold text-[#E86A3C]">$9</span> children (4–12) ·{" "}
+                    under 4 free. Pay at the gate.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <Waves className="w-4 h-4 text-[#D4A94A] shrink-0 mt-0.5" />
+                  <span>
+                    <span className="font-bold text-[#0B3B5C]">Atlantis Marine Habitat (optional)</span>{" "}
+                    — the Atlantis self-walk is <em>included</em>. Only the aquarium
+                    day-pass costs extra (<span className="mono font-bold text-[#E86A3C]">$50+</span> pp at the on-site guest-services desk).
+                  </span>
+                </li>
+              </ul>
+              <p className="mt-3 text-xs text-[#64748B] leading-relaxed">
+                Skip any stop and Reagan swaps in a beach photo op or a straw-market run — no
+                penalty, no repricing. Fort Montagu + the Atlantis self-walk are always free.
               </p>
             </div>
 

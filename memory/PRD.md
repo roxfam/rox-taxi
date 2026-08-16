@@ -5,6 +5,14 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 16 — Signature Tour Cross-Links + Rotating Reviews + Reagan Tour Refresh
+- **Cross-linked `/nassau-with-reagan`** so the page finally gets internal traffic:
+  - New "Signature Tour" callout card under the hero on `/drivers/reagan` (text + $220 flat, links to `/nassau-with-reagan`).
+  - New slim gold ribbon above the homepage Featured Tours grid ("New: Nassau with Reagan · $220 flat").
+- **Constantly-rotating Google reviews on Home**: `GoogleReviews.jsx` now pulls the widest 4+ star pool via `/api/reviews?limit=60`, rotates the visible 3-card window every 8s using framer-motion `AnimatePresence`, pauses on hover, refetches silently every 5 min. Subtle "Live" pulse indicator when the pool exceeds the visible window. Backend cron bumped from every 6h → every hour (`.emergent/crons.yml`). Backend `/api/reviews` now takes an optional `limit` (default 60, max 200) and enforces `rating >= 4` at the query level.
+- **Reagan's languages** narrowed to English only (updated live DB record + catalog default + admin seed).
+- **Nassau-with-Reagan tour expanded to 6 stops (~5 hours)**: added Fort Montagu + beach (30 min, always included, free) and Atlantis self-tour on Paradise Island (30 min free lobby/Marina Village walk, aquarium admission optional). Added per-stop "Paid separately" chips for Fish Fry ($15–$35 pp meals) and Ardastra ($18 adult / $9 child gate) plus green "Included in the tour" badges on Fort Montagu + Atlantis. Removed the old "+$25 flamingo timing" upcharge since it's now bundled into the flat $220. Pricing block rewritten with a consolidated "Paid separately (per person)" callout listing meals · Ardastra admission · optional Atlantis Marine Habitat.
+
 ### Feb 12ad — "Nassau with Reagan" Signature Tour Landing Page
 - New public page at **`/nassau-with-reagan`** — hero with gold "Signature tour · with Reagan" ribbon, 4-stop itinerary (Fort Fincastle + Queen's Staircase → Bay Street → Fish Fry → Ardastra flamingos) with per-stop timings, transparent pricing card ($220 flat / +$30 extra pax / +$25 flamingo-show timing), "In Reagan's words" pull-quote, three "Book Reagan for this tour" CTAs.
 - All CTAs deep-link to `/taxi?book=hourly-charter&driver=Reagan` so the booking modal auto-opens the hourly charter with "Request Reagan" already checked.
