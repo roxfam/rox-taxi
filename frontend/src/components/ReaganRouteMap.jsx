@@ -69,7 +69,7 @@ export default function ReaganRouteMap() {
           viewBox="0 0 800 420"
           className="w-full h-auto"
           role="img"
-          aria-label="Illustrative map of the 8-stop Nassau with Reagan tour route"
+          aria-label="Illustrative map of the Nassau with Reagan tour route"
           data-testid="reagan-route-map-svg"
         >
           <defs>
@@ -225,7 +225,7 @@ export default function ReaganRouteMap() {
           <div className="flex items-center gap-2">
             <span className="inline-block w-3 h-3 rounded-full bg-[#059669] border-2 border-white ring-1 ring-[#059669]/30" />
             <span className="text-[#334155]">
-              <span className="font-bold text-[#0B3B5C]">Included</span> in the $225 flat
+              <span className="font-bold text-[#0B3B5C]">Included</span> in the $235 flat
             </span>
           </div>
           <div className="flex items-center gap-2">

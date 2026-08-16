@@ -117,7 +117,7 @@ export default function Home() {
                 New Signature Tour
               </div>
               <div className="text-sm sm:text-base font-black truncate">
-                Nassau with Reagan · $225 flat
+                Nassau with Reagan · from $235
               </div>
             </div>
           </div>
