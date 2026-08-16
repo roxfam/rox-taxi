@@ -5,6 +5,11 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 12ad — "Nassau with Reagan" Signature Tour Landing Page
+- New public page at **`/nassau-with-reagan`** — hero with gold "Signature tour · with Reagan" ribbon, 4-stop itinerary (Fort Fincastle + Queen's Staircase → Bay Street → Fish Fry → Ardastra flamingos) with per-stop timings, transparent pricing card ($220 flat / +$30 extra pax / +$25 flamingo-show timing), "In Reagan's words" pull-quote, three "Book Reagan for this tour" CTAs.
+- All CTAs deep-link to `/taxi?book=hourly-charter&driver=Reagan` so the booking modal auto-opens the hourly charter with "Request Reagan" already checked.
+- SEO-defensible landing — nobody else has a Nassau tour "with Reagan."
+
 ### Feb 12ac — Driver Spotlight Admin Panel + Headshot Uploader
 - New **Driver Spotlights tab** at `Admin → Manage → Driver Spotlights`. Each driver in `site_config.driver_spotlights` renders as a card in the left rail with their headshot, canonical name, and `/drivers/<slug>` deep-link.
 - Full editor on the right: Display name · Tagline · Bio · Specialties · Years experience · Languages. Partial updates merge on top of prior fields (dotted `$set` per key so the bio isn't wiped when only the tagline changes).
