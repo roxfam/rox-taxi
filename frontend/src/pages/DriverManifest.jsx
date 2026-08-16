@@ -198,7 +198,17 @@ export default function DriverManifest() {
                       <div className="font-semibold text-[#0B3B5C]">{b.customer_name}</div>
                       <div className="text-[11px] text-[#64748B]">{b.customer_phone || "—"}{b.pax ? ` · ${b.pax} pax` : ""}</div>
                     </div>
-                    <div className="mono text-[#E86A3C] font-bold">{money(b.total)}</div>
+                    <div className="mono text-[#E86A3C] font-bold text-right">
+                      {money(b.total)}
+                      {b.tip_amount > 0 && (
+                        <div
+                          className="mt-0.5 text-[10px] uppercase tracking-widest font-black text-[#059669]"
+                          data-testid={`driver-manifest-tip-${b.id}`}
+                        >
+                          +{money(b.tip_amount)} tip
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="rounded-lg bg-[#F7F5EF] border border-[#EFE7D5] px-3 py-2">

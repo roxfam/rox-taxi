@@ -381,6 +381,14 @@ export default function MyBookings() {
                   </div>
                   <div className="text-right">
                     <div className="mono text-lg text-[#E86A3C] font-semibold">{money(b.total)}</div>
+                    {b.tip_amount > 0 && (
+                      <div
+                        className="text-[10px] uppercase tracking-widest font-black text-[#059669] mt-0.5"
+                        data-testid={`mybookings-tip-${b.id}`}
+                      >
+                        incl. {money(b.tip_amount)} tip
+                      </div>
+                    )}
                     {!isCancelled && (
                       <Link to={`/track?id=${b.id}`} className="mt-1 inline-flex items-center gap-1 text-xs text-[#D4A94A] hover:underline">
                         Track <ArrowRight className="w-3 h-3" />

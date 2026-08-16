@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle } from "lucide-react";
+import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle, HandCoins } from "lucide-react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { api, money } from "../lib/api";
 import { DateTimePicker } from "../components/DateTimePicker";
@@ -227,12 +227,33 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
       return sum + (mode === "per_person" ? price * Math.max(1, taxiPaxForAddons) : price);
     }, 0);
 
-  // Processing fee — 3% on the whole transaction (base + extras + deposit)
-  // to cover Stripe/PayPal card fees. Shown to the customer as its own line.
+  // Processing fee — 3% on the whole transaction (base + extras + deposit
+  // + tip) to cover Stripe/PayPal card fees. Shown to the customer as its own line.
   const PROCESSING_FEE_PCT = 0.03;
   const subtotal = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee + babySeatFee + taxiAddonFee + taxiExtrasFee;
-  const processingFee = subtotal * PROCESSING_FEE_PCT;
-  const total = subtotal + processingFee;
+
+  // ── Driver gratuity ─────────────────────────────────────────────────
+  // Optional tip pre-charged with the booking so the driver takes home
+  // 100% (business absorbs no card-fee gap — Stripe processes tip inside
+  // the same PaymentIntent). Rentals don't offer tipping (no driver).
+  // Custom values are capped at $1000 to match backend Pydantic bound.
+  const supportsTip = serviceType !== "rental";
+  const [tipMode, setTipMode] = useState(0); // 0 | 15 | 18 | 20 | "custom"
+  const [customTip, setCustomTip] = useState("");
+  const tipAmount = (() => {
+    if (!supportsTip) return 0;
+    if (tipMode === "custom") {
+      const n = Number(customTip);
+      if (!Number.isFinite(n) || n <= 0) return 0;
+      return Math.min(1000, Math.max(0, n));
+    }
+    const pct = Number(tipMode) || 0;
+    if (pct <= 0) return 0;
+    return subtotal * (pct / 100);
+  })();
+
+  const processingFee = (subtotal + tipAmount) * PROCESSING_FEE_PCT;
+  const total = subtotal + tipAmount + processingFee;
 
   const submit = async () => {
     if (!form.customer_name || !form.customer_email || !form.customer_phone || !form.booking_date) {
@@ -290,6 +311,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         flight_number: form.flight_number ? form.flight_number.trim().toUpperCase().replace(/\s+/g, "") : null,
         selected_addon_ids: serviceType === "taxi" ? selectedAddonIds : undefined,
         requested_driver: serviceType === "taxi" && form.requested_driver ? form.requested_driver.trim() : undefined,
+        tip_amount: tipAmount > 0 ? Number(tipAmount.toFixed(2)) : 0,
       };
       const { data: b } = await api.post("/bookings", payload);
       setBooking(b);
@@ -805,6 +827,14 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                       <span className="mono font-bold text-[#059669]">−{money(groupDiscount)}</span>
                     </div>
                   )}
+                  {tipAmount > 0 && (
+                    <div className="flex justify-between" data-testid="tip-line">
+                      <span className="text-[#0B3B5C] font-semibold">
+                        Driver gratuity{tipMode !== "custom" && Number(tipMode) > 0 ? ` (${tipMode}%)` : ""}
+                      </span>
+                      <span className="mono font-bold text-[#0B3B5C]">+{money(tipAmount)}</span>
+                    </div>
+                  )}
                   {processingFee > 0 && (
                     <div className="flex justify-between" data-testid="processing-fee-line">
                       <span className="text-[#64748B]">Processing fee (3%)</span>
@@ -813,6 +843,80 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   )}
                 </div>
               )}
+
+              {/* Driver gratuity picker — taxi + tour bookings only.
+                  Sits above the notes so guests see it during the review,
+                  not tucked away on the payment step. Quick chips + custom $. */}
+              {supportsTip && (
+                <div
+                  className="rounded-xl border border-[#E2E8F0] bg-white p-4 space-y-3"
+                  data-testid="tip-picker"
+                >
+                  <div className="flex items-center gap-2">
+                    <HandCoins className="w-4 h-4 text-[#D4A94A]" />
+                    <div className="flex-1">
+                      <div className="text-xs tracking-[0.2em] uppercase text-[#0B3B5C] font-bold">
+                        Add a tip for your driver
+                      </div>
+                      <div className="text-[11px] text-[#64748B] mt-0.5">
+                        100% passed to your driver — pre-charged with the booking so they don't need to ask.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: "No tip", value: 0, testid: "tip-none" },
+                      { label: "15%", value: 15, testid: "tip-15" },
+                      { label: "18%", value: 18, testid: "tip-18" },
+                      { label: "20%", value: 20, testid: "tip-20" },
+                      { label: "Custom", value: "custom", testid: "tip-custom" },
+                    ].map((chip) => {
+                      const active = tipMode === chip.value;
+                      return (
+                        <button
+                          key={String(chip.value)}
+                          type="button"
+                          data-testid={chip.testid}
+                          onClick={() => {
+                            setTipMode(chip.value);
+                            if (chip.value !== "custom") setCustomTip("");
+                          }}
+                          className={`rounded-full border px-4 py-1.5 text-xs font-bold transition-colors ${
+                            active
+                              ? "bg-[#0B3B5C] border-[#0B3B5C] text-white shadow-[0_4px_10px_rgba(11,59,92,0.25)]"
+                              : "bg-white border-[#E2E8F0] text-[#0B3B5C] hover:border-[#D4A94A]"
+                          }`}
+                        >
+                          {chip.label}
+                          {typeof chip.value === "number" && chip.value > 0 && subtotal > 0 && (
+                            <span className={`ml-1.5 text-[10px] ${active ? "text-white/70" : "text-[#94a3b8]"}`}>
+                              ${((subtotal * chip.value) / 100).toFixed(0)}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {tipMode === "custom" && (
+                    <div className="flex items-center gap-2">
+                      <span className="mono text-lg text-[#64748B]">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="1000"
+                        step="1"
+                        inputMode="decimal"
+                        value={customTip}
+                        onChange={(e) => setCustomTip(e.target.value)}
+                        placeholder="Enter tip amount"
+                        data-testid="tip-custom-input"
+                        className="w-full rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-sm mono focus:border-[#D4A94A] focus:outline-none focus:ring-2 focus:ring-[#D4A94A]/20"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">Notes (optional)</label>
                 <textarea

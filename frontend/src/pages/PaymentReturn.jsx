@@ -81,6 +81,14 @@ export function PaymentSuccess() {
             <div className="text-right">
               <div className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Total paid</div>
               <div className="mono text-2xl text-[#E86A3C] font-black tracking-tight">{money(booking.total)}</div>
+              {booking.tip_amount > 0 && (
+                <div
+                  className="mt-1 text-[10px] uppercase tracking-widest font-black text-[#059669]"
+                  data-testid="payment-success-tip-line"
+                >
+                  Includes {money(booking.tip_amount)} driver gratuity
+                </div>
+              )}
             </div>
           </div>
 
