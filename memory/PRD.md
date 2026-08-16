@@ -5,6 +5,12 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 12w — Google Reviews Live + Recently-Viewed Nav Dropdown
+- **Google Reviews syncing live** — 5 five-star reviews now pulled from Google Places API (New) and rendering on the homepage "Reviews from real riders" section. Rating: 5.0 · 5+ reviews. Business: ROX TAXI SERVICE (`ChIJVXxKZCKt7gMR61X4WUuKbow`).
+- **Root cause of prior silent failure**: API key had HTTP-referrer restrictions but the backend calls server-to-server (no referrer). Fixed by sending `Referer: https://roxtaxi.com/` header from the sync worker — matches the owner's Google Cloud referrer allowlist. Falls back gracefully if the site_config `site_url` is set to a different domain.
+- Credentials saved to both `.env` (`GOOGLE_PLACES_API_KEY`, `GOOGLE_PLACE_ID`) and `site_config` (belt-and-suspenders).
+- **Recently-viewed picker** on both desktop and mobile nav dropdowns. LocalStorage-backed per-section cache (last 3 picks), pinned to the top of the picker menu with a gold "History" icon. Mobile now uses a custom bottom-sheet dropdown matching the desktop menu design (Recently viewed → All options → See all footer).
+
 ### Feb 12b — Google Reviews Auto-Sync: 4-Star Quality Filter + ENV Priority
 - `_sync_google_reviews_bg()` reads `GOOGLE_PLACES_API_KEY` + `GOOGLE_PLACE_ID` from env FIRST (falls back to `site_config` for admin-panel convenience).
 - **Only reviews with rating ≥ 4 are stored as active**; 1–3 star reviews counted in `last_skipped_low_rating` but never surface on the homepage.

@@ -89,9 +89,17 @@ async def _sync_google_reviews_bg() -> None:
             return  # dormant — neither env nor site_config has credentials
 
         url = f"https://places.googleapis.com/v1/places/{place_id}"
+        # Some owners restrict their Google API key by HTTP referrer.
+        # Server-to-server calls normally have no referrer so the request
+        # is blocked with PERMISSION_DENIED (API_KEY_HTTP_REFERRER_BLOCKED).
+        # We send our public site domain as the Referer header so a
+        # correctly-configured allowlist (roxtaxi.com + the preview URL)
+        # accepts the call. Owners who prefer IP-based restriction can
+        # ignore this — the header is harmless when unrestricted.
         headers = {
             "X-Goog-Api-Key": api_key,
             "X-Goog-FieldMask": "reviews,rating,userRatingCount",
+            "Referer": (cfg.get("site_url") or "https://roxtaxi.com/").strip() or "https://roxtaxi.com/",
         }
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.get(url, headers=headers)

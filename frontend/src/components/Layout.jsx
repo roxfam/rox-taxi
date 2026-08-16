@@ -1120,6 +1120,7 @@ function MobileNavCategory({ item, options, onNavigate }) {
   const slug = item.label.toLowerCase().replace(/\s+/g, "-");
   const Icon = item.icon;
   const [recent, setRecent] = useState(() => readRecentPicks(item.to));
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => {
     const rehydrate = () => setRecent(readRecentPicks(item.to));
@@ -1130,6 +1131,13 @@ function MobileNavCategory({ item, options, onNavigate }) {
       window.removeEventListener("storage", rehydrate);
     };
   }, [item.to]);
+
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const onEsc = (e) => { if (e.key === "Escape") setSheetOpen(false); };
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, [sheetOpen]);
 
   const formatPrice = (n, suffix = "") => {
     if (typeof n !== "number" || Number.isNaN(n) || n <= 0) return "";
@@ -1143,86 +1151,169 @@ function MobileNavCategory({ item, options, onNavigate }) {
     "/rentals": "Pick a car",
   }[item.to] || "Pick";
 
-  const onPick = (e) => {
-    const id = e.target.value;
-    if (!id) return;
-    const chosen = options.find((o) => o.id === id) || recent.find((r) => r.id === id);
-    if (chosen) {
-      pushRecentPick(item.to, {
-        id: chosen.id, name: chosen.name, price: chosen.price, priceSuffix: chosen.priceSuffix || "",
-      });
-    }
+  const onPick = (o) => {
+    pushRecentPick(item.to, {
+      id: o.id, name: o.name, price: o.price, priceSuffix: o.priceSuffix || "",
+    });
+    setSheetOpen(false);
     if (onNavigate) onNavigate();
-    nav(`${item.to}?book=${encodeURIComponent(id)}`);
+    nav(`${item.to}?book=${encodeURIComponent(o.id)}`);
   };
 
   const recentIds = new Set(recent.map((r) => r.id));
+  const restOptions = options.filter((o) => !recentIds.has(o.id));
 
   return (
-    <div
-      className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors ${
-        isActive
-          ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] text-white shadow-[0_10px_25px_rgba(11,25,44,0.15)]"
-          : "text-[#0B3B5C] hover:bg-[#F1F5F9]"
-      }`}
-    >
-      <Link
-        to={item.to}
-        onClick={onNavigate}
-        data-testid={`mobile-nav-${slug}`}
-        className="flex items-center gap-3 min-w-0"
+    <>
+      <div
+        className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors ${
+          isActive
+            ? "bg-gradient-to-br from-[#0B3B5C] to-[#0B192C] text-white shadow-[0_10px_25px_rgba(11,25,44,0.15)]"
+            : "text-[#0B3B5C] hover:bg-[#F1F5F9]"
+        }`}
       >
-        <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isActive ? "bg-white/15" : "bg-[#F1F5F9]"}`}>
-          <Icon className="w-4 h-4" />
-        </span>
-        <span className="font-semibold whitespace-nowrap">{item.label}</span>
-      </Link>
+        <Link
+          to={item.to}
+          onClick={onNavigate}
+          data-testid={`mobile-nav-${slug}`}
+          className="flex items-center gap-3 min-w-0"
+        >
+          <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isActive ? "bg-white/15" : "bg-[#F1F5F9]"}`}>
+            <Icon className="w-4 h-4" />
+          </span>
+          <span className="font-semibold whitespace-nowrap">{item.label}</span>
+        </Link>
 
-      {/* Native picker dropdown — a real <select> so mobile browsers
-          show the OS-native picker wheel. Recently-picked options are
-          grouped at the top via <optgroup> so returning guests see
-          their favourites first. */}
-      <div className="ml-auto relative shrink-0">
-        <div
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold pointer-events-none border ${
-            isActive
-              ? "bg-white/15 border-white/25 text-white"
-              : "bg-[#FBF7EF] border-[#EFE7D5] text-[#0B3B5C]"
-          }`}
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
           data-testid={`mobile-nav-${slug}-picker-pill`}
+          aria-haspopup="listbox"
+          aria-expanded={sheetOpen}
+          aria-label={`${pickerLabel} for ${item.label}`}
+          className={`ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold border active:scale-95 transition-all ${
+            isActive
+              ? "bg-white/15 border-white/25 text-white hover:bg-white/20"
+              : "bg-[#FBF7EF] border-[#EFE7D5] text-[#0B3B5C] hover:border-[#D4A94A] hover:shadow-[0_4px_12px_rgba(212,169,74,0.2)]"
+          }`}
         >
           {recent.length > 0 && (
-            <History className={`w-3 h-3 ${isActive ? "text-[#D4A94A]" : "text-[#D4A94A]"}`} />
+            <History className="w-3 h-3 text-[#D4A94A]" />
           )}
           {pickerLabel}
-          <ChevronDown className="w-3.5 h-3.5" />
-        </div>
-        <select
-          onChange={onPick}
-          value=""
-          aria-label={`${pickerLabel} — ${item.label}`}
-          data-testid={`mobile-nav-${slug}-picker`}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-        >
-          <option value="" disabled>{pickerLabel}…</option>
-          {recent.length > 0 && (
-            <optgroup label="Recently viewed">
-              {recent.map((o) => (
-                <option key={`recent-${o.id}`} value={o.id}>
-                  {o.name}{formatPrice(o.price, o.priceSuffix) ? ` — ${formatPrice(o.price, o.priceSuffix)}` : ""}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          <optgroup label={recent.length > 0 ? "All options" : ""}>
-            {options.filter((o) => !recentIds.has(o.id)).map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}{formatPrice(o.price, o.priceSuffix) ? ` — ${formatPrice(o.price, o.priceSuffix)}` : ""}
-              </option>
-            ))}
-          </optgroup>
-        </select>
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${sheetOpen ? "rotate-180" : ""}`} />
+        </button>
       </div>
-    </div>
+
+      {/* Bottom-sheet picker — matches the desktop dropdown design so
+          the mobile UX carries the same visual hierarchy (Recently
+          viewed → All options → See all footer). */}
+      <AnimatePresence>
+        {sheetOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setSheetOpen(false)}
+            className="fixed inset-0 z-[100] bg-[#0B192C]/60 backdrop-blur-sm flex items-end"
+            data-testid={`mobile-nav-${slug}-sheet-backdrop`}
+          >
+            <motion.div
+              initial={{ y: 400 }}
+              animate={{ y: 0 }}
+              exit={{ y: 400 }}
+              transition={{ type: "spring", stiffness: 320, damping: 32 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full bg-white rounded-t-3xl shadow-[0_-20px_60px_rgba(11,25,44,0.35)] max-h-[82vh] flex flex-col"
+              data-testid={`mobile-nav-${slug}-sheet`}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="pt-3 pb-2 flex justify-center shrink-0">
+                <span className="w-10 h-1.5 rounded-full bg-[#E2E8F0]" />
+              </div>
+              <div className="px-5 pb-3 flex items-center justify-between border-b border-[#F1F5F9] shrink-0">
+                <div>
+                  <div className="text-[10px] tracking-[0.3em] uppercase text-[#94a3b8] font-black">{pickerLabel}</div>
+                  <div className="serif text-lg text-[#0B3B5C] leading-tight mt-0.5">{item.label}</div>
+                </div>
+                <span className="text-[10px] font-black text-[#D4A94A] tracking-wider">LIVE</span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-3">
+                {recent.length > 0 && (
+                  <div
+                    className="mb-2 rounded-2xl bg-gradient-to-b from-[#FBF7EF] to-white p-2"
+                    data-testid={`mobile-nav-${slug}-sheet-recent`}
+                  >
+                    <div className="flex items-center gap-1.5 px-2 pt-1 pb-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#D4A94A] shadow-[0_0_8px_rgba(212,169,74,0.6)]" />
+                      <span className="text-[9px] tracking-[0.28em] uppercase text-[#D4A94A] font-black">Recently viewed</span>
+                    </div>
+                    <ul>
+                      {recent.map((o) => (
+                        <li key={`recent-${o.id}`}>
+                          <button
+                            type="button"
+                            onClick={() => onPick(o)}
+                            data-testid={`mobile-nav-${slug}-sheet-recent-${o.id}`}
+                            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white active:bg-[#FBF7EF] transition-colors text-left"
+                          >
+                            <span className="w-8 h-8 rounded-full bg-[#D4A94A]/15 flex items-center justify-center text-[#D4A94A] shrink-0">
+                              <History className="w-4 h-4" />
+                            </span>
+                            <span className="flex-1 min-w-0 text-sm font-semibold text-[#0B3B5C] truncate">{o.name}</span>
+                            {formatPrice(o.price, o.priceSuffix) && (
+                              <span className="mono font-bold text-sm text-[#E86A3C] shrink-0">
+                                {formatPrice(o.price, o.priceSuffix)}
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div className="text-[9px] tracking-[0.28em] uppercase text-[#94a3b8] font-black px-3 pt-2 pb-2">
+                  {recent.length > 0 ? "All options" : "Choose one"}
+                </div>
+                <ul>
+                  {restOptions.map((o, i) => (
+                    <li key={o.id}>
+                      <button
+                        type="button"
+                        onClick={() => onPick(o)}
+                        data-testid={`mobile-nav-${slug}-sheet-opt-${o.id}`}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-[#FBF7EF] active:bg-[#EFE7D5] transition-colors text-left"
+                      >
+                        <span className="w-8 h-8 rounded-full bg-[#F1F5F9] flex items-center justify-center text-[11px] font-black text-[#0B3B5C] shrink-0">
+                          {i + 1}
+                        </span>
+                        <span className="flex-1 min-w-0 text-sm font-semibold text-[#0B3B5C] truncate">{o.name}</span>
+                        {formatPrice(o.price, o.priceSuffix) && (
+                          <span className="mono font-bold text-sm text-[#E86A3C] shrink-0">
+                            {formatPrice(o.price, o.priceSuffix)}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <Link
+                to={item.to}
+                onClick={() => { setSheetOpen(false); if (onNavigate) onNavigate(); }}
+                data-testid={`mobile-nav-${slug}-sheet-see-all`}
+                className="block px-5 py-4 border-t border-[#F1F5F9] text-xs uppercase tracking-widest font-black text-[#D4A94A] hover:bg-[#FBF7EF] transition-colors text-center shrink-0"
+              >
+                {`See all ${item.label.toLowerCase()} →`}
+              </Link>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
