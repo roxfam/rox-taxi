@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+/* eslint-disable react/prop-types */
 import { toast } from "sonner";
-import { Star, Trash2, Plus, Save, X, Info, ExternalLink, RefreshCw, Copy, Sparkles, Trophy } from "lucide-react";
+import { Star, Trash2, Plus, Save, X, Info, ExternalLink, RefreshCw, Copy, Sparkles, Trophy, Link2, Unplug, Send, CheckCircle2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { F } from "./shared";
 
@@ -127,6 +128,7 @@ export default function ReviewsPanel() {
           >
             <RefreshCw className="w-3.5 h-3.5" /> Sync from Google now
           </button>
+          <GbpConnectButton />
           <span className="text-[10px] text-[#94a3b8]">Auto-runs every 6 hours when API key is set</span>
         </div>
       </div>
@@ -424,6 +426,7 @@ function OwnerReplyDraft({ review, testSlug }) {
         >
           <ExternalLink className="w-3 h-3" /> Open on Google
         </a>
+        <PostToGoogleButton reviewId={review.id} draft={draft} testSlug={testSlug} posted={!!review.owner_reply_posted_at} />
         <button
           type="button"
           onClick={regenerate}
@@ -451,3 +454,130 @@ function OwnerReplyDraft({ review, testSlug }) {
     </div>
   );
 }
+
+// ── GbpConnectButton ────────────────────────────────────────────────
+// Pill in the review-panel header showing GBP connection status and
+// exposing 1-tap Connect / Disconnect. Reads /admin/gbp/status on
+// mount + after every OAuth roundtrip. When `oauth_configured` is
+// false, shows a helper tooltip explaining the .env variables and
+// GCP approval steps rather than surfacing a broken "Connect" button.
+function GbpConnectButton() {
+  const [status, setStatus] = useState(null);
+  const load = () => api.get("/admin/gbp/status").then((r) => setStatus(r.data)).catch(() => {});
+  useEffect(() => {
+    load();
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("gbp") === "connected") toast.success("Google Business Profile connected");
+    if (q.get("gbp") === "error") toast.error(`Google connect failed: ${q.get("reason") || "unknown"}`);
+  }, []);
+  if (!status) return null;
+
+  const connect = async () => {
+    try {
+      const { data } = await api.get("/admin/gbp/oauth/start");
+      if (data?.authorize_url) window.location.href = data.authorize_url;
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "OAuth not configured — see setup steps");
+    }
+  };
+  const disconnect = async () => {
+    if (!window.confirm("Disconnect Google Business Profile? Existing tokens are wiped.")) return;
+    try {
+      await api.post("/admin/gbp/disconnect");
+      toast.success("Disconnected");
+      load();
+    } catch { toast.error("Disconnect failed"); }
+  };
+
+  if (!status.oauth_configured) {
+    return (
+      <span
+        title="Set GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET + GOOGLE_OAUTH_REDIRECT_URI in backend/.env, then restart the backend."
+        data-testid="gbp-not-configured"
+        className="inline-flex items-center gap-1.5 rounded-full bg-[#FEF3C7] border border-[#FBBF24]/60 text-[#92400E] text-[10px] font-bold px-3 py-1.5 cursor-help"
+      >
+        <Info className="w-3 h-3" /> Google Business OAuth not configured
+      </span>
+    );
+  }
+  if (status.connected) {
+    return (
+      <span className="inline-flex items-center gap-2">
+        <span
+          data-testid="gbp-connected-pill"
+          className="inline-flex items-center gap-1.5 rounded-full bg-[#D1FAE5] border border-[#059669]/50 text-[#065F46] text-[10px] font-bold px-3 py-1.5"
+          title={`Connected as ${status.location_label || status.account_label || "your business"}`}
+        >
+          <CheckCircle2 className="w-3 h-3" /> Google connected
+          {status.location_label && (
+            <span className="opacity-70 font-normal max-w-[140px] truncate">· {status.location_label}</span>
+          )}
+        </span>
+        <button
+          type="button"
+          onClick={disconnect}
+          data-testid="gbp-disconnect-btn"
+          className="text-[10px] text-[#64748B] hover:text-[#DC2626] underline"
+        >
+          <Unplug className="w-3 h-3 inline" /> disconnect
+        </button>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={connect}
+      data-testid="gbp-connect-btn"
+      className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[#D4A94A] text-[#0B3B5C] text-xs font-bold px-4 py-2 hover:bg-[#FBF7EF]"
+    >
+      <Link2 className="w-3.5 h-3.5" /> Connect Google Business
+    </button>
+  );
+}
+
+// ── PostToGoogleButton ──────────────────────────────────────────────
+// Sends the current draft to `/admin/reviews/{id}/post-to-google`.
+// Hidden when OAuth isn't connected. Shows a "Posted" chip after a
+// successful publish.
+function PostToGoogleButton({ reviewId, draft, testSlug, posted }) {
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.get("/admin/gbp/status").then((r) => setStatus(r.data)).catch(() => {});
+  }, []);
+  if (!status?.connected) return null;
+  if (posted) {
+    return (
+      <span
+        data-testid={`review-draft-posted-${testSlug}`}
+        className="inline-flex items-center gap-1 rounded-full bg-[#D1FAE5] border border-[#059669]/50 text-[#065F46] text-[11px] font-bold px-3 py-1.5"
+      >
+        <CheckCircle2 className="w-3 h-3" /> Posted to Google
+      </span>
+    );
+  }
+  const post = async () => {
+    if (!draft?.trim()) return toast.error("Draft is empty");
+    if (!window.confirm("Post this reply publicly on Google? It replaces any existing owner reply on that review.")) return;
+    setBusy(true);
+    try {
+      await api.post(`/admin/reviews/${reviewId}/post-to-google`, { comment: draft });
+      toast.success("Reply posted on Google");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Post failed");
+    } finally { setBusy(false); }
+  };
+  return (
+    <button
+      type="button"
+      onClick={post}
+      disabled={busy}
+      data-testid={`review-draft-post-google-${testSlug}`}
+      className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#D4A94A] to-[#c99738] text-white text-[11px] font-bold px-3 py-1.5 hover:shadow-[0_6px_14px_rgba(212,169,74,0.4)] disabled:opacity-40"
+    >
+      <Send className={`w-3 h-3 ${busy ? "animate-pulse" : ""}`} /> {busy ? "Posting…" : "Post to Google"}
+    </button>
+  );
+}
+

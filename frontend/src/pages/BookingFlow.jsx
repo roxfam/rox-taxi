@@ -34,6 +34,14 @@ function isClosedDate(dateStr, days = 1) {
  *  - onClose: () => void
  */
 export default function BookingModal({ item, serviceType, extraFields, defaultDays = 1, initialDropoff = "", initialPickup = "", initialAddonIds = [], onClose }) {
+  // Deep-link support: /taxi?driver=Reagan pre-checks the "Request
+  // Reagan" checkbox on the taxi booking modal so guests coming from
+  // the /drivers/reagan spotlight page land in the flow with him
+  // already selected. Strips the query so a refresh doesn't re-apply.
+  const [urlParams, setUrlParams] = typeof window !== "undefined" && window.location
+    ? [new URLSearchParams(window.location.search), null]
+    : [new URLSearchParams(""), null];
+  const initialRequestedDriver = serviceType === "taxi" ? (urlParams.get("driver") || "") : "";
   const nav = useNavigate();
   // Prefill adults from a "group size" chosen on the marketing banner (e.g. the
   // "Groups of 6+ save 10%" quick-picker on /tours). sessionStorage key is set
@@ -73,6 +81,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     notes: "",
     taxi_addon_selected: false,
     selected_addon_ids: Array.isArray(initialAddonIds) ? [...initialAddonIds] : [],
+    requested_driver: initialRequestedDriver,
   });
   const LUGGAGE_FEE = 3;
   const PASSENGER_FEE = 5;
@@ -280,6 +289,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         return_time: form.round_trip ? (form.return_time || "") : "",
         flight_number: form.flight_number ? form.flight_number.trim().toUpperCase().replace(/\s+/g, "") : null,
         selected_addon_ids: serviceType === "taxi" ? selectedAddonIds : undefined,
+        requested_driver: serviceType === "taxi" && form.requested_driver ? form.requested_driver.trim() : undefined,
       };
       const { data: b } = await api.post("/bookings", payload);
       setBooking(b);
@@ -441,6 +451,56 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 </div>
               </div>
               {extraFields && extraFields(form, setForm)}
+
+              {/* Request-a-driver checkbox — taxi only. Auto-checked
+                  when the guest lands here from /drivers/:slug via the
+                  ?driver= deep-link. Free-text so the owner can adjust
+                  the roster from admin without a code change. */}
+              {serviceType === "taxi" && (
+                <label
+                  className={`flex items-start gap-3 rounded-2xl border p-4 cursor-pointer transition-all ${
+                    form.requested_driver
+                      ? "border-[#D4A94A] bg-gradient-to-br from-[#FBF7EF] to-white shadow-[0_6px_18px_rgba(212,169,74,0.15)]"
+                      : "border-[#EFE7D5] bg-white hover:border-[#D4A94A]/60"
+                  }`}
+                  data-testid="taxi-request-driver-row"
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!form.requested_driver}
+                    onChange={(e) => setForm({
+                      ...form,
+                      requested_driver: e.target.checked ? (form.requested_driver || "Reagan") : "",
+                    })}
+                    className="mt-1 w-4 h-4 accent-[#D4A94A] shrink-0"
+                    data-testid="taxi-request-driver-checkbox"
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="flex items-center gap-2 text-sm font-semibold text-[#0B3B5C]">
+                      Request a specific driver
+                      {form.requested_driver && (
+                        <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-black text-white bg-gradient-to-r from-[#D4A94A] to-[#c99738] px-2 py-0.5 rounded-full">
+                          {form.requested_driver}
+                        </span>
+                      )}
+                    </span>
+                    <span className="block text-[11px] text-[#64748B] mt-1 leading-relaxed">
+                      We'll try to match you — if they're not on shift, another Rox-trained driver picks you up.
+                    </span>
+                    {form.requested_driver && (
+                      <input
+                        type="text"
+                        value={form.requested_driver}
+                        onChange={(e) => setForm({ ...form, requested_driver: e.target.value.slice(0, 64) })}
+                        onClick={(e) => e.preventDefault() || e.stopPropagation()}
+                        placeholder="Driver name (e.g. Reagan)"
+                        className="mt-2 w-full rounded-lg border border-[#EFE7D5] bg-white px-3 py-2 text-sm text-[#0B3B5C] outline-none focus:border-[#D4A94A]"
+                        data-testid="taxi-request-driver-input"
+                      />
+                    )}
+                  </span>
+                </label>
+              )}
 
               {/* Popular Add-ons picker — taxi only, when the service ships
                   an `addons` catalog. Selecting/unselecting recomputes the

@@ -45,6 +45,7 @@ const GiftCards = lazy(() => import("./pages/GiftCards"));
 const UploadLicense = lazy(() => import("./pages/UploadLicense"));
 const TravelToNassau = lazy(() => import("./pages/TravelToNassau"));
 const CruiseGroupsNassau = lazy(() => import("./pages/CruiseGroupsNassau"));
+const DriverSpotlight = lazy(() => import("./pages/DriverSpotlight"));
 import { AuthProvider } from "./lib/auth";
 
 import { useVisitorBeacon } from "./hooks/useVisitorBeacon";
@@ -100,6 +101,7 @@ function AppRouter() {
       <Route path="/wall" element={<CustomerShell><Wall /></CustomerShell>} />
       <Route path="/travel-to-nassau" element={<CustomerShell><TravelToNassau /></CustomerShell>} />
       <Route path="/cruise-groups-nassau" element={<CustomerShell><CruiseGroupsNassau /></CustomerShell>} />
+      <Route path="/drivers/:slug" element={<CustomerShell><DriverSpotlight /></CustomerShell>} />
       <Route path="/tours/ardastra" element={<CustomerShell><Ardastra /></CustomerShell>} />
       <Route path="/tours/atlantis" element={<CustomerShell><Atlantis /></CustomerShell>} />
       <Route path="/tours/blue-lagoon" element={<CustomerShell><BlueLagoon /></CustomerShell>} />

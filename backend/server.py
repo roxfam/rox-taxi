@@ -29,6 +29,7 @@ from routes import payments as payments_module
 from routes import admin as admin_module
 from routes import catalog as catalog_module
 from routes import chat as chat_module
+from routes import gbp as gbp_module
 from routes import gallery as gallery_module
 from routes import licenses as licenses_module
 from routes import auth as auth_module
@@ -180,6 +181,11 @@ class BookingCreate(BaseModel):
     # guest ticked. Server re-hydrates each id against the taxi service's
     # `addons` catalog so the fee/label can't be spoofed.
     selected_addon_ids: Optional[List[str]] = None
+    # Guest can request a specific driver on the booking (e.g. "Reagan").
+    # Free-text so anyone can be requested even if they're not in the
+    # backup roster; server-side dispatch honours it best-effort and
+    # falls back to the standard assignment if unavailable.
+    requested_driver: Optional[str] = Field(None, max_length=64)
 
 
 LUGGAGE_FEE_USD = 3.0
@@ -2477,6 +2483,12 @@ async def create_booking(req: BookingCreate, request: Request):
             if picked:
                 booking["addons_selected"] = picked
                 booking["addons_fee"] = round(taxi_extras_fee, 2)
+    # ── Guest driver request ──────────────────────────────────────
+    # Stamped on the booking so dispatch can honour it, and surfaced
+    # inside the admin card + driver dispatch SMS so the requested
+    # driver knows they were personally asked for.
+    if req.requested_driver and req.requested_driver.strip():
+        booking["requested_driver"] = req.requested_driver.strip()[:64]
     if req.service_type == "rental":
         deposit_amount = RENTAL_DEPOSIT_USD
         booking["deposit_amount"] = deposit_amount
@@ -4610,6 +4622,8 @@ api_router.include_router(seo_module.router)
 
 # Cron endpoints — scheduled work fired by the platform on .emergent/crons.yml.
 cron_module.configure(db=db, now_iso=now_iso)
+gbp_module.configure(db=db, now_iso=now_iso, require_admin=require_admin)
+api_router.include_router(gbp_module.router)
 api_router.include_router(cron_module.router)
 
 app.include_router(api_router)

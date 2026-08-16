@@ -5,6 +5,19 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 12z — Google Business Profile OAuth Post-to-Google Wired
+- **Full OAuth flow scaffolded** in new `/app/backend/routes/gbp.py` — endpoints: `GET /admin/gbp/status` · `GET /admin/gbp/oauth/start` · `GET /admin/gbp/oauth/callback` · `POST /admin/gbp/disconnect` · `POST /admin/reviews/{id}/post-to-google`.
+- Tokens (access + refresh + account/location IDs) persisted in `site_config.gbp_tokens`. Access token auto-refreshes on `<60s` from expiry via the refresh token.
+- After OAuth callback, we auto-resolve the primary GCP business account + first location via `mybusinessaccountmanagement` + `mybusinessbusinessinformation` APIs so the owner never has to paste IDs.
+- **Post-to-Google flow**: matches the local review to Google's MyBusiness v4 review resource by author + rating + text-prefix, then PUTs the reply. Caches `mybusiness_review_name` on the review doc so subsequent edits skip the scan.
+- Admin ReviewsPanel now shows a **status pill**: yellow "OAuth not configured" · gold "Connect Google Business" · green "Google connected · {location}". Reply-draft toolbar gets a gold **"Post to Google"** button (only when connected) that replaces the manual Copy → Open → Paste dance.
+- **`.env` slots added**: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI` (all blank — owner will paste after GCP approval).
+
+### Feb 12y — Driver Spotlight Page + Request-a-Driver Booking Field
+- **`/drivers/:slug` public page** — first driver: `/drivers/reagan`. Hero with headshot + "Guest-favourite" gold badge, 5.0 rating pill with review count, tagline + bio + specialties, facts (10+ years, Bahamian Creole, Nassau base), and pinned Google reviews carousel that filters by `driver_tags`. Backend endpoint `GET /api/drivers/:slug` self-seeds Reagan's profile so the page renders immediately; `site_config.driver_spotlights` lets the owner override bio + headshot without a deploy.
+- **"Request a driver" checkbox** on every taxi booking. Free-text (defaults to "Reagan") so any name-drop works. Deep-link `/taxi?driver=Reagan` (fired from every Reagan-spotlight CTA) pre-checks the box on the booking modal. Stored on booking as `requested_driver` for dispatch to honour best-effort.
+- Horse tours confirmed absent — the DB no longer contains "Private Horseback Lesson" or "Horseback Trail + Beach Ride"; removal from an earlier session took effect.
+
 ### Feb 12x — Reagan-Tagged Reviews + Attach-Rate Dashboard + Auto-Reply Drafter
 - **Driver-tagged reviews** — sync now scans each review body for driver-name mentions (roster in `site_config.driver_name_tags`, default catches Reagan/Regan/Reggan). Tagged reviews get pinned to the front of the /reviews API list and render a gold "REAGAN DROVE THEM" ribbon on the homepage. 4 of our 5 Google reviews name-drop Reagan and now pin visibly.
 - **Owner reply auto-drafter** — every fresh 5-star sync fires a Claude Sonnet 4.6 prompt that composes a warm, 2-sentence public reply mentioning the reviewer's first name (and driver if named). Draft persists on the review doc as `owner_reply_draft`. Admin ReviewsPanel exposes 4-button widget: **Copy** (clipboard), **Open on Google** (business.google.com/reviews), **Re-draft** (regenerate), **Save edit** (persist manual tweak). Falls back to a static template if the LLM key is missing.

@@ -167,6 +167,69 @@ async def list_reviews():
     }
 
 
+@router.get("/drivers/{slug}")
+async def get_driver_spotlight(slug: str):
+    """Public driver-spotlight endpoint. Returns bio + headshot + the
+    driver's tagged Google reviews (highest-star first). Bio is stored
+    in `site_config.driver_spotlights` so the owner can edit copy +
+    photo from the admin panel without a deploy.
+
+    Falls back to a default Reagan profile so the /drivers/reagan
+    landing page has content out of the box even before the owner
+    customises it.
+    """
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    roster = cfg.get("driver_spotlights") or {}
+    # Case-insensitive key match; canonicalise on the way in
+    key = slug.strip().lower()
+    profile = roster.get(key) or roster.get(slug) or {}
+
+    # ── Sensible defaults so /drivers/reagan renders immediately ────
+    if not profile and key == "reagan":
+        profile = {
+            "canonical": "Reagan",
+            "tagline": "The reason 4 out of 5 Google reviews mention his name.",
+            "bio": (
+                "Reagan grew up on New Providence and has been driving the "
+                "Nassau taxi circuit for over a decade. Guests routinely "
+                "call him their favourite part of the trip — patient with "
+                "families, playful with kids, and a walking history book "
+                "for the Bay Street strip, Fort Fincastle, and the Queen's "
+                "Staircase. Every review below name-drops him directly."
+            ),
+            "specialties": [
+                "Airport transfers (LPIA in 12 min from downtown)",
+                "Cruise-port meet-and-greet",
+                "Queen's Staircase + Fort Fincastle historical loop",
+                "Long-form Nassau city narration on request",
+            ],
+            "headshot_url": "https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400&h=400&fit=crop&crop=faces&auto=format",
+            "years_experience": 10,
+            "languages": ["English", "Bahamian Creole"],
+        }
+    if not profile:
+        return {"error": "not_found", "slug": slug}
+
+    # Pull this driver's tagged reviews (order: highest-star, then most
+    # recent). Match on canonical name in `driver_tags`.
+    canonical = profile.get("canonical") or slug.title()
+    tagged = await _db.reviews.find({
+        "active": {"$ne": False},
+        "driver_tags": canonical,
+    }).sort([("rating", -1), ("created_at", -1)]).to_list(20)
+
+    return {
+        "slug": key,
+        "profile": profile,
+        "reviews": [_clean(r) for r in tagged],
+        "review_count": len(tagged),
+        "avg_rating": (
+            round(sum(int(r.get("rating") or 0) for r in tagged) / len(tagged), 1)
+            if tagged else 0.0
+        ),
+    }
+
+
 @router.get("/packages")
 async def list_packages():
     """Public curated bundles. Each: {id, name, description,
