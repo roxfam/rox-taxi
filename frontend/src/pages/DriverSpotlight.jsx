@@ -147,7 +147,7 @@ export default function DriverSpotlight() {
                   A half-day curated by Reagan himself — beaches, forts, Fish Fry lunch, and the stops most drivers skip. Small group, one price, no upsells.
                 </p>
                 <div className="mt-5 flex items-baseline gap-2">
-                  <span className="mono text-4xl font-black text-[#F5E1A4]">$220</span>
+                  <span className="mono text-4xl font-black text-[#F5E1A4]">$225</span>
                   <span className="text-xs uppercase tracking-widest text-white/60">flat · up to 4 guests</span>
                 </div>
               </div>

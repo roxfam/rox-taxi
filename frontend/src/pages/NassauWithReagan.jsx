@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Clock, MapPin, Users, Star, Shell, Camera, ShoppingBag, Utensils, Trophy, Sparkles, Palmtree, Info, Wallet, Waves, Landmark } from "lucide-react";
+import { ArrowRight, Clock, MapPin, Users, Star, Shell, Camera, ShoppingBag, Utensils, Trophy, Sparkles, Palmtree, Info, Wallet, Waves, Landmark, Cake } from "lucide-react";
 
 /**
  * NassauWithReagan — signature 4-hour city tour built around our best
@@ -17,21 +17,33 @@ const STOPS = [
     title: "Fort Fincastle + Queen's Staircase",
     body:
       "We start at the top — 66 hand-carved limestone steps and a hilltop fort with the best downtown view. I'll tell you why the Queen never actually walked them (spoiler: the name came later).",
-    minutes: 45,
+    minutes: 30,
   },
   {
     icon: ShoppingBag,
     title: "Bay Street strip",
     body:
       "Straw Market, colonial architecture, and the pastel row where every cruise-day photo happens. I know which shops give a real haggle vs the ones selling factory-made 'Bahamian' straw.",
-    minutes: 60,
+    minutes: 45,
+  },
+  {
+    icon: Cake,
+    title: "Bahamas Rum Cake Factory",
+    body:
+      "A quick walk through the working bakery on East Bay Street where they bottle-cure rum cakes the same way since 1978. Free samples at the counter, minis start at about $6, full cakes $15–$25 — cash or card, no ticket needed.",
+    minutes: 20,
+    included_note: "Walk-in free · tasting samples included",
+    paid_separately: {
+      label: "Cakes to take home are pay-as-you-go",
+      detail: "Mini rum cakes from ~$6, boxed 6-inch cakes ~$15–$25. Vacuum-sealed for the plane home. Sample first, buy only what you love.",
+    },
   },
   {
     icon: Utensils,
     title: "Arawak Cay Fish Fry",
     body:
       "Native seafood shacks on stilts over the water. Twin Brothers or Oh Andros — I'll rank them for you honestly. Conch fritters, cracked lobster, Kalik cold enough to hurt your teeth.",
-    minutes: 60,
+    minutes: 45,
     paid_separately: {
       label: "Food + drinks paid separately",
       detail: "Typical plates run $15–$35 per person at the shack. Cash preferred; most take card. Order at your own pace.",
@@ -52,8 +64,8 @@ const STOPS = [
     icon: Landmark,
     title: "Fort Montagu + beach",
     body:
-      "The oldest fort on New Providence (1741) — quieter than Fincastle, and the crescent beach next to it is where locals actually swim. Great for wading kids and a 20-minute stretch of your legs.",
-    minutes: 30,
+      "The oldest fort on New Providence (1741) — quieter than Fincastle, and the crescent beach next to it is where locals actually swim. Great for wading kids and a quick stretch of your legs.",
+    minutes: 20,
     included_note: "Free to visit · included in the tour",
   },
   {
@@ -72,7 +84,7 @@ const STOPS = [
 
 export default function NassauWithReagan() {
   useEffect(() => {
-    document.title = "Nassau with Reagan · Signature 6-stop city tour · Rox Taxi";
+    document.title = "Nassau with Reagan · Signature 7-stop city tour · Rox Taxi";
   }, []);
 
   return (
@@ -100,7 +112,7 @@ export default function NassauWithReagan() {
               Nassau,<br />the way <span className="text-[#D4A94A]">Reagan</span> tells it.
             </h1>
             <p className="mt-6 max-w-2xl text-lg text-white/85 leading-relaxed">
-              Around five hours. Six stops. One driver who's spent a decade turning cruise-day guests into repeat customers — and gets his name dropped in half the Google reviews we get.
+              About four hours. Seven stops. One driver who's spent a decade turning cruise-day guests into repeat customers — and gets his name dropped in half the Google reviews we get.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <Link
@@ -120,7 +132,7 @@ export default function NassauWithReagan() {
             </div>
 
             <div className="mt-10 flex flex-wrap gap-6 text-sm">
-              <Fact icon={Clock} label="~5 hours" />
+              <Fact icon={Clock} label="~4 hours" />
               <Fact icon={Users} label="Up to 4 guests" />
               <Fact icon={MapPin} label="Pickup: your hotel or cruise port" />
               <Fact icon={Star} label="5.0★ on Google" />
@@ -135,7 +147,7 @@ export default function NassauWithReagan() {
           The route
         </div>
         <h2 className="serif text-5xl lg:text-6xl text-[#0B3B5C] mt-2 leading-tight">
-          Six stops. Zero tourist traps.
+          Seven stops. Zero tourist traps.
         </h2>
         <p className="mt-4 text-[#334155] max-w-2xl leading-relaxed">
           Reagan builds this route around whichever of you shows up — kids, foodies, first-timers, repeat cruisers. Timings flex; the flavours don't.
@@ -199,11 +211,11 @@ export default function NassauWithReagan() {
               Simple, honest pricing
             </div>
             <h2 className="serif text-5xl text-[#0B3B5C] mt-2 leading-tight">
-              $220 flat.
+              $225 flat.
             </h2>
             <div className="mt-4 space-y-3 text-[#334155] leading-relaxed">
               <p>
-                Around five hours of private driving, up to 4 guests. Not $99-per-person that tacks on to $600 for a family — one flat rate, one driver, one honest handshake.
+                About four hours of private driving, up to 4 guests. Not $99-per-person that tacks on to $600 for a family — one flat rate, one driver, one honest handshake.
               </p>
               <p>
                 <span className="mono font-bold text-[#E86A3C]">+$30</span> for each extra guest above 4 (up to 6 total in an SUV).
@@ -211,9 +223,10 @@ export default function NassauWithReagan() {
             </div>
 
             {/* Paid-separately callout — Fish Fry meals + Ardastra admission
-                + optional Atlantis aquarium are not bundled into the $220 flat
+                + optional Atlantis aquarium are not bundled into the $225 flat
                 so families can opt in per head. Fort Montagu + the Atlantis
-                self-tour are always included. Keeps the flat rate honest. */}
+                self-walk + the Rum Cake Factory tasting are always included.
+                Keeps the flat rate honest. */}
             <div
               className="mt-6 rounded-2xl bg-[#FBF7EF] border border-[#D4A94A]/40 p-5"
               data-testid="nassau-reagan-paid-separately-callout"
