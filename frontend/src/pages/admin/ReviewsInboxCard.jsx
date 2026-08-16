@@ -103,6 +103,14 @@ function InboxRow({ review, gbpConnected, onDone }) {
   const firstName = (review.author_name || "there").split(" ")[0];
   const tags = Array.isArray(review.driver_tags) ? review.driver_tags : [];
 
+  // Google soft-caps public review replies at ~4096 chars but
+  // moderation flags long drafts as PENDING far more often. We target
+  // 240 chars (matches the drafter prompt) — anything over shows an
+  // amber counter to nudge the owner to trim.
+  const MAX_REPLY = 240;
+  const charCount = draft.length;
+  const overBudget = charCount > MAX_REPLY;
+
   const draftReply = async () => {
     setBusy(true);
     try {
@@ -188,8 +196,22 @@ function InboxRow({ review, gbpConnected, onDone }) {
             onChange={(e) => setDraft(e.target.value)}
             data-testid={`reviews-inbox-textarea-${review.id}`}
             placeholder="Thank the reviewer here…"
-            className="w-full rounded-md border border-[#EFE7D5] bg-white px-3 py-2 text-sm text-[#0B3B5C] outline-none focus:border-[#D4A94A] min-h-[70px] leading-relaxed"
+            className={`w-full rounded-md border bg-white px-3 py-2 text-sm text-[#0B3B5C] outline-none min-h-[70px] leading-relaxed ${
+              overBudget ? "border-[#F59E0B] focus:border-[#F59E0B]" : "border-[#EFE7D5] focus:border-[#D4A94A]"
+            }`}
           />
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <span
+              data-testid={`reviews-inbox-charcount-${review.id}`}
+              className={`text-[10px] font-bold tracking-widest uppercase ${
+                overBudget ? "text-[#F59E0B]" : charCount > MAX_REPLY - 40 ? "text-[#D4A94A]" : "text-[#94a3b8]"
+              }`}
+              title={overBudget ? "Google is more likely to hold long replies in PENDING moderation" : ""}
+            >
+              {charCount} / {MAX_REPLY}
+              {overBudget && " · trim to reduce PENDING risk"}
+            </span>
+          </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {gbpConnected ? (
               <button

@@ -70,9 +70,11 @@ async def _extract_driver_tags(text: str, db) -> list:
 
 
 async def generate_review_reply_draft(review: dict) -> str:
-    """Ask Claude Sonnet for a warm 2-sentence public reply to a
-    Google review. Falls back to a static templated thank-you if the
-    LLM key is missing or the call errors — never blocks the sync."""
+    """Ask Claude Sonnet for a warm, 2-sentence public reply to a
+    Google review, capped at 240 chars to match Google's soft ceiling
+    on public review replies (longer bodies land in PENDING moderation
+    more often). Falls back to a static templated thank-you if the LLM
+    key is missing or the call errors — never blocks the sync."""
     author = (review.get("author_name") or "there").split()[0] or "there"
     text = (review.get("text") or "").strip()
     rating = int(review.get("rating") or 5)
@@ -82,34 +84,60 @@ async def generate_review_reply_draft(review: dict) -> str:
     )
     llm_key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
     if not _LLM_AVAILABLE or not llm_key or not text:
-        return static
+        return static[:240]
     try:
         prompt = (
             f"You are the owner of Rox Taxi Service & Tours in Nassau, Bahamas. "
-            f"Write a warm, personal 2-sentence public reply to this {rating}-star Google review. "
-            f"Do NOT use exclamation points more than once. Address the reviewer by their first name. "
-            f"If they mention a specific driver (e.g. Reagan, Regan), thank that driver by name too. "
-            f"Do not repeat the whole review back — respond to it. Sign off with '— Rox'.\n\n"
+            f"Write a warm, personal public reply to this {rating}-star Google review. "
+            f"HARD RULES:\n"
+            f"  1. STRICTLY under 240 characters INCLUDING the sign-off.\n"
+            f"  2. Exactly 2 short sentences — no more.\n"
+            f"  3. Address the reviewer by first name once.\n"
+            f"  4. If a driver is named (e.g. Reagan/Regan), thank that driver by name.\n"
+            f"  5. Do not repeat the review back to them — respond to it.\n"
+            f"  6. Do not use more than one exclamation point.\n"
+            f"  7. End with ' — Rox' (with the em dash and space).\n"
+            f"Return ONLY the reply text. No preamble.\n\n"
             f"Reviewer name: {review.get('author_name','')}\n"
-            f"Review: {text}"
+            f"Review: {text[:600]}"
         )
         chat = LlmChat(
             api_key=llm_key,
             session_id=f"review-reply-{review.get('id','x')}",
-            system_message="You write short, warm, brand-authentic public replies to Google reviews.",
+            system_message="You write short, warm, brand-authentic public replies to Google reviews. Hard 240-char cap.",
         ).with_model("anthropic", "claude-sonnet-4-6")
-        parts: list[str] = []
-        async for ev in chat.stream_message(UserMessage(text=prompt)):
-            # TextDelta events carry `.content`; StreamDone has no
-            # payload we need — the type check is intentionally loose
-            # so both event families work.
-            piece = getattr(ev, "content", None)
-            if piece:
-                parts.append(piece)
-        reply = ("".join(parts)).strip()
-        return reply or static
+        # send_message returns the full response text once (no stream
+        # concatenation), which avoids the double-body issue we saw
+        # when iterating the stream (Blaine's draft doubling).
+        reply = await chat.send_message(UserMessage(text=prompt))
+        reply = (str(reply) or "").strip()
+        if len(reply) > 240:
+            # Belt-and-suspenders: trim to 240 but preserve sign-off if
+            # the model went over.
+            reply = _hard_cap_240(reply)
+        return reply or static[:240]
     except Exception:  # noqa: BLE001
-        return static
+        return static[:240]
+
+
+def _hard_cap_240(text: str) -> str:
+    """Trim a reply to <=240 chars while keeping the ' — Rox' sign-off
+    when possible. Falls back to a hard slice if we can't find a clean
+    sentence boundary."""
+    text = text.strip()
+    if len(text) <= 240:
+        return text
+    signoff = " — Rox"
+    body_max = 240 - len(signoff)
+    body = text.replace(signoff, "").rstrip()
+    # Prefer ending on a full sentence
+    trimmed = body[:body_max]
+    for sep in [". ", "! ", "? "]:
+        idx = trimmed.rfind(sep)
+        if idx > 60:  # avoid ultra-short trims
+            trimmed = trimmed[: idx + 1]
+            break
+    return trimmed.rstrip(" ,;-") + signoff
 
 
 _db = None

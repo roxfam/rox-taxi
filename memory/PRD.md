@@ -5,6 +5,12 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 12ab — 240-Char Cap + Live Character Counter on Reply Drafts
+- **Fixed draft-doubling bug**: swapped `chat.stream_message` (which was concatenating stream chunks twice on some replies) for `chat.send_message` — returns the full response in one shot. Blaine's doubled draft regenerated cleanly (178 chars).
+- **Drafter prompt tightened**: hard 240-char cap in the system prompt with 7 explicit rules (2 sentences, one exclamation max, name the reviewer + driver, end with " — Rox"). Belt-and-suspenders `_hard_cap_240()` helper trims post-generation while preserving the sign-off.
+- **Live character counter** in both admin surfaces — the Reviews Inbox card on `/admin` and each 5★ row inside Manage → Reviews. Grey under 200 chars, gold at 200-240, amber "trim to reduce PENDING risk" over 240. Textarea border tints amber too so long drafts self-flag.
+- All 5 existing drafts regenerated under the new rules — 133/159/169/178/190 chars.
+
 ### Feb 12aa — Reviews Inbox on Admin Dashboard
 - **New landing card** at the top of `/admin` — pulls every un-replied 5★ Google review with the Claude-drafted thank-you already loaded, so the owner can Copy → Open on Google → Post (or one-tap Post-to-Google once OAuth is connected) in ~30 seconds per morning.
 - Backend endpoint: `GET /admin/reviews/inbox` — filters by `rating >= 5 AND owner_reply_posted_at IN [null, ""]`, sorted newest first.

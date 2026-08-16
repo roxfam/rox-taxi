@@ -349,6 +349,9 @@ function OwnerReplyDraft({ review, testSlug }) {
   const [draft, setDraft] = useState(review.owner_reply_draft || "");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(!!review.owner_reply_draft);
+  const MAX_REPLY = 240;
+  const charCount = draft.length;
+  const overBudget = charCount > MAX_REPLY;
 
   const copy = () => {
     if (!draft) return;
@@ -404,9 +407,23 @@ function OwnerReplyDraft({ review, testSlug }) {
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         data-testid={`review-draft-textarea-${testSlug}`}
-        className="w-full rounded-lg border border-[#EFE7D5] bg-white px-3 py-2 text-sm text-[#0B3B5C] outline-none focus:border-[#D4A94A] min-h-[80px] leading-relaxed"
+        className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-[#0B3B5C] outline-none min-h-[80px] leading-relaxed ${
+          overBudget ? "border-[#F59E0B] focus:border-[#F59E0B]" : "border-[#EFE7D5] focus:border-[#D4A94A]"
+        }`}
         placeholder="Thank the reviewer here…"
       />
+      <div className="mt-1 flex items-center justify-end">
+        <span
+          data-testid={`review-draft-charcount-${testSlug}`}
+          className={`text-[10px] font-bold tracking-widest uppercase ${
+            overBudget ? "text-[#F59E0B]" : charCount > MAX_REPLY - 40 ? "text-[#D4A94A]" : "text-[#94a3b8]"
+          }`}
+          title={overBudget ? "Google is more likely to hold long replies in PENDING moderation" : ""}
+        >
+          {charCount} / {MAX_REPLY}
+          {overBudget && " · trim to reduce PENDING risk"}
+        </span>
+      </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         <button
           type="button"
