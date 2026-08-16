@@ -1,7 +1,7 @@
 crons:
   - name: sync-google-reviews
-    description: "Pulls the latest 5 Google Business reviews via Places API every 6 hours so the homepage stays fresh without manual pasting"
-    cron: "0 */6 * * *"
+    description: "Pulls the latest Google Business reviews via Places API every hour so the homepage rotator always has a fresh pool of 4+ star quotes."
+    cron: "0 * * * *"
     endpoint: "{{BASE_URL}}/api/cron/sync-google-reviews"
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.

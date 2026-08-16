@@ -1210,7 +1210,7 @@ async def admin_list_driver_spotlights(_: str = Depends(_admin_dep)):
                 ],
                 "headshot_url": "",
                 "years_experience": 10,
-                "languages": ["English", "Bahamian Creole"],
+                "languages": ["English"],
                 "_starter": True,
             },
             **roster,

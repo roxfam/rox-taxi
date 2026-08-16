@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Car, MapPinned, ShipWheel, Star, ShieldCheck, Clock, Users, X, Facebook, MessageCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, Car, MapPinned, ShipWheel, Star, ShieldCheck, Clock, Users, X, Facebook, MessageCircle, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { api, money } from "../lib/api";
 import { cdn, cdnSrcSet } from "../lib/img";
 import NassauCarousel from "../components/NassauCarousel";
@@ -101,6 +101,31 @@ export default function Home() {
 
       {/* FEATURED TOURS */}
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24" data-testid="featured-tours">
+        {/* Signature Tour ribbon — slim gold bar cross-linking the
+            "Nassau with Reagan" one-pager for SEO + discovery. */}
+        <Link
+          to="/nassau-with-reagan"
+          data-testid="home-signature-tour-ribbon"
+          className="group mb-8 flex items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-[#F5E1A4] via-[#D4A94A] to-[#c99738] px-5 sm:px-6 py-3 sm:py-3.5 text-[#0B192C] shadow-[0_10px_30px_rgba(212,169,74,0.35)] hover:shadow-[0_15px_40px_rgba(212,169,74,0.5)] transition-shadow"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="hidden sm:inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#0B192C]/10 shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.3em] font-black opacity-80">
+                New Signature Tour
+              </div>
+              <div className="text-sm sm:text-base font-black truncate">
+                Nassau with Reagan · $220 flat
+              </div>
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black whitespace-nowrap group-hover:gap-2.5 transition-all">
+            See tour <ArrowRight className="w-4 h-4" />
+          </div>
+        </Link>
+
         <div className="flex items-end justify-between mb-12">
           <div>
             <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Handpicked</span>

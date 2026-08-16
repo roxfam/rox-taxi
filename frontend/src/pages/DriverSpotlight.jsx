@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Star, ArrowRight, Trophy, MapPin, Languages, Calendar, Phone, MessageCircle } from "lucide-react";
+import { Star, ArrowRight, Trophy, MapPin, Languages, Calendar, Phone, MessageCircle, Sparkles } from "lucide-react";
 import { api } from "../lib/api";
 
 /**
@@ -121,6 +121,47 @@ export default function DriverSpotlight() {
           </motion.div>
         </div>
       </section>
+
+      {/* Signature Tour callout — only shown for drivers with a dedicated
+          Signature Tour page (currently just Reagan). Sits directly below the
+          hero for maximum visibility; text + price only per brand direction. */}
+      {slug === "reagan" && (
+        <section className="max-w-6xl mx-auto px-6 lg:px-10 -mt-2 pb-4" data-testid="driver-spotlight-signature-callout">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B3B5C] via-[#0B3B5C] to-[#0B192C] px-6 sm:px-10 py-8 sm:py-10 text-white shadow-[0_25px_60px_rgba(11,59,92,0.25)]"
+          >
+            <div className="absolute -top-16 -right-10 w-72 h-72 rounded-full bg-[#D4A94A]/20 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -left-16 w-72 h-72 rounded-full bg-[#E86A3C]/15 blur-3xl pointer-events-none" />
+            <div className="relative grid sm:grid-cols-[1fr,auto] gap-6 items-center">
+              <div>
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-[#D4A94A]/15 border border-[#D4A94A]/40 px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[#F5E1A4] font-black">
+                  <Sparkles className="w-3 h-3" /> Signature Tour
+                </div>
+                <h2 className="serif text-3xl sm:text-4xl lg:text-5xl mt-3 leading-tight">
+                  Nassau <em className="italic text-[#F5E1A4]">with Reagan</em>.
+                </h2>
+                <p className="mt-3 text-sm sm:text-base text-white/75 leading-relaxed max-w-xl">
+                  A half-day curated by Reagan himself — beaches, forts, Fish Fry lunch, and the stops most drivers skip. Small group, one price, no upsells.
+                </p>
+                <div className="mt-5 flex items-baseline gap-2">
+                  <span className="mono text-4xl font-black text-[#F5E1A4]">$220</span>
+                  <span className="text-xs uppercase tracking-widest text-white/60">flat · up to 4 guests</span>
+                </div>
+              </div>
+              <Link
+                to="/nassau-with-reagan"
+                data-testid="driver-spotlight-signature-cta"
+                className="btn-shine inline-flex items-center gap-2 rounded-full bg-[#E86A3C] text-white px-6 py-3.5 text-sm font-bold hover:bg-[#d55a30] active:scale-95 shadow-[0_15px_35px_rgba(232,106,60,0.45)] whitespace-nowrap"
+              >
+                See the tour <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </motion.div>
+        </section>
+      )}
 
       {/* Bio + facts */}
       <section className="max-w-6xl mx-auto px-6 lg:px-10 pb-16">

@@ -132,18 +132,25 @@ async def list_home_slides():
 
 
 @router.get("/reviews")
-async def list_reviews():
-    """Real reviews pasted via admin. Rating + total are computed from the
-    actual pasted rows (no more inflated seed numbers). Returns an empty
-    list when no reviews have been pasted yet — the frontend hides the
-    section in that case.
+async def list_reviews(limit: int = 60):
+    """Real reviews pasted via admin or synced from Google Places.
+    Rating + total are computed from the actual rows (no inflated seed
+    numbers). Returns an empty list when no reviews are stored yet — the
+    frontend hides the section in that case.
 
     Reviews that name-drop a driver from the tag roster (see
     site_config.driver_name_tags) are pinned to the front of the list
     so returning guests + guests booking with that driver see the
-    proof point immediately.
+    proof point immediately. Sub-4-star reviews are soft-hidden by the
+    Google sync (`active: False`), so the `active` filter here is the
+    single source of truth for the 4+ star cutoff.
+
+    `limit` (default 60, hard-capped at 200) controls how many reviews
+    the client can pull — the homepage rotator pulls the full pool so
+    every 8-second rotation shows a fresh face.
     """
-    docs = await _db.reviews.find({"active": {"$ne": False}}).sort("created_at", -1).to_list(60)
+    limit = max(3, min(int(limit or 60), 200))
+    docs = await _db.reviews.find({"active": {"$ne": False}, "rating": {"$gte": 4}}).sort("created_at", -1).to_list(limit)
     reviews = [_clean(d) for d in docs]
     if not reviews:
         return {
@@ -208,7 +215,7 @@ async def get_driver_spotlight(slug: str):
             ],
             "headshot_url": "https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=400&h=400&fit=crop&crop=faces&auto=format",
             "years_experience": 10,
-            "languages": ["English", "Bahamian Creole"],
+            "languages": ["English"],
         }
     if not profile:
         return {"error": "not_found", "slug": slug}
