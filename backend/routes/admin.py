@@ -1185,6 +1185,106 @@ async def admin_notifications_summary(days: int = 30, _: str = Depends(_admin_de
     }
 
 
+@router.get("/admin/drivers")
+async def admin_list_driver_spotlights(_: str = Depends(_admin_dep)):
+    """Return the full driver_spotlights roster from site_config so
+    the admin panel can list every driver + edit any of them."""
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    roster = cfg.get("driver_spotlights") or {}
+    # Also surface `reagan` even before it's saved so admins see a
+    # starter row for the built-in fallback profile.
+    if "reagan" not in roster:
+        roster = {
+            "reagan": {
+                "canonical": "Reagan",
+                "tagline": "The reason 4 out of 5 Google reviews mention his name.",
+                "bio": (
+                    "Reagan grew up on New Providence and has been driving the Nassau taxi "
+                    "circuit for over a decade. Guests routinely call him their favourite part "
+                    "of the trip — patient with families, playful with kids, and a walking "
+                    "history book for the Bay Street strip."
+                ),
+                "specialties": [
+                    "Airport transfers", "Cruise-port meet-and-greet",
+                    "Queen's Staircase + Fort Fincastle historical loop",
+                ],
+                "headshot_url": "",
+                "years_experience": 10,
+                "languages": ["English", "Bahamian Creole"],
+                "_starter": True,
+            },
+            **roster,
+        }
+    return {"drivers": roster}
+
+
+class DriverSpotlightIn(BaseModel):
+    canonical: Optional[str] = None
+    tagline: Optional[str] = None
+    bio: Optional[str] = None
+    specialties: Optional[list] = None
+    headshot_url: Optional[str] = None
+    years_experience: Optional[int] = None
+    languages: Optional[list] = None
+
+
+@router.put("/admin/drivers/{slug}")
+async def admin_save_driver_spotlight(slug: str, req: DriverSpotlightIn, _: str = Depends(_admin_dep)):
+    """Save/create a driver spotlight profile. Merges provided fields
+    into `site_config.driver_spotlights.<slug>` so partial updates
+    (e.g. just the headshot) don't blow away the bio."""
+    key = slug.strip().lower()
+    if not key:
+        raise HTTPException(400, "Missing slug")
+    update = {f"driver_spotlights.{key}.{k}": v for k, v in req.dict(exclude_none=True).items()}
+    if not update:
+        raise HTTPException(400, "Nothing to update")
+    await _db.site_config.update_one({"_id": "main"}, {"$set": update}, upsert=True)
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    return {"slug": key, "profile": (cfg.get("driver_spotlights") or {}).get(key) or {}}
+
+
+@router.post("/admin/drivers/{slug}/upload-headshot")
+async def admin_upload_driver_headshot(slug: str, file: UploadFile = File(...), _: str = Depends(_admin_dep)):
+    """Upload a driver headshot. Reuses the shared uploads dir so the
+    URL is served through /api/uploads/*. Resizes down to 512×512 max
+    to keep the payload trim on the public spotlight page."""
+    key = slug.strip().lower()
+    if not key:
+        raise HTTPException(400, "Missing slug")
+    allowed = {".png", ".jpg", ".jpeg", ".webp"}
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in allowed:
+        raise HTTPException(400, f"Unsupported file type. Use {', '.join(sorted(allowed))}")
+    content = await file.read()
+    if len(content) > 8 * 1024 * 1024:
+        raise HTTPException(400, "Headshot must be ≤ 8MB")
+    # Best-effort resize + center-crop to a 512² square. Falls back to
+    # the original bytes if PIL fails on a weird format.
+    try:
+        from PIL import Image, ImageOps
+        import io as _io
+        img = Image.open(_io.BytesIO(content))
+        img = ImageOps.exif_transpose(img)
+        img = ImageOps.fit(img.convert("RGB"), (512, 512), method=Image.LANCZOS)
+        buf = _io.BytesIO()
+        img.save(buf, format="JPEG", quality=88, optimize=True)
+        content = buf.getvalue()
+        ext = ".jpg"
+    except Exception:  # noqa: BLE001
+        pass
+    name = f"driver-{key}-{uuid.uuid4().hex[:6]}{ext}"
+    dest = _upload_dir / name
+    dest.write_bytes(content)
+    url = f"/api/uploads/{name}"
+    await _db.site_config.update_one(
+        {"_id": "main"},
+        {"$set": {f"driver_spotlights.{key}.headshot_url": url}},
+        upsert=True,
+    )
+    return {"slug": key, "headshot_url": url}
+
+
 # ============================================================================
 # Logo upload + site config (literal routes)
 # ============================================================================

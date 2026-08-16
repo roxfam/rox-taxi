@@ -183,6 +183,9 @@ async def get_driver_spotlight(slug: str):
     # Case-insensitive key match; canonicalise on the way in
     key = slug.strip().lower()
     profile = roster.get(key) or roster.get(slug) or {}
+    # Strip internal admin-only flags before returning to the public
+    if isinstance(profile, dict):
+        profile = {k: v for k, v in profile.items() if not k.startswith("_")}
 
     # ── Sensible defaults so /drivers/reagan renders immediately ────
     if not profile and key == "reagan":

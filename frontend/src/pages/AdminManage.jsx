@@ -14,6 +14,7 @@ import BrokenImagesPanel from "./admin/BrokenImagesPanel";
 import LicensesPanel from "./admin/LicensesPanel";
 import VisitorsPanel from "./admin/VisitorsPanel";
 import ReviewsPanel from "./admin/ReviewsPanel";
+import DriverSpotlightsPanel from "./admin/DriverSpotlightsPanel";
 
 const TABS = [
   { key: "home_slides", label: "Home Slides" },
@@ -24,6 +25,7 @@ const TABS = [
   { key: "visitors", label: "Visitors" },
   { key: "promotions", label: "Promotions" },
   { key: "reviews", label: "Reviews" },
+  { key: "drivers", label: "Driver Spotlights" },
   { key: "images", label: "Images" },
   { key: "image_health", label: "Image Health" },
   { key: "gallery", label: "Guest Photos" },
@@ -94,6 +96,7 @@ export default function AdminManage() {
           : tab === "visitors" ? <VisitorsPanel />
           : tab === "promotions" ? <PromotionsPanel />
           : tab === "reviews" ? <ReviewsPanel />
+          : tab === "drivers" ? <DriverSpotlightsPanel />
           : tab === "messages" ? <MessagesPanel />
           : tab === "home_slides" ? <HomeSlidesPanel />
           : tab === "payments" ? <PaymentsPanel />

@@ -5,6 +5,13 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 12ac — Driver Spotlight Admin Panel + Headshot Uploader
+- New **Driver Spotlights tab** at `Admin → Manage → Driver Spotlights`. Each driver in `site_config.driver_spotlights` renders as a card in the left rail with their headshot, canonical name, and `/drivers/<slug>` deep-link.
+- Full editor on the right: Display name · Tagline · Bio · Specialties · Years experience · Languages. Partial updates merge on top of prior fields (dotted `$set` per key so the bio isn't wiped when only the tagline changes).
+- **Headshot uploader** — accepts PNG/JPG/WEBP up to 8MB, auto-crops to 512×512 JPEG via Pillow, saves to `/api/uploads/driver-<slug>-<hash>.jpg` and stamps the URL into `site_config.driver_spotlights.<slug>.headshot_url`. Public `/drivers/<slug>` reads it directly.
+- Reagan seeded as a "starter" row (`_starter: True`) when the roster is empty so the first-time UX has a clear entry point instead of "Add driver + fill 6 fields from scratch".
+- Backend endpoints: `GET /admin/drivers` · `PUT /admin/drivers/<slug>` · `POST /admin/drivers/<slug>/upload-headshot`.
+
 ### Feb 12ab — 240-Char Cap + Live Character Counter on Reply Drafts
 - **Fixed draft-doubling bug**: swapped `chat.stream_message` (which was concatenating stream chunks twice on some replies) for `chat.send_message` — returns the full response in one shot. Blaine's doubled draft regenerated cleanly (178 chars).
 - **Drafter prompt tightened**: hard 240-char cap in the system prompt with 7 explicit rules (2 sentences, one exclamation max, name the reviewer + driver, end with " — Rox"). Belt-and-suspenders `_hard_cap_240()` helper trims post-generation while preserving the sign-off.
