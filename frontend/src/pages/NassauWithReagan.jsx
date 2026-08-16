@@ -42,12 +42,12 @@ const STOPS = [
     icon: Cake,
     title: "Bahamas Rum Cake Factory",
     body:
-      "A quick walk through the working bakery on East Bay Street where they bottle-cure rum cakes the same way since 1978. Free samples at the counter, minis start at about $6, full cakes $15–$25 — cash or card, no ticket needed.",
+      "A quick walk through the working bakery at 602 East Bay Street where they've been small-batch baking and rum-curing cakes since 1978. Free samples at the counter across a dozen flavours — Original, Pineapple, Chocolate, Key Lime, Kentucky Bourbon, Irish Cream and more. Every cake is vacuum-sealed and cleared for carry-on.",
     minutes: 20,
     included_note: "Walk-in free · tasting samples included",
     paid_separately: {
       label: "Cakes to take home are pay-as-you-go",
-      detail: "Mini rum cakes from ~$6, boxed 6-inch cakes ~$15–$25. Vacuum-sealed for the plane home. Sample first, buy only what you love.",
+      detail: "Singles from $7 (12+ flavours) · 4 oz six-pack samplers ~$37.75 · 20 oz two-pack bundles ~$39.58. Vacuum-sealed for the plane home — no refrigeration needed. Cash or card at the counter.",
     },
   },
   {
