@@ -8,6 +8,7 @@ import SignupCountriesCard from "./admin/SignupCountriesCard";
 import WarmLeadCard from "./admin/WarmLeadCard";
 import PickupAuditCard from "./admin/PickupAuditCard";
 import AttachRateCard from "./admin/AttachRateCard";
+import ReviewsInboxCard from "./admin/ReviewsInboxCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -248,6 +249,11 @@ export default function AdminDashboard() {
         {/* Login-method analytics — how customers actually sign in. Helps
             decide whether to keep the Google tab first or promote email. */}
         <AuthMethodsCard data={authMethods} />
+
+        {/* Reviews Inbox — every un-replied 5★ Google review with an
+            AI-drafted thank-you ready to fire. Auto-hides when the
+            inbox is empty so it doesn't dominate the dashboard. */}
+        <ReviewsInboxCard />
 
         {/* Post-trip photo-nudge funnel — proves the email nudge is driving
             submissions to fill the "Recent group tours" strip on

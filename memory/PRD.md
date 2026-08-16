@@ -5,6 +5,12 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 12aa — Reviews Inbox on Admin Dashboard
+- **New landing card** at the top of `/admin` — pulls every un-replied 5★ Google review with the Claude-drafted thank-you already loaded, so the owner can Copy → Open on Google → Post (or one-tap Post-to-Google once OAuth is connected) in ~30 seconds per morning.
+- Backend endpoint: `GET /admin/reviews/inbox` — filters by `rating >= 5 AND owner_reply_posted_at IN [null, ""]`, sorted newest first.
+- Card auto-hides when the inbox is empty and collapses on demand. Reagan-tagged reviews carry their gold "REAGAN" ribbon inside the inbox row too so the owner can prioritise driver-branded shout-outs.
+- Fixed initial-load null crash — guards `data.reviews.map` behind the `!data` early-return.
+
 ### Feb 12z — Google Business Profile OAuth Post-to-Google Wired
 - **Full OAuth flow scaffolded** in new `/app/backend/routes/gbp.py` — endpoints: `GET /admin/gbp/status` · `GET /admin/gbp/oauth/start` · `GET /admin/gbp/oauth/callback` · `POST /admin/gbp/disconnect` · `POST /admin/reviews/{id}/post-to-google`.
 - Tokens (access + refresh + account/location IDs) persisted in `site_config.gbp_tokens`. Access token auto-refreshes on `<60s` from expiry via the refresh token.

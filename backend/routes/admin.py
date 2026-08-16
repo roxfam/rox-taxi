@@ -648,6 +648,29 @@ async def admin_save_reply_draft(review_id: str, req: ReplyDraftUpdate, _: str =
     return {"review_id": review_id, "saved": True}
 
 
+@router.get("/admin/reviews/inbox")
+async def admin_reviews_inbox(_: str = Depends(_admin_dep)):
+    """5-star reviews that haven't been replied to on Google yet.
+
+    Powers the "Reviews Inbox" landing card on /admin — turns the
+    reply-to-Google ritual into a 30-second-a-morning chore instead
+    of a "when I remember" one. Sorted by most-recent first so today's
+    reviewers get their thank-you first."""
+    cursor = _db.reviews.find({
+        "active": {"$ne": False},
+        "source": "google",
+        "rating": {"$gte": 5},
+        "owner_reply_posted_at": {"$in": [None, ""]},
+    }).sort("created_at", -1)
+    docs = await cursor.to_list(20)
+    reviews = [_clean(d) for d in docs]
+    return {
+        "count": len(reviews),
+        "reviews": reviews,
+        "generated_at": _now_iso(),
+    }
+
+
 # ============================================================================
 # Booking management — MUST be registered BEFORE the /admin/{kind} catch-all
 # ============================================================================
