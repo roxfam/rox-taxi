@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, Clock, MapPin, Users, Star, Shell, Camera, ShoppingBag, Utensils, Trophy, Sparkles, Palmtree, Info, Wallet, Waves, Landmark, Cake } from "lucide-react";
+import { ArrowRight, Clock, MapPin, Users, Star, Shell, Camera, ShoppingBag, Utensils, Trophy, Sparkles, Palmtree, Info, Wallet, Waves, Landmark, Cake, Factory } from "lucide-react";
 
 /**
  * NassauWithReagan — signature 4-hour city tour built around our best
@@ -24,7 +24,19 @@ const STOPS = [
     title: "Bay Street strip",
     body:
       "Straw Market, colonial architecture, and the pastel row where every cruise-day photo happens. I know which shops give a real haggle vs the ones selling factory-made 'Bahamian' straw.",
-    minutes: 45,
+    minutes: 30,
+  },
+  {
+    icon: Factory,
+    title: "Graycliff Cigar & Chocolate Factory",
+    body:
+      "Working cigar-rolling floor above West Hill Street where you'll watch Cuban-trained torcedores hand-roll each stick, then across the courtyard to the Graycliff Chocolatier where the truffles are moulded in small batches. Both floors are free to walk through with Reagan.",
+    minutes: 20,
+    included_note: "Factory walk-through free · included in the tour",
+    paid_separately: {
+      label: "Cigars & chocolates are pay-as-you-go",
+      detail: "Single hand-rolled cigars from ~$10, sampler 5-packs ~$40, boxes $150+. Chocolate bars ~$8, filled truffle boxes ~$20–$45. Pay at the boutique counter — cash or card.",
+    },
   },
   {
     icon: Cake,
@@ -84,7 +96,7 @@ const STOPS = [
 
 export default function NassauWithReagan() {
   useEffect(() => {
-    document.title = "Nassau with Reagan · Signature 7-stop city tour · Rox Taxi";
+    document.title = "Nassau with Reagan · Signature 8-stop city tour · Rox Taxi";
   }, []);
 
   return (
@@ -112,7 +124,7 @@ export default function NassauWithReagan() {
               Nassau,<br />the way <span className="text-[#D4A94A]">Reagan</span> tells it.
             </h1>
             <p className="mt-6 max-w-2xl text-lg text-white/85 leading-relaxed">
-              About four hours. Seven stops. One driver who's spent a decade turning cruise-day guests into repeat customers — and gets his name dropped in half the Google reviews we get.
+              About four hours. Eight stops. One driver who's spent a decade turning cruise-day guests into repeat customers — and gets his name dropped in half the Google reviews we get.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <Link
@@ -147,7 +159,7 @@ export default function NassauWithReagan() {
           The route
         </div>
         <h2 className="serif text-5xl lg:text-6xl text-[#0B3B5C] mt-2 leading-tight">
-          Seven stops. Zero tourist traps.
+          Eight stops. Zero tourist traps.
         </h2>
         <p className="mt-4 text-[#334155] max-w-2xl leading-relaxed">
           Reagan builds this route around whichever of you shows up — kids, foodies, first-timers, repeat cruisers. Timings flex; the flavours don't.
@@ -235,6 +247,15 @@ export default function NassauWithReagan() {
                 <Info className="w-3 h-3" /> Paid separately (per person)
               </div>
               <ul className="mt-3 space-y-2.5 text-sm text-[#334155]">
+                <li className="flex items-start gap-2.5">
+                  <Factory className="w-4 h-4 text-[#D4A94A] shrink-0 mt-0.5" />
+                  <span>
+                    <span className="font-bold text-[#0B3B5C]">Graycliff cigars & chocolates</span>{" "}
+                    — factory walk-through is free. Single cigars from{" "}
+                    <span className="mono font-bold text-[#E86A3C]">$10</span>, chocolate bars from{" "}
+                    <span className="mono font-bold text-[#E86A3C]">$8</span>. Buy only what you want.
+                  </span>
+                </li>
                 <li className="flex items-start gap-2.5">
                   <Utensils className="w-4 h-4 text-[#D4A94A] shrink-0 mt-0.5" />
                   <span>
