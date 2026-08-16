@@ -14,7 +14,59 @@ import os
 from typing import Callable, Optional
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Header
+
+# ── Optional Claude-drafted owner-reply (fresh 5-star reviews only) ──
+# Wrapped in try/except so a missing SDK never breaks the sync — the
+# review still lands, just without a pre-drafted reply.
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
+    _LLM_AVAILABLE = True
+except Exception:  # noqa: BLE001
+    _LLM_AVAILABLE = False
+
+
+async def generate_review_reply_draft(review: dict) -> str:
+    """Ask Claude Sonnet for a warm 2-sentence public reply to a
+    Google review. Falls back to a static templated thank-you if the
+    LLM key is missing or the call errors — never blocks the sync."""
+    author = (review.get("author_name") or "there").split()[0] or "there"
+    text = (review.get("text") or "").strip()
+    rating = int(review.get("rating") or 5)
+    static = (
+        f"Thank you so much, {author} — reviews like this mean everything to our team. "
+        "Come see us again next time you're on the island! — Rox"
+    )
+    llm_key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+    if not _LLM_AVAILABLE or not llm_key or not text:
+        return static
+    try:
+        prompt = (
+            f"You are the owner of Rox Taxi Service & Tours in Nassau, Bahamas. "
+            f"Write a warm, personal 2-sentence public reply to this {rating}-star Google review. "
+            f"Do NOT use exclamation points more than once. Address the reviewer by their first name. "
+            f"If they mention a specific driver (e.g. Reagan, Regan), thank that driver by name too. "
+            f"Do not repeat the whole review back — respond to it. Sign off with '— Rox'.\n\n"
+            f"Reviewer name: {review.get('author_name','')}\n"
+            f"Review: {text}"
+        )
+        chat = LlmChat(
+            api_key=llm_key,
+            session_id=f"review-reply-{review.get('id','x')}",
+            system_message="You write short, warm, brand-authentic public replies to Google reviews.",
+        ).with_model("anthropic", "claude-sonnet-4-6")
+        parts: list[str] = []
+        async for ev in chat.stream_message(UserMessage(text=prompt)):
+            # TextDelta events carry `.content`; StreamDone has no
+            # payload we need — the type check is intentionally loose
+            # so both event families work.
+            piece = getattr(ev, "content", None)
+            if piece:
+                parts.append(piece)
+        reply = ("".join(parts)).strip()
+        return reply or static
+    except Exception:  # noqa: BLE001
+        return static, HTTPException, Request
 
 
 _db = None
@@ -148,12 +200,30 @@ async def _sync_google_reviews_bg() -> None:
                 "source": "google",
                 "synced_at": _now_iso(),
             }
+            existing = await _db.reviews.find_one({"google_review_id": google_id})
             await _db.reviews.update_one(
                 {"google_review_id": google_id},
                 {"$set": doc, "$setOnInsert": {"created_at": _now_iso()}},
                 upsert=True,
             )
             upserted += 1
+            # Draft an owner reply the first time we see a fresh 5-star
+            # review. Existing rows keep whatever draft the owner has
+            # tweaked; regeneration is exposed as a separate button.
+            if rating >= 5 and (not existing or not existing.get("owner_reply_draft")):
+                try:
+                    fresh = await _db.reviews.find_one({"google_review_id": google_id})
+                    if fresh:
+                        draft = await generate_review_reply_draft(fresh)
+                        await _db.reviews.update_one(
+                            {"google_review_id": google_id},
+                            {"$set": {
+                                "owner_reply_draft": draft,
+                                "owner_reply_generated_at": _now_iso(),
+                            }},
+                        )
+                except Exception:  # noqa: BLE001
+                    pass
         await _db.cron_runs.update_one(
             {"kind": "google_reviews"},
             {"$set": {"last_success_at": _now_iso(), "last_upserted": upserted,

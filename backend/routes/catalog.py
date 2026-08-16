@@ -11,6 +11,8 @@ Endpoints:
 Wired up by server.py via `configure()` + `include_router()`. Same
 factory-configure pattern as routes/payments.py and routes/admin.py.
 """
+import asyncio
+import time
 from typing import Callable, List
 from fastapi import APIRouter
 
@@ -35,6 +37,60 @@ def configure(*, db, clean, annotate_promo, now_iso, reviews_seed: list):
 router = APIRouter()
 
 
+# ── Recommended-addon computation (cached 10 min) ────────────────────
+# The /taxi-services endpoint decorates each addon with `recommended:
+# True` when its 30-day attach rate crosses 25% AND at least 4 guests
+# have picked it. Cached in-memory so the public catalog endpoint
+# stays fast even if hundreds of visitors hit it inside a minute.
+_recommended_cache: dict = {"ts": 0.0, "keys": set()}
+_RECOMMENDED_TTL_SECONDS = 600  # 10 min
+
+
+async def _compute_recommended_addon_keys() -> set:
+    """Returns a set of `(service_id, addon_id)` tuples that qualify
+    as 'recommended' based on the last 30 days of booking activity."""
+    from datetime import datetime, timedelta, timezone
+    since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    pipeline = [
+        {"$match": {"service_type": "taxi", "created_at": {"$gte": since}}},
+        {"$group": {
+            "_id": "$item_id",
+            "total_bookings": {"$sum": 1},
+            "addons_lists": {"$push": {"$ifNull": ["$addons_selected", []]}},
+        }},
+    ]
+    keys: set = set()
+    async for row in _db.bookings.aggregate(pipeline):
+        item_id = row["_id"]
+        total = int(row["total_bookings"])
+        if total <= 0:
+            continue
+        counts: dict = {}
+        for lst in row.get("addons_lists") or []:
+            for a in (lst or []):
+                aid = a.get("id")
+                if aid:
+                    counts[aid] = counts.get(aid, 0) + 1
+        for aid, attaches in counts.items():
+            rate = (attaches / total) * 100
+            if rate >= 25.0 and attaches >= 4:
+                keys.add((item_id, aid))
+    return keys
+
+
+async def _get_recommended_keys() -> set:
+    now = time.monotonic()
+    if now - _recommended_cache["ts"] < _RECOMMENDED_TTL_SECONDS and _recommended_cache["keys"]:
+        return _recommended_cache["keys"]
+    try:
+        keys = await _compute_recommended_addon_keys()
+        _recommended_cache["keys"] = keys
+        _recommended_cache["ts"] = now
+        return keys
+    except Exception:  # noqa: BLE001
+        return _recommended_cache.get("keys") or set()
+
+
 @router.get("/tours")
 async def list_tours():
     docs = await _db.tours.find({"active": True}).to_list(200)
@@ -43,9 +99,23 @@ async def list_tours():
 
 @router.get("/taxi-services")
 async def list_taxi_services():
-    """Public fixed-fare taxi routes for the /taxi page grid."""
+    """Public fixed-fare taxi routes for the /taxi page grid. Each
+    add-on is decorated with `recommended: True` when its 30-day
+    attach rate crosses 25% (min 4 attaches) — surfaces a gold ribbon
+    in the frontend chip strip on high-converting extras."""
     docs = await _db.taxi_services.find({"active": {"$ne": False}}).to_list(200)
-    return [_annotate_promo(_clean(d)) for d in docs]
+    recommended_keys = await _get_recommended_keys()
+    out = []
+    for d in docs:
+        cleaned = _annotate_promo(_clean(d))
+        addons = cleaned.get("addons") or []
+        if addons and recommended_keys:
+            sid = cleaned.get("id")
+            for a in addons:
+                if (sid, a.get("id")) in recommended_keys:
+                    a["recommended"] = True
+        out.append(cleaned)
+    return out
 
 
 @router.get("/rentals")

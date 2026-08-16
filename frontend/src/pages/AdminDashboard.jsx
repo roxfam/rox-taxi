@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineCh
 import SignupCountriesCard from "./admin/SignupCountriesCard";
 import WarmLeadCard from "./admin/WarmLeadCard";
 import PickupAuditCard from "./admin/PickupAuditCard";
+import AttachRateCard from "./admin/AttachRateCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -255,6 +256,11 @@ export default function AdminDashboard() {
 
         {/* Taxi add-on attach rate — is the upsell landing? */}
         <TaxiAddonCard data={addonStats} />
+
+        {/* Popular add-ons attach-rate — 30-day breakdown per add-on × route.
+            Winners (≥25% attach + ≥4 picks) auto-earn a gold ribbon on
+            the public /taxi chip strip via the recommended-decorator. */}
+        <AttachRateCard />
 
         {/* Fleet blackout costs — days blocked by reason for the year */}
         <BlackoutReasonCard data={reasonStats} year={reasonYear} onYearChange={setReasonYear} />

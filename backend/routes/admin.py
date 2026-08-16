@@ -497,6 +497,149 @@ class GroupInquiryStatusUpdate(BaseModel):
 
 
 
+@router.get("/admin/analytics/addon-attach-rate")
+async def admin_addon_attach_rate(days: int = 30, _: str = Depends(_admin_dep)):
+    """Which popular add-ons are actually converting?
+
+    For every taxi service that ships an `addons` catalog, groups the
+    last N days of taxi bookings by service and counts how many of them
+    ticked each add-on. Attach rate = attached / total_bookings for
+    that service. `recommended: true` fires when attach_rate >= 25 and
+    at least 4 guests picked it (guards against noise from tiny
+    samples). Sorted by attach-rate desc so the winners bubble up.
+    """
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    since = (_dt.now(_tz.utc) - _td(days=max(1, days))).isoformat()
+
+    # Fetch the full taxi-service catalog once so we can label rows +
+    # emit zero-attach rows for add-ons no one has picked yet.
+    services = await _db.taxi_services.find({}).to_list(300)
+    svc_by_id = {s.get("id"): s for s in services}
+
+    # Aggregate bookings by service_id
+    pipeline = [
+        {"$match": {"service_type": "taxi", "created_at": {"$gte": since}}},
+        {"$group": {
+            "_id": "$item_id",
+            "total_bookings": {"$sum": 1},
+            "addons_lists": {"$push": {"$ifNull": ["$addons_selected", []]}},
+        }},
+    ]
+    rows = []
+    async for row in _db.bookings.aggregate(pipeline):
+        item_id = row["_id"]
+        svc = svc_by_id.get(item_id) or {}
+        catalog_addons = svc.get("addons") or []
+        # flatten attach counts + revenue per addon_id
+        counts = {}
+        revenue = {}
+        for lst in row.get("addons_lists") or []:
+            for a in (lst or []):
+                aid = a.get("id")
+                if not aid:
+                    continue
+                counts[aid] = counts.get(aid, 0) + 1
+                revenue[aid] = revenue.get(aid, 0.0) + float(a.get("fee") or 0)
+        total = int(row["total_bookings"])
+        for a in catalog_addons:
+            aid = a.get("id")
+            attaches = counts.get(aid, 0)
+            rate = round((attaches / total) * 100, 1) if total > 0 else 0.0
+            rows.append({
+                "addon_id": aid,
+                "addon_label": a.get("label", aid),
+                "addon_price": float(a.get("price") or 0),
+                "addon_price_mode": (a.get("price_mode") or "flat"),
+                "service_id": item_id,
+                "service_name": svc.get("name") or item_id,
+                "total_bookings": total,
+                "attaches": attaches,
+                "attach_rate_pct": rate,
+                "revenue": round(revenue.get(aid, 0.0), 2),
+                "recommended": rate >= 25.0 and attaches >= 4,
+            })
+
+    # Also surface add-ons whose parent service has ZERO bookings in
+    # the window so admins see the full catalog + a 0% row instead of
+    # "did I break something?"
+    seen = {(r["service_id"], r["addon_id"]) for r in rows}
+    for s in services:
+        addons = s.get("addons") or []
+        for a in addons:
+            key = (s.get("id"), a.get("id"))
+            if key in seen:
+                continue
+            rows.append({
+                "addon_id": a.get("id"),
+                "addon_label": a.get("label", a.get("id")),
+                "addon_price": float(a.get("price") or 0),
+                "addon_price_mode": (a.get("price_mode") or "flat"),
+                "service_id": s.get("id"),
+                "service_name": s.get("name") or s.get("id"),
+                "total_bookings": 0,
+                "attaches": 0,
+                "attach_rate_pct": 0.0,
+                "revenue": 0.0,
+                "recommended": False,
+            })
+
+    rows.sort(key=lambda r: (-r["attach_rate_pct"], -r["attaches"], -r["revenue"]))
+    total_attaches = sum(r["attaches"] for r in rows)
+    total_revenue = round(sum(r["revenue"] for r in rows), 2)
+    winners = [r for r in rows if r["recommended"]]
+    return {
+        "days": days,
+        "rows": rows,
+        "totals": {
+            "attaches": total_attaches,
+            "revenue": total_revenue,
+            "winners": len(winners),
+        },
+        "generated_at": _now_iso(),
+    }
+
+
+@router.post("/admin/reviews/{review_id}/reply-draft/regenerate")
+async def admin_regenerate_reply_draft(review_id: str, _: str = Depends(_admin_dep)):
+    """Re-draft the owner-reply for a Google review — useful when the
+    first draft feels off or after the owner tweaks their tone. Delegates
+    to the shared helper defined in routes/cron.py to keep the prompt
+    logic in one place."""
+    from routes.cron import generate_review_reply_draft
+    doc = await _db.reviews.find_one({"id": review_id})
+    if not doc:
+        raise HTTPException(404, "Review not found")
+    draft = await generate_review_reply_draft(doc)
+    await _db.reviews.update_one(
+        {"id": review_id},
+        {"$set": {
+            "owner_reply_draft": draft,
+            "owner_reply_generated_at": _now_iso(),
+        }},
+    )
+    return {"review_id": review_id, "owner_reply_draft": draft}
+
+
+class ReplyDraftUpdate(BaseModel):
+    owner_reply_draft: str
+
+
+@router.put("/admin/reviews/{review_id}/reply-draft")
+async def admin_save_reply_draft(review_id: str, req: ReplyDraftUpdate, _: str = Depends(_admin_dep)):
+    """Persist manual owner edits to a reply draft so the copy button
+    always paints the latest tweaked version."""
+    res = await _db.reviews.update_one(
+        {"id": review_id},
+        {"$set": {
+            "owner_reply_draft": (req.owner_reply_draft or "")[:1200],
+            "owner_reply_edited_at": _now_iso(),
+        }},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Review not found")
+    return {"review_id": review_id, "saved": True}
+
+
 # ---- Dependency shim so this router can reuse server.py's require_admin ----
 def _admin_dep(authorization: Optional[str] = Header(None)) -> str:
     if _require_admin is None:

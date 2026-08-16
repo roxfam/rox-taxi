@@ -5,7 +5,7 @@ import BookingModal from "./BookingFlow";
 import RouteQuoteWidget from "../components/RouteQuoteWidget";
 import FlightTrackerCard from "../components/FlightTrackerCard";
 import Seo from "../components/Seo";
-import { Car, ArrowRight, Plane, Anchor, ShoppingBag, Utensils, Palmtree, MapPin, Ship, Hotel, ChevronDown } from "lucide-react";
+import { Car, ArrowRight, Plane, Anchor, ShoppingBag, Utensils, Palmtree, MapPin, Ship, Hotel, ChevronDown, Trophy } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
 /**
@@ -282,8 +282,21 @@ export default function Taxi() {
                       onClick={() => bookService(s, [a.id])}
                       title={a.description || a.label}
                       data-testid={`taxi-addon-chip-${s.id}-${a.id}`}
-                      className="group inline-flex items-center gap-1.5 rounded-full border border-[#EFE7D5] bg-[#FBF7EF] hover:bg-white hover:border-[#D4A94A] hover:shadow-[0_4px_12px_rgba(212,169,74,0.18)] active:scale-95 text-xs text-[#0B3B5C] px-3 py-1.5 transition-all"
+                      className={`group relative inline-flex items-center gap-1.5 rounded-full border text-xs text-[#0B3B5C] px-3 py-1.5 transition-all active:scale-95 ${
+                        a.recommended
+                          ? "border-[#D4A94A] bg-gradient-to-r from-[#FBF7EF] to-white shadow-[0_4px_12px_rgba(212,169,74,0.28)] hover:shadow-[0_6px_16px_rgba(212,169,74,0.4)]"
+                          : "border-[#EFE7D5] bg-[#FBF7EF] hover:bg-white hover:border-[#D4A94A] hover:shadow-[0_4px_12px_rgba(212,169,74,0.18)]"
+                      }`}
                     >
+                      {a.recommended && (
+                        <span
+                          className="absolute -top-2 -right-1.5 inline-flex items-center gap-0.5 text-[8px] uppercase tracking-widest font-black text-white bg-gradient-to-r from-[#D4A94A] to-[#c99738] px-1.5 py-0.5 rounded-full shadow-[0_4px_8px_rgba(212,169,74,0.4)]"
+                          data-testid={`taxi-addon-chip-${s.id}-${a.id}-ribbon`}
+                          title="Popular pick — 25%+ of guests add this"
+                        >
+                          <Trophy className="w-2 h-2" /> Top pick
+                        </span>
+                      )}
                       <span className="mono font-bold text-[#E86A3C]">+${Number(a.price).toFixed(0)}</span>
                       <span className="text-[#0B3B5C]/85 group-hover:text-[#0B3B5C] truncate max-w-[180px]">{a.label}</span>
                       {(a.price_mode || "flat").toLowerCase() === "per_person" && (
