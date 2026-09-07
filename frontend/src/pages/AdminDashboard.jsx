@@ -10,6 +10,7 @@ import PickupAuditCard from "./admin/PickupAuditCard";
 import AttachRateCard from "./admin/AttachRateCard";
 import ReviewsInboxCard from "./admin/ReviewsInboxCard";
 import ReferralLeaderboardCard from "./admin/ReferralLeaderboardCard";
+import WeeklyReportCard from "./admin/WeeklyReportCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -250,6 +251,10 @@ export default function AdminDashboard() {
         {/* Login-method analytics — how customers actually sign in. Helps
             decide whether to keep the Google tab first or promote email. */}
         <AuthMethodsCard data={authMethods} />
+
+        {/* Weekly sales & transactions rollup — same numbers as the
+            Monday-morning owner email, on-demand from the dashboard. */}
+        <WeeklyReportCard />
 
         {/* Reviews Inbox — every un-replied 5★ Google review with an
             AI-drafted thank-you ready to fire. Auto-hides when the
@@ -559,9 +564,16 @@ function HandoffPhotosCell({ booking }) {
 
 function NotifyCell({ booking, onRefresh }) {
   const [resending, setResending] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const status = booking.notification_status || null;
-  const notifiedAt = booking.notified_at;
+  const ack = booking.acknowledgment_status || null;
+  const notifiedAt = booking.notified_at || booking.acknowledged_at;
   const paid = booking.payment_status === "paid";
+  // If confirmation hasn't fired yet, fall back to the acknowledgment report
+  // so admins can still see the pre-payment "we got it" email delivery.
+  const emailMeta = status?.email || ack?.email;
+  const smsMeta = status?.sms || ack?.sms;
+  const hasAnyError = (emailMeta?.enabled && !emailMeta?.sent) || (smsMeta?.enabled && !smsMeta?.sent);
 
   const badge = (channel, meta) => {
     const Icon = channel === "email" ? Mail : MessageSquare;
@@ -655,9 +667,53 @@ function NotifyCell({ booking, onRefresh }) {
   return (
     <div className="flex flex-col gap-1" data-testid={`notify-cell-${booking.id}`}>
       <div className="flex gap-1 flex-wrap">
-        {badge("email", status?.email)}
-        {badge("sms", status?.sms)}
+        {badge("email", emailMeta)}
+        {badge("sms", smsMeta)}
+        {(emailMeta || smsMeta) && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[9px] px-1.5 py-1 rounded bg-[#F1F5F9] text-[#64748B] hover:bg-[#0B3B5C] hover:text-white font-semibold"
+            data-testid={`notify-details-toggle-${booking.id}`}
+            title="Show provider & error details"
+          >
+            {expanded ? "Hide" : "Details"}
+          </button>
+        )}
       </div>
+      {expanded && (
+        <div
+          className="mt-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-2 text-[10px] text-[#0B3B5C] space-y-1"
+          data-testid={`notify-details-${booking.id}`}
+        >
+          {emailMeta && (
+            <div>
+              <span className="font-bold">Email:</span>{" "}
+              <span className="text-[#64748B]">provider={emailMeta.provider || "—"}</span>
+              {emailMeta.error && (
+                <div className="mt-0.5 text-[#DC2626] break-all">
+                  err: {String(emailMeta.error).slice(0, 200)}
+                </div>
+              )}
+            </div>
+          )}
+          {smsMeta && (
+            <div>
+              <span className="font-bold">SMS:</span>{" "}
+              <span className="text-[#64748B]">provider={smsMeta.provider || "—"}</span>
+              {smsMeta.error && (
+                <div className="mt-0.5 text-[#DC2626] break-all">
+                  err: {String(smsMeta.error).slice(0, 200)}
+                </div>
+              )}
+            </div>
+          )}
+          {hasAnyError && (
+            <div className="pt-1 border-t border-[#E2E8F0] text-[#DC2626] font-semibold">
+              ⚠ Check Twilio region / SendGrid keys in Site Config → Tokens.
+            </div>
+          )}
+        </div>
+      )}
       {notifiedAt && (
         <div className="text-[9px] text-[#94a3b8]" data-testid={`notify-time-${booking.id}`}>
           {new Date(notifiedAt).toLocaleString()}

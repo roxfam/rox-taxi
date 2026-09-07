@@ -7,6 +7,7 @@ and avoid circular deps.
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 import logging
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -1242,6 +1243,304 @@ async def admin_notifications_summary(days: int = 30, _: str = Depends(_admin_de
     }
 
 
+# ---- Weekly sales & transactions report ----------------------------------
+
+async def _compute_weekly_report(days: int = 7) -> dict:
+    """Aggregate the last N days of paid bookings + notification health so
+    the admin dashboard card and the Monday-morning email share the same
+    numbers. Broken out into a helper so the cron worker doesn't
+    duplicate the aggregation."""
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    since = (now - timedelta(days=days)).isoformat()
+    prev_since = (now - timedelta(days=days * 2)).isoformat()
+
+    # Paid bookings this window
+    paid_cursor = _db.bookings.find({
+        "payment_status": "paid",
+        "created_at": {"$gte": since},
+    }).sort("created_at", -1)
+    paid = await paid_cursor.to_list(1000)
+
+    # Prior period for delta comparison
+    prev_paid = await _db.bookings.count_documents({
+        "payment_status": "paid",
+        "created_at": {"$gte": prev_since, "$lt": since},
+    })
+
+    revenue = round(sum(float(b.get("total") or 0) for b in paid), 2)
+    tips = round(sum(float(b.get("tip_amount") or 0) for b in paid), 2)
+    tips_topup = round(sum(float(b.get("tip_topup_pledged") or 0) for b in paid), 2)
+
+    # Split by service_type
+    by_service: Dict[str, Dict[str, Any]] = {}
+    for b in paid:
+        stype = b.get("service_type") or "other"
+        bucket = by_service.setdefault(stype, {"count": 0, "revenue": 0.0})
+        bucket["count"] += 1
+        bucket["revenue"] += float(b.get("total") or 0)
+    for bucket in by_service.values():
+        bucket["revenue"] = round(bucket["revenue"], 2)
+
+    # Split by payment method
+    by_method: Dict[str, Dict[str, Any]] = {}
+    for b in paid:
+        pm = (b.get("payment_method") or "other").lower()
+        bucket = by_method.setdefault(pm, {"count": 0, "revenue": 0.0})
+        bucket["count"] += 1
+        bucket["revenue"] += float(b.get("total") or 0)
+    for bucket in by_method.values():
+        bucket["revenue"] = round(bucket["revenue"], 2)
+
+    # Daily breakdown for the sparkline
+    from collections import defaultdict
+    daily = defaultdict(lambda: {"count": 0, "revenue": 0.0})
+    for b in paid:
+        day = (b.get("created_at") or "")[:10]
+        daily[day]["count"] += 1
+        daily[day]["revenue"] += float(b.get("total") or 0)
+    days_list = []
+    for i in range(days - 1, -1, -1):
+        d = (now - timedelta(days=i)).date().isoformat()
+        row = daily.get(d) or {"count": 0, "revenue": 0.0}
+        days_list.append({"date": d, "count": row["count"], "revenue": round(row["revenue"], 2)})
+
+    # Top services this week
+    top_services: Dict[str, Dict[str, Any]] = {}
+    for b in paid:
+        name = b.get("item_name") or "Unknown"
+        row = top_services.setdefault(name, {"name": name, "count": 0, "revenue": 0.0})
+        row["count"] += 1
+        row["revenue"] += float(b.get("total") or 0)
+    top_services_list = sorted(top_services.values(), key=lambda r: -r["revenue"])[:5]
+    for row in top_services_list:
+        row["revenue"] = round(row["revenue"], 2)
+
+    # Notification deliverability
+    with_notif = [b for b in paid if b.get("notification_status")]
+    email_sent = sum(1 for b in with_notif if (b.get("notification_status") or {}).get("email", {}).get("sent"))
+    email_fail = sum(1 for b in with_notif if (b.get("notification_status") or {}).get("email", {}).get("enabled") and not (b.get("notification_status") or {}).get("email", {}).get("sent"))
+    sms_sent = sum(1 for b in with_notif if (b.get("notification_status") or {}).get("sms", {}).get("sent"))
+    sms_fail = sum(1 for b in with_notif if (b.get("notification_status") or {}).get("sms", {}).get("enabled") and not (b.get("notification_status") or {}).get("sms", {}).get("sent"))
+
+    prev_rev_docs = await _db.bookings.aggregate([
+        {"$match": {"payment_status": "paid", "created_at": {"$gte": prev_since, "$lt": since}}},
+        {"$group": {"_id": None, "sum": {"$sum": "$total"}}},
+    ]).to_list(1)
+    prev_revenue = round(prev_rev_docs[0]["sum"], 2) if prev_rev_docs else 0.0
+
+    def _pct_delta(cur, prev):
+        if not prev:
+            return None
+        return round(((cur - prev) / prev) * 100, 1)
+
+    return {
+        "days": days,
+        "period_start": since,
+        "period_end": now.isoformat(),
+        "totals": {
+            "paid_bookings": len(paid),
+            "revenue": revenue,
+            "avg_ticket": round(revenue / len(paid), 2) if paid else 0.0,
+            "tips_collected": tips,
+            "tips_topup_pledged": tips_topup,
+        },
+        "prev_period": {
+            "paid_bookings": prev_paid,
+            "revenue": prev_revenue,
+        },
+        "delta": {
+            "paid_bookings_pct": _pct_delta(len(paid), prev_paid),
+            "revenue_pct": _pct_delta(revenue, prev_revenue),
+        },
+        "by_service": by_service,
+        "by_payment_method": by_method,
+        "daily": days_list,
+        "top_services": top_services_list,
+        "deliverability": {
+            "with_notifications": len(with_notif),
+            "email_sent": email_sent,
+            "email_failed": email_fail,
+            "sms_sent": sms_sent,
+            "sms_failed": sms_fail,
+        },
+        "generated_at": _now_iso(),
+    }
+
+
+@router.get("/admin/analytics/weekly-report")
+async def admin_weekly_report(days: int = 7, _: str = Depends(_admin_dep)):
+    """Live weekly sales & transactions report — powers the dashboard card
+    AND the Monday-morning email. Change `days` to preview other windows
+    (e.g. days=30 for a monthly view)."""
+    return await _compute_weekly_report(max(1, min(days, 90)))
+
+
+def _render_weekly_report_html(report: dict) -> str:
+    """Format the aggregate dict into a friendly HTML email. Kept simple
+    so the same numbers render cleanly in Gmail, Outlook, and Apple Mail."""
+    totals = report["totals"]
+    deliverability = report["deliverability"]
+    delta = report.get("delta") or {}
+    prev = report.get("prev_period") or {}
+    days = report["days"]
+
+    def _delta_span(pct):
+        if pct is None:
+            return '<span style="color:#94a3b8;font-size:12px;">—</span>'
+        color = "#059669" if pct >= 0 else "#DC2626"
+        arrow = "▲" if pct >= 0 else "▼"
+        return f'<span style="color:{color};font-size:12px;font-weight:700;">{arrow} {abs(pct)}%</span>'
+
+    daily_rows = "".join(
+        f'<tr><td style="padding:4px 8px;font-size:12px;color:#64748B;">{d["date"]}</td>'
+        f'<td style="padding:4px 8px;text-align:right;font-size:12px;">{d["count"]}</td>'
+        f'<td style="padding:4px 8px;text-align:right;font-size:12px;font-family:\'JetBrains Mono\',monospace;">${d["revenue"]:.2f}</td></tr>'
+        for d in report.get("daily", [])
+    )
+    top_rows = "".join(
+        f'<tr><td style="padding:4px 8px;font-size:12px;color:#0B3B5C;font-weight:600;">{s["name"][:40]}</td>'
+        f'<td style="padding:4px 8px;text-align:right;font-size:12px;">{s["count"]}</td>'
+        f'<td style="padding:4px 8px;text-align:right;font-size:12px;font-family:\'JetBrains Mono\',monospace;">${s["revenue"]:.2f}</td></tr>'
+        for s in report.get("top_services", [])
+    ) or '<tr><td colspan="3" style="padding:12px 8px;color:#94a3b8;font-size:12px;text-align:center;">No paid bookings this window.</td></tr>'
+
+    method_rows = "".join(
+        f'<tr><td style="padding:4px 8px;font-size:12px;color:#64748B;">{m.upper()}</td>'
+        f'<td style="padding:4px 8px;text-align:right;font-size:12px;">{v["count"]}</td>'
+        f'<td style="padding:4px 8px;text-align:right;font-size:12px;font-family:\'JetBrains Mono\',monospace;">${v["revenue"]:.2f}</td></tr>'
+        for m, v in (report.get("by_payment_method") or {}).items()
+    ) or '<tr><td colspan="3" style="padding:8px;font-size:12px;color:#94a3b8;text-align:center;">—</td></tr>'
+
+    return f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:640px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Rox Weekly Report</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:28px;line-height:1.15;">Your last {days} days at a glance</h1>
+      <p style="color:#64748B;font-size:14px;margin:8px 0 0;">Automatic recap of paid bookings, revenue trends, and notification health.</p>
+
+      <div style="display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:180px;background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;">
+          <div style="font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.16em;font-weight:700;">Revenue</div>
+          <div style="font-size:28px;color:#0B3B5C;font-weight:800;margin-top:4px;font-family:'JetBrains Mono',monospace;">${totals['revenue']:.2f}</div>
+          <div style="margin-top:6px;">{_delta_span(delta.get('revenue_pct'))} <span style="color:#94a3b8;font-size:11px;">vs prev ${prev.get('revenue',0):.2f}</span></div>
+        </div>
+        <div style="flex:1;min-width:180px;background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;">
+          <div style="font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.16em;font-weight:700;">Paid bookings</div>
+          <div style="font-size:28px;color:#0B3B5C;font-weight:800;margin-top:4px;">{totals['paid_bookings']}</div>
+          <div style="margin-top:6px;">{_delta_span(delta.get('paid_bookings_pct'))} <span style="color:#94a3b8;font-size:11px;">vs prev {prev.get('paid_bookings',0)}</span></div>
+        </div>
+        <div style="flex:1;min-width:180px;background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;">
+          <div style="font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.16em;font-weight:700;">Avg ticket</div>
+          <div style="font-size:28px;color:#0B3B5C;font-weight:800;margin-top:4px;font-family:'JetBrains Mono',monospace;">${totals['avg_ticket']:.2f}</div>
+          <div style="margin-top:6px;color:#94a3b8;font-size:11px;">Tips: ${totals['tips_collected']:.2f} · Top-ups: ${totals['tips_topup_pledged']:.2f}</div>
+        </div>
+      </div>
+
+      <h3 style="color:#0B3B5C;font-family:Georgia,serif;margin-top:28px;">Top services</h3>
+      <table style="width:100%;background:#fff;border:1px solid #E2E8F0;border-radius:12px;border-collapse:separate;border-spacing:0;overflow:hidden;">
+        <thead><tr style="background:#F8F5EC;"><th style="padding:8px;text-align:left;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.1em;">Service</th>
+        <th style="padding:8px;text-align:right;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.1em;">Bookings</th>
+        <th style="padding:8px;text-align:right;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.1em;">Revenue</th></tr></thead>
+        <tbody>{top_rows}</tbody>
+      </table>
+
+      <h3 style="color:#0B3B5C;font-family:Georgia,serif;margin-top:28px;">Daily trend</h3>
+      <table style="width:100%;background:#fff;border:1px solid #E2E8F0;border-radius:12px;border-collapse:separate;border-spacing:0;overflow:hidden;">
+        <thead><tr style="background:#F8F5EC;"><th style="padding:8px;text-align:left;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.1em;">Date</th>
+        <th style="padding:8px;text-align:right;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.1em;">Bookings</th>
+        <th style="padding:8px;text-align:right;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.1em;">Revenue</th></tr></thead>
+        <tbody>{daily_rows}</tbody>
+      </table>
+
+      <h3 style="color:#0B3B5C;font-family:Georgia,serif;margin-top:28px;">Payment methods</h3>
+      <table style="width:100%;background:#fff;border:1px solid #E2E8F0;border-radius:12px;border-collapse:separate;border-spacing:0;overflow:hidden;">
+        <thead><tr style="background:#F8F5EC;"><th style="padding:8px;text-align:left;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.1em;">Method</th>
+        <th style="padding:8px;text-align:right;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.1em;">Bookings</th>
+        <th style="padding:8px;text-align:right;font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.1em;">Revenue</th></tr></thead>
+        <tbody>{method_rows}</tbody>
+      </table>
+
+      <div style="margin-top:24px;background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;">
+        <div style="font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.16em;font-weight:700;">Notification deliverability</div>
+        <div style="margin-top:8px;color:#0B3B5C;font-size:13px;">
+          Email — <strong>{deliverability['email_sent']}</strong> sent · <span style="color:#DC2626;font-weight:700;">{deliverability['email_failed']}</span> failed<br>
+          SMS — <strong>{deliverability['sms_sent']}</strong> sent · <span style="color:#DC2626;font-weight:700;">{deliverability['sms_failed']}</span> failed
+        </div>
+      </div>
+
+      <p style="color:#94a3b8;font-size:11px;margin-top:32px;">Rox Taxi Service &amp; Tours · Nassau, Bahamas · <a href="https://roxtaxi.com/admin" style="color:#0B3B5C;font-weight:600;text-decoration:none;">Open admin →</a></p>
+    </div>
+    """
+
+
+async def _send_weekly_report_bg() -> None:
+    """Background worker — computes the last 7 days, formats an email,
+    and dispatches it to ADMIN_EMAIL. No-op if the email isn't configured."""
+    try:
+        from notifications import send_email as _send_email
+        from secrets_store import get_secret as _get_secret
+
+        owner_email = (_get_secret("ADMIN_EMAIL", "") or "").strip()
+        if not owner_email:
+            return
+        report = await _compute_weekly_report(7)
+        html = _render_weekly_report_html(report)
+        totals = report["totals"]
+        subject = f"Rox weekly report · ${totals['revenue']:.0f} · {totals['paid_bookings']} bookings"
+        text = (
+            f"Rox weekly report — last 7 days\n\n"
+            f"Revenue: ${totals['revenue']:.2f}\n"
+            f"Paid bookings: {totals['paid_bookings']}\n"
+            f"Avg ticket: ${totals['avg_ticket']:.2f}\n"
+            f"Tips: ${totals['tips_collected']:.2f}\n\n"
+            f"Open the dashboard for the full breakdown: https://roxtaxi.com/admin\n"
+        )
+        result = _send_email(owner_email, subject, html, text, category="admin")
+        # Log to cron_runs so admin can verify delivery
+        await _db.cron_runs.update_one(
+            {"kind": "weekly_report"},
+            {"$set": {
+                "last_run_at": _now_iso(),
+                "last_result": result,
+                "last_revenue": totals["revenue"],
+                "last_bookings": totals["paid_bookings"],
+            }},
+            upsert=True,
+        )
+    except Exception as ex:  # noqa: BLE001
+        logging.warning("weekly report err: %s", ex)
+
+
+@router.post("/cron/send-weekly-report")
+async def cron_send_weekly_report(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    x_webhook_id: Optional[str] = Header(None),
+):
+    """Weekly cron — dispatches the weekly report email to the owner.
+    Bearer-auth against WEBHOOK_CRON_SECRET (same pattern as tip-bump)."""
+    import hmac as _hmac
+    secret = (os.environ.get("WEBHOOK_CRON_SECRET") or "").strip()
+    presented = ""
+    if authorization and authorization.startswith("Bearer "):
+        presented = authorization[7:].strip()
+    if not secret or not presented or not _hmac.compare_digest(presented, secret):
+        raise HTTPException(401, "Invalid cron auth")
+    import asyncio
+    asyncio.create_task(_send_weekly_report_bg())
+    return {"accepted": True, "kind": "weekly_report", "run_id": x_webhook_id}
+
+
+@router.post("/admin/analytics/weekly-report/send-now")
+async def admin_weekly_report_send_now(_: str = Depends(_admin_dep)):
+    """Admin-triggered weekly email — same delivery path as the cron so
+    the owner can test the pipeline any time from the dashboard card."""
+    import asyncio
+    asyncio.create_task(_send_weekly_report_bg())
+    return {"accepted": True, "kind": "weekly_report_manual"}
+
+
 @router.get("/admin/drivers")
 async def admin_list_driver_spotlights(_: str = Depends(_admin_dep)):
     """Return the full driver_spotlights roster from site_config so
@@ -1341,6 +1640,16 @@ async def admin_upload_driver_headshot(slug: str, file: UploadFile = File(...), 
         {"$set": {f"driver_spotlights.{key}.headshot_url": url}},
         upsert=True,
     )
+    await _db.uploaded_images.update_one(
+        {"name": name},
+        {"$set": {"name": name, "url": url, "kind": "driver-headshot",
+                  "driver_slug": key,
+                  "original_filename": file.filename or "",
+                  "size": len(content),
+                  "content_type": "image/jpeg" if ext == ".jpg" else f"image/{ext.lstrip('.')}",
+                  "uploaded_at": _now_iso()}},
+        upsert=True,
+    )
     return {"slug": key, "headshot_url": url}
 
 
@@ -1367,6 +1676,14 @@ async def upload_logo(file: UploadFile = File(...), _: str = Depends(_admin_dep)
 
     url = f"/api/uploads/{name}"
     await _db.site_config.update_one({"_id": "main"}, {"$set": {"logo_url": url}}, upsert=True)
+    await _db.uploaded_images.update_one(
+        {"name": name},
+        {"$set": {"name": name, "url": url, "kind": "logo",
+                  "original_filename": file.filename or "",
+                  "size": len(content), "content_type": ct,
+                  "uploaded_at": _now_iso()}},
+        upsert=True,
+    )
     return {"logo_url": url}
 
 
@@ -1376,7 +1693,11 @@ async def upload_logo(file: UploadFile = File(...), _: str = Depends(_admin_dep)
 
 @router.post("/admin/images")
 async def upload_catalog_image(file: UploadFile = File(...), _: str = Depends(_admin_dep)):
-    """Upload a catalog image (any tour / taxi / rental / carousel photo)."""
+    """Upload a catalog image (any tour / taxi / rental / carousel photo).
+
+    Emergent Object Storage has no list API — so we mirror every upload
+    into `uploaded_images` in Mongo so the admin image gallery has a
+    real catalog to browse."""
     allowed = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
     ext = Path(file.filename or "").suffix.lower()
     if ext not in allowed:
@@ -1398,28 +1719,41 @@ async def upload_catalog_image(file: UploadFile = File(...), _: str = Depends(_a
           "webp": "image/webp", "svg": "image/svg+xml", "gif": "image/gif"}.get(ext.lstrip("."), file.content_type or "application/octet-stream")
     if not _put_object(name, content, ct):
         raise HTTPException(503, "Object storage unavailable; try again in a moment")
-    return {
+
+    url = f"/api/uploads/{name}"
+    doc = {
         "name": name,
-        "url": f"/api/uploads/{name}",
+        "url": url,
+        "kind": "catalog",
+        "original_filename": file.filename or "",
         "size": len(content),
-        "content_type": file.content_type,
+        "content_type": ct,
+        "uploaded_at": _now_iso(),
     }
+    await _db.uploaded_images.update_one({"name": name}, {"$set": doc}, upsert=True)
+    return doc
 
 
 @router.get("/admin/images")
 async def list_catalog_images(_: str = Depends(_admin_dep)):
-    """List uploaded images. Emergent Object Storage doesn't expose a
-    list API per the playbook, so admin should track image references
-    in DB. For now this returns an empty list — image references live
-    on the catalog rows themselves (tour/taxi/rental `image_url`)."""
-    return []
+    """List uploaded images from the `uploaded_images` catalog.
+
+    Backed by Mongo (Emergent Object Storage has no list API) — every
+    successful upload writes a row here so the admin panel can browse
+    the full photo library. Newest first."""
+    docs = await _db.uploaded_images.find({}).sort("uploaded_at", -1).to_list(500)
+    return [_clean(d) for d in docs]
 
 
 @router.delete("/admin/images/{name}")
 async def delete_catalog_image(name: str, _: str = Depends(_admin_dep)):
-    """No-op: Emergent Object Storage has no delete API. Soft-delete
-    happens by clearing the `image_url` reference on the catalog row."""
-    return {"deleted": True, "name": name, "soft": True}
+    """Remove an image from the admin catalog listing.
+
+    The underlying object stays in Emergent Object Storage (no delete
+    API), but hiding the DB row removes it from every admin picker so
+    it's effectively gone from the workflow."""
+    res = await _db.uploaded_images.delete_one({"name": name})
+    return {"deleted": True, "name": name, "removed_from_catalog": res.deleted_count > 0}
 
 
 @router.put("/admin/site-config")

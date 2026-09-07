@@ -12,3 +12,10 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/send-tip-bump-sms"
     method: POST
     enabled: true
+
+  - name: send-weekly-report
+    description: "Monday-morning 9am UTC recap email to the owner — last 7 days revenue, bookings, top services, and notification deliverability."
+    cron: "0 9 * * 1"
+    endpoint: "{{BASE_URL}}/api/cron/send-weekly-report"
+    method: POST
+    enabled: true
