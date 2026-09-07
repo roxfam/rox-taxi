@@ -203,37 +203,101 @@ def _booking_details_for_owner(booking: dict) -> str:
 
 
 def notify_owner_booking_created(booking: dict) -> dict:
-    """Send an SMS alert to the business owner the moment a booking hits the DB.
-    Uses `ADMIN_SMS_NUMBER` env — falls back to `WHATSAPP_NUMBER` so we don't
-    need duplicate configuration if the owner uses one phone for both.
+    """Alert the business owner the moment a booking hits the DB.
 
-    Returns Twilio send-report dict.
+    Sends BOTH channels the owner is set up for:
+      • SMS  → `ADMIN_SMS_NUMBER` (fallback `WHATSAPP_NUMBER`)
+      • Email → `ADMIN_EMAIL`
+
+    Either channel is skipped silently if its credentials aren't set,
+    so a partially-configured environment (SMS-only, or email-only)
+    still works. Returns a combined report so admin can see which
+    channel actually landed.
     """
     owner = (get_secret("ADMIN_SMS_NUMBER") or get_secret("WHATSAPP_NUMBER") or "").strip()
-    if not owner:
-        return {"sent": False, "provider": "none", "error": "ADMIN_SMS_NUMBER not set"}
-    body = (
+    owner_email = (get_secret("ADMIN_EMAIL") or "").strip()
+
+    report = {"sms": {"sent": False, "provider": "none", "error": None},
+              "email": {"sent": False, "provider": "none", "error": None}}
+
+    body_text = (
         f"🚕 NEW BOOKING {booking['id']}\n"
         f"{_booking_details_for_owner(booking)}\n"
         f"👉 roxtaxi.com/admin/bookings/{booking['id']}"
     )
-    return send_sms(owner, body)
+
+    if owner:
+        report["sms"].update(send_sms(owner, body_text))
+    else:
+        report["sms"]["error"] = "ADMIN_SMS_NUMBER not set"
+
+    if owner_email:
+        subject = f"🚕 New booking {booking['id']} — {booking.get('customer_name','?')}"
+        html = f"""
+        <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#FAF9F6;">
+          <h2 style="font-family:Georgia,serif;color:#0B3B5C;margin:0 0 4px;">New booking</h2>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:22px;color:#0B3B5C;">{booking['id']}</div>
+          <pre style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#334155;white-space:pre-wrap;">{_booking_details_for_owner(booking)}</pre>
+          <a href="https://roxtaxi.com/admin/bookings/{booking['id']}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;padding:10px 20px;border-radius:999px;margin-top:12px;font-weight:700;">Open in admin →</a>
+        </div>
+        """
+        report["email"].update(send_email(owner_email, subject, html, body_text, category="admin"))
+    else:
+        report["email"]["error"] = "ADMIN_EMAIL not set"
+
+    # Keep backwards-compat top-level keys for existing callers that
+    # only read `sent`/`provider`.
+    report["sent"] = bool(report["sms"].get("sent") or report["email"].get("sent"))
+    report["provider"] = (
+        f"{report['sms'].get('provider','')}+{report['email'].get('provider','')}"
+    ).strip("+") or "none"
+    return report
 
 
 def notify_owner_payment_received(booking: dict, provider: str = "stripe") -> dict:
-    """Send an SMS alert to the owner the moment a booking is marked paid.
-    Fires from every payment path (Stripe webhook, PayPal capture, Zelle mark).
+    """Alert the owner the moment a booking is marked paid.
+
+    Fires from every payment path (Stripe webhook, PayPal capture, Zelle
+    mark). Sends BOTH owner SMS and owner email so both records exist.
     """
     owner = (get_secret("ADMIN_SMS_NUMBER") or get_secret("WHATSAPP_NUMBER") or "").strip()
-    if not owner:
-        return {"sent": False, "provider": "none", "error": "ADMIN_SMS_NUMBER not set"}
-    body = (
+    owner_email = (get_secret("ADMIN_EMAIL") or "").strip()
+
+    report = {"sms": {"sent": False, "provider": "none", "error": None},
+              "email": {"sent": False, "provider": "none", "error": None}}
+
+    body_text = (
         f"💰 PAYMENT RECEIVED {_fmt_money(booking.get('total',0))} via {provider.upper()}\n"
         f"Booking  : {booking['id']}\n"
         f"{_booking_details_for_owner(booking)}\n"
         f"👉 roxtaxi.com/admin/bookings/{booking['id']}"
     )
-    return send_sms(owner, body)
+
+    if owner:
+        report["sms"].update(send_sms(owner, body_text))
+    else:
+        report["sms"]["error"] = "ADMIN_SMS_NUMBER not set"
+
+    if owner_email:
+        subject = f"💰 Payment received · {_fmt_money(booking.get('total',0))} · {booking['id']}"
+        html = f"""
+        <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#FAF9F6;">
+          <h2 style="font-family:Georgia,serif;color:#0B3B5C;margin:0 0 4px;">Payment received</h2>
+          <div style="color:#059669;font-size:22px;font-weight:700;margin-top:4px;">{_fmt_money(booking.get('total',0))} <span style="color:#64748B;font-size:14px;font-weight:400;">via {provider.upper()}</span></div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:#0B3B5C;margin-top:8px;">{booking['id']}</div>
+          <pre style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#334155;white-space:pre-wrap;">{_booking_details_for_owner(booking)}</pre>
+          <a href="https://roxtaxi.com/admin/bookings/{booking['id']}" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:10px 20px;border-radius:999px;margin-top:12px;font-weight:700;">Open in admin →</a>
+        </div>
+        """
+        report["email"].update(send_email(owner_email, subject, html, body_text, category="admin"))
+    else:
+        report["email"]["error"] = "ADMIN_EMAIL not set"
+
+    report["sent"] = bool(report["sms"].get("sent") or report["email"].get("sent"))
+    report["provider"] = (
+        f"{report['sms'].get('provider','')}+{report['email'].get('provider','')}"
+    ).strip("+") or "none"
+    return report
 
 
 def notify_booking_received(booking: dict, prefs: Optional[dict] = None) -> dict:
@@ -246,10 +310,19 @@ def notify_booking_received(booking: dict, prefs: Optional[dict] = None) -> dict
     """
     prefs = prefs or {}
     email_enabled = prefs.get("notify_email_enabled", True) is not False
-    report = {"email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled}}
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+    report = {
+        "email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+        "sms":   {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
+    }
 
-    if not (email_enabled and booking.get("customer_email")):
+    has_email_target = bool(email_enabled and booking.get("customer_email"))
+    has_sms_target = bool(sms_enabled and booking.get("customer_phone"))
+    if not has_email_target:
         report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+    if not has_sms_target:
+        report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+    if not (has_email_target or has_sms_target):
         return report
 
     pickup = booking.get("pickup_location") or "—"

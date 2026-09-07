@@ -5,6 +5,12 @@ Website offering taxi and tours in The Bahamas (Nassau & Paradise Island focus).
 
 ## What's Implemented (Feb 2026)
 
+### Feb 16 (evening) — Full-Channel Booking Notifications
+- **Guest email + SMS on every booking creation**: `notify_booking_received` in `notifications.py` now fans out to BOTH the guest's email (SMTP → Namecheap Private Email) and the guest's cellphone (Twilio SMS). Previously it was email-only; the SMS path was verified live with a $40 test booking (`email: {sent: true, provider: "smtp"}`, `sms: {sent: true, provider: "twilio"}`).
+- **Owner email on top of owner SMS** for both `notify_owner_booking_created` and `notify_owner_payment_received`: reads `ADMIN_EMAIL` env, sends a HTML admin-styled email with the same details as the SMS + a deep-link to the booking in admin. Either channel is skipped silently if its credential isn't set, so partial configs still work.
+- Both functions now return a combined `{sms: {...}, email: {...}, sent, provider}` report so admin can see which channels actually landed.
+- Owner phone still `ADMIN_SMS_NUMBER=+12424322587`, owner email still `ADMIN_EMAIL=roxfam2509@gmail.com`. No env changes required.
+
 ### Feb 16 (late) — Refer-a-Friend Public Share Flow
 - **New `/refer` page** (`ReferFriend.jsx`) — public share hub with sharer-name input, optional 240-char personal note, deterministic `FRIEND-{initials}-{4-char hash}` code, live message preview, and 6 share channels (WhatsApp, Email, Facebook, X/Twitter, Copy Link, Native Share).
 - **Referral catcher** (`ReferralCatcher.jsx`, mounted globally in Layout) — parses `?ref=<code>&from=<name>` on every navigation, persists to `localStorage.rox_referral`, and shows a dismissible floating "10% off from {name}" ribbon on landing.

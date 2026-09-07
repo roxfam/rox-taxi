@@ -4000,11 +4000,26 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 @api_router.get("/uploads/{name}")
 async def get_upload(name: str):
-    from fastapi.responses import FileResponse
+    """Serve a stored upload. Emergent Object Storage is the source of
+    truth (survives redeploys). Legacy pod-local files (older uploads
+    still on disk from before the storage migration) fall through as a
+    read-only backup so old admin data doesn't 404.
+    """
+    from fastapi.responses import FileResponse, Response
+    # 1) Prefer Emergent Object Storage
+    try:
+        from storage import get_object
+        got = get_object(name)
+        if got is not None:
+            content, ctype = got
+            return Response(content=content, media_type=ctype)
+    except Exception as ex:  # noqa: BLE001
+        logging.warning("object storage get failed for %s: %s", name, ex)
+    # 2) Fall back to legacy pod-local (best-effort — for pre-migration files only)
     path = (UPLOAD_DIR / name).resolve()
-    if not str(path).startswith(str(UPLOAD_DIR.resolve())) or not path.exists():
-        raise HTTPException(404, "Not found")
-    return FileResponse(path)
+    if str(path).startswith(str(UPLOAD_DIR.resolve())) and path.exists():
+        return FileResponse(path)
+    raise HTTPException(404, "Not found")
 
 
 # ---------------- Payments ----------------

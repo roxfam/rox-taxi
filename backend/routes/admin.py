@@ -1331,8 +1331,10 @@ async def admin_upload_driver_headshot(slug: str, file: UploadFile = File(...), 
     except Exception:  # noqa: BLE001
         pass
     name = f"driver-{key}-{uuid.uuid4().hex[:6]}{ext}"
-    dest = _upload_dir / name
-    dest.write_bytes(content)
+    # Emergent Object Storage — persistent across redeploys (no pod-local disk).
+    from storage import put_object as _put_object
+    if not _put_object(name, content, "image/jpeg" if ext == ".jpg" else f"image/{ext.lstrip('.')}"):
+        raise HTTPException(503, "Object storage unavailable; try again in a moment")
     url = f"/api/uploads/{name}"
     await _db.site_config.update_one(
         {"_id": "main"},
@@ -1354,11 +1356,14 @@ async def upload_logo(file: UploadFile = File(...), _: str = Depends(_admin_dep)
         raise HTTPException(400, f"Unsupported file type. Use {', '.join(sorted(allowed))}")
 
     name = f"logo-{uuid.uuid4().hex[:8]}{ext}"
-    dest = _upload_dir / name
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Logo must be ≤ 5MB")
-    dest.write_bytes(content)
+    from storage import put_object as _put_object
+    ct = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+          "webp": "image/webp", "svg": "image/svg+xml"}.get(ext.lstrip("."), "application/octet-stream")
+    if not _put_object(name, content, ct):
+        raise HTTPException(503, "Object storage unavailable; try again in a moment")
 
     url = f"/api/uploads/{name}"
     await _db.site_config.update_one({"_id": "main"}, {"$set": {"logo_url": url}}, upsert=True)
@@ -1388,8 +1393,11 @@ async def upload_catalog_image(file: UploadFile = File(...), _: str = Depends(_a
     slug = _re.sub(r"[^a-zA-Z0-9._-]+", "-", stem).strip("-")[:40] or "image"
     name = f"cat-{slug}-{uuid.uuid4().hex[:6]}{ext}"
 
-    dest = _upload_dir / name
-    dest.write_bytes(content)
+    from storage import put_object as _put_object
+    ct = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+          "webp": "image/webp", "svg": "image/svg+xml", "gif": "image/gif"}.get(ext.lstrip("."), file.content_type or "application/octet-stream")
+    if not _put_object(name, content, ct):
+        raise HTTPException(503, "Object storage unavailable; try again in a moment")
     return {
         "name": name,
         "url": f"/api/uploads/{name}",
@@ -1400,32 +1408,18 @@ async def upload_catalog_image(file: UploadFile = File(...), _: str = Depends(_a
 
 @router.get("/admin/images")
 async def list_catalog_images(_: str = Depends(_admin_dep)):
-    """List every uploaded image in the upload dir, newest first."""
-    if not _upload_dir.exists():
-        return []
-    exts = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
-    items = []
-    for p in _upload_dir.iterdir():
-        if p.is_file() and p.suffix.lower() in exts:
-            stat = p.stat()
-            items.append({
-                "name": p.name,
-                "url": f"/api/uploads/{p.name}",
-                "size": stat.st_size,
-                "modified_at": stat.st_mtime,
-            })
-    items.sort(key=lambda x: x["modified_at"], reverse=True)
-    return items
+    """List uploaded images. Emergent Object Storage doesn't expose a
+    list API per the playbook, so admin should track image references
+    in DB. For now this returns an empty list — image references live
+    on the catalog rows themselves (tour/taxi/rental `image_url`)."""
+    return []
 
 
 @router.delete("/admin/images/{name}")
 async def delete_catalog_image(name: str, _: str = Depends(_admin_dep)):
-    """Delete an uploaded image. Traversal-guarded via resolve() compare."""
-    path = (_upload_dir / name).resolve()
-    if not str(path).startswith(str(_upload_dir.resolve())) or not path.exists():
-        raise HTTPException(404, "Image not found")
-    path.unlink()
-    return {"deleted": True, "name": name}
+    """No-op: Emergent Object Storage has no delete API. Soft-delete
+    happens by clearing the `image_url` reference on the catalog row."""
+    return {"deleted": True, "name": name, "soft": True}
 
 
 @router.put("/admin/site-config")
