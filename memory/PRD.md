@@ -15,7 +15,7 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Referral system with 10% discount + admin leaderboard
 
 ## Personas
-- **Owner** — reviews bookings, deliverability, and weekly performance from `/admin`.
+- **Owner** — reviews bookings, deliverability, and weekly performance from `/admin`; gets SMS + email pings for every meaningful site event.
 - **Guest** — books taxi/tour/rental, receives SMS+email lifecycle nudges, tips post-trip.
 - **Driver** — reads day-of manifest, scans QR at pickup.
 
@@ -23,21 +23,36 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
-### Feb 2026 — Storage-backed image catalog + delivery detail + weekly report
-- **Storage-backed Image List (P0)**: New Mongo `uploaded_images` collection mirrors every upload from `/api/admin/images`, `/api/admin/upload-logo`, and `/api/admin/drivers/{slug}/upload-headshot`. `/api/admin/images` GET now returns the real library (was empty because Emergent Object Storage lacks a list API). Delete removes DB rows so images disappear from the picker.
-- **Post-Trip Tip Bump SMS live test**: Seeded booking `TIPBUMP-TEST`, triggered `/api/cron/send-tip-bump-sms` — Twilio delivered SMS to +12424322587. ✅ Verified end-to-end.
-- **Delivery Report Card**: New collapsible "Details" panel inside every booking row's NotifyCell (`AdminDashboard.jsx`) — exposes provider (Twilio / SendGrid / SMTP) and full error text inline instead of tooltip-only. Also falls back to `acknowledgment_status` when the guest hasn't paid yet so pre-payment email failures surface.
-- **Weekly Sales & Transaction Report**: 
-  - New endpoint `GET /api/admin/analytics/weekly-report?days=7|14|30` with totals, delta vs prev period, daily trend, top services, payment-method split, deliverability.
-  - New cron `POST /api/cron/send-weekly-report` (bearer-auth) — Monday 9am UTC via `.emergent/crons.yml`.
-  - `POST /api/admin/analytics/weekly-report/send-now` — admin-triggered email test.
-  - Frontend `WeeklyReportCard.jsx` on the dashboard — sparkline, top services table, payment methods breakdown, delta chips, "Email me now" button.
+### Feb 2026 — Deliverability alerts + weekly report preview + full owner activity SMS
+- **Owner Activity SMS (Feb 2026)** — Owner cellphone at `+12424322587` now pings on every meaningful site event:
+  - New customer signup (auth.py register hook)
+  - Referral conversion (server.py `_apply_referral_conversion_if_paid`)
+  - Group inquiry (server.py `/group-inquiries`)
+  - New guest photo submission (`routes/gallery.py`)
+  - Contact form (already wired)
+  - Tip top-up submitted (already wired)
+  - New booking + payment received (already wired)
+  All routed through `notifications.notify_owner_activity(kind, sms_body, ...)` — fire-and-forget, never blocks user response.
+- **Weekly Report Preview** — `GET /api/admin/analytics/weekly-report/preview` returns the exact HTML that ships in the Monday email. Frontend "Preview email" button on `WeeklyReportCard` fetches with admin bearer and opens in a new tab via Blob URL.
+- **Delivery Alert Thresholds** — Owner alert when SMS or email failure rate exceeds threshold (default 5%) in rolling 24h.
+  - New endpoint `GET /api/admin/analytics/delivery-health?hours=24`
+  - New endpoint `PUT /api/admin/analytics/delivery-health/threshold` (editable %)
+  - New cron `POST /api/cron/check-delivery-alerts` — hourly, throttled to 1 alert per 6h per breach
+  - Frontend "Armed / Over threshold" chip + inline threshold editor + "Test alert" button on WeeklyReportCard
+- **Storage-backed Image List** — Mongo `uploaded_images` collection powers `/api/admin/images`.
+- **Tip Bump SMS live-verified** — Twilio delivered to +12424322587.
+
+### Cron schedule (`.emergent/crons.yml`)
+- `sync-google-reviews` — hourly
+- `send-tip-bump-sms` — every 5 min
+- `send-weekly-report` — Monday 9am UTC
+- `check-delivery-alerts` — hourly at :15
 
 ### Previous work carried over
 - Reagan Itinerary Builder (14 stops, pick 7 for $235)
 - Refer-a-Friend system with 10% discount + admin leaderboard
-- Twilio SMS + SMTP email pipeline (notify_owner_booking_created, notify_booking_confirmed, tip bump, return-leg nudge, rental return, photo share)
-- Google Reviews auto-sync (4+ stars, hourly) with Claude-drafted reply suggestions
+- Twilio SMS + SMTP email pipeline (booking, tip bump, return-leg, rental return, photo share)
+- Google Reviews auto-sync (4+ stars, hourly) with Claude-drafted replies
 - Emergent Object Storage migration for all uploads
 
 ---
@@ -45,16 +60,17 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 ## ROADMAP
 
 ### P0
-- **User SMS verification** — do a live booking to confirm SMS lands on the guest's phone in production (owner already confirmed today with TIPBUMP-TEST run).
-- **Apple Login** — BLOCKED, needs user's Apple Developer account. Use `integration_playbook_expert_v2` once unblocked.
+- Confirm live SMS pipeline on production URL (Twilio verified; user should test one live signup).
+- **Apple Login** — BLOCKED, needs user's Apple Developer account.
 
 ### P1
-- Refresh other hero slides (Atlantis, Rose Island, Junkanoo) with proprietary photos when owner delivers them.
-- Admin filter on booking table: "failed deliverability last 24h" to isolate SMS/email errors.
+- Refresh hero slides (Atlantis, Rose Island, Junkanoo) with proprietary photos.
+- SMS quiet-hours: suppress owner activity SMS between 10pm-7am Nassau time and batch into a morning digest (deferred — user opted for firehose).
+- Admin filter on booking table: "failed deliverability last 24h".
 
 ### P2
-- Referral card locator timeout in test suite (unauthenticated `/mybookings` state).
-- Server.py refactor — split remaining route logic into `/app/backend/routes/`.
+- Referral card locator timeout in test suite.
+- server.py refactor — continue splitting logic into `/app/backend/routes/`.
 
 ---
 
@@ -62,4 +78,3 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Admin login: `roxfam2509@gmail.com` / `admin123`
 - Owner SMS: +12424322587
 - Cron secret: `WEBHOOK_CRON_SECRET`
-- Test booking: `TIPBUMP-TEST` (completed, verified Twilio delivery)

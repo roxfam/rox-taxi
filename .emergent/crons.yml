@@ -19,3 +19,10 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/send-weekly-report"
     method: POST
     enabled: true
+
+  - name: check-delivery-alerts
+    description: "Hourly deliverability watchdog — alerts the owner when SMS or email failure rate exceeds the threshold in the rolling 24h window. Alerts throttled to at most one every 6 hours."
+    cron: "15 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/check-delivery-alerts"
+    method: POST
+    enabled: true

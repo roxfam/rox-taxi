@@ -592,6 +592,20 @@ async def _apply_referral_conversion_if_paid(booking_id: str) -> Optional[dict]:
             {"$set": {"credit_awarded": credit_awarded, "unlock_number": conv_count // REFERRAL_REWARD_EVERY}},
         )
     await db.bookings.update_one({"id": booking_id}, {"$set": {"referral_applied": True}})
+    # Owner activity SMS — every unlocked referral conversion, including
+    # trusted-tier 2x credit awards. Fire-and-forget so a Twilio miss
+    # never rolls back the credit-award transaction.
+    try:
+        from notifications import notify_owner_activity
+        referrer_doc = await db.users.find_one({"user_id": referrer_id}) or {}
+        referrer_name = (referrer_doc.get("name") or referrer_doc.get("email") or "someone").split("@")[0]
+        credit_line = f" · +${credit_awarded:.2f} credit unlocked" if credit_awarded > 0 else " · no credit unlocked this time"
+        notify_owner_activity(
+            "referral_conversion",
+            f"🎁 Rox referral: {referrer_name} → {email} converted (booking {booking_id}, #{conv_count} total){credit_line}",
+        )
+    except Exception:  # noqa: BLE001
+        pass
     return {"referrer_id": referrer_id, "conv_count": conv_count, "credit_awarded": credit_awarded}
 
 
@@ -3001,6 +3015,16 @@ async def create_group_inquiry(req: GroupInquiryCreate):
         if ADMIN_EMAIL:
             send_email(ADMIN_EMAIL, subject, f"<pre>{text}</pre>", text)
         send_sms(req.customer_phone, f"Rox: Got your group inquiry {inquiry['id']} for {req.guest_count} guests on {req.event_date}. We'll reply within 2 hours.")
+        # Owner activity SMS — ping the owner cellphone the moment a group
+        # inquiry lands (email above may sit unread; SMS is the wake-up ping).
+        try:
+            from notifications import notify_owner_activity
+            notify_owner_activity(
+                "group_inquiry",
+                f"🎉 Rox group inquiry {inquiry['id']}: {req.event_type} · {req.guest_count} pax · {req.event_date} · {req.customer_name} ({req.customer_phone})",
+            )
+        except Exception:  # noqa: BLE001
+            pass
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("group notify err: %s", e)
 

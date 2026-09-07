@@ -202,6 +202,31 @@ def _booking_details_for_owner(booking: dict) -> str:
     return "\n".join(lines)
 
 
+def notify_owner_activity(kind: str, sms_body: str, email_subject: Optional[str] = None,
+                          email_html: Optional[str] = None) -> dict:
+    """Fire-and-forget owner SMS + optional email for lightweight site
+    activity events (signups, gallery submissions, group inquiries,
+    referral conversions, etc.). Kept small and dependency-free so any
+    endpoint can drop it in without pulling in the full booking-notify
+    scaffolding. Returns a delivery report.
+
+    Never raises — callers wrap in their own try/except and never let a
+    notification failure block the user response.
+    """
+    owner_sms = (get_secret("ADMIN_SMS_NUMBER") or get_secret("WHATSAPP_NUMBER") or "").strip()
+    owner_email = (get_secret("ADMIN_EMAIL") or "").strip()
+    report = {"kind": kind,
+              "sms": {"sent": False, "provider": "none", "error": None},
+              "email": {"sent": False, "provider": "none", "error": None}}
+    if owner_sms:
+        report["sms"].update(send_sms(owner_sms, sms_body[:600]))
+    else:
+        report["sms"]["error"] = "ADMIN_SMS_NUMBER not set"
+    if owner_email and email_subject and email_html:
+        report["email"].update(send_email(owner_email, email_subject, email_html, sms_body, category="admin"))
+    return report
+
+
 def notify_owner_booking_created(booking: dict) -> dict:
     """Alert the business owner the moment a booking hits the DB.
 

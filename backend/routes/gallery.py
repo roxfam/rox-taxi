@@ -135,6 +135,19 @@ async def submit_gallery_photo(
         )
     except Exception:  # noqa: BLE001
         pass
+    # Owner activity SMS — fires on every guest photo submission so the
+    # owner can approve it into the "Recent group tours" strip fast.
+    try:
+        from notifications import notify_owner_activity
+        cap = (doc.get("caption") or "").strip()[:80]
+        notify_owner_activity(
+            "gallery_submission",
+            f"📸 Rox new guest photo from {doc['submitter_name']} ({doc.get('submitter_email','no email')}). "
+            + (f'"{cap}" · ' if cap else "")
+            + "Review: roxtaxi.com/admin/manage?tab=gallery",
+        )
+    except Exception:  # noqa: BLE001
+        pass
     return {"id": sub_id, "status": "pending", "message": "Thanks — we'll review your photo and post it soon."}
 
 

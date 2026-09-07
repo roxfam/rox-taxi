@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { api, money } from "../../lib/api";
-import { TrendingUp, TrendingDown, Send, RefreshCw, Mail } from "lucide-react";
+import { api, money, BACKEND_URL } from "../../lib/api";
+import { TrendingUp, TrendingDown, Send, RefreshCw, Mail, Eye, ShieldAlert } from "lucide-react";
 
 /**
  * WeeklyReportCard — 7-day sales & transactions rollup for the admin
@@ -12,13 +12,21 @@ export default function WeeklyReportCard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [days, setDays] = useState(7);
+  const [health, setHealth] = useState(null);
+  const [editingThreshold, setEditingThreshold] = useState(false);
+  const [thresholdDraft, setThresholdDraft] = useState("");
 
   const load = async (windowDays = days) => {
     setLoading(true);
     try {
-      const { data } = await api.get(`/admin/analytics/weekly-report?days=${windowDays}`);
-      setData(data);
+      const [rep, h] = await Promise.all([
+        api.get(`/admin/analytics/weekly-report?days=${windowDays}`),
+        api.get(`/admin/analytics/delivery-health?hours=24`).catch(() => ({ data: null })),
+      ]);
+      setData(rep.data);
+      setHealth(h.data);
     } catch {
       // silent — card just hides on error
     } finally {
@@ -37,6 +45,52 @@ export default function WeeklyReportCard() {
       toast.error(e?.response?.data?.detail || "Send failed");
     } finally {
       setSending(false);
+    }
+  };
+
+  const previewEmail = async () => {
+    setPreviewing(true);
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(`${BACKEND_URL}/api/admin/analytics/weekly-report/preview?days=${days}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const html = await res.text();
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      // Revoke after a beat so Safari/Firefox finish loading the tab.
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      toast.error(e?.message || "Preview failed");
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const saveThreshold = async () => {
+    const val = parseFloat(thresholdDraft);
+    if (Number.isNaN(val) || val < 0 || val > 100) {
+      toast.error("Threshold must be between 0 and 100");
+      return;
+    }
+    try {
+      await api.put("/admin/analytics/delivery-health/threshold", { threshold_pct: val });
+      toast.success(`Alert threshold set to ${val}%`);
+      setEditingThreshold(false);
+      load(days);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Save failed");
+    }
+  };
+
+  const triggerAlertCheck = async () => {
+    try {
+      await api.post("/admin/analytics/delivery-health/check-now");
+      toast.info("Alert scan triggered — check your inbox in a moment if a channel is breached.");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Trigger failed");
     }
   };
 
@@ -93,6 +147,15 @@ export default function WeeklyReportCard() {
             data-testid="weekly-report-refresh"
           >
             <RefreshCw className="w-3 h-3" /> Refresh
+          </button>
+          <button
+            onClick={previewEmail}
+            disabled={previewing}
+            className="inline-flex items-center gap-1 rounded-md bg-[#F1F5F9] text-[#0B3B5C] text-xs font-semibold px-3 py-1.5 hover:bg-[#E2E8F0] disabled:opacity-60"
+            data-testid="weekly-report-preview"
+            title="Open the exact HTML the owner inbox gets in a new tab"
+          >
+            <Eye className="w-3 h-3" /> {previewing ? "…" : "Preview email"}
           </button>
           <button
             onClick={sendNow}
@@ -189,8 +252,23 @@ export default function WeeklyReportCard() {
 
         {/* Deliverability */}
         <div className="bg-white rounded-lg p-4 border border-[#E2E8F0]" data-testid="weekly-deliverability">
-          <div className="text-[11px] uppercase tracking-[.16em] text-[#64748B] font-bold mb-3 inline-flex items-center gap-1.5">
-            <Mail className="w-3 h-3" /> Notification health
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div className="text-[11px] uppercase tracking-[.16em] text-[#64748B] font-bold inline-flex items-center gap-1.5">
+              <Mail className="w-3 h-3" /> Notification health
+            </div>
+            {health && (
+              <div className="flex items-center gap-1.5">
+                {(health.email_over_threshold || health.sms_over_threshold) ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-[#DC2626]/10 text-[#DC2626] font-bold" data-testid="delivery-alert-armed-red">
+                    <ShieldAlert className="w-3 h-3" /> Over threshold
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-[#059669]/10 text-[#059669] font-bold" data-testid="delivery-alert-armed-green">
+                    <ShieldAlert className="w-3 h-3" /> Armed
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="space-y-1.5 text-[12px]">
             <div className="flex justify-between">
@@ -210,6 +288,61 @@ export default function WeeklyReportCard() {
               <span className={`font-mono font-bold ${deliverability.sms_failed ? "text-[#DC2626]" : "text-[#94a3b8]"}`}>{deliverability.sms_failed}</span>
             </div>
           </div>
+
+          {health && (
+            <div className="mt-3 pt-3 border-t border-[#E2E8F0] text-[11px]" data-testid="delivery-alert-config">
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-[#64748B]">Rolling 24h</span>
+                <span className="font-mono text-[#0B3B5C]">
+                  E {health.email.fail_rate_pct}% · S {health.sms.fail_rate_pct}%
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[#64748B]">Alert threshold</span>
+                  {editingThreshold ? (
+                    <>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={thresholdDraft}
+                        onChange={(e) => setThresholdDraft(e.target.value)}
+                        className="w-14 px-1.5 py-0.5 border border-[#E2E8F0] rounded text-[10px]"
+                        data-testid="delivery-threshold-input"
+                      />
+                      <span>%</span>
+                      <button onClick={saveThreshold} className="text-[10px] font-bold text-[#059669]" data-testid="delivery-threshold-save">Save</button>
+                      <button onClick={() => setEditingThreshold(false)} className="text-[10px] text-[#94a3b8]">Cancel</button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => { setThresholdDraft(String(health.threshold_pct)); setEditingThreshold(true); }}
+                      className="font-bold text-[#0B3B5C] hover:text-[#D4A94A]"
+                      data-testid="delivery-threshold-edit"
+                      title="Edit failure-rate threshold"
+                    >
+                      {health.threshold_pct}%
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={triggerAlertCheck}
+                  className="text-[10px] font-semibold text-[#0B3B5C] hover:text-[#D4A94A]"
+                  data-testid="delivery-alert-check-now"
+                  title="Run the alert scan right now"
+                >
+                  Test alert →
+                </button>
+              </div>
+              {health.last_alert_at && (
+                <div className="text-[9px] text-[#94a3b8] mt-1" data-testid="delivery-alert-last">
+                  Last owner alert: {new Date(health.last_alert_at).toLocaleString()}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

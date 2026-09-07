@@ -1541,6 +1541,196 @@ async def admin_weekly_report_send_now(_: str = Depends(_admin_dep)):
     return {"accepted": True, "kind": "weekly_report_manual"}
 
 
+@router.get("/admin/analytics/weekly-report/preview")
+async def admin_weekly_report_preview(days: int = 7, _: str = Depends(_admin_dep)):
+    """Return the exact HTML the Monday-morning email uses, so the owner
+    can eyeball the layout before it ships. Rendered inline as
+    text/html — the frontend opens it in a new tab via a Blob URL."""
+    from fastapi.responses import HTMLResponse
+    report = await _compute_weekly_report(max(1, min(days, 90)))
+    html = _render_weekly_report_html(report)
+    return HTMLResponse(content=html)
+
+
+# ─── Deliverability failure alerts ───────────────────────────────────────
+async def _compute_deliverability_health(hours: int = 24) -> dict:
+    """Rolling failure-rate snapshot used by both the alert cron and the
+    admin dashboard badge. Returns per-channel counts and pct so callers
+    can render + threshold in one place."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max(1, hours))).isoformat()
+    docs = await _db.bookings.find({
+        "created_at": {"$gte": cutoff},
+        "notification_status": {"$exists": True},
+    }).to_list(2000)
+
+    def _rate(sent, failed):
+        total = sent + failed
+        if total == 0:
+            return 0.0
+        return round((failed / total) * 100, 2)
+
+    email_sent = sum(1 for d in docs if (d.get("notification_status") or {}).get("email", {}).get("sent"))
+    email_fail = sum(1 for d in docs if (d.get("notification_status") or {}).get("email", {}).get("enabled") and not (d.get("notification_status") or {}).get("email", {}).get("sent"))
+    sms_sent = sum(1 for d in docs if (d.get("notification_status") or {}).get("sms", {}).get("sent"))
+    sms_fail = sum(1 for d in docs if (d.get("notification_status") or {}).get("sms", {}).get("enabled") and not (d.get("notification_status") or {}).get("sms", {}).get("sent"))
+
+    return {
+        "window_hours": hours,
+        "email": {"sent": email_sent, "failed": email_fail, "fail_rate_pct": _rate(email_sent, email_fail)},
+        "sms":   {"sent": sms_sent,   "failed": sms_fail,   "fail_rate_pct": _rate(sms_sent, sms_fail)},
+    }
+
+
+@router.get("/admin/analytics/delivery-health")
+async def admin_delivery_health(hours: int = 24, _: str = Depends(_admin_dep)):
+    """Live deliverability failure-rate snapshot for the alert card."""
+    snap = await _compute_deliverability_health(hours)
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    threshold_pct = float(cfg.get("delivery_alert_threshold_pct") or 5)
+    last_fired = cfg.get("delivery_alert_last_fired_at")
+    return {
+        **snap,
+        "threshold_pct": threshold_pct,
+        "email_over_threshold": snap["email"]["fail_rate_pct"] > threshold_pct,
+        "sms_over_threshold": snap["sms"]["fail_rate_pct"] > threshold_pct,
+        "last_alert_at": last_fired,
+    }
+
+
+class DeliveryAlertConfig(BaseModel):
+    threshold_pct: float = Field(..., ge=0, le=100)
+
+
+@router.put("/admin/analytics/delivery-health/threshold")
+async def admin_delivery_health_set_threshold(req: DeliveryAlertConfig, _: str = Depends(_admin_dep)):
+    """Owner-editable failure-rate threshold (default 5%)."""
+    await _db.site_config.update_one(
+        {"_id": "main"},
+        {"$set": {"delivery_alert_threshold_pct": float(req.threshold_pct), "updated_at": _now_iso()}},
+        upsert=True,
+    )
+    return {"threshold_pct": float(req.threshold_pct)}
+
+
+async def _check_delivery_alerts_bg() -> None:
+    """Rolling 24-hour deliverability check. When either channel's failure
+    rate exceeds the configured threshold, sends the owner an SMS+email
+    alert — but at most once per 6 hours so a bad Twilio region doesn't
+    spam the inbox every cron tick."""
+    try:
+        from notifications import send_sms as _send_sms, send_email as _send_email
+        from secrets_store import get_secret as _get_secret
+
+        cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+        threshold_pct = float(cfg.get("delivery_alert_threshold_pct") or 5)
+        snap = await _compute_deliverability_health(24)
+        breached = []
+        if snap["email"]["fail_rate_pct"] > threshold_pct and (snap["email"]["failed"] + snap["email"]["sent"]) >= 5:
+            breached.append(("Email", snap["email"]))
+        if snap["sms"]["fail_rate_pct"] > threshold_pct and (snap["sms"]["failed"] + snap["sms"]["sent"]) >= 5:
+            breached.append(("SMS", snap["sms"]))
+        if not breached:
+            await _db.cron_runs.update_one(
+                {"kind": "delivery_alerts"},
+                {"$set": {"last_run_at": _now_iso(), "last_status": "ok",
+                          "last_snapshot": snap, "last_threshold_pct": threshold_pct}},
+                upsert=True,
+            )
+            return
+
+        # Cooldown — 6h so we don't spam the owner every cron tick.
+        last_fired = cfg.get("delivery_alert_last_fired_at")
+        if last_fired:
+            try:
+                last_dt = datetime.fromisoformat(last_fired.replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - last_dt) < timedelta(hours=6):
+                    await _db.cron_runs.update_one(
+                        {"kind": "delivery_alerts"},
+                        {"$set": {"last_run_at": _now_iso(),
+                                  "last_status": "cooling_down",
+                                  "last_snapshot": snap,
+                                  "last_threshold_pct": threshold_pct}},
+                        upsert=True,
+                    )
+                    return
+            except Exception:  # noqa: BLE001
+                pass
+
+        owner_sms = (_get_secret("ADMIN_SMS_NUMBER") or _get_secret("WHATSAPP_NUMBER") or "").strip()
+        owner_email = (_get_secret("ADMIN_EMAIL") or "").strip()
+
+        parts = "; ".join(
+            f"{ch} {v['fail_rate_pct']}% ({v['failed']}/{v['failed'] + v['sent']})"
+            for ch, v in breached
+        )
+        sms_body = (
+            f"⚠️ Rox deliverability alert — last 24h {parts}. "
+            f"Threshold: {threshold_pct}%. Check Site Config → Tokens."
+        )
+        html = f"""
+        <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#DC2626;font-weight:700;">Rox Deliverability Alert</div>
+          <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:24px;">Notification failure rate spike</h1>
+          <p style="color:#64748B;font-size:14px;margin-top:12px;">One or more channels crossed the <strong>{threshold_pct}%</strong> failure threshold in the last 24 hours:</p>
+          <ul style="color:#0B3B5C;font-size:14px;line-height:1.7;">
+            {''.join(f'<li><strong>{ch}</strong> — {v["fail_rate_pct"]}% failed ({v["failed"]}/{v["failed"]+v["sent"]} attempts)</li>' for ch, v in breached)}
+          </ul>
+          <p style="color:#64748B;font-size:13px;">Common causes: Twilio region not enabled, expired SendGrid key, SMTP domain mismatch. Open Admin → Site Config → Tokens to check credentials.</p>
+          <a href="https://roxtaxi.com/admin" style="display:inline-block;background:#DC2626;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;margin-top:12px;font-size:13px;">Open Admin →</a>
+          <p style="color:#94a3b8;font-size:11px;margin-top:20px;">Alerts are throttled to at most one every 6 hours per breach.</p>
+        </div>
+        """
+        alert_report = {"sms": None, "email": None}
+        if owner_sms:
+            alert_report["sms"] = _send_sms(owner_sms, sms_body)
+        if owner_email:
+            alert_report["email"] = _send_email(owner_email, "⚠️ Rox deliverability alert — failures over threshold", html, sms_body, category="admin")
+
+        now = _now_iso()
+        await _db.site_config.update_one(
+            {"_id": "main"},
+            {"$set": {"delivery_alert_last_fired_at": now}},
+            upsert=True,
+        )
+        await _db.cron_runs.update_one(
+            {"kind": "delivery_alerts"},
+            {"$set": {"last_run_at": now, "last_status": "fired",
+                      "last_snapshot": snap, "last_threshold_pct": threshold_pct,
+                      "last_alert_report": alert_report}},
+            upsert=True,
+        )
+    except Exception as ex:  # noqa: BLE001
+        logging.warning("delivery alert err: %s", ex)
+
+
+@router.post("/cron/check-delivery-alerts")
+async def cron_check_delivery_alerts(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    x_webhook_id: Optional[str] = Header(None),
+):
+    """Hourly cron — scans last 24h notification failures and alerts the
+    owner when either channel exceeds the threshold (default 5%)."""
+    import hmac as _hmac
+    secret = (os.environ.get("WEBHOOK_CRON_SECRET") or "").strip()
+    presented = ""
+    if authorization and authorization.startswith("Bearer "):
+        presented = authorization[7:].strip()
+    if not secret or not presented or not _hmac.compare_digest(presented, secret):
+        raise HTTPException(401, "Invalid cron auth")
+    import asyncio
+    asyncio.create_task(_check_delivery_alerts_bg())
+    return {"accepted": True, "kind": "delivery_alerts", "run_id": x_webhook_id}
+
+
+@router.post("/admin/analytics/delivery-health/check-now")
+async def admin_delivery_alerts_check_now(_: str = Depends(_admin_dep)):
+    """Fire the alert scan on-demand so the owner can verify wiring."""
+    import asyncio
+    asyncio.create_task(_check_delivery_alerts_bg())
+    return {"accepted": True, "kind": "delivery_alerts_manual"}
+
+
 @router.get("/admin/drivers")
 async def admin_list_driver_spotlights(_: str = Depends(_admin_dep)):
     """Return the full driver_spotlights roster from site_config so

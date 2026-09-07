@@ -790,6 +790,20 @@ async def customer_register(req: CustomerRegisterRequest, request: Request, resp
         except Exception:  # noqa: BLE001
             pass
 
+        # Owner activity SMS — every brand-new customer signup. Kept
+        # separate from the fraud-watch first-ever-country alert (which
+        # only fires once per country) so the owner gets a ping on
+        # every organic growth event too.
+        try:
+            from notifications import notify_owner_activity
+            ref_line = " · via referral" if referred_by else ""
+            notify_owner_activity(
+                "customer_signup",
+                f"👤 Rox new signup: {req.name or '(no name)'} <{email}>{ref_line}",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
     user = await _db.users.find_one({"user_id": user_id}, {"_id": 0})
     user.pop("password_hash", None)
     return {"user": user}
