@@ -56,6 +56,24 @@ def set_owner_priority_kinds(kinds) -> None:
     _owner_priority_kinds = cleaned or {"payment"}
 
 
+_high_value_threshold: float = 500.0  # bookings ≥ this bypass quiet-hours
+
+
+def set_high_value_threshold(usd: float) -> None:
+    """Set the USD threshold above which a booking is auto-promoted to
+    priority — big trips wake you up even if `booking` isn't a priority
+    kind. Anything ≤ 0 disables the override entirely."""
+    global _high_value_threshold
+    try:
+        _high_value_threshold = float(usd)
+    except Exception:  # noqa: BLE001
+        _high_value_threshold = 500.0
+
+
+def get_high_value_threshold() -> float:
+    return _high_value_threshold
+
+
 def _is_priority_kind(kind: Optional[str]) -> bool:
     """True when this event kind breaks through quiet-hours for every
     recipient, regardless of their `quiet_hours` preference."""
@@ -278,7 +296,7 @@ def _owner_sms_numbers() -> list:
     return [r["phone"] for r in _owner_sms_recipients_resolved()]
 
 
-def send_owner_sms(body: str, kind: Optional[str] = None) -> dict:
+def send_owner_sms(body: str, kind: Optional[str] = None, force_priority: bool = False) -> dict:
     """Fan out an owner SMS respecting per-recipient subscriptions and
     quiet-hours. Returns an aggregated report:
       • `.sent`       — True if AT LEAST ONE recipient got a live SMS
@@ -293,6 +311,8 @@ def send_owner_sms(body: str, kind: Optional[str] = None) -> dict:
          into quiet-hours are pushed to `owner_sms_queue` for the 5am
          digest drain instead of receiving a live SMS.
       3. Everyone else gets the SMS immediately via Twilio.
+      4. `force_priority=True` short-circuits quiet-hours regardless of
+         `kind` — used by high-value bookings (see `notify_owner_booking_created`).
     """
     recipients = _owner_sms_recipients_resolved()
     if not recipients:
@@ -301,7 +321,7 @@ def send_owner_sms(body: str, kind: Optional[str] = None) -> dict:
                 "recipients": [], "queued": 0}
 
     quiet_now = _in_owner_quiet_hours()
-    priority = _is_priority_kind(kind)
+    priority = force_priority or _is_priority_kind(kind)
     report: list = []
     any_sent = False
     queued_count = 0
@@ -447,7 +467,20 @@ def notify_owner_booking_created(booking: dict) -> dict:
         f"👉 roxtaxi.com/admin/bookings/{booking['id']}"
     )
 
-    report["sms"].update(send_owner_sms(body_text, kind="booking"))
+    # Auto-promote high-value bookings to priority so the owner wakes up
+    # even during quiet-hours. Threshold is admin-editable via
+    # /admin/owner-sms/high-value-threshold and defaults to $500.
+    total = 0.0
+    try:
+        total = float(booking.get("total") or 0)
+    except Exception:  # noqa: BLE001
+        total = 0.0
+    threshold = get_high_value_threshold()
+    force_priority = threshold > 0 and total >= threshold
+    if force_priority:
+        body_text = f"💎 HIGH-VALUE {_fmt_money(total)} — " + body_text
+    report["sms"].update(send_owner_sms(body_text, kind="booking", force_priority=force_priority))
+    report["sms"]["high_value_override"] = force_priority
 
     if owner_email:
         subject = f"🚕 New booking {booking['id']} — {booking.get('customer_name','?')}"
@@ -608,6 +641,9 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
 
     subject = f"Booking {booking['id']} confirmed — Rox Taxi Service & Tours"
     body_text = _booking_summary_text(booking)
+    _base = "https://roxtaxi.com"
+    _pass_url = f"{_base}/booking/{booking['id']}/pass"
+    _qr_img_url = f"{_base}/api/bookings/{booking['id']}/qr.png"
     html = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
       <h1 style="font-family:Georgia,serif;color:#1A365D;margin:0 0 8px;">You're booked!</h1>
@@ -620,7 +656,18 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
         <div style="color:#64748B;font-size:14px;margin-top:4px;">Date: {booking['booking_date']}</div>
         <div style="color:#64748B;font-size:14px;">Total: <span style="color:#FF7F50;font-weight:600;">{_fmt_money(booking.get('total',0))}</span></div>
       </div>
-      <p style="color:#64748B;font-size:13px;margin-top:24px;">Track your booking anytime at <a style="color:#00B4D8;" href="https://roxtaxi.com/track?id={booking['id']}">roxtaxi.com/track</a>.</p>
+
+      <!-- Boarding pass with QR — driver scans this at pickup -->
+      <div style="background:#0B3B5C;color:#fff;border-radius:16px;padding:24px;margin-top:20px;text-align:center;">
+        <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Rox boarding pass</div>
+        <div style="margin:14px auto;background:#fff;border-radius:12px;padding:10px;display:inline-block;">
+          <img src="{_qr_img_url}" width="180" height="180" alt="Pickup QR" style="display:block;" />
+        </div>
+        <p style="color:#F8F5EC;font-size:13px;margin:8px 0 4px;">Show this to your Rox driver at pickup — they scan &amp; you're on your way.</p>
+        <a href="{_pass_url}" style="display:inline-block;background:#D4A94A;color:#0B3B5C;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;font-size:13px;margin-top:12px;">Save to phone →</a>
+      </div>
+
+      <p style="color:#64748B;font-size:13px;margin-top:24px;">Track your booking anytime at <a style="color:#00B4D8;" href="{_base}/track?id={booking['id']}">roxtaxi.com/track</a>.</p>
     </div>
     """
 
@@ -631,7 +678,7 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
         report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
 
     if sms_enabled and booking.get("customer_phone"):
-        sms = f"Rox Taxi: Booking {booking['id']} confirmed for {booking['item_name']} on {booking['booking_date']}. Total {_fmt_money(booking.get('total',0))}. Track: roxtaxi.com/track?id={booking['id']}"
+        sms = f"Rox Taxi: Booking {booking['id']} confirmed for {booking['item_name']} on {booking['booking_date']}. Total {_fmt_money(booking.get('total',0))}. Pickup pass (driver scans this): roxtaxi.com/booking/{booking['id']}/pass"
         result = send_sms(booking["customer_phone"], sms)
         report["sms"].update(result)
     else:

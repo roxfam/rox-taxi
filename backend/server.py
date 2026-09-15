@@ -1416,12 +1416,17 @@ async def seed_db():
 
         async def _owner_recipients_refresher():
             import asyncio as _aio
-            from notifications import set_owner_priority_kinds as _set_priority_kinds
+            from notifications import (
+                set_owner_priority_kinds as _set_priority_kinds,
+                set_high_value_threshold as _set_hv,
+            )
             while True:
                 try:
                     cfg = await db.site_config.find_one({"_id": "main"}) or {}
                     _set_owner_recipients_cache(cfg.get("owner_sms_recipients") or [])
                     _set_priority_kinds(cfg.get("owner_sms_priority_kinds") or ["payment"])
+                    hv = cfg.get("owner_sms_high_value_threshold")
+                    _set_hv(500.0 if hv is None else float(hv))
                 except Exception:  # noqa: BLE001
                     pass
                 await _aio.sleep(60)
@@ -2959,6 +2964,31 @@ async def get_booking(booking_id: str):
     if not doc:
         raise HTTPException(404, "Booking not found")
     return clean(doc)
+
+
+@api_router.get("/bookings/{booking_id}/public-summary")
+async def get_booking_public_summary(booking_id: str):
+    """Non-authenticated read used by the /booking/:id/pass mobile
+    boarding-pass page. Returns only the fields the guest needs to
+    show a driver at pickup — never financials or admin metadata."""
+    b = await db.bookings.find_one({"id": booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    return {
+        "id": b["id"],
+        "status": b.get("status", "pending"),
+        "item_name": b.get("item_name", ""),
+        "service_type": b.get("service_type", ""),
+        "booking_date": b.get("booking_date", ""),
+        "booking_time": b.get("booking_time", ""),
+        "pickup_location": b.get("pickup_location", ""),
+        "dropoff_location": b.get("dropoff_location", ""),
+        "passengers": b.get("passengers", 1),
+        "round_trip": b.get("round_trip", False),
+        "return_time": b.get("return_time"),
+        "total": float(b.get("total") or 0),
+        "customer_name": b.get("customer_name", ""),
+    }
 
 
 @api_router.post("/contact")

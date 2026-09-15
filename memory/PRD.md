@@ -23,6 +23,19 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — High-value booking auto-priority + guest QR boarding pass
+- **High-Value Auto-Priority**: Bookings ≥ configurable USD threshold (default $500) auto-promote to priority — they break through quiet-hours regardless of the recipient's `booking` subscription. Admin editor at `Admin → Owner SMS → High-value auto-priority`. Endpoint: `PUT /api/admin/owner-sms/high-value-threshold`.
+  - Verified: $95 booking during quiet hours → queued (0 sent); $525 booking → live-sent to both owners (`high_value_override: true`).
+  - `💎 HIGH-VALUE $525` prefix on the owner SMS body so the notification stands out visually.
+  - Setting threshold to 0 disables the override cleanly.
+- **Guest QR Boarding Pass**: New `/booking/:id/pass` mobile-optimised page with the pickup QR the driver scans at pickup.
+  - Fetches non-financial summary from new `GET /api/bookings/:id/public-summary`.
+  - Renders as a shareable "boarding pass" card (Rox gold + navy).
+  - "Save pass to Photos" (via html2canvas) + native Web Share fallback.
+  - iOS/Android add-to-home-screen instructions inline.
+  - QR link + `img` embed added to `notify_booking_confirmed` HTML email and confirmation SMS so guests see it the moment they book.
+  - Apple/Google Wallet `.pkpass` generation deferred (needs Apple Developer + Google Wallet API creds).
+
 ### Feb 2026 — Priority override for revenue events
 - **`payment` events always break through quiet-hours** — regardless of any recipient's `quiet_hours` preference. Configurable via `Admin → Owner SMS → Priority override` strip.
 - Backend: `_is_priority_kind(kind)` short-circuits the quiet-hours queue. Priority list stored in `site_config.owner_sms_priority_kinds` (defaults to `["payment"]`; empty list auto-resets to `["payment"]` so revenue alerts can't be silenced by accident).

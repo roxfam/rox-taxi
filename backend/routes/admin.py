@@ -1765,13 +1765,40 @@ async def admin_get_owner_sms_recipients(_: str = Depends(_admin_dep)):
                 continue
             recipients.append({"phone": phone, "label": phone, "subscriptions": ["*"], "quiet_hours": True})
     priority = cfg.get("owner_sms_priority_kinds") or ["payment"]
+    high_value = cfg.get("owner_sms_high_value_threshold")
+    if high_value is None:
+        high_value = 500.0
     return {
         "recipients": recipients,
         "kinds": OWNER_SMS_EVENT_KINDS,
         "priority_kinds": priority,
+        "high_value_threshold_usd": float(high_value),
         "quiet_hours_window": {"start_local": "22:00", "end_local": "04:00", "tz": "America/Nassau"},
         "digest_delivery_local": "05:00",
     }
+
+
+class OwnerSmsHighValueUpdate(BaseModel):
+    threshold_usd: float = Field(..., ge=0, le=100000)
+
+
+@router.put("/admin/owner-sms/high-value-threshold")
+async def admin_put_owner_sms_high_value_threshold(req: OwnerSmsHighValueUpdate, _: str = Depends(_admin_dep)):
+    """USD threshold above which a booking auto-promotes to priority
+    (bypasses quiet-hours regardless of per-recipient preference).
+    Set to 0 to disable."""
+    val = float(req.threshold_usd)
+    await _db.site_config.update_one(
+        {"_id": "main"},
+        {"$set": {"owner_sms_high_value_threshold": val, "updated_at": _now_iso()}},
+        upsert=True,
+    )
+    try:
+        from notifications import set_high_value_threshold
+        set_high_value_threshold(val)
+    except Exception:  # noqa: BLE001
+        pass
+    return {"threshold_usd": val}
 
 
 class OwnerSmsPriorityUpdate(BaseModel):

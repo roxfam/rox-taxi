@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "../../lib/api";
-import { PhoneCall, Plus, Trash2, Save, Moon, Zap, ListChecks, AlertTriangle } from "lucide-react";
+import { PhoneCall, Plus, Trash2, Save, Moon, Zap, ListChecks, AlertTriangle, DollarSign } from "lucide-react";
 
 /**
  * OwnerSmsPanel — /admin/manage?tab=owner_sms
@@ -148,6 +148,9 @@ export default function OwnerSmsPanel() {
       </div>
 
       <div className="p-5 space-y-4">
+        {/* ── High-Value auto-priority strip ── */}
+        <HighValueThreshold />
+
         {/* ── Priority override strip — pinned at top so it's the first thing an admin sees ── */}
         <div className="rounded-lg border-2 border-[#DC2626]/30 bg-gradient-to-br from-[#FEF3C7] to-[#FFFFFF] p-4" data-testid="owner-sms-priority-card">
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-[.18em] text-[#DC2626] font-bold">
@@ -298,6 +301,77 @@ export default function OwnerSmsPanel() {
         >
           <Save className="w-3 h-3" /> {saving ? "Saving…" : "Save routing"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── High-value auto-priority editor ─────────────────────────────────────
+function HighValueThreshold() {
+  const [val, setVal] = useState(500);
+  const [draft, setDraft] = useState("500");
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get("/admin/owner-sms/recipients");
+        const t = Number(data.high_value_threshold_usd ?? 500);
+        setVal(t);
+        setDraft(String(t));
+      } catch { /* silent */ }
+      setLoaded(true);
+    })();
+  }, []);
+  const save = async () => {
+    const v = parseFloat(draft);
+    if (Number.isNaN(v) || v < 0) { toast.error("Enter a positive dollar amount (or 0 to disable)"); return; }
+    setSaving(true);
+    try {
+      const { data } = await api.put("/admin/owner-sms/high-value-threshold", { threshold_usd: v });
+      setVal(data.threshold_usd);
+      toast.success(v === 0 ? "High-value override disabled" : `Bookings ≥ $${v} will always wake you up 💎`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+  if (!loaded) return null;
+  return (
+    <div className="rounded-lg border-2 border-[#0B3B5C]/20 bg-gradient-to-br from-[#0B3B5C] to-[#082941] text-white p-4" data-testid="high-value-threshold-card">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[.18em] text-[#D4A94A] font-bold">
+        <DollarSign className="w-3 h-3" /> High-value auto-priority
+      </div>
+      <p className="mt-1 text-[13px] text-white/85">
+        Bookings <strong>at or above this amount</strong> auto-promote to priority — they break through quiet-hours even without <code>booking</code> in the priority list. Because big trips shouldn't sleep.
+      </p>
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
+        <div className="inline-flex items-center gap-1 bg-white rounded-md px-2 py-1.5 text-[#0B3B5C]">
+          <span className="font-bold">$</span>
+          <input
+            type="number"
+            min="0"
+            step="25"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="w-24 outline-none font-mono font-bold"
+            data-testid="high-value-threshold-input"
+          />
+        </div>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="inline-flex items-center gap-1 rounded-md bg-[#D4A94A] text-[#0B3B5C] text-[11px] font-bold px-3 py-2 hover:bg-[#B8912F] disabled:opacity-60"
+          data-testid="high-value-threshold-save"
+        >
+          <Save className="w-3 h-3" /> {saving ? "Saving…" : "Save"}
+        </button>
+        {val > 0 ? (
+          <span className="text-[11px] text-white/70">Currently active — bookings ≥ <strong className="text-[#D4A94A]">${val}</strong> will wake you.</span>
+        ) : (
+          <span className="text-[11px] text-white/70">Disabled — every booking respects your normal quiet-hours preference.</span>
+        )}
       </div>
     </div>
   );
