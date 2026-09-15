@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "../../lib/api";
-import { PhoneCall, Plus, Trash2, Save, Moon, Zap, ListChecks } from "lucide-react";
+import { PhoneCall, Plus, Trash2, Save, Moon, Zap, ListChecks, AlertTriangle } from "lucide-react";
 
 /**
  * OwnerSmsPanel — /admin/manage?tab=owner_sms
@@ -16,8 +16,10 @@ import { PhoneCall, Plus, Trash2, Save, Moon, Zap, ListChecks } from "lucide-rea
 export default function OwnerSmsPanel() {
   const [rows, setRows] = useState([]);
   const [kinds, setKinds] = useState([]);
+  const [priority, setPriority] = useState([]);
   const [meta, setMeta] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [savingPriority, setSavingPriority] = useState(false);
   const [flushing, setFlushing] = useState(false);
   const [pending, setPending] = useState(null);
 
@@ -26,6 +28,7 @@ export default function OwnerSmsPanel() {
       const { data } = await api.get("/admin/owner-sms/recipients");
       setRows(data.recipients || []);
       setKinds(data.kinds || []);
+      setPriority(data.priority_kinds || ["payment"]);
       setMeta({
         window: data.quiet_hours_window,
         digest_at: data.digest_delivery_local,
@@ -41,6 +44,23 @@ export default function OwnerSmsPanel() {
     }
   };
   useEffect(() => { load(); }, []);
+
+  const togglePriority = (kind) => {
+    setPriority((p) => p.includes(kind) ? p.filter((k) => k !== kind) : [...p, kind]);
+  };
+
+  const savePriority = async () => {
+    setSavingPriority(true);
+    try {
+      const { data } = await api.put("/admin/owner-sms/priority-kinds", { priority_kinds: priority });
+      setPriority(data.priority_kinds || ["payment"]);
+      toast.success("Priority override saved — payment always wakes you up 💰");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Save failed");
+    } finally {
+      setSavingPriority(false);
+    }
+  };
 
   const updateRow = (idx, patch) => setRows((r) => r.map((row, i) => i === idx ? { ...row, ...patch } : row));
 
@@ -128,6 +148,43 @@ export default function OwnerSmsPanel() {
       </div>
 
       <div className="p-5 space-y-4">
+        {/* ── Priority override strip — pinned at top so it's the first thing an admin sees ── */}
+        <div className="rounded-lg border-2 border-[#DC2626]/30 bg-gradient-to-br from-[#FEF3C7] to-[#FFFFFF] p-4" data-testid="owner-sms-priority-card">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[.18em] text-[#DC2626] font-bold">
+            <AlertTriangle className="w-3 h-3" /> Priority override
+          </div>
+          <p className="mt-1 text-[13px] text-[#0B3B5C]">
+            These events <strong>always fan out live</strong> — they ignore quiet-hours and per-recipient preferences. Because money can wake you up 💰
+          </p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {kinds.filter((k) => k !== "*").map((k) => {
+              const on = priority.includes(k);
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => togglePriority(k)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${on ? "bg-[#DC2626] text-white border-[#DC2626]" : "bg-white text-[#94a3b8] border-[#E2E8F0] hover:border-[#DC2626]"}`}
+                  data-testid={`owner-sms-priority-${k}`}
+                >
+                  {on ? "🔔 " : ""}{k.replaceAll("_", " ")}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[11px] text-[#64748B]">Cleared list resets to <strong>payment</strong> so revenue alerts can't be silenced by accident.</span>
+            <button
+              onClick={savePriority}
+              disabled={savingPriority}
+              className="inline-flex items-center gap-1 rounded-md bg-[#DC2626] text-white text-[11px] font-bold px-3 py-1.5 hover:bg-[#B91C1C] disabled:opacity-60"
+              data-testid="owner-sms-priority-save"
+            >
+              <Save className="w-3 h-3" /> {savingPriority ? "Saving…" : "Save priority list"}
+            </button>
+          </div>
+        </div>
+
         {rows.length === 0 && (
           <div className="text-center py-8 text-[#64748B] text-sm">
             No recipients yet. Click <strong>Add owner phone</strong> below.

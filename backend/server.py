@@ -1416,10 +1416,12 @@ async def seed_db():
 
         async def _owner_recipients_refresher():
             import asyncio as _aio
+            from notifications import set_owner_priority_kinds as _set_priority_kinds
             while True:
                 try:
                     cfg = await db.site_config.find_one({"_id": "main"}) or {}
                     _set_owner_recipients_cache(cfg.get("owner_sms_recipients") or [])
+                    _set_priority_kinds(cfg.get("owner_sms_priority_kinds") or ["payment"])
                 except Exception:  # noqa: BLE001
                     pass
                 await _aio.sleep(60)

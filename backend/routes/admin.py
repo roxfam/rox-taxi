@@ -1752,9 +1752,9 @@ OWNER_SMS_EVENT_KINDS = [
 
 @router.get("/admin/owner-sms/recipients")
 async def admin_get_owner_sms_recipients(_: str = Depends(_admin_dep)):
-    """Return the per-phone SMS routing table. Falls back to
-    ADMIN_SMS_NUMBER env so a fresh install has sensible defaults on
-    first render."""
+    """Return the per-phone SMS routing table + priority-kinds override
+    list. Falls back to ADMIN_SMS_NUMBER env so a fresh install has
+    sensible defaults on first render."""
     cfg = await _db.site_config.find_one({"_id": "main"}) or {}
     recipients = cfg.get("owner_sms_recipients") or []
     if not recipients:
@@ -1764,12 +1764,46 @@ async def admin_get_owner_sms_recipients(_: str = Depends(_admin_dep)):
             if not phone:
                 continue
             recipients.append({"phone": phone, "label": phone, "subscriptions": ["*"], "quiet_hours": True})
+    priority = cfg.get("owner_sms_priority_kinds") or ["payment"]
     return {
         "recipients": recipients,
         "kinds": OWNER_SMS_EVENT_KINDS,
+        "priority_kinds": priority,
         "quiet_hours_window": {"start_local": "22:00", "end_local": "04:00", "tz": "America/Nassau"},
         "digest_delivery_local": "05:00",
     }
+
+
+class OwnerSmsPriorityUpdate(BaseModel):
+    priority_kinds: List[str]
+
+
+@router.put("/admin/owner-sms/priority-kinds")
+async def admin_put_owner_sms_priority(req: OwnerSmsPriorityUpdate, _: str = Depends(_admin_dep)):
+    """Overwrite the list of event kinds that break through quiet-hours
+    for every recipient. Empty list ⇒ resets to the default `["payment"]`
+    so the owner never accidentally silences payment alerts."""
+    cleaned = []
+    for k in (req.priority_kinds or []):
+        k = str(k).strip()
+        if not k:
+            continue
+        if k != "*" and k not in OWNER_SMS_EVENT_KINDS:
+            raise HTTPException(400, f"Unknown priority kind '{k}'. Valid: {OWNER_SMS_EVENT_KINDS}")
+        cleaned.append(k)
+    if not cleaned:
+        cleaned = ["payment"]
+    await _db.site_config.update_one(
+        {"_id": "main"},
+        {"$set": {"owner_sms_priority_kinds": cleaned, "updated_at": _now_iso()}},
+        upsert=True,
+    )
+    try:
+        from notifications import set_owner_priority_kinds
+        set_owner_priority_kinds(cleaned)
+    except Exception:  # noqa: BLE001
+        pass
+    return {"priority_kinds": cleaned}
 
 
 @router.put("/admin/owner-sms/recipients")

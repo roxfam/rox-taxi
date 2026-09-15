@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 # ── Owner SMS registry + quiet-hours state (populated by server.py) ─────────
 _owner_sms_db = None  # motor db handle for queue writes
 _owner_recipients_cache: list = []  # list of {phone, label, subscriptions, quiet_hours}
+_owner_priority_kinds: set = {"payment"}  # default: payment always breaks quiet-hours
 
 
 def configure_owner_sms(db) -> None:
@@ -41,6 +42,24 @@ def set_owner_recipients_cache(recipients: list) -> None:
     global _owner_recipients_cache
     if isinstance(recipients, list):
         _owner_recipients_cache = recipients
+
+
+def set_owner_priority_kinds(kinds) -> None:
+    """Update which event kinds should ALWAYS break through quiet-hours
+    regardless of per-recipient preference. Falls back to the default
+    `{"payment"}` set when passed an empty iterable."""
+    global _owner_priority_kinds
+    try:
+        cleaned = {str(k).strip() for k in (kinds or []) if str(k).strip()}
+    except Exception:  # noqa: BLE001
+        cleaned = set()
+    _owner_priority_kinds = cleaned or {"payment"}
+
+
+def _is_priority_kind(kind: Optional[str]) -> bool:
+    """True when this event kind breaks through quiet-hours for every
+    recipient, regardless of their `quiet_hours` preference."""
+    return bool(kind and kind in _owner_priority_kinds)
 
 
 def _in_owner_quiet_hours(start: int = 22, end: int = 4) -> bool:
@@ -282,6 +301,7 @@ def send_owner_sms(body: str, kind: Optional[str] = None) -> dict:
                 "recipients": [], "queued": 0}
 
     quiet_now = _in_owner_quiet_hours()
+    priority = _is_priority_kind(kind)
     report: list = []
     any_sent = False
     queued_count = 0
@@ -294,7 +314,7 @@ def send_owner_sms(body: str, kind: Optional[str] = None) -> dict:
                            "sent": False, "queued": False,
                            "skipped": True, "reason": f"not subscribed to '{kind}'"})
             continue
-        if quiet_now and r.get("quiet_hours", True):
+        if quiet_now and r.get("quiet_hours", True) and not priority:
             # Enqueue for the morning digest. Motor 3.x returns a Future
             # for collection methods, so we wrap in a coroutine before
             # scheduling as a task. During quiet hours we DO NOT fall
@@ -343,6 +363,7 @@ def send_owner_sms(body: str, kind: Optional[str] = None) -> dict:
         "recipients": report,
         "queued": queued_count,
         "quiet_hours_active": quiet_now,
+        "priority_override": priority,
     }
 
 
