@@ -1407,6 +1407,26 @@ async def seed_db():
         asyncio.create_task(_license_maintenance_loop())
     except Exception as e:  # noqa: BLE001
         logging.warning("license maintenance loop start warn: %s", e)
+    # ── Owner-SMS routing cache — refreshed every 60s from site_config ──
+    # notifications.send_owner_sms() reads this cache on every call, so
+    # subscription + quiet-hours edits go live within a minute of save.
+    try:
+        from notifications import configure_owner_sms as _configure_owner_sms, set_owner_recipients_cache as _set_owner_recipients_cache
+        _configure_owner_sms(db)
+
+        async def _owner_recipients_refresher():
+            import asyncio as _aio
+            while True:
+                try:
+                    cfg = await db.site_config.find_one({"_id": "main"}) or {}
+                    _set_owner_recipients_cache(cfg.get("owner_sms_recipients") or [])
+                except Exception:  # noqa: BLE001
+                    pass
+                await _aio.sleep(60)
+
+        asyncio.create_task(_owner_recipients_refresher())
+    except Exception as e:  # noqa: BLE001
+        logging.warning("owner-sms cache start warn: %s", e)
     # Ensure customer auth indexes exist
     try:
         await db.users.create_index("email", unique=True)

@@ -1731,6 +1731,226 @@ async def admin_delivery_alerts_check_now(_: str = Depends(_admin_dep)):
     return {"accepted": True, "kind": "delivery_alerts_manual"}
 
 
+# ─── Owner SMS recipients — per-phone subscriptions + quiet-hours ───────
+class OwnerSmsRecipient(BaseModel):
+    phone: str = Field(..., min_length=6, max_length=20)
+    label: Optional[str] = Field(None, max_length=60)
+    subscriptions: List[str] = Field(default_factory=lambda: ["*"])
+    quiet_hours: bool = True
+
+
+class OwnerSmsRecipientsUpdate(BaseModel):
+    recipients: List[OwnerSmsRecipient]
+
+
+OWNER_SMS_EVENT_KINDS = [
+    "booking", "payment", "contact_form", "tip_topup",
+    "group_inquiry", "gallery_submission", "customer_signup",
+    "referral_conversion", "activity",
+]
+
+
+@router.get("/admin/owner-sms/recipients")
+async def admin_get_owner_sms_recipients(_: str = Depends(_admin_dep)):
+    """Return the per-phone SMS routing table. Falls back to
+    ADMIN_SMS_NUMBER env so a fresh install has sensible defaults on
+    first render."""
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    recipients = cfg.get("owner_sms_recipients") or []
+    if not recipients:
+        raw = (os.environ.get("ADMIN_SMS_NUMBER") or "").strip()
+        for part in raw.split(","):
+            phone = part.strip()
+            if not phone:
+                continue
+            recipients.append({"phone": phone, "label": phone, "subscriptions": ["*"], "quiet_hours": True})
+    return {
+        "recipients": recipients,
+        "kinds": OWNER_SMS_EVENT_KINDS,
+        "quiet_hours_window": {"start_local": "22:00", "end_local": "04:00", "tz": "America/Nassau"},
+        "digest_delivery_local": "05:00",
+    }
+
+
+@router.put("/admin/owner-sms/recipients")
+async def admin_put_owner_sms_recipients(req: OwnerSmsRecipientsUpdate, _: str = Depends(_admin_dep)):
+    """Overwrite the SMS routing table. The notifications module picks
+    up the new roster within 60 seconds via the background refresher —
+    or immediately if the caller uses the reload endpoint below."""
+    normalised = []
+    for r in req.recipients:
+        p = r.phone.strip()
+        if not p.startswith("+"):
+            raise HTTPException(400, f"Phone {p} must be E.164 (start with +).")
+        subs = [s.strip() for s in (r.subscriptions or []) if s and s.strip()]
+        if not subs:
+            subs = ["*"]
+        for s in subs:
+            if s != "*" and s not in OWNER_SMS_EVENT_KINDS:
+                raise HTTPException(400, f"Unknown subscription '{s}'. Valid: * or {OWNER_SMS_EVENT_KINDS}")
+        normalised.append({
+            "phone": p,
+            "label": (r.label or "").strip() or p,
+            "subscriptions": subs,
+            "quiet_hours": bool(r.quiet_hours),
+        })
+    await _db.site_config.update_one(
+        {"_id": "main"},
+        {"$set": {"owner_sms_recipients": normalised, "updated_at": _now_iso()}},
+        upsert=True,
+    )
+    # Refresh the in-process cache immediately so the new routing is
+    # live before the next event fires.
+    try:
+        from notifications import set_owner_recipients_cache
+        set_owner_recipients_cache(normalised)
+    except Exception:  # noqa: BLE001
+        pass
+    return {"recipients": normalised}
+
+
+async def _flush_owner_sms_digest_bg(force: bool = False) -> None:
+    """Drain the `owner_sms_queue` collection and send a digest SMS +
+    email to each recipient. Idempotent per-day via
+    `site_config.owner_sms_digest_last_fired_at`. When `force=True`, the
+    idempotency + time-gate is bypassed (used by the manual admin button)."""
+    try:
+        from notifications import send_sms as _send_sms, send_email as _send_email, _NASSAU_TZ
+        cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+        # Time-gate — only fire between 04:30 and 05:30 Nassau time from
+        # the cron. Admin manual invocation passes force=True.
+        if not force and _NASSAU_TZ is not None:
+            from datetime import datetime as _dt
+            local_hr = _dt.now(_NASSAU_TZ).hour
+            local_min = _dt.now(_NASSAU_TZ).minute
+            slot = local_hr == 4 and local_min >= 30 or local_hr == 5 and local_min < 30
+            if not slot:
+                return
+        # Idempotency — one digest per Nassau-local day.
+        if not force and _NASSAU_TZ is not None:
+            from datetime import datetime as _dt
+            today = _dt.now(_NASSAU_TZ).date().isoformat()
+            last = cfg.get("owner_sms_digest_last_day")
+            if last == today:
+                return
+
+        docs = await _db.owner_sms_queue.find({"sent_at": None}).sort("queued_at", 1).to_list(1000)
+        if not docs:
+            return
+
+        # Group by phone
+        by_phone: dict = {}
+        for d in docs:
+            by_phone.setdefault(d["phone"], []).append(d)
+
+        owner_email = (os.environ.get("ADMIN_EMAIL") or "").strip()
+
+        # ── Deliverability tail for the digest email (last 7 days) ───────
+        deliv7 = await _compute_deliverability_health(24 * 7)
+
+        for phone, items in by_phone.items():
+            label = items[0].get("label", phone)
+            # SMS digest — line-per-item, capped to ~1400 chars (3 segments).
+            header = f"🌅 Rox overnight digest ({len(items)} events):\n"
+            lines = [f"• {it['body'][:120]}" for it in items]
+            body = header + "\n".join(lines)
+            if len(body) > 1400:
+                body = body[:1380] + f"\n(+{len(items)} total)"
+            r = _send_sms(phone, body)
+
+            # Mark items as sent for this phone
+            ids = [d["_id"] for d in items]
+            await _db.owner_sms_queue.update_many(
+                {"_id": {"$in": ids}},
+                {"$set": {"sent_at": _now_iso(), "digest_result": r, "digest_phone": phone}},
+            )
+
+        # Optional email to owner with the full digest + deliverability tail.
+        if owner_email:
+            html_items = "".join(
+                f'<li style="margin:6px 0;font-size:13px;color:#0B3B5C;"><strong>{d.get("kind","activity")}</strong> · <span style="color:#64748B;">{d["body"][:180]}</span></li>'
+                for d in docs
+            )
+            deliv_line = (
+                f'<div style="margin-top:16px;padding:12px 16px;background:#F8F5EC;border:1px solid #E2E8F0;border-radius:12px;font-size:12px;color:#0B3B5C;">'
+                f'<strong>Last 7 days delivery health</strong><br>'
+                f'Email — <strong>{deliv7["email"]["sent"]}</strong> sent · <span style="color:#DC2626;">{deliv7["email"]["failed"]}</span> failed ({deliv7["email"]["fail_rate_pct"]}%) · '
+                f'SMS — <strong>{deliv7["sms"]["sent"]}</strong> sent · <span style="color:#DC2626;">{deliv7["sms"]["failed"]}</span> failed ({deliv7["sms"]["fail_rate_pct"]}%)'
+                f'</div>'
+            )
+            html = (
+                '<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">'
+                '<div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Overnight Digest · 5am</div>'
+                f'<h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:24px;">{len(docs)} events landed overnight</h1>'
+                '<p style="color:#64748B;font-size:14px;">Every ping that was captured while quiet-hours (10pm-4am Nassau) was active.</p>'
+                f'<ul style="margin-top:16px;padding-left:18px;">{html_items}</ul>'
+                f'{deliv_line}'
+                '<p style="color:#94a3b8;font-size:11px;margin-top:24px;">Rox Taxi Service &amp; Tours · Nassau · Configure recipients in Admin → Site Config</p></div>'
+            )
+            text = f"Rox overnight digest — {len(docs)} events\n\n" + "\n".join(
+                f"- [{d.get('kind','activity')}] {d['body'][:200]}" for d in docs
+            ) + f"\n\nLast 7d: Email {deliv7['email']['sent']}/{deliv7['email']['failed']} fail · SMS {deliv7['sms']['sent']}/{deliv7['sms']['failed']} fail\n"
+            _send_email(owner_email, f"🌅 Rox overnight digest — {len(docs)} events", html, text, category="admin")
+
+        # Stamp the digest date so the cron doesn't double-fire today.
+        stamp_day = None
+        if _NASSAU_TZ is not None:
+            from datetime import datetime as _dt
+            stamp_day = _dt.now(_NASSAU_TZ).date().isoformat()
+        await _db.site_config.update_one(
+            {"_id": "main"},
+            {"$set": {"owner_sms_digest_last_day": stamp_day, "owner_sms_digest_last_fired_at": _now_iso()}},
+            upsert=True,
+        )
+        await _db.cron_runs.update_one(
+            {"kind": "owner_sms_digest"},
+            {"$set": {"last_run_at": _now_iso(),
+                      "events_flushed": len(docs),
+                      "recipients_pinged": len(by_phone)}},
+            upsert=True,
+        )
+    except Exception as ex:  # noqa: BLE001
+        logging.warning("owner sms digest err: %s", ex)
+
+
+@router.post("/cron/flush-owner-sms-digest")
+async def cron_flush_owner_sms_digest(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    x_webhook_id: Optional[str] = Header(None),
+):
+    """Fires every hour; internal Nassau-time gate ensures it only
+    actually drains once per day at ~5am local. Bearer-auth against
+    WEBHOOK_CRON_SECRET."""
+    import hmac as _hmac
+    secret = (os.environ.get("WEBHOOK_CRON_SECRET") or "").strip()
+    presented = ""
+    if authorization and authorization.startswith("Bearer "):
+        presented = authorization[7:].strip()
+    if not secret or not presented or not _hmac.compare_digest(presented, secret):
+        raise HTTPException(401, "Invalid cron auth")
+    import asyncio
+    asyncio.create_task(_flush_owner_sms_digest_bg())
+    return {"accepted": True, "kind": "owner_sms_digest", "run_id": x_webhook_id}
+
+
+@router.post("/admin/owner-sms/flush-digest-now")
+async def admin_flush_digest_now(_: str = Depends(_admin_dep)):
+    """Force-drain the queue and send the digest right now (bypasses the
+    5am-local time gate and per-day idempotency)."""
+    import asyncio
+    asyncio.create_task(_flush_owner_sms_digest_bg(force=True))
+    return {"accepted": True, "forced": True}
+
+
+@router.get("/admin/owner-sms/queue")
+async def admin_owner_sms_queue_peek(_: str = Depends(_admin_dep)):
+    """Live peek at the overnight queue so admins can see what's waiting
+    before the 5am digest fires."""
+    docs = await _db.owner_sms_queue.find({"sent_at": None}).sort("queued_at", 1).to_list(200)
+    return {"pending": len(docs), "items": [_clean(d) for d in docs]}
+
+
 @router.get("/admin/drivers")
 async def admin_list_driver_spotlights(_: str = Depends(_admin_dep)):
     """Return the full driver_spotlights roster from site_config so

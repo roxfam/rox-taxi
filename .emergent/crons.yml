@@ -26,3 +26,10 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/check-delivery-alerts"
     method: POST
     enabled: true
+
+  - name: flush-owner-sms-digest
+    description: "Drains overnight quiet-hours SMS queue and sends the 5am Nassau digest to every owner phone. Fires hourly; worker gates on Nassau local time (4:30-5:30) with per-day idempotency."
+    cron: "30 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/flush-owner-sms-digest"
+    method: POST
+    enabled: true

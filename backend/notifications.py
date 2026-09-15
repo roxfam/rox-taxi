@@ -8,11 +8,52 @@ against the booking (used for admin dashboard delivery badges):
 import hmac
 import hashlib
 import logging
+import os
 from typing import Optional
+
+try:
+    from zoneinfo import ZoneInfo  # py3.9+
+    _NASSAU_TZ = ZoneInfo("America/Nassau")
+except Exception:  # noqa: BLE001
+    _NASSAU_TZ = None
 
 from secrets_store import get_secret
 
 logger = logging.getLogger(__name__)
+
+
+# ── Owner SMS registry + quiet-hours state (populated by server.py) ─────────
+_owner_sms_db = None  # motor db handle for queue writes
+_owner_recipients_cache: list = []  # list of {phone, label, subscriptions, quiet_hours}
+
+
+def configure_owner_sms(db) -> None:
+    """Called by server.py at startup so send_owner_sms can enqueue
+    quiet-hours SMS to Mongo. Safe to call multiple times."""
+    global _owner_sms_db
+    _owner_sms_db = db
+
+
+def set_owner_recipients_cache(recipients: list) -> None:
+    """Replace the cached owner-SMS recipient registry. Called every N
+    seconds by server.py's async refresher after reading site_config.
+    Empty list ⇒ fall back to ADMIN_SMS_NUMBER env var."""
+    global _owner_recipients_cache
+    if isinstance(recipients, list):
+        _owner_recipients_cache = recipients
+
+
+def _in_owner_quiet_hours(start: int = 22, end: int = 4) -> bool:
+    """22:00-04:00 America/Nassau by default. When start > end the window
+    wraps midnight (22-23 OR 00-03). Returns False if zoneinfo not
+    available so we never silently drop SMS."""
+    if _NASSAU_TZ is None:
+        return False
+    from datetime import datetime as _dt
+    hr = _dt.now(_NASSAU_TZ).hour
+    if start <= end:
+        return start <= hr < end
+    return hr >= start or hr < end
 
 
 def _fmt_money(n: float) -> str:
@@ -166,10 +207,31 @@ def send_sms(to_number: str, body: str) -> dict:
         return {"sent": False, "provider": "twilio", "error": str(e)}
 
 
-def _owner_sms_numbers() -> list:
-    """Resolve all owner SMS recipients from ADMIN_SMS_NUMBER (comma-separated)
-    with WHATSAPP_NUMBER as a legacy fallback. De-dupes, trims, keeps E.164
-    order stable so the primary owner phone always gets the ping first."""
+def _owner_sms_recipients_resolved() -> list:
+    """Return the effective recipient roster.
+
+    Priority: `_owner_recipients_cache` (loaded from site_config) →
+    ADMIN_SMS_NUMBER env fallback. Every entry is normalised into
+    `{phone, label, subscriptions, quiet_hours}` so the rest of the
+    dispatch code doesn't branch on config source."""
+    if _owner_recipients_cache:
+        out = []
+        for r in _owner_recipients_cache:
+            phone = (r.get("phone") or "").strip()
+            if not phone:
+                continue
+            subs = r.get("subscriptions") or ["*"]
+            if isinstance(subs, str):
+                subs = [subs]
+            out.append({
+                "phone": phone,
+                "label": (r.get("label") or "").strip() or phone,
+                "subscriptions": subs,
+                "quiet_hours": bool(r.get("quiet_hours", True)),
+            })
+        if out:
+            return out
+    # Env fallback — every number is treated as "all-events, quiet-hours-on".
     raw = (get_secret("ADMIN_SMS_NUMBER") or get_secret("WHATSAPP_NUMBER") or "").strip()
     seen: set = set()
     out: list = []
@@ -178,39 +240,109 @@ def _owner_sms_numbers() -> list:
         if not n or n in seen:
             continue
         seen.add(n)
-        out.append(n)
+        out.append({"phone": n, "label": n, "subscriptions": ["*"], "quiet_hours": True})
     return out
 
 
-def send_owner_sms(body: str) -> dict:
-    """Fan out an owner SMS to every recipient in ADMIN_SMS_NUMBER.
+def _matches_subscription(recipient: dict, kind: Optional[str]) -> bool:
+    """Wildcard-aware subscription filter. `["*"]` matches any kind;
+    otherwise the kind must be in the list. Missing/unknown kind ⇒ True."""
+    if not kind:
+        return True
+    subs = recipient.get("subscriptions") or ["*"]
+    return "*" in subs or kind in subs
 
-    Kept as ONE dict for backwards compat with callers that only look at
-    `.sent` / `.provider` / `.error`:
-      • `.sent`     = True if AT LEAST ONE recipient succeeded
-      • `.provider` = "twilio" (or "none" when unconfigured)
-      • `.error`    = concatenated error string when every recipient failed
-      • `.recipients` = per-number breakdown for the delivery-report card
+
+def _owner_sms_numbers() -> list:
+    """Legacy helper — kept for callers that still expect a flat list of
+    E.164 numbers. Prefer send_owner_sms(body, kind) for new code."""
+    return [r["phone"] for r in _owner_sms_recipients_resolved()]
+
+
+def send_owner_sms(body: str, kind: Optional[str] = None) -> dict:
+    """Fan out an owner SMS respecting per-recipient subscriptions and
+    quiet-hours. Returns an aggregated report:
+      • `.sent`       — True if AT LEAST ONE recipient got a live SMS
+      • `.provider`   — "twilio" (or "none" when unconfigured)
+      • `.recipients` — per-recipient breakdown (`sent`/`queued`/`skipped`)
+      • `.queued`     — count of recipients whose SMS was pushed to the
+                        morning-digest queue instead of sent live
+
+    Behaviour:
+      1. Recipients whose subscriptions don't include `kind` get skipped.
+      2. During Nassau quiet-hours (22:00-04:00) recipients that opted
+         into quiet-hours are pushed to `owner_sms_queue` for the 5am
+         digest drain instead of receiving a live SMS.
+      3. Everyone else gets the SMS immediately via Twilio.
     """
-    numbers = _owner_sms_numbers()
-    if not numbers:
-        return {"sent": False, "provider": "none", "error": "ADMIN_SMS_NUMBER not set",
-                "recipients": []}
-    recipients = []
+    recipients = _owner_sms_recipients_resolved()
+    if not recipients:
+        return {"sent": False, "provider": "none",
+                "error": "No owner SMS recipients configured",
+                "recipients": [], "queued": 0}
+
+    quiet_now = _in_owner_quiet_hours()
+    report: list = []
     any_sent = False
+    queued_count = 0
     errors: list = []
-    for n in numbers:
-        r = send_sms(n, body)
-        recipients.append({"to": n, **r})
-        if r.get("sent"):
+
+    for r in recipients:
+        phone = r["phone"]
+        if not _matches_subscription(r, kind):
+            report.append({"to": phone, "label": r.get("label", phone),
+                           "sent": False, "queued": False,
+                           "skipped": True, "reason": f"not subscribed to '{kind}'"})
+            continue
+        if quiet_now and r.get("quiet_hours", True):
+            # Enqueue for the morning digest. Motor 3.x returns a Future
+            # for collection methods, so we wrap in a coroutine before
+            # scheduling as a task. During quiet hours we DO NOT fall
+            # through to live send if enqueue fails — the whole point of
+            # quiet hours is silence.
+            queued = False
+            if _owner_sms_db is not None:
+                try:
+                    from datetime import datetime as _dt, timezone as _tz
+                    import asyncio as _aio
+                    doc = {
+                        "phone": phone,
+                        "label": r.get("label", phone),
+                        "kind": kind or "activity",
+                        "body": body,
+                        "queued_at": _dt.now(_tz.utc).isoformat(),
+                        "sent_at": None,
+                    }
+
+                    async def _enqueue(d=doc):
+                        await _owner_sms_db.owner_sms_queue.insert_one(d)
+
+                    _aio.create_task(_enqueue())
+                    queued = True
+                    queued_count += 1
+                except Exception as ex:  # noqa: BLE001
+                    logger.warning("owner_sms_queue enqueue err: %s", ex)
+            report.append({"to": phone, "label": r.get("label", phone),
+                           "sent": False, "queued": queued,
+                           "reason": "quiet_hours" if queued else "quiet_hours_enqueue_failed"})
+            continue
+        # Live send
+        res = send_sms(phone, body)
+        entry = {"to": phone, "label": r.get("label", phone),
+                 "queued": False, **res}
+        report.append(entry)
+        if res.get("sent"):
             any_sent = True
-        elif r.get("error"):
-            errors.append(f"{n}: {r['error']}")
+        elif res.get("error"):
+            errors.append(f"{phone}: {res['error']}")
+
     return {
         "sent": any_sent,
         "provider": "twilio",
-        "error": None if any_sent else "; ".join(errors) or "all recipients failed",
-        "recipients": recipients,
+        "error": None if any_sent or queued_count else ("; ".join(errors) or "all recipients failed"),
+        "recipients": report,
+        "queued": queued_count,
+        "quiet_hours_active": quiet_now,
     }
 
 
@@ -265,7 +397,7 @@ def notify_owner_activity(kind: str, sms_body: str, email_subject: Optional[str]
     report = {"kind": kind,
               "sms": {"sent": False, "provider": "none", "error": None},
               "email": {"sent": False, "provider": "none", "error": None}}
-    report["sms"].update(send_owner_sms(sms_body[:600]))
+    report["sms"].update(send_owner_sms(sms_body[:600], kind=kind or "activity"))
     if owner_email and email_subject and email_html:
         report["email"].update(send_email(owner_email, email_subject, email_html, sms_body, category="admin"))
     return report
@@ -294,7 +426,7 @@ def notify_owner_booking_created(booking: dict) -> dict:
         f"👉 roxtaxi.com/admin/bookings/{booking['id']}"
     )
 
-    report["sms"].update(send_owner_sms(body_text))
+    report["sms"].update(send_owner_sms(body_text, kind="booking"))
 
     if owner_email:
         subject = f"🚕 New booking {booking['id']} — {booking.get('customer_name','?')}"
@@ -337,7 +469,7 @@ def notify_owner_payment_received(booking: dict, provider: str = "stripe") -> di
         f"👉 roxtaxi.com/admin/bookings/{booking['id']}"
     )
 
-    report["sms"].update(send_owner_sms(body_text))
+    report["sms"].update(send_owner_sms(body_text, kind="payment"))
 
     if owner_email:
         subject = f"💰 Payment received · {_fmt_money(booking.get('total',0))} · {booking['id']}"
