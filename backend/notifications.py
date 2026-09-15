@@ -444,6 +444,78 @@ def notify_owner_activity(kind: str, sms_body: str, email_subject: Optional[str]
     return report
 
 
+def notify_guest_picked_up(booking: dict, prefs: Optional[dict] = None) -> dict:
+    """Fires the moment the driver scans the guest's QR at pickup.
+
+    Sends the guest a "You're on your way" SMS + email so they know
+    the driver has confirmed pickup and the trip is officially rolling.
+    Idempotency lives on the caller (guarded by the `status` check in
+    the /driver-checkin endpoint) — this function itself is safe to
+    invoke multiple times, it just re-sends.
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+
+    report = {
+        "email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+        "sms":   {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
+    }
+
+    who = booking.get("customer_name") or "there"
+    pickup_time = booking.get("driver_confirmed_pickup_time") or booking.get("booking_time") or ""
+    pickup_loc = booking.get("driver_confirmed_pickup_location") or booking.get("pickup_location") or ""
+    driver = booking.get("driver_name") or booking.get("assigned_driver") or "Your Rox driver"
+
+    subject = f"✅ You're on your way — Rox booking {booking['id']}"
+    text = (
+        f"Hi {who},\n\n"
+        f"{driver} has confirmed your pickup{f' at {pickup_time}' if pickup_time else ''}"
+        f"{f' from {pickup_loc}' if pickup_loc else ''}. You're officially rolling with Rox.\n\n"
+        f"  Confirmation: {booking['id']}\n"
+        f"  Service: {booking.get('item_name','')}\n\n"
+        f"Track live: https://roxtaxi.com/track?id={booking['id']}\n"
+        f"Anything urgent? WhatsApp us: https://wa.me/12424322587\n\n"
+        f"Enjoy the ride,\n— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#059669;font-weight:700;">Pickup Confirmed</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;">You're on your way, {who} 🚕</h1>
+      <p style="color:#64748B;font-size:14px;margin-top:12px;">
+        <strong>{driver}</strong> just scanned your pass{f' at <strong>{pickup_time}</strong>' if pickup_time else ''}. Your ride is officially underway.
+      </p>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:20px;margin-top:20px;">
+        <div style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#64748B;">Confirmation</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:24px;color:#0B3B5C;margin-top:4px;">{booking['id']}</div>
+        <div style="color:#0B3B5C;font-size:14px;margin-top:12px;"><strong>{booking.get('item_name','')}</strong></div>
+        {f'<div style="color:#64748B;font-size:13px;margin-top:4px;">Pickup: {pickup_loc}</div>' if pickup_loc else ''}
+      </div>
+      <a href="https://roxtaxi.com/track?id={booking['id']}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;font-size:13px;margin-top:20px;">Track your ride →</a>
+      <p style="color:#94a3b8;font-size:11px;margin-top:24px;">Enjoy the Bahamas — we're glad you're riding with us.</p>
+    </div>
+    """
+
+    if email_enabled and booking.get("customer_email"):
+        result = send_email(booking["customer_email"], subject, html, text, category="confirmation")
+        report["email"].update(result)
+    else:
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+
+    if sms_enabled and booking.get("customer_phone"):
+        sms = (
+            f"Rox: ✅ {driver} confirmed your pickup"
+            f"{f' at {pickup_time}' if pickup_time else ''}. Booking {booking['id']} is rolling. "
+            f"Track: roxtaxi.com/track?id={booking['id']}"
+        )
+        result = send_sms(booking["customer_phone"], sms)
+        report["sms"].update(result)
+    else:
+        report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+
+    return report
+
+
 def notify_owner_booking_created(booking: dict) -> dict:
     """Alert the business owner the moment a booking hits the DB.
 

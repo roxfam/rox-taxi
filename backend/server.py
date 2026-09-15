@@ -3825,6 +3825,28 @@ async def booking_driver_checkin(booking_id: str, req: DriverCheckinRequest):
 
     await db.bookings.update_one({"id": b["id"]}, {"$set": updates})
 
+    # ── Guest pickup confirmation (SMS + email) ───────────────────────
+    # Fires exactly once — the `if status in ("cancelled", "completed")`
+    # guard above blocks re-scans from re-notifying. Runs in background
+    # so a slow SMTP round-trip can't hold up the driver's tap.
+    was_first_scan = b.get("status") != "picked_up"
+    if was_first_scan:
+        try:
+            from notifications import notify_guest_picked_up
+            fresh = {**b, **updates}
+            cfg = await db.site_config.find_one({"_id": "main"}) or {}
+            prefs = {
+                "notify_email_enabled": cfg.get("notify_email_enabled", True),
+                "notify_sms_enabled": cfg.get("notify_sms_enabled", True),
+            }
+            report = await asyncio.to_thread(notify_guest_picked_up, fresh, prefs)
+            await db.bookings.update_one(
+                {"id": b["id"]},
+                {"$set": {"pickup_notification": report, "pickup_notified_at": now_iso()}},
+            )
+        except Exception as ex:  # noqa: BLE001
+            logger.warning("guest pickup notify err: %s", ex)
+
     # ── >2km-away alert (owner SMS) ───────────────────────────────────
     # If the driver's GPS ping is more than 2km from the closest Nassau
     # anchor keyword-matched from the pickup text, wake the owner with an
