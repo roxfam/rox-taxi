@@ -2973,10 +2973,9 @@ async def create_contact_message(req: ContactMessage):
             f"Hi {req.name},\n\nThanks for reaching out — we'll reply within the hour.\n\nYour message ({doc['id']}):\n{req.message}",
             category="info",
         )
-        # Admin SMS ping (best-effort, no phone from ADMIN_EMAIL context)
-        admin_sms_number = os.environ.get("ADMIN_SMS_NUMBER", "").strip()
-        if admin_sms_number:
-            send_sms(admin_sms_number, f"Rox contact form ({doc['id']}) from {req.name}: {req.message[:120]}")
+        # Admin SMS ping — fan out to every owner in ADMIN_SMS_NUMBER
+        from notifications import send_owner_sms as _send_owner_sms
+        _send_owner_sms(f"Rox contact form ({doc['id']}) from {req.name}: {req.message[:120]}")
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("contact notify err: %s", e)
 

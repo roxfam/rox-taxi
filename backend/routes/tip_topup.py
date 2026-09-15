@@ -103,20 +103,15 @@ async def tip_topup_submit(booking_id: str, t: str, req: TipTopupSubmit):
             "tip_topup_submitted_at": _now_iso(),
         }},
     )
-    # Fire-and-forget admin SMS so the owner + driver know a top-up
-    # landed. Errors swallowed — pledge succeeds regardless.
+    # Fire-and-forget owner SMS fan-out so every owner cellphone in
+    # ADMIN_SMS_NUMBER hears about the top-up. Errors swallowed — pledge
+    # succeeds regardless.
     try:
-        from notifications import send_sms  # local import: server-side only
-        admin_sms = (
-            os.environ.get("ADMIN_SMS_TO")
-            or os.environ.get("ADMIN_PHONE")
-            or ""
-        ).strip()
-        if admin_sms:
-            send_sms(
-                admin_sms,
-                f"Rox tip top-up: {b.get('customer_name','Guest')} pledged +${req.amount:.2f} ({req.method or 'cash'}) on booking {booking_id}. Pledged total: ${new_total:.2f}",
-            )
+        from notifications import send_owner_sms
+        send_owner_sms(
+            f"Rox tip top-up: {b.get('customer_name','Guest')} pledged +${req.amount:.2f} "
+            f"({req.method or 'cash'}) on booking {booking_id}. Pledged total: ${new_total:.2f}",
+        )
     except Exception:  # noqa: BLE001
         pass
     return {"ok": True, "pledged_total": new_total}

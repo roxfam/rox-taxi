@@ -23,6 +23,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Owner SMS fan-out (multi-recipient)
+- **Two owner cellphones now ping on every event** — `ADMIN_SMS_NUMBER` is now comma-separated (`+12424322587,+12424285524`). New `send_owner_sms(body)` helper in `notifications.py` fans out to every recipient; returns a per-number delivery report.
+- **All owner SMS paths refactored** to use the helper: `notify_owner_activity`, `notify_owner_booking_created`, `notify_owner_payment_received`, contact form, tip top-up, group inquiry, gallery submission, referral conversion, signup.
+- **Verified live**: direct test sent to both numbers, both `sent: true`.
+
 ### Feb 2026 — Deliverability alerts + weekly report preview + full owner activity SMS
 - **Owner Activity SMS (Feb 2026)** — Owner cellphone at `+12424322587` now pings on every meaningful site event:
   - New customer signup (auth.py register hook)

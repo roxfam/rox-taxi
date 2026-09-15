@@ -166,6 +166,54 @@ def send_sms(to_number: str, body: str) -> dict:
         return {"sent": False, "provider": "twilio", "error": str(e)}
 
 
+def _owner_sms_numbers() -> list:
+    """Resolve all owner SMS recipients from ADMIN_SMS_NUMBER (comma-separated)
+    with WHATSAPP_NUMBER as a legacy fallback. De-dupes, trims, keeps E.164
+    order stable so the primary owner phone always gets the ping first."""
+    raw = (get_secret("ADMIN_SMS_NUMBER") or get_secret("WHATSAPP_NUMBER") or "").strip()
+    seen: set = set()
+    out: list = []
+    for part in raw.split(","):
+        n = part.strip()
+        if not n or n in seen:
+            continue
+        seen.add(n)
+        out.append(n)
+    return out
+
+
+def send_owner_sms(body: str) -> dict:
+    """Fan out an owner SMS to every recipient in ADMIN_SMS_NUMBER.
+
+    Kept as ONE dict for backwards compat with callers that only look at
+    `.sent` / `.provider` / `.error`:
+      • `.sent`     = True if AT LEAST ONE recipient succeeded
+      • `.provider` = "twilio" (or "none" when unconfigured)
+      • `.error`    = concatenated error string when every recipient failed
+      • `.recipients` = per-number breakdown for the delivery-report card
+    """
+    numbers = _owner_sms_numbers()
+    if not numbers:
+        return {"sent": False, "provider": "none", "error": "ADMIN_SMS_NUMBER not set",
+                "recipients": []}
+    recipients = []
+    any_sent = False
+    errors: list = []
+    for n in numbers:
+        r = send_sms(n, body)
+        recipients.append({"to": n, **r})
+        if r.get("sent"):
+            any_sent = True
+        elif r.get("error"):
+            errors.append(f"{n}: {r['error']}")
+    return {
+        "sent": any_sent,
+        "provider": "twilio",
+        "error": None if any_sent else "; ".join(errors) or "all recipients failed",
+        "recipients": recipients,
+    }
+
+
 def _booking_details_for_owner(booking: dict) -> str:
     """Build a rich SMS body with every field the driver/owner needs to
     dispatch the ride: route, pickup/dropoff, passengers, luggage, days,
@@ -213,15 +261,11 @@ def notify_owner_activity(kind: str, sms_body: str, email_subject: Optional[str]
     Never raises — callers wrap in their own try/except and never let a
     notification failure block the user response.
     """
-    owner_sms = (get_secret("ADMIN_SMS_NUMBER") or get_secret("WHATSAPP_NUMBER") or "").strip()
     owner_email = (get_secret("ADMIN_EMAIL") or "").strip()
     report = {"kind": kind,
               "sms": {"sent": False, "provider": "none", "error": None},
               "email": {"sent": False, "provider": "none", "error": None}}
-    if owner_sms:
-        report["sms"].update(send_sms(owner_sms, sms_body[:600]))
-    else:
-        report["sms"]["error"] = "ADMIN_SMS_NUMBER not set"
+    report["sms"].update(send_owner_sms(sms_body[:600]))
     if owner_email and email_subject and email_html:
         report["email"].update(send_email(owner_email, email_subject, email_html, sms_body, category="admin"))
     return report
@@ -239,7 +283,6 @@ def notify_owner_booking_created(booking: dict) -> dict:
     still works. Returns a combined report so admin can see which
     channel actually landed.
     """
-    owner = (get_secret("ADMIN_SMS_NUMBER") or get_secret("WHATSAPP_NUMBER") or "").strip()
     owner_email = (get_secret("ADMIN_EMAIL") or "").strip()
 
     report = {"sms": {"sent": False, "provider": "none", "error": None},
@@ -251,10 +294,7 @@ def notify_owner_booking_created(booking: dict) -> dict:
         f"👉 roxtaxi.com/admin/bookings/{booking['id']}"
     )
 
-    if owner:
-        report["sms"].update(send_sms(owner, body_text))
-    else:
-        report["sms"]["error"] = "ADMIN_SMS_NUMBER not set"
+    report["sms"].update(send_owner_sms(body_text))
 
     if owner_email:
         subject = f"🚕 New booking {booking['id']} — {booking.get('customer_name','?')}"
@@ -285,7 +325,6 @@ def notify_owner_payment_received(booking: dict, provider: str = "stripe") -> di
     Fires from every payment path (Stripe webhook, PayPal capture, Zelle
     mark). Sends BOTH owner SMS and owner email so both records exist.
     """
-    owner = (get_secret("ADMIN_SMS_NUMBER") or get_secret("WHATSAPP_NUMBER") or "").strip()
     owner_email = (get_secret("ADMIN_EMAIL") or "").strip()
 
     report = {"sms": {"sent": False, "provider": "none", "error": None},
@@ -298,10 +337,7 @@ def notify_owner_payment_received(booking: dict, provider: str = "stripe") -> di
         f"👉 roxtaxi.com/admin/bookings/{booking['id']}"
     )
 
-    if owner:
-        report["sms"].update(send_sms(owner, body_text))
-    else:
-        report["sms"]["error"] = "ADMIN_SMS_NUMBER not set"
+    report["sms"].update(send_owner_sms(body_text))
 
     if owner_email:
         subject = f"💰 Payment received · {_fmt_money(booking.get('total',0))} · {booking['id']}"
