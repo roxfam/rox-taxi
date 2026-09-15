@@ -748,6 +748,15 @@ async def admin_update_status(booking_id: str, req: BookingStatusUpdate, _: str 
     if res.matched_count == 0:
         raise HTTPException(404, "Booking not found")
     doc = await _db.bookings.find_one({"id": booking_id.upper()})
+    # Fire the trip-complete guest ping when admins flip status to
+    # `completed` from the desktop — same logic as the driver mobile app.
+    if req.status == "completed" and not doc.get("trip_complete_notified_at"):
+        try:
+            from server import _fire_trip_complete_ping  # avoid circular import at module load
+            await _fire_trip_complete_ping(doc)
+            doc = await _db.bookings.find_one({"id": booking_id.upper()})
+        except Exception:  # noqa: BLE001
+            pass
     return _clean(doc)
 
 

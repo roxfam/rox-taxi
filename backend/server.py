@@ -3165,6 +3165,50 @@ async def driver_view_booking(booking_id: str):
     }
 
 
+async def _fire_trip_complete_ping(fresh: dict) -> None:
+    """Shared helper for the driver-status + admin-status endpoints.
+
+    Signs a 1-tap rating link + tip top-up link, dispatches the
+    notification via a threadpool so the driver's tap isn't blocked by
+    SMTP, and persists the delivery report + timestamp for the admin
+    notify-details drawer."""
+    import hmac as _hmac, hashlib as _hashlib
+    from notifications import notify_guest_trip_complete
+    from routes.tip_topup import _tip_token as _make_tip_token
+
+    booking_id = fresh["id"]
+    prefs_doc = await db.site_config.find_one({"_id": "main"}) or {}
+    prefs = {
+        "notify_email_enabled": prefs_doc.get("notify_email_enabled", True),
+        "notify_sms_enabled": prefs_doc.get("notify_sms_enabled", True),
+    }
+    base = (
+        secrets_store.get_secret("PUBLIC_SITE_URL", "")
+        or os.environ.get("PUBLIC_SITE_URL", "")
+        or "https://roxtaxi.com"
+    ).rstrip("/")
+
+    # Rating link — reuse BOOKING_LINK_SECRET so the token pattern is
+    # consistent with the tip-topup token style.
+    rating_secret = (
+        os.environ.get("BOOKING_LINK_SECRET")
+        or os.environ.get("WEBHOOK_CRON_SECRET")
+        or "rox-rating-fallback"
+    ).encode()
+    rating_token = _hmac.new(rating_secret, f"rate:{booking_id}".encode(), _hashlib.sha256).hexdigest()[:16]
+    rating_link = f"{base}/rate?id={booking_id}&t={rating_token}"
+    tip_link = f"{base}/tip-topup?id={booking_id}&t={_make_tip_token(booking_id)}"
+
+    report = await asyncio.to_thread(
+        notify_guest_trip_complete, dict(fresh), prefs, rating_link, tip_link,
+    )
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"trip_complete_notification": report,
+                  "trip_complete_notified_at": now_iso()}},
+    )
+
+
 @api_router.post("/driver/{booking_id}/status")
 async def driver_update_status(booking_id: str, req: DriverStatusUpdate):
     """Driver-mobile status transition. Rejects illegal transitions so a
@@ -3184,6 +3228,7 @@ async def driver_update_status(booking_id: str, req: DriverStatusUpdate):
         update["arrived_at"] = now
     elif req.status == "completed":
         update["completed_at"] = now
+        was_first_completion = b.get("status") != "completed"
     elif req.status == "no_show":
         update["no_show_at"] = now
     if req.note:
@@ -3207,6 +3252,15 @@ async def driver_update_status(booking_id: str, req: DriverStatusUpdate):
             )
         except Exception as e:  # noqa: BLE001
             logger.warning("driver arrival notify failed: %s", e)
+
+    # Trip-complete guest ping — 1-tap rating link + driver tip top-up.
+    # Fires once on first transition to `completed` (repeat completes
+    # are no-op'd by the transition guard above).
+    if req.status == "completed" and locals().get("was_first_completion", False) and not b.get("trip_complete_notified_at"):
+        try:
+            await _fire_trip_complete_ping(fresh)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("trip complete notify failed: %s", e)
 
     return {
         "id": b["id"],
@@ -3709,6 +3763,95 @@ async def admin_reassign_backup(
         }},
     )
     return {"ok": True, "backup_sms": result, "backup_name": backup_name}
+
+
+def _rating_token(booking_id: str) -> str:
+    import hmac as _hmac, hashlib as _hashlib
+    secret = (
+        os.environ.get("BOOKING_LINK_SECRET")
+        or os.environ.get("WEBHOOK_CRON_SECRET")
+        or "rox-rating-fallback"
+    ).encode()
+    return _hmac.new(secret, f"rate:{booking_id}".encode(), _hashlib.sha256).hexdigest()[:16]
+
+
+def _verify_rating_token(booking_id: str, token: str) -> bool:
+    import hmac as _hmac
+    return bool(token) and _hmac.compare_digest(_rating_token(booking_id), token.strip())
+
+
+class RatingSubmit(BaseModel):
+    stars: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = Field(None, max_length=1000)
+
+
+@api_router.get("/bookings/{booking_id}/rating-info")
+async def rating_info(booking_id: str, t: str):
+    """Public — read-only summary for the /rate?id=X&t=Y page.
+    Returns 401 for a bad HMAC so booking ids can't be brute-forced."""
+    bid = booking_id.upper()
+    if not _verify_rating_token(bid, t):
+        raise HTTPException(401, "Invalid or expired rating link.")
+    b = await db.bookings.find_one({"id": bid})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    return {
+        "id": b["id"],
+        "customer_name": b.get("customer_name", ""),
+        "item_name": b.get("item_name", ""),
+        "booking_date": b.get("booking_date", ""),
+        "driver_name": b.get("driver_name") or b.get("assigned_driver") or "",
+        "already_rated": bool(b.get("customer_rating")),
+        "existing_stars": b.get("customer_rating"),
+    }
+
+
+@api_router.post("/bookings/{booking_id}/rate")
+async def rate_booking(booking_id: str, req: RatingSubmit, t: str):
+    """1-tap public rating. Stamps the booking with `customer_rating`,
+    `customer_rating_comment`, and `customer_rated_at`. Also copies
+    into the `reviews` collection so 5-star ratings feed the future
+    Google-Reviews reply-draft pipeline."""
+    bid = booking_id.upper()
+    if not _verify_rating_token(bid, t):
+        raise HTTPException(401, "Invalid or expired rating link.")
+    b = await db.bookings.find_one({"id": bid})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    now = now_iso()
+    updates = {
+        "customer_rating": int(req.stars),
+        "customer_rating_comment": (req.comment or "").strip()[:1000],
+        "customer_rated_at": now,
+    }
+    await db.bookings.update_one({"id": bid}, {"$set": updates})
+    # Log to reviews collection for aggregation.
+    try:
+        await db.customer_ratings.insert_one({
+            "booking_id": bid,
+            "customer_name": b.get("customer_name", ""),
+            "driver_name": b.get("driver_name") or b.get("assigned_driver") or "",
+            "item_name": b.get("item_name", ""),
+            "stars": int(req.stars),
+            "comment": (req.comment or "").strip()[:1000],
+            "created_at": now,
+        })
+    except Exception as ex:  # noqa: BLE001
+        logger.warning("rating log err: %s", ex)
+    # Owner activity SMS — every rating pings the owner so they can
+    # celebrate 5-star trips + jump on <4 star ones fast.
+    try:
+        from notifications import notify_owner_activity
+        emoji = "🌟" if req.stars >= 5 else ("👍" if req.stars >= 4 else "⚠️")
+        driver = b.get("driver_name") or b.get("assigned_driver") or "driver"
+        comment_tail = f' · "{req.comment[:80]}"' if (req.comment or "").strip() else ""
+        notify_owner_activity(
+            "activity",
+            f"{emoji} Rox rating: {req.stars}★ for {driver} (booking {bid}){comment_tail}",
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    return {"ok": True, "stars": int(req.stars)}
 
 
 @api_router.get("/bookings/{booking_id}/qr.png")

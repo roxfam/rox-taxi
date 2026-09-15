@@ -7,6 +7,7 @@ import Layout from "./components/Layout";
 // Home is the LCP page — keep it in the main bundle so first paint is fast.
 import Home from "./pages/Home";
 import BoardingPass from "./pages/BoardingPass";
+import RateTrip from "./pages/RateTrip";
 // Every other route is lazy-loaded — cuts the initial JS payload by ~60%
 // on the main entry chunk and defers heavy admin/booking pages until the
 // user actually navigates to them.
@@ -117,6 +118,7 @@ function AppRouter() {
       <Route path="/pay" element={<CustomerShell><Pay /></CustomerShell>} />
       <Route path="/pay/:bookingId" element={<CustomerShell><Pay /></CustomerShell>} />
       <Route path="/booking/:id/pass" element={<BoardingPass />} />
+      <Route path="/rate" element={<RateTrip />} />
       <Route path="/my-bookings" element={<CustomerShell><MyBookings /></CustomerShell>} />
       <Route path="/login" element={<CustomerShell><Login /></CustomerShell>} />
       <Route path="/signup" element={<CustomerShell><Signup /></CustomerShell>} />

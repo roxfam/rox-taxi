@@ -444,6 +444,78 @@ def notify_owner_activity(kind: str, sms_body: str, email_subject: Optional[str]
     return report
 
 
+def notify_guest_trip_complete(booking: dict, prefs: Optional[dict] = None,
+                                rating_link: str = "", tip_link: str = "") -> dict:
+    """Fires when the driver marks the ride `completed`.
+
+    Sends the guest a "How was it?" SMS + email with a 1-tap rating
+    link and a driver tip top-up prompt while the trip is still fresh.
+    Idempotency lives on the caller.
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+
+    report = {
+        "email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+        "sms":   {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
+    }
+
+    who = (booking.get("customer_name") or "there").split(" ")[0]
+    driver = booking.get("driver_name") or booking.get("assigned_driver") or "your driver"
+    item = booking.get("item_name") or "your Rox ride"
+
+    subject = f"🎉 How was your Rox ride? — {booking['id']}"
+    text = (
+        f"Hi {who},\n\n"
+        f"You just wrapped up {item} with {driver}. Thanks for riding with Rox!\n\n"
+        f"Rate the trip in one tap: {rating_link}\n"
+        f"Bump {driver}'s tip: {tip_link}\n\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Trip complete</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;">How was your ride, {who}? 🎉</h1>
+      <p style="color:#64748B;font-size:14px;margin-top:12px;">
+        You just wrapped up <strong>{item}</strong> with <strong>{driver}</strong>. Thanks for riding with Rox — a quick tap tells us how it went.
+      </p>
+
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:24px;margin-top:20px;text-align:center;">
+        <div style="font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Rate this ride</div>
+        <div style="font-size:32px;margin:12px 0 4px;letter-spacing:6px;color:#D4A94A;">☆ ☆ ☆ ☆ ☆</div>
+        <a href="{rating_link}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;font-size:13px;margin-top:12px;">Tap to rate →</a>
+      </div>
+
+      <div style="background:#0B3B5C;color:#fff;border-radius:16px;padding:20px;margin-top:16px;text-align:center;">
+        <div style="font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Loved {driver}?</div>
+        <p style="color:#F8F5EC;font-size:14px;margin:10px 0 12px;">Add to their tip in one tap — drivers keep 100%.</p>
+        <a href="{tip_link}" style="display:inline-block;background:#D4A94A;color:#0B3B5C;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;font-size:13px;">Bump the tip →</a>
+      </div>
+
+      <p style="color:#94a3b8;font-size:11px;margin-top:24px;">Booking {booking['id']} · Rox Taxi Service &amp; Tours · Nassau</p>
+    </div>
+    """
+
+    if email_enabled and booking.get("customer_email"):
+        result = send_email(booking["customer_email"], subject, html, text, category="confirmation")
+        report["email"].update(result)
+    else:
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+
+    if sms_enabled and booking.get("customer_phone"):
+        sms = (
+            f"Rox: 🎉 Thanks for riding with {driver}! Rate in 1 tap: {rating_link}"
+            f" · Bump the tip: {tip_link}"
+        )
+        result = send_sms(booking["customer_phone"], sms)
+        report["sms"].update(result)
+    else:
+        report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+
+    return report
+
+
 def notify_guest_picked_up(booking: dict, prefs: Optional[dict] = None) -> dict:
     """Fires the moment the driver scans the guest's QR at pickup.
 

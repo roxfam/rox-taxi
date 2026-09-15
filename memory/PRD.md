@@ -23,6 +23,20 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Trip-complete guest ping (rating + tip top-up)
+- **`notify_guest_trip_complete()`** — new SMS + email helper fires the moment the driver marks the ride `completed`. Body includes:
+  - **1-tap rating link** (`/rate?id=X&t=SIGNED_HMAC`) — 5-star tap UI; 5★ pathway offers a Google Review handoff.
+  - **Tip top-up link** — reuses the existing signed `/tip-topup` route so drivers keep 100%.
+- **Wired into both status-change surfaces**:
+  - `POST /api/driver/{id}/status` (mobile driver app) — first-completion guard on `trip_complete_notified_at`.
+  - `PATCH /api/admin/bookings/{id}/status` (desktop admin) — same guard.
+- **Public rating API** (both signed with HMAC of `BOOKING_LINK_SECRET`):
+  - `GET /api/bookings/{id}/rating-info?t=` — returns booking summary + `already_rated` flag.
+  - `POST /api/bookings/{id}/rate?t=` — stamps `customer_rating`, comment, and copies to `customer_ratings` collection for aggregation.
+- **Owner activity SMS** on every rating so admins celebrate 5★ trips and jump on <4★ ones fast.
+- Delivery report persisted to `booking.trip_complete_notification` for the admin notify-details drawer.
+- Verified live: `picked_up` → `completed` transition sent SMS + email to guest phone/inbox; rating POST stamped the booking; owner got a `🌟 5★ for Reagan` ping.
+
 ### Feb 2026 — Guest pickup confirmation on QR scan
 - **`notify_guest_picked_up(booking)`** — new SMS + email helper in `notifications.py`. Sends the guest a "You're on your way ✅" ping the moment the driver scans the QR at pickup.
 - **Wired into `POST /api/bookings/{id}/driver-checkin`**: after the status flips to `picked_up`, we spawn the notification via `asyncio.to_thread` so a slow SMTP round-trip never holds up the driver's tap.
