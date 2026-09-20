@@ -3836,6 +3836,35 @@ async def rate_booking(booking_id: str, req: RatingSubmit, t: str):
         )
     except Exception:  # noqa: BLE001
         pass
+
+    # Reviews Growth Loop: after a 5★ tap, DM the guest the Google
+    # review link so authentic reviews keep flowing. Fires exactly once
+    # per booking — the `google_review_prompt_sent_at` guard blocks
+    # re-fires if the guest re-submits or bumps a lower rating to 5★.
+    if int(req.stars) >= 5 and not b.get("google_review_prompt_sent_at"):
+        try:
+            cfg = await db.site_config.find_one({"_id": "main"}) or {}
+            review_url = (
+                cfg.get("google_reviews_url")
+                or cfg.get("google_business_url")
+                or "https://g.page/r/CYy0V1JN5XwtEAI/review"
+            )
+            prefs = {
+                "notify_email_enabled": cfg.get("notify_email_enabled", True),
+                "notify_sms_enabled": cfg.get("notify_sms_enabled", True),
+            }
+            from notifications import notify_guest_google_review_prompt
+            report = await asyncio.to_thread(
+                notify_guest_google_review_prompt, dict(b), review_url, prefs,
+            )
+            await db.bookings.update_one(
+                {"id": bid},
+                {"$set": {"google_review_prompt": report,
+                          "google_review_prompt_sent_at": now_iso()}},
+            )
+        except Exception as ex:  # noqa: BLE001
+            logger.warning("google review prompt err: %s", ex)
+
     return {"ok": True, "stars": int(req.stars)}
 
 

@@ -444,6 +444,72 @@ def notify_owner_activity(kind: str, sms_body: str, email_subject: Optional[str]
     return report
 
 
+def notify_guest_google_review_prompt(booking: dict, review_url: str,
+                                       prefs: Optional[dict] = None) -> dict:
+    """After a 5★ in-app rating, follow up with a "please share on Google"
+    SMS + email so authentic reviews keep flowing. Idempotency stamp
+    lives on the booking (`google_review_prompt_sent_at`) — this
+    function itself is safe to call multiple times, it just re-sends.
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+
+    report = {
+        "email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+        "sms":   {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
+    }
+
+    who = (booking.get("customer_name") or "there").split(" ")[0]
+    driver = booking.get("driver_name") or booking.get("assigned_driver") or "your Rox driver"
+
+    subject = f"⭐ Would you share that on Google, {who}? — {booking['id']}"
+    text = (
+        f"Hi {who},\n\n"
+        f"Thanks for the 5-star rating for {driver} — it made our day.\n\n"
+        f"Would you take 30 seconds to post it on Google? It's the single "
+        f"biggest thing that helps our small Bahamian business:\n"
+        f"{review_url}\n\n"
+        f"— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Thank you</div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;">You just made our day, {who} ⭐</h1>
+      <p style="color:#64748B;font-size:14px;margin-top:12px;">
+        Thanks for the 5-star rating for <strong>{driver}</strong>. If you
+        have 30 seconds, would you post it on Google? A public review is the
+        single biggest thing that helps our small Bahamian business earn the
+        trust of the next family that lands at LPIA.
+      </p>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:24px;margin-top:20px;text-align:center;">
+        <div style="font-size:32px;letter-spacing:8px;color:#FBBC05;">★ ★ ★ ★ ★</div>
+        <a href="{review_url}" style="display:inline-block;background:#4285F4;color:#fff;text-decoration:none;font-weight:700;padding:14px 26px;border-radius:999px;font-size:14px;margin-top:14px;">Share on Google →</a>
+        <p style="color:#94a3b8;font-size:11px;margin-top:14px;">Opens Google Maps · one-tap 5-star form</p>
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:24px;">Booking {booking['id']} · Rox Taxi Service &amp; Tours · Nassau</p>
+    </div>
+    """
+
+    if email_enabled and booking.get("customer_email"):
+        result = send_email(booking["customer_email"], subject, html, text, category="confirmation")
+        report["email"].update(result)
+    else:
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+
+    if sms_enabled and booking.get("customer_phone"):
+        sms = (
+            f"Rox: ⭐ Thanks for the 5★ for {driver}! Would you share on Google (30 sec)? "
+            f"{review_url}"
+        )
+        result = send_sms(booking["customer_phone"], sms)
+        report["sms"].update(result)
+    else:
+        report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+
+    return report
+
+
 def notify_guest_trip_complete(booking: dict, prefs: Optional[dict] = None,
                                 rating_link: str = "", tip_link: str = "") -> dict:
     """Fires when the driver marks the ride `completed`.
