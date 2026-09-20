@@ -180,6 +180,31 @@ function Field({ label, val, on, type = "text", testid }) {
 }
 
 function GoogleReviewsCard({ url }) {
+  // Pull authentic reviews from the same /api/reviews endpoint that
+  // powers the homepage rotator. Falls back gracefully when the sync
+  // pool is empty so we never leak a hard-coded quote.
+  const [data, setData] = useState(null);
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    let cancel = false;
+    api.get("/reviews?limit=30")
+      .then((r) => { if (!cancel) setData(r.data); })
+      .catch(() => {});
+    return () => { cancel = true; };
+  }, []);
+
+  useEffect(() => {
+    const pool = data?.reviews || [];
+    if (pool.length <= 1) return;
+    const id = setInterval(() => setIdx((i) => (i + 1) % pool.length), 9000);
+    return () => clearInterval(id);
+  }, [data?.reviews?.length]);
+
+  const rating = data?.rating || 0;
+  const total = data?.total || 0;
+  const featured = data?.reviews?.[idx];
+
   return (
     <div className="sticky top-24 rounded-3xl border border-[#E2E8F0] bg-gradient-to-br from-white to-[#FBF7EF] p-8" data-testid="google-reviews-card">
       <div className="flex items-center gap-2 mb-4">
@@ -194,15 +219,21 @@ function GoogleReviewsCard({ url }) {
         </div>
         <div>
           <div className="serif text-lg text-[#0B3B5C] leading-tight">Verified on Google</div>
-          <div className="text-[11px] text-[#64748B] leading-tight">Real reviews from real riders</div>
+          <div className="text-[11px] text-[#64748B] leading-tight">Real reviews synced hourly from Google</div>
         </div>
       </div>
 
       <div className="flex items-center gap-2 mb-1">
-        {[0,1,2,3,4].map((i) => <Star key={i} className="w-5 h-5 text-[#FBBC05] fill-[#FBBC05]" />)}
-        <span className="serif text-2xl text-[#0B3B5C] font-semibold ml-1">4.9</span>
+        {[0,1,2,3,4].map((i) => (
+          <Star key={i} className={`w-5 h-5 ${i < Math.round(rating) ? "text-[#FBBC05] fill-[#FBBC05]" : "text-[#E2E8F0]"}`} />
+        ))}
+        {rating > 0 && <span className="serif text-2xl text-[#0B3B5C] font-semibold ml-1" data-testid="google-reviews-avg">{rating.toFixed(1)}</span>}
       </div>
-      <div className="text-xs text-[#64748B] mb-6">Averaged across hundreds of trips across Nassau, Paradise Island &amp; Cable Beach.</div>
+      <div className="text-xs text-[#64748B] mb-6">
+        {total > 0
+          ? <>Live-averaged across <strong>{total}</strong> real Google review{total === 1 ? "" : "s"} across Nassau, Paradise Island &amp; Cable Beach.</>
+          : <>Fresh syncs pending — new reviews land within the hour.</>}
+      </div>
 
       <a
         href={url}
@@ -215,13 +246,20 @@ function GoogleReviewsCard({ url }) {
         <ExternalLink className="w-3.5 h-3.5 opacity-80" />
       </a>
 
-      <div className="mt-6 pt-6 border-t border-[#E2E8F0]">
-        <div className="text-[11px] tracking-[0.2em] uppercase text-[#64748B] mb-3">What guests say</div>
-        <blockquote className="text-sm text-[#0B192C] italic leading-relaxed border-l-2 border-[#D4A94A] pl-4">
-          "Fast pickup at LPIA, driver was fantastic and got us to Atlantis smoothly. Booked the return the same night — would use again."
-        </blockquote>
-        <div className="text-[11px] text-[#64748B] mt-2">— Verified rider · Google review</div>
-      </div>
+      {featured && (
+        <div className="mt-6 pt-6 border-t border-[#E2E8F0]" data-testid="google-reviews-featured">
+          <div className="text-[11px] tracking-[0.2em] uppercase text-[#64748B] mb-3">What guests say</div>
+          <blockquote className="text-sm text-[#0B192C] italic leading-relaxed border-l-2 border-[#D4A94A] pl-4">
+            "{featured.text}"
+          </blockquote>
+          <div className="mt-2 flex items-center gap-2 text-[11px] text-[#64748B]">
+            {featured.profile_photo_url && (
+              <img src={featured.profile_photo_url} alt="" className="w-5 h-5 rounded-full border border-[#E2E8F0]" />
+            )}
+            <span>— {featured.author_name} · {featured.relative_time} on Google</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

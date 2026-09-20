@@ -21,17 +21,15 @@ _db = None
 _clean: Callable = lambda x: x
 _annotate_promo: Callable = lambda x: x
 _now_iso: Callable = lambda: ""
-_reviews_seed: list = []
 
 
-def configure(*, db, clean, annotate_promo, now_iso, reviews_seed: list):
+def configure(*, db, clean, annotate_promo, now_iso):
     """Called once at app startup."""
-    global _db, _clean, _annotate_promo, _now_iso, _reviews_seed
+    global _db, _clean, _annotate_promo, _now_iso
     _db = db
     _clean = clean
     _annotate_promo = annotate_promo
     _now_iso = now_iso
-    _reviews_seed = reviews_seed
 
 
 router = APIRouter()

@@ -2936,26 +2936,11 @@ async def admin_set_blackout_dates(req: BlackoutDatesUpdate, _admin: dict = Depe
 
 
 
-REVIEWS_SEED = [
-    {"id": "r1", "author_name": "Jamie R.", "rating": 5, "relative_time": "2 weeks ago",
-     "text": "Prompt airport pickup at LPIA even after a delayed flight. Driver helped with our luggage and gave great tips for the Fish Fry. Highly recommend Rox Taxi!",
-     "profile_photo_url": "https://i.pravatar.cc/80?img=12"},
-    {"id": "r2", "author_name": "Marcia D.", "rating": 5, "relative_time": "1 month ago",
-     "text": "Booked the Blue Lagoon Island tour through Rox — smooth from booking to boat. The staff on the island were amazing. Best day of our Nassau trip!",
-     "profile_photo_url": "https://i.pravatar.cc/80?img=32"},
-    {"id": "r3", "author_name": "Thomas K.", "rating": 5, "relative_time": "3 weeks ago",
-     "text": "Rented the Chevy Trax for 5 days. Delivered right to our Cable Beach hotel. Clean, cold AC, and easy WhatsApp support the entire trip.",
-     "profile_photo_url": "https://i.pravatar.cc/80?img=68"},
-    {"id": "r4", "author_name": "Sara M.", "rating": 5, "relative_time": "2 months ago",
-     "text": "Family of 6 — the van was perfect, driver very courteous. Cross-island run to Atlantis was cheaper than the hotel taxi stand. Will use again.",
-     "profile_photo_url": "https://i.pravatar.cc/80?img=45"},
-    {"id": "r5", "author_name": "Devon W.", "rating": 5, "relative_time": "3 months ago",
-     "text": "Booked online, paid via Zelle. Everything confirmed within minutes. Cruise-port to Paradise Island pickup was seamless. Thanks Rox!",
-     "profile_photo_url": "https://i.pravatar.cc/80?img=15"},
-    {"id": "r6", "author_name": "Isla P.", "rating": 4, "relative_time": "4 months ago",
-     "text": "Great service overall. Snorkeling boat was on time. Small nitpick: bring your own towels. Would definitely book again.",
-     "profile_photo_url": "https://i.pravatar.cc/80?img=48"},
-]
+# Note: REVIEWS_SEED was removed Feb 2026. All reviews now come from
+# the `reviews` collection populated by the hourly Google Places sync
+# in routes/cron.py (`_sync_google_reviews_bg`). The homepage GoogleReviews
+# component + Contact page GoogleReviewsCard both read /api/reviews
+# (routes/catalog.py::list_reviews) which returns authentic reviews only.
 
 
 @api_router.get("/bookings/{booking_id}")
@@ -4823,7 +4808,6 @@ catalog_module.configure(
     clean=clean,
     annotate_promo=annotate_promo,
     now_iso=now_iso,
-    reviews_seed=REVIEWS_SEED,
 )
 api_router.include_router(catalog_module.router)
 
