@@ -175,6 +175,8 @@ class BookingCreate(BaseModel):
     # the tour + master switch is on). Server re-computes the fee from the
     # tour's stored taxi_addon_price / mode so the total can't be spoofed.
     taxi_addon_selected: Optional[bool] = False
+    # Rental option: drop the car back at LPIA airport (+$25 flat).
+    rental_airport_dropoff: Optional[bool] = False
     # A/B variant shown to the guest ("A" or "B"). Recorded verbatim so the
     # analytics chart can compute per-variant attach rate.
     taxi_addon_variant: Optional[str] = Field(None, max_length=1)
@@ -194,6 +196,7 @@ LUGGAGE_MAX = 10
 EXTRA_PASSENGER_FEE_USD = 5.0
 EXTRA_PASSENGER_INCLUDED = 2  # first 2 passengers included in the flat fare; each additional adds the fee
 RENTAL_DEPOSIT_USD = 150.0  # refundable security deposit applied automatically to every car rental booking
+RENTAL_AIRPORT_DROPOFF_FEE_USD = 25.0  # flat surcharge when the guest opts to drop the rental back at LPIA
 ADDITIONAL_DRIVER_FEE_USD = 25.0  # flat fee per extra registered driver on a car rental
 ADDITIONAL_DRIVER_MAX = 4
 RENTAL_MIN_DAYS = 2  # 2-day minimum booking policy for car rentals
@@ -205,6 +208,12 @@ ROUND_TRIP_DISCOUNT_PCT = 0.10  # 10% off when a taxi is booked as a same-day ro
 # Multi-day rental discount tiers — applied to price*days base (not deposit / add-ons).
 RENTAL_DISCOUNT_TIERS = [(14, 0.12), (7, 0.07), (5, 0.03)]
 
+# Taxes & processing — apply to every paid booking. Deposit + tip are
+# excluded from the taxable subtotal (deposit is refundable hold, tip
+# is a gratuity for the driver). Processing fee is 4.5% of subtotal+VAT.
+BAHAMAS_VAT_PCT = 0.10           # 10% Bahamas VAT on all orders
+PROCESSING_FEE_PCT = 0.045       # 4.5% payment-processing fee
+
 
 def _rental_discount_pct(days: int) -> float:
     for threshold, pct in RENTAL_DISCOUNT_TIERS:
@@ -213,8 +222,9 @@ def _rental_discount_pct(days: int) -> float:
     return 0.0
 
 # Days closed (weekly). Python weekday: Monday=0..Sunday=6. Saturday=5.
-CANCELLATION_FEE_PCT = 0.15  # 15% cancellation fee
+CANCELLATION_FEE_PCT = 0.20  # 20% cancellation fee on taxi/tour/excursion (rentals: forfeit deposit only)
 CANCELLATION_NOTICE_HOURS = 48  # 48-hour notice required for eligible refund
+CANCELLATION_APPLIES_TO = {"taxi", "tour", "excursion"}  # rentals handled separately (deposit forfeit)
 
 CLOSED_WEEKDAYS = {5}
 CLOSED_APPLIES_TO = {"taxi", "rental"}
@@ -2585,15 +2595,51 @@ async def create_booking(req: BookingCreate, request: Request):
             rental_discount = round(base * _pct, 2)
             booking["rental_discount"] = rental_discount
             booking["rental_discount_pct"] = _pct
+        # ── Airport drop-off surcharge ($25 flat) ────────────────────────
+        # Applies whenever the guest ticks the "return at LPIA" box. Also
+        # auto-flag when they typed an airport into dropoff_location so
+        # walk-in bookings can't accidentally dodge the fee.
+        rental_airport_dropoff = bool(req.rental_airport_dropoff)
+        if not rental_airport_dropoff and req.dropoff_location:
+            _hay = req.dropoff_location.lower()
+            if "airport" in _hay or "lpia" in _hay:
+                rental_airport_dropoff = True
+        if rental_airport_dropoff:
+            booking["rental_airport_dropoff"] = True
+            booking["rental_airport_dropoff_fee"] = RENTAL_AIRPORT_DROPOFF_FEE_USD
 
     if tip_amount > 0:
         booking["tip_amount"] = tip_amount
 
-    computed_total = round(
+    airport_dropoff_fee = booking.get("rental_airport_dropoff_fee", 0.0) if req.service_type == "rental" else 0.0
+
+    subtotal_before_tax = round(
         base + round_trip_fare_addition - round_trip_discount - rental_discount
-        + luggage_fee + passenger_fee + deposit_amount + additional_driver_fee
-        + bridge_toll_fee + tip_amount + taxi_addon_fee + taxi_extras_fee
+        + luggage_fee + passenger_fee + additional_driver_fee
+        + bridge_toll_fee + taxi_addon_fee + taxi_extras_fee
+        + airport_dropoff_fee
         + booking.get("baby_seat_fee", 0.0),
+        2,
+    )
+
+    # ── Bahamas VAT (10%) — skipped for taxi-only fares per policy ────
+    vat_applies = req.service_type != "taxi"
+    vat_amount = round(subtotal_before_tax * BAHAMAS_VAT_PCT, 2) if vat_applies else 0.0
+
+    # ── Payment-processing fee (4.5%) — applied to every order ─────────
+    processing_fee = round((subtotal_before_tax + vat_amount) * PROCESSING_FEE_PCT, 2)
+
+    if vat_amount > 0:
+        booking["vat_amount"] = vat_amount
+        booking["vat_pct"] = BAHAMAS_VAT_PCT
+    booking["processing_fee"] = processing_fee
+    booking["processing_fee_pct"] = PROCESSING_FEE_PCT
+    booking["subtotal_before_tax"] = subtotal_before_tax
+
+    # Deposit + tip layered on AFTER VAT/processing so they aren't taxed
+    # (deposit is a refundable hold, tip is a gratuity for the driver).
+    computed_total = round(
+        subtotal_before_tax + vat_amount + processing_fee + deposit_amount + tip_amount,
         2,
     )
 
@@ -2765,9 +2811,24 @@ async def get_fees():
         "passenger_policy": f"Taxi flat rate covers up to {EXTRA_PASSENGER_INCLUDED} passengers. Each additional passenger is +${EXTRA_PASSENGER_FEE_USD:.0f}.",
         "rental_deposit_usd": RENTAL_DEPOSIT_USD,
         "rental_deposit_policy": (
-            f"A refundable security deposit of ${RENTAL_DEPOSIT_USD:.0f} is added automatically to every car "
-            "rental booking. It is released back to the customer after the vehicle is returned undamaged, with a "
-            "full tank and on time."
+            f"A refundable ${RENTAL_DEPOSIT_USD:.0f} security deposit is held on every car "
+            "rental booking. It is released back to the customer after the vehicle is returned "
+            "undamaged, with a full tank, and on time."
+        ),
+        "rental_airport_dropoff_fee_usd": RENTAL_AIRPORT_DROPOFF_FEE_USD,
+        "rental_airport_dropoff_policy": (
+            f"Drop the rental back at LPIA airport for a flat ${RENTAL_AIRPORT_DROPOFF_FEE_USD:.0f} convenience "
+            "surcharge — otherwise return at our Nassau depot at no extra charge."
+        ),
+        "bahamas_vat_pct": BAHAMAS_VAT_PCT,
+        "bahamas_vat_policy": (
+            f"{int(BAHAMAS_VAT_PCT*100)}% Bahamas VAT is added to every order except point-to-point taxi fares. "
+            "Deposits and driver tips are exempt."
+        ),
+        "processing_fee_pct": PROCESSING_FEE_PCT,
+        "processing_fee_policy": (
+            f"A {PROCESSING_FEE_PCT*100:g}% payment-processing fee is applied to every order to cover "
+            "credit-card and payout costs."
         ),
         "additional_driver_fee_usd": ADDITIONAL_DRIVER_FEE_USD,
         "additional_driver_max": ADDITIONAL_DRIVER_MAX,
@@ -2794,10 +2855,13 @@ async def get_fees():
         "closed_applies_to": sorted(CLOSED_APPLIES_TO),
         "cancellation_fee_pct": CANCELLATION_FEE_PCT,
         "cancellation_notice_hours": CANCELLATION_NOTICE_HOURS,
+        "cancellation_applies_to": sorted(CANCELLATION_APPLIES_TO),
         "cancellation_policy": (
-            f"Cancellations made at least {CANCELLATION_NOTICE_HOURS} hours before the service will be refunded "
-            f"minus a {int(CANCELLATION_FEE_PCT*100)}% cancellation fee. Cancellations within "
-            f"{CANCELLATION_NOTICE_HOURS} hours are non-refundable."
+            f"Taxi, tour, and excursion bookings: cancellations made at least {CANCELLATION_NOTICE_HOURS} hours "
+            f"before the service are refunded minus a {int(CANCELLATION_FEE_PCT*100)}% cancellation fee. "
+            f"Cancellations within {CANCELLATION_NOTICE_HOURS} hours are non-refundable. "
+            "Car rentals: the base fare is fully refunded outside the notice window; the security deposit is "
+            "always released back."
         ),
     }
 
@@ -2827,7 +2891,21 @@ async def cancel_booking(booking_id: str):
 
     total = float(doc.get("total") or 0.0)
     paid = doc.get("payment_status") == "paid"
-    fee = round(total * CANCELLATION_FEE_PCT, 2) if eligible else (total if paid else 0.0)
+    svc_type = (doc.get("service_type") or "").lower()
+    # Cancellation fee only applies to taxi / tour / excursion. Rentals
+    # always release the deposit + refund the base fare when eligible;
+    # inside the notice window rentals forfeit the base fare only (deposit
+    # still comes back). Keep the existing "non-refundable within window"
+    # behaviour for the other service types.
+    if svc_type in CANCELLATION_APPLIES_TO:
+        fee = round(total * CANCELLATION_FEE_PCT, 2) if eligible else (total if paid else 0.0)
+    else:
+        # Rental — refund the base fare when eligible; forfeit fare (but not deposit) if late.
+        deposit = float(doc.get("deposit_amount") or 0.0)
+        if eligible:
+            fee = 0.0
+        else:
+            fee = round(max(0.0, total - deposit), 2) if paid else 0.0
     refund = round(max(0.0, total - fee), 2) if paid else 0.0
 
     # ── AUTO-REFUND — fire provider API when eligible + paid ───────────────

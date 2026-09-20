@@ -80,6 +80,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     flight_number: "",
     notes: "",
     taxi_addon_selected: false,
+    rental_airport_dropoff: false,
     selected_addon_ids: Array.isArray(initialAddonIds) ? [...initialAddonIds] : [],
     requested_driver: initialRequestedDriver,
   });
@@ -87,11 +88,14 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const PASSENGER_FEE = 5;
   const PASSENGER_INCLUDED = 2;
   const RENTAL_DEPOSIT = 150;
+  const RENTAL_AIRPORT_DROPOFF_FEE = 25;
   const ADDITIONAL_DRIVER_FEE = 25;
   const ADDITIONAL_DRIVER_MAX = 4;
   const BABY_SEAT_FEE = 7;
   const BABY_SEAT_MAX = 3;
   const BABY_SEAT_FREE_AFTER_DAYS = 14;
+  const BAHAMAS_VAT_PCT = 0.10;
+  const PROCESSING_FEE_PCT = 0.045;
   const [payMethod, setPayMethod] = useState("stripe");
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
   const [loading, setLoading] = useState(false);
@@ -227,10 +231,15 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
       return sum + (mode === "per_person" ? price * Math.max(1, taxiPaxForAddons) : price);
     }, 0);
 
-  // Processing fee — 3% on the whole transaction (base + extras + deposit
-  // + tip) to cover Stripe/PayPal card fees. Shown to the customer as its own line.
-  const PROCESSING_FEE_PCT = 0.03;
-  const rawSubtotal = base + luggageFee + passengerFee + rentalDeposit + additionalDriverFee + babySeatFee + taxiAddonFee + taxiExtrasFee;
+  const rentalAirportDropoff = serviceType === "rental" && !!form.rental_airport_dropoff;
+  const rentalAirportDropoffFee = rentalAirportDropoff ? RENTAL_AIRPORT_DROPOFF_FEE : 0;
+
+  // ── Taxable subtotal ───────────────────────────────────────────────
+  // Everything the guest is actually being charged for, EXCLUDING the
+  // refundable deposit and the driver tip (deposit is a hold, tip is a
+  // gratuity — neither is VAT-taxable).
+  const rawSubtotal = base + luggageFee + passengerFee + additionalDriverFee
+    + babySeatFee + taxiAddonFee + taxiExtrasFee + rentalAirportDropoffFee;
 
   // ── Friend-of-friend referral discount ──────────────────────────────
   // Captured by <ReferralCatcher> in Layout when the guest lands via
@@ -253,14 +262,6 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   // Optional tip pre-charged with the booking so the driver takes home
   // 100% (business absorbs no card-fee gap — Stripe processes tip inside
   // the same PaymentIntent). Rentals don't offer tipping (no driver).
-  // Custom values are capped at $1000 to match backend Pydantic bound.
-  //
-  // Default policy: FIRST-TIME visitors land on 18% pre-selected so most
-  // guests tip without thinking; RETURNING visitors see whatever they
-  // picked on their last booking (persisted to localStorage on submit).
-  // `rox_last_tip` = "0" | "15" | "18" | "20" | "custom". If "custom"
-  // is stored, we also restore the exact custom $ value from
-  // `rox_last_tip_custom`.
   const supportsTip = serviceType !== "rental";
   const [tipMode, setTipMode] = useState(() => {
     if (!supportsTip) return 0;
@@ -291,8 +292,15 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     return subtotal * (pct / 100);
   })();
 
-  const processingFee = (subtotal + tipAmount) * PROCESSING_FEE_PCT;
-  const total = subtotal + tipAmount + processingFee;
+  // ── Bahamas VAT (10%) — taxi fares are exempt per policy ───────────
+  const vatApplies = serviceType !== "taxi";
+  const vatAmount = vatApplies ? subtotal * BAHAMAS_VAT_PCT : 0;
+
+  // ── Payment-processing fee (4.5%) — applied to every order ─────────
+  const processingFee = (subtotal + vatAmount) * PROCESSING_FEE_PCT;
+
+  // Deposit + tip layer on AFTER VAT/processing so they aren't taxed.
+  const total = subtotal + vatAmount + processingFee + rentalDeposit + tipAmount;
 
   const submit = async () => {
     if (!form.customer_name || !form.customer_email || !form.customer_phone || !form.booking_date) {
@@ -343,6 +351,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         extra_luggage: Number(form.extra_luggage) || 0,
         additional_drivers: Number(form.additional_drivers) || 0,
         baby_seats: Number(form.baby_seats) || 0,
+        rental_airport_dropoff: !!rentalAirportDropoff,
         notes: form.notes || null,
         payment_method: payMethod,
         round_trip: !!form.round_trip,

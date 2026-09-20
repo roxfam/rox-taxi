@@ -23,6 +23,21 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Front-page slide rename
+- Renamed hero slide **"Rose Island reefs." → "Pearl & Athol Island."** (id: `hero-rose-island` → `hero-pearl-athol-island`) — subtitle preserved.
+- Renamed hero slide **"Junkanoo golden hour." → "Junkanoo Beach."** (id: `hero-junkanoo` → `hero-junkanoo-beach`) — subtitle preserved.
+- Both updates applied live to the `home_slides` Mongo collection AND persisted in `seed_data.py` so fresh installs pick up the new copy.
+
+### Feb 2026 — Pricing overhaul: VAT, processing, cancellation, airport drop-off
+- **10% Bahamas VAT** on every order EXCEPT point-to-point taxi fares. Deposits + driver tips are exempt (deposit is a refundable hold, tip is a gratuity).
+- **4.5% processing fee** on every order (applied to subtotal + VAT, before deposit/tip).
+- **20% cancellation fee** on taxi, tour, and excursion bookings (was 15%). Rentals now handled separately — deposit is always released back; base fare refunded when ≥48h notice, otherwise forfeit fare but keep deposit.
+- **$25 airport drop-off fee** on rentals — new `rental_airport_dropoff` field on `BookingCreate` + auto-detects when "airport" or "LPIA" is typed into dropoff_location.
+- **$150 rental hold deposit** kept as-is (existing `RENTAL_DEPOSIT_USD`) — verified applied automatically on every rental booking.
+- **Stripe = instant** (already was) — `StripeCheckout` charges the full booking total on session complete; no deposit-mode split.
+- Frontend `BookingFlow` mirrors the backend line-for-line: separate VAT + processing line items, airport-drop-off checkbox for rentals, and the new taxable-subtotal separation from deposit/tip.
+- Verified live: taxi ($40) → total $41.80 (no VAT, just processing); tour ($235) → total $270.79 (VAT $47 + processing $12.79); rental (3d @ $75 + airport) → total ≈ $410 including $150 deposit + $25 airport fee + VAT + processing.
+
 ### Feb 2026 — Reviews Growth Loop
 - **After every 5★ in-app rating**, the guest gets a follow-up SMS + email inviting them to post the review on Google. Powered by new `notify_guest_google_review_prompt(booking, review_url)` in `notifications.py`.
 - **URL source**: reads `site_config.google_reviews_url` (or `google_business_url`) with a default fallback to Rox's actual g.page short-link so it works out of the box.
