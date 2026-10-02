@@ -47,14 +47,14 @@ def configure(*, db, require_admin, site_base_url: str, indexnow_key: str):
 router = APIRouter()
 
 
-def _admin_dep(
+async def _admin_dep(
     request: Request,
     authorization: Optional[str] = Header(None),
     x_csrf_token: Optional[str] = Header(None, alias="X-CSRF-Token"),
 ) -> str:
     if _require_admin is None:
         raise HTTPException(500, "Admin dependency not configured")
-    return _require_admin(request, authorization, x_csrf_token)
+    return await _require_admin(request, authorization, x_csrf_token)
 
 
 # ─── Static, high-priority pages ────────────────────────────────────

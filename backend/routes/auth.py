@@ -17,7 +17,7 @@ import hashlib
 import os
 import secrets
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
 import bcrypt
@@ -604,8 +604,46 @@ async def admin_login(req: LoginRequest, request: Request, response: Response):
 
 
 @router.post("/auth/admin-logout")
-async def admin_logout(response: Response):
-    """Clear admin session + CSRF cookies. Idempotent; always 200."""
+async def admin_logout(request: Request, response: Response,
+                        authorization: Optional[str] = Header(None)):
+    """Clear admin session + CSRF cookies AND revoke the JWT server-side
+    so a stolen cookie can't be replayed. Idempotent; always 200 even
+    when no token is present (so a double-click doesn't error)."""
+    import hashlib
+    token = request.cookies.get("admin_session")
+    if not token and authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+    if token:
+        try:
+            # Decode WITHOUT verifying signature validity on logout — if
+            # the user is signing out of a (possibly expired) session we
+            # still want to blacklist that hash so a replay fails.
+            payload = jwt.decode(
+                token, _jwt_secret,
+                algorithms=["HS256"],
+                options={"verify_exp": False, "verify_signature": True},
+            )
+            # Convert the JWT `exp` (unix seconds) into an aware datetime
+            # for the TTL index. If `exp` is missing we fall back to +7d.
+            exp = payload.get("exp")
+            if exp:
+                expires_at = datetime.fromtimestamp(int(exp), tz=timezone.utc)
+            else:
+                expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+            token_hash = hashlib.sha256(token.encode()).hexdigest()
+            await _db.admin_revoked_tokens.update_one(
+                {"token_hash": token_hash},
+                {"$setOnInsert": {
+                    "token_hash": token_hash,
+                    "revoked_at": datetime.now(timezone.utc),
+                    "expires_at": expires_at,
+                    "sub": payload.get("sub"),
+                }},
+                upsert=True,
+            )
+        except jwt.PyJWTError:
+            # Garbage token — nothing to revoke. Still clear cookies.
+            pass
     response.delete_cookie("admin_session", path="/")
     response.delete_cookie("admin_csrf", path="/")
     return {"ok": True}

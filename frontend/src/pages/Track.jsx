@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, money, STATUS_STEPS, STATUS_INDEX } from "../lib/api";
-import { Check, Search, MapPin, User, Calendar as CalIcon, Loader2, XCircle, AlertTriangle, Signal, CreditCard } from "lucide-react";
+import { Check, Search, MapPin, User, Calendar as CalIcon, Loader2, XCircle, AlertTriangle, Signal, CreditCard, CalendarPlus, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -58,6 +58,7 @@ export default function Track() {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
 
   const fetchBooking = async (id) => {
     if (!id) return;
@@ -264,18 +265,27 @@ export default function Track() {
                 <div className="flex items-start gap-3 max-w-xl">
                   <AlertTriangle className="w-5 h-5 text-[#D4A94A] mt-0.5 shrink-0" />
                   <div className="text-sm text-[#334155] leading-relaxed">
-                    <div className="font-semibold text-[#0B3B5C]">Cancellation policy</div>
-                    <div className="text-[#64748B] mt-0.5">Cancel 48+ hours before service to receive a refund minus a <strong>15% cancellation fee</strong>. Within 48 hours = non-refundable.</div>
+                    <div className="font-semibold text-[#0B3B5C]">Need to change your plans?</div>
+                    <div className="text-[#64748B] mt-0.5">Reschedule for free up to 2 hours before pickup. Full cancel: 48+ hr notice = refund minus <strong>15%</strong>; within 48 hr = non-refundable.</div>
                   </div>
                 </div>
-                <button
-                  onClick={cancelBooking}
-                  disabled={cancelling}
-                  data-testid="cancel-booking-btn"
-                  className="rounded-full bg-white border border-[#E2E8F0] text-[#0B3B5C] px-4 py-2.5 text-sm font-semibold hover:border-red-500 hover:text-red-600 active:scale-95 disabled:opacity-60 inline-flex items-center gap-2"
-                >
-                  <XCircle className="w-4 h-4" /> {cancelling ? "Cancelling…" : "Cancel booking"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setRescheduleOpen(true)}
+                    data-testid="reschedule-booking-btn"
+                    className="rounded-full bg-[#0B3B5C] border border-[#0B3B5C] text-white px-4 py-2.5 text-sm font-semibold hover:bg-[#132a4a] active:scale-95 inline-flex items-center gap-2"
+                  >
+                    <CalendarPlus className="w-4 h-4" /> Reschedule
+                  </button>
+                  <button
+                    onClick={cancelBooking}
+                    disabled={cancelling}
+                    data-testid="cancel-booking-btn"
+                    className="rounded-full bg-white border border-[#E2E8F0] text-[#0B3B5C] px-4 py-2.5 text-sm font-semibold hover:border-red-500 hover:text-red-600 active:scale-95 disabled:opacity-60 inline-flex items-center gap-2"
+                  >
+                    <XCircle className="w-4 h-4" /> {cancelling ? "Cancelling…" : "Cancel"}
+                  </button>
+                </div>
               </div>
             )}
 

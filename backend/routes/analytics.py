@@ -37,12 +37,14 @@ def configure(**kw):
 router = APIRouter()
 
 
-def _require_admin_dep(
+async def _require_admin_dep(
     request: Request,
     authorization: Optional[str] = Header(None),
     x_csrf_token: Optional[str] = Header(None, alias="X-CSRF-Token"),
 ):
-    return _require_admin(request, authorization, x_csrf_token) if callable(_require_admin) else None
+    if not callable(_require_admin):
+        return None
+    return await _require_admin(request, authorization, x_csrf_token)
 
 
 def _require():

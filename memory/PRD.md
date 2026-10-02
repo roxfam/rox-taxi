@@ -233,6 +233,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Owner SMS: +12424322587
 - Cron secret: `WEBHOOK_CRON_SECRET`
 
+### Feb 2026 — Admin kill-switch · Guest-side rebooking · Rebook SMS fan-out
+- **Admin session kill-switch** (`server.py require_admin`, `routes/auth.py admin_logout`): logout now hashes the JWT and inserts `{token_hash, expires_at}` into a new `admin_revoked_tokens` collection with a TTL index that auto-cleans at JWT expiry. Every admin request pays an ~0.5 ms Mongo lookup and 401s on a revoked hash — so even if an attacker already copied the httpOnly cookie, a Sign-Out invalidates the session server-side. `require_admin` was made `async` for the lookup.
+- **Guest-driven rebook** (`POST /api/bookings/{id}/guest-reschedule`): new public endpoint that lets the guest shift pickup directly from the Track page. Verifies `customer_email` match, enforces 2 hr minimum lead-time + 90 day max horizon, 60 s rate-limit, resets `airport_reminder_sent_at` so the T-60 driver nudge re-fires on the new time. Appends to `reschedule_history[]`.
+- **Rebook SMS fan-out** (`_notify_reschedule`): every rebook path — guest-side (new) and flight-delay one-tap (existing `/bookings/reschedule/{token}`) — now fires an owner-dispatcher SMS AND a guest confirmation SMS with old → new pickup times. Logged into `booking.notification_log[]` for audit.
+- **Track page UX** (`frontend/src/pages/Track.jsx`): new `Reschedule` button alongside Cancel, opens a `RescheduleDialog` with datetime pickers for pickup (and optional return for round-trip bookings) plus email verification. Toast confirms both SMS channels fired.
+
 ### Feb 2026 — Admin booking actions + VAT/fee adjustments + invoice overhaul
 - **Pricing policy update**: VAT now 10% on **every** fare (previously taxi was exempt); processing fee bumped from 4.5% → **5%**. `server.py BAHAMAS_VAT_PCT / PROCESSING_FEE_PCT`, mirrored in `BookingFlow.jsx` and `pdf_utils.py`.
 - **Round-trip date + time**: `BookingRequest.return_date` added so round-trip pickups can land on a different calendar day. Frontend `Taxi.jsx` upgraded from a time-only input to a native `datetime-local` picker. Return-leg driver nudge cron + ICS calendar export both honour the new field with a same-day fallback.

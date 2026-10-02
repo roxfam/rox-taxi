@@ -392,7 +392,7 @@ def make_admin_token(email: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 
-def require_admin(
+async def require_admin(
     request: Request,
     authorization: Optional[str] = Header(None),
     x_csrf_token: Optional[str] = Header(None, alias="X-CSRF-Token"),
@@ -408,8 +408,14 @@ def require_admin(
     client that hasn't been upgraded (and old automated tests) still
     authenticates. Bearer requests skip CSRF since the attacker can't
     forge an Authorization header cross-origin.
+
+    Server-side kill-switch: after JWT decode, hash the token and check
+    `admin_revoked_tokens`. If present → 401. The collection self-cleans
+    via a TTL index on `expires_at` so revoked hashes drop out of the DB
+    the moment the underlying JWT would have expired anyway.
     """
     import hmac
+    import hashlib
     token = None
     source = None
     cookie_token = request.cookies.get("admin_session") if request else None
@@ -431,6 +437,17 @@ def require_admin(
         cookie_csrf = request.cookies.get("admin_csrf") or ""
         if not cookie_csrf or not x_csrf_token or not hmac.compare_digest(cookie_csrf, x_csrf_token):
             raise HTTPException(403, "CSRF validation failed")
+    # ── Server-side revocation (kill-switch) ──────────────────────────
+    # We hash the raw JWT so a leaked collection can't be used to
+    # resurrect a stolen session. SHA-256 is overkill-fast for this
+    # single lookup — <1 ms vs. the ~5-20 ms the handler itself takes.
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    try:
+        revoked = await db.admin_revoked_tokens.find_one({"token_hash": token_hash})
+    except Exception:  # noqa: BLE001
+        revoked = None  # fail-open on transient Mongo blip rather than lock out admins
+    if revoked:
+        raise HTTPException(401, "Session revoked — please sign in again")
     return payload["sub"]
 
 
@@ -1516,6 +1533,11 @@ async def seed_db():
         await db.password_reset_tokens.create_index("expires_at")
         await db.password_reset_attempts.create_index("email")
         await db.password_reset_attempts.create_index("created_at")
+        # Admin JWT kill-switch — one unique hash per revoked token with a
+        # TTL on `expires_at` so revoked entries disappear the moment the
+        # underlying JWT would've died anyway (7-day admin session).
+        await db.admin_revoked_tokens.create_index("token_hash", unique=True)
+        await db.admin_revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
     except Exception as e:  # noqa: BLE001
         logging.warning("auth index create warn: %s", e)
     # Idempotent seed. `price` + `price_history` are ONLY set on first insert so
@@ -2929,6 +2951,155 @@ async def get_fees():
             "always released back."
         ),
     }
+
+
+# ─── Reschedule SMS fan-out (admin + guest) ───────────────────────────
+# Every rebook path funnels through here so both audiences see the same
+# story: owner gets an audit SMS, guest gets a confirmation. Failures
+# are swallowed so a Twilio outage can't break the user-facing API.
+async def _notify_reschedule(booking: dict, old_pickup: str, new_pickup: str,
+                              new_return: Optional[str] = None,
+                              actor: str = "guest") -> dict:
+    """Fire owner + guest SMS for any rescheduled booking. Returns a dict
+    with per-channel delivery status for the audit log."""
+    try:
+        from notifications import send_owner_sms, send_sms  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return {"error": "notifications module unavailable"}
+
+    def _fmt(iso: str) -> str:
+        try:
+            d = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+            return d.strftime("%a %b %-d · %H:%M")
+        except Exception:  # noqa: BLE001
+            return (iso or "")[:16]
+
+    first = (booking.get("customer_name") or "guest").split(" ")[0]
+    bid = booking.get("id", "?")
+    svc = booking.get("item_name") or booking.get("service_type") or "booking"
+    old_s, new_s = _fmt(old_pickup), _fmt(new_pickup)
+    return_tail = f" (return {_fmt(new_return)})" if new_return else ""
+
+    report: Dict[str, Any] = {"actor": actor, "old": old_s, "new": new_s}
+    try:
+        owner_body = (
+            f"🔁 Rebook {bid} by {actor} — {svc}\n"
+            f"OLD: {old_s}\nNEW: {new_s}{return_tail}\n"
+            f"Guest: {booking.get('customer_name','')} · {booking.get('customer_phone','')}"
+        )
+        report["owner_sms"] = send_owner_sms(owner_body[:600], kind="booking", force_priority=True)
+    except Exception as e:  # noqa: BLE001
+        report["owner_sms"] = {"sent": False, "error": str(e)}
+
+    phone = (booking.get("customer_phone") or "").strip()
+    if phone and len(phone) >= 7:
+        try:
+            guest_body = (
+                f"Hi {first}! Your Rox pickup for booking {bid} is rebooked.\n"
+                f"Was: {old_s}\nNow: {new_s}{return_tail}\n"
+                f"Need to tweak again? Reply here or WhatsApp +1 (242) 432-2587."
+            )
+            report["guest_sms"] = send_sms(phone, guest_body[:600])
+        except Exception as e:  # noqa: BLE001
+            report["guest_sms"] = {"sent": False, "error": str(e)}
+    return report
+
+
+# ─── Guest-driven reschedule from the Track page ──────────────────────
+class GuestRescheduleRequest(BaseModel):
+    email: EmailStr                              # verifies ownership (case-insensitive match)
+    new_pickup: str = Field(..., min_length=10)  # ISO datetime for the new pickup
+    new_return_date: Optional[str] = None        # YYYY-MM-DD when a round-trip return also shifts
+    new_return_time: Optional[str] = None        # HH:MM in 24h clock
+
+
+@api_router.post("/bookings/{booking_id}/guest-reschedule")
+async def guest_reschedule(booking_id: str, req: GuestRescheduleRequest):
+    """Lets a guest shift their own pickup from the Track page — no email
+    round-trip required. Guards:
+      * booking must exist, status not completed/cancelled/no_show
+      * supplied `email` must match the booking's customer_email
+      * new pickup must be ≥ 2 hours from now and ≤ 90 days ahead
+      * one reschedule allowed per 60 seconds (anti-fat-finger)
+    Fires admin + guest SMS on success and resets `airport_reminder_sent_at`
+    so the T-60 driver nudge re-fires relative to the new pickup time."""
+    doc = await db.bookings.find_one({"id": booking_id.upper()})
+    if not doc:
+        raise HTTPException(404, "Booking not found")
+    if (doc.get("customer_email") or "").strip().lower() != req.email.strip().lower():
+        raise HTTPException(403, "Email on file doesn't match this booking")
+    if doc.get("status") in {"cancelled", "completed", "no_show"}:
+        raise HTTPException(409, f"Cannot reschedule a {doc['status']} booking")
+
+    try:
+        new_dt = datetime.fromisoformat(req.new_pickup.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(400, "new_pickup must be an ISO-8601 datetime")
+    if new_dt.tzinfo is None:
+        new_dt = new_dt.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    if (new_dt - now).total_seconds() < 2 * 3600:
+        raise HTTPException(400, "New pickup must be at least 2 hours from now")
+    if (new_dt - now).total_seconds() > 90 * 24 * 3600:
+        raise HTTPException(400, "New pickup can't be more than 90 days out")
+
+    last = doc.get("last_guest_reschedule_at")
+    if last:
+        try:
+            delta = (now - datetime.fromisoformat(last.replace("Z", "+00:00"))).total_seconds()
+            if delta < 60:
+                raise HTTPException(429, f"Please wait {60-int(delta)}s before rescheduling again")
+        except (ValueError, TypeError):
+            pass
+
+    old_pickup = doc.get("booking_date", "")
+    set_doc: Dict[str, Any] = {
+        "booking_date": new_dt.isoformat(),
+        "last_guest_reschedule_at": now.isoformat(),
+    }
+    if req.new_return_date:
+        set_doc["return_date"] = req.new_return_date.strip()[:16]
+    if req.new_return_time:
+        set_doc["return_time"] = req.new_return_time.strip()[:32]
+
+    history_entry = {
+        "at": now.isoformat(),
+        "actor": "guest",
+        "from_pickup": old_pickup,
+        "to_pickup": new_dt.isoformat(),
+        "return_date": set_doc.get("return_date"),
+        "return_time": set_doc.get("return_time"),
+    }
+    await db.bookings.update_one(
+        {"id": doc["id"]},
+        {"$set": set_doc,
+         "$push": {"reschedule_history": history_entry},
+         "$unset": {"airport_reminder_sent_at": ""}},
+    )
+
+    new_return_iso = None
+    if set_doc.get("return_date") and set_doc.get("return_time"):
+        new_return_iso = f"{set_doc['return_date']}T{set_doc['return_time']}:00+00:00"
+
+    fresh = await db.bookings.find_one({"id": doc["id"]})
+    sms_report = await _notify_reschedule(
+        fresh or doc, old_pickup, new_dt.isoformat(), new_return_iso, actor="guest",
+    )
+    await db.bookings.update_one(
+        {"id": doc["id"]},
+        {"$push": {"notification_log": {"at": now.isoformat(), "kind": "reschedule_guest", "report": sms_report}}},
+    )
+
+    return {
+        "ok": True,
+        "booking_id": doc["id"],
+        "new_pickup": new_dt.isoformat(),
+        "return_date": set_doc.get("return_date"),
+        "return_time": set_doc.get("return_time"),
+        "sms": sms_report,
+    }
+
 
 
 @api_router.post("/bookings/{booking_id}/cancel")
@@ -4867,6 +5038,21 @@ async def one_tap_reschedule(token: str):
             "airport_reminder_sent_at": "",
          }},
     )
+    # Fan out admin + guest SMS so the whole chain hears about the new
+    # pickup — same helper the Track-page reschedule path uses.
+    try:
+        fresh = await db.bookings.find_one({"id": b["id"]}) or b
+        sms_report = await _notify_reschedule(
+            fresh, b["booking_date"], new_dt.isoformat(), actor="flight_delay",
+        )
+        await db.bookings.update_one(
+            {"id": b["id"]},
+            {"$push": {"notification_log": {
+                "at": now_iso(), "kind": "reschedule_one_tap", "report": sms_report,
+            }}},
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.warning("one-tap reschedule SMS fan-out failed for %s: %s", b["id"], e)
     return HTMLResponse(_reschedule_page(
         title="Pickup shifted ✓",
         body=(
