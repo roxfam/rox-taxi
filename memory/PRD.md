@@ -233,7 +233,18 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Owner SMS: +12424322587
 - Cron secret: `WEBHOOK_CRON_SECRET`
 
-### Feb 2026 — Remaining P2 refactoring backlog
+### Feb 2026 — Admin booking actions + VAT/fee adjustments + invoice overhaul
+- **Pricing policy update**: VAT now 10% on **every** fare (previously taxi was exempt); processing fee bumped from 4.5% → **5%**. `server.py BAHAMAS_VAT_PCT / PROCESSING_FEE_PCT`, mirrored in `BookingFlow.jsx` and `pdf_utils.py`.
+- **Round-trip date + time**: `BookingRequest.return_date` added so round-trip pickups can land on a different calendar day. Frontend `Taxi.jsx` upgraded from a time-only input to a native `datetime-local` picker. Return-leg driver nudge cron + ICS calendar export both honour the new field with a same-day fallback.
+- **QR on booking confirmation**: new `BoardingQrCard` component rendered on the Zelle + PayPal confirmation screens inside `BookingFlow.jsx`. Guests see their scannable QR + a one-tap "Open full boarding pass" link without hunting through email.
+- **Invoice redesign**: `pdf_utils.build_receipt_pdf` now ships (a) a prominent navy "Call / WhatsApp: +1 (242) 432-2587" row, (b) a scannable **Code128 barcode** of the booking id with human-readable text, and (c) the existing QR → boarding pass. Fixed a latent bug where `qrcode.make_image` was receiving a `reportlab.HexColor` object and crashing silently to the fallback footer.
+- **3 new admin actions on `BookingDetailModal`**:
+  - `POST /admin/bookings/{id}/complete` — one-tap "mark complete" shortcut (idempotent, appends `admin_complete` entry to `status_history`, fires trip-complete guest ping exactly once).
+  - `POST /admin/bookings/{id}/send-payment-email` — email a one-tap pay button + invoice PDF attachment to the guest. Supports optional `message` note. Rate-limited to 1 send per 60s per booking. Logs every send into `booking.payment_email_log[]`.
+  - Existing `/reopen` wired visually alongside — guests, drivers, and admins now have one place to drive the booking lifecycle.
+- End-to-end verified via curl + the pymupdf-rendered PDF images: full receipt flow, admin lifecycle actions, and double-submit CSRF still intact.
+
+
 - **Split BookingFlow Modal** (`BookingModal.jsx`, 1264 lines) → `BookingSteps` + `BookingForm` + `BookingSummary` so future booking tweaks stop touching a single giant file.
 - **Notifications Template Refactor** (`notifications.py`) → extract Jinja2 templates for `send_email`, `send_owner_sms`, `send_dispatcher_digest` so each top-level function drops <20 lines.
 - **ChatWidget Rewrite** (`ChatWidget.jsx`, complexity 83) → split into `MessageList` + `MessageInput` + `useChatConnection`.

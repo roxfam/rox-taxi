@@ -375,16 +375,32 @@ export default function Taxi() {
                   data-testid="taxi-return-time-block"
                 >
                   <label className="block">
-                    <span className="block text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black mb-1.5">Return pickup time</span>
+                    <span className="block text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black mb-1.5">Return pickup — date &amp; time</span>
                     <input
-                      type="time"
-                      value={form.return_time || ""}
-                      onChange={(e) => setForm({ ...form, return_time: e.target.value })}
-                      data-testid="taxi-return-time-input"
+                      type="datetime-local"
+                      value={
+                        // Reconstruct an ISO-ish `YYYY-MM-DDTHH:MM` value from
+                        // the two separate fields the booking payload uses.
+                        // Blank until BOTH date and time are set so the
+                        // picker shows its native placeholder.
+                        form.return_date && form.return_time
+                          ? `${form.return_date}T${form.return_time}`
+                          : ""
+                      }
+                      onChange={(e) => {
+                        // Split `YYYY-MM-DDTHH:MM` → separate `return_date`
+                        // + `return_time` fields. Backend accepts them both;
+                        // the time-only variant stays supported for guests
+                        // on legacy browsers that render datetime-local as
+                        // a text input.
+                        const [d, t] = (e.target.value || "").split("T");
+                        setForm({ ...form, return_date: d || "", return_time: t || "" });
+                      }}
+                      data-testid="taxi-return-datetime-input"
                       className="w-full rounded-xl border border-[#EFE7D5] bg-white px-3.5 py-2.5 text-sm text-[#0B3B5C] focus:border-[#D4A94A] focus:outline-none focus:ring-2 focus:ring-[#D4A94A]/20 mono"
                     />
                     <span className="block text-[11px] text-[#64748B] mt-1.5 leading-relaxed">
-                      Tell us when you'd like to be picked up on the return leg — we'll radio the driver so they swing back on the dot. Leave blank if flexible.
+                      Pick the date and time you'd like us back for the return leg — same day for cruise days + dinner runs, next-day for airport runs. We'll radio the driver so they swing back on the dot. Leave blank if flexible.
                     </span>
                   </label>
                 </div>

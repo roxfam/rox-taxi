@@ -158,11 +158,14 @@ class BookingCreate(BaseModel):
     notes: Optional[str] = None
     payment_method: str
     round_trip: Optional[bool] = False  # taxi: same-day return, 10% off both legs
-    # When round_trip=True the guest can pick a return time so the driver
-    # knows exactly when to swing back for pickup. Stored as HH:MM (24h)
-    # or a datetime-local string — no strict validation because drivers
-    # accept ranges like "16:30-ish" too.
+    # When round_trip=True the guest can pick a return date + time so the
+    # driver knows exactly when to swing back for pickup. `return_time`
+    # keeps the HH:MM (24h) format for backward compat; `return_date`
+    # (YYYY-MM-DD) is NEW — lets the return leg land on a different
+    # calendar day. If `return_date` is empty, cron falls back to the
+    # outbound booking_date's calendar date for the swing-back.
     return_time: Optional[str] = Field(None, max_length=32)
+    return_date: Optional[str] = Field(None, max_length=16)
     tip_amount: Optional[float] = Field(0, ge=0, le=1000)
     flight_number: Optional[str] = Field(None, max_length=12)
     gift_code: Optional[str] = Field(None, max_length=32)
@@ -210,9 +213,9 @@ RENTAL_DISCOUNT_TIERS = [(14, 0.12), (7, 0.07), (5, 0.03)]
 
 # Taxes & processing — apply to every paid booking. Deposit + tip are
 # excluded from the taxable subtotal (deposit is refundable hold, tip
-# is a gratuity for the driver). Processing fee is 4.5% of subtotal+VAT.
-BAHAMAS_VAT_PCT = 0.10           # 10% Bahamas VAT on all orders
-PROCESSING_FEE_PCT = 0.045       # 4.5% payment-processing fee
+# is a gratuity for the driver). Processing fee is 5% of subtotal+VAT.
+BAHAMAS_VAT_PCT = 0.10           # 10% Bahamas VAT on EVERY order (incl. taxi)
+PROCESSING_FEE_PCT = 0.05        # 5% payment-processing fee
 
 
 def _rental_discount_pct(days: int) -> float:
@@ -1105,12 +1108,13 @@ async def _run_reminder_tick() -> int:
         })
         async for b in cur_rt:
             try:
-                # Combine booking_date's calendar date with the return_time
-                # (HH:MM). Fallback to skipping if either parses badly.
-                base_dt = _parse_booking_date(b.get("booking_date", ""))
-                if base_dt.tzinfo is None:
-                    base_dt = base_dt.replace(tzinfo=timezone.utc)
+                # Compose the return pickup datetime. Priority:
+                #   1. explicit `return_date` (YYYY-MM-DD) + `return_time` (HH:MM)
+                #      — used when the guest booked a next-day or later return
+                #   2. fallback: booking_date's calendar date + `return_time`
+                #      — same-day round trip (the historical default)
                 rt_str = str(b.get("return_time") or "").strip()
+                rt_date = str(b.get("return_date") or "").strip()
                 # Accept HH:MM or a full ISO datetime string
                 if "T" in rt_str:
                     return_dt_full = datetime.fromisoformat(rt_str.replace("Z", "+00:00"))
@@ -1118,7 +1122,17 @@ async def _run_reminder_tick() -> int:
                         return_dt_full = return_dt_full.replace(tzinfo=timezone.utc)
                 else:
                     hh, mm = rt_str.split(":", 1)
-                    return_dt_full = base_dt.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
+                    if rt_date:
+                        # YYYY-MM-DD + HH:MM → full UTC datetime
+                        yy, mo, dd = rt_date.split("-")
+                        return_dt_full = datetime(int(yy), int(mo), int(dd),
+                                                  int(hh), int(mm), tzinfo=timezone.utc)
+                    else:
+                        base_dt = _parse_booking_date(b.get("booking_date", ""))
+                        if base_dt.tzinfo is None:
+                            base_dt = base_dt.replace(tzinfo=timezone.utc)
+                        return_dt_full = base_dt.replace(hour=int(hh), minute=int(mm),
+                                                          second=0, microsecond=0)
             except Exception:  # noqa: BLE001
                 continue
             # Fire when the return pickup is within [now, now+30m].
@@ -2549,10 +2563,15 @@ async def create_booking(req: BookingCreate, request: Request):
                 round_trip_discount = round((base * 2) * ROUND_TRIP_DISCOUNT_PCT, 2)
                 booking["round_trip"] = True
                 booking["round_trip_discount"] = round_trip_discount
-            # Optional return time — helps the driver plan the double-run and
-            # lets the guest see it on their confirmation.
+            # Optional return date + time — helps the driver plan the
+            # double-run and lets the guest see it on their confirmation.
+            # `return_date` (YYYY-MM-DD) is optional; when omitted the
+            # return leg is assumed to be the same calendar day as the
+            # outbound pickup.
             if req.return_time:
                 booking["return_time"] = req.return_time.strip()[:32]
+            if req.return_date:
+                booking["return_date"] = req.return_date.strip()[:16]
         # ── Popular Add-ons picker ─────────────────────────────────────
         # Guest may have checked one or more extras on the taxi card /
         # booking modal. Each add-on id is looked up against the service's
@@ -2669,11 +2688,10 @@ async def create_booking(req: BookingCreate, request: Request):
         2,
     )
 
-    # ── Bahamas VAT (10%) — skipped for taxi-only fares per policy ────
-    vat_applies = req.service_type != "taxi"
-    vat_amount = round(subtotal_before_tax * BAHAMAS_VAT_PCT, 2) if vat_applies else 0.0
+    # ── Bahamas VAT (10%) — applies to every order, taxi included ─────
+    vat_amount = round(subtotal_before_tax * BAHAMAS_VAT_PCT, 2)
 
-    # ── Payment-processing fee (4.5%) — applied to every order ─────────
+    # ── Payment-processing fee (5%) — applied to every order ──────────
     processing_fee = round((subtotal_before_tax + vat_amount) * PROCESSING_FEE_PCT, 2)
 
     if vat_amount > 0:
@@ -4632,13 +4650,20 @@ async def booking_calendar_ics(booking_id: str):
     ]
     # ── Return-leg event (round-trip taxi only) ──────────────────────
     rt_time = str(booking.get("return_time") or "").strip()
+    rt_date = str(booking.get("return_date") or "").strip()
     if booking.get("round_trip") and rt_time:
         try:
             if "T" in rt_time:
                 return_dt = datetime.fromisoformat(rt_time.replace("Z", "+00:00"))
             else:
                 hh, mm = rt_time.split(":", 1)
-                return_dt = pickup_dt.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
+                if rt_date:
+                    yy, mo, dd = rt_date.split("-")
+                    return_dt = datetime(int(yy), int(mo), int(dd),
+                                         int(hh), int(mm), tzinfo=timezone.utc)
+                else:
+                    return_dt = pickup_dt.replace(hour=int(hh), minute=int(mm),
+                                                  second=0, microsecond=0)
             if return_dt.tzinfo is None:
                 return_dt = return_dt.replace(tzinfo=timezone.utc)
             events.append((

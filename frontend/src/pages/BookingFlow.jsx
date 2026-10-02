@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle, HandCoins } from "lucide-react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
-import { api, money } from "../lib/api";
+import { api, money, BACKEND_URL } from "../lib/api";
 import { DateTimePicker } from "../components/DateTimePicker";
 import { trackLead, trackPurchase, trackInitiateCheckout } from "../lib/fbpixel";
 
@@ -77,6 +77,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     baby_seats: 0,
     round_trip: false,
     return_time: "",
+    return_date: "",
     flight_number: "",
     notes: "",
     taxi_addon_selected: false,
@@ -95,7 +96,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const BABY_SEAT_MAX = 3;
   const BABY_SEAT_FREE_AFTER_DAYS = 14;
   const BAHAMAS_VAT_PCT = 0.10;
-  const PROCESSING_FEE_PCT = 0.045;
+  const PROCESSING_FEE_PCT = 0.05;
   const [payMethod, setPayMethod] = useState("stripe");
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
   const [loading, setLoading] = useState(false);
@@ -356,6 +357,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         payment_method: payMethod,
         round_trip: !!form.round_trip,
         return_time: form.round_trip ? (form.return_time || "") : "",
+        return_date: form.round_trip ? (form.return_date || "") : "",
         flight_number: form.flight_number ? form.flight_number.trim().toUpperCase().replace(/\s+/g, "") : null,
         selected_addon_ids: serviceType === "taxi" ? selectedAddonIds : undefined,
         requested_driver: serviceType === "taxi" && form.requested_driver ? form.requested_driver.trim() : undefined,
@@ -1129,6 +1131,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 </button>
               </div>
 
+              <BoardingQrCard bookingId={booking.id} data-testid="zelle-boarding-qr" />
+
               <div className="mt-6 rounded-2xl border border-[#E2E8F0] p-5">
                 <h4 className="serif text-lg text-[#0B3B5C]">Send Zelle payment to:</h4>
                 <ul className="mt-3 space-y-2 text-sm">
@@ -1178,6 +1182,9 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 <code className="mono text-2xl bg-[#F1F5F9] px-4 py-2 rounded-lg text-[#0B3B5C]" data-testid="paypal-booking-code">{booking.id}</code>
                 <button onClick={() => { navigator.clipboard.writeText(booking.id); toast.success("Copied"); }} className="p-2 rounded-lg hover:bg-[#F1F5F9]" data-testid="paypal-copy-code"><Copy className="w-4 h-4" /></button>
               </div>
+
+              <BoardingQrCard bookingId={booking.id} data-testid="paypal-boarding-qr" />
+
               <div className="mt-6 rounded-2xl border border-[#E2E8F0] p-5">
                 <h4 className="serif text-lg text-[#0B3B5C]">Pay via PayPal directly</h4>
                 <p className="text-sm text-[#64748B] mt-2">A PayPal window opened in a new tab. If it didn't:</p>
@@ -1305,6 +1312,42 @@ function PayPalGlyph() {
       <path fill="#0070E0" d="M18.9 8.72c-.2 1.24-.68 2.28-1.44 3.12-.76.84-1.72 1.48-2.88 1.92-1.16.44-2.52.66-4.08.66h-.9l-.98 6.02c-.04.24-.24.42-.5.42h-2.14a.4.4 0 0 1-.4-.48l.36-2.24 1.1-6.594h2.482c.9 0 1.7-.12 2.4-.36a5 5 0 0 0 1.72-.94c.3-.28.56-.58.78-.9.22-.32.4-.66.54-1.02.56-1.48.42-2.66-.42-3.54.12.12.24.24.36.36.98.98 1.28 2.36.82 4.16z" />
       <path fill="#003087" d="M15.196 6.663c-.14-.06-.28-.12-.44-.16-.16-.06-.32-.1-.5-.14-.62-.14-1.3-.2-2.04-.2H8.6a.5.5 0 0 0-.5.42l-1.98 12.234-.06.34a.5.5 0 0 0 .5.6h2.646l.66-4.184-.02.14.06-.34a.5.5 0 0 1 .5-.42h1.16c2.4 0 4.28-.98 4.82-3.8v-.02c.02-.08.04-.16.04-.24.16-1-.02-1.68-.56-2.28-.16-.16-.36-.32-.58-.44z" />
     </svg>
+  );
+}
+
+/**
+ * BoardingQrCard — rendered on every post-booking confirmation screen so the
+ * guest can save/scan their QR + boarding pass link without hunting through
+ * the confirmation email. Uses the backend-rendered QR PNG so it works even
+ * if JS fails to load for some reason.
+ */
+function BoardingQrCard({ bookingId }) {
+  const src = `${BACKEND_URL}/api/bookings/${bookingId}/qr.png`;
+  return (
+    <div
+      className="mt-6 rounded-2xl bg-[#0B3B5C] text-white p-5 flex items-center gap-4"
+      data-testid="booking-qr-card"
+    >
+      <div className="shrink-0 bg-white rounded-xl p-2.5">
+        <img src={src} alt="Scan at pickup" className="w-24 h-24" data-testid="booking-qr-image" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black">Rox boarding pass</div>
+        <div className="serif text-lg mt-1">Show this QR to your driver at pickup</div>
+        <p className="text-xs text-white/70 mt-1 leading-relaxed">
+          Driver scans the code and you're on your way — no fumbling for the booking ID.
+        </p>
+        <a
+          href={`/booking/${bookingId}/pass`}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-block mt-2 text-xs font-black uppercase tracking-wider text-[#D4A94A] hover:underline"
+          data-testid="booking-qr-fullscreen-link"
+        >
+          Open full boarding pass →
+        </a>
+      </div>
+    </div>
   );
 }
 

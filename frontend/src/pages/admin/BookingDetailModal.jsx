@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import {
   X, FileText, Download, Send, Unlock, Mail, Phone, Calendar, MapPin,
   Plane, CreditCard, ShieldCheck, ShieldOff, Clock, History, DollarSign, AlertTriangle,
+  CheckCircle2, Receipt,
 } from "lucide-react";
 import { api, money, BACKEND_URL } from "../../lib/api";
 
@@ -30,6 +31,8 @@ const STATUS_TONE = {
 
 export default function BookingDetailModal({ booking, onClose, onChanged, onOpenIncidental }) {
   const [reopenOpen, setReopenOpen] = useState(false);
+  const [payEmailOpen, setPayEmailOpen] = useState(false);
+  const [completeBusy, setCompleteBusy] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
   const bid = booking.id;
   const invoiceUrl = `${BACKEND_URL}/api/bookings/${bid}/receipt.pdf`;
@@ -46,8 +49,32 @@ export default function BookingDetailModal({ booking, onClose, onChanged, onOpen
     }
   };
 
+  // One-tap "mark complete" — the driver mobile app flips this normally,
+  // but admin needs it for walk-ups + Zelle bookings where the driver
+  // forgot to tap. Server is idempotent so double-clicks are safe.
+  const completeNow = async () => {
+    if (!window.confirm(`Mark ${bid} as COMPLETED? This fires the trip-complete email + rating prompt to the guest.`)) return;
+    setCompleteBusy(true);
+    try {
+      const { data } = await api.post(`/admin/bookings/${bid}/complete`, { note: "Closed by admin" });
+      if (data.already_completed) {
+        toast.info("Already completed");
+      } else {
+        toast.success(`${bid} marked complete · guest ping fired`);
+      }
+      onChanged?.();
+      onClose();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Complete failed");
+    } finally {
+      setCompleteBusy(false);
+    }
+  };
+
   const history = Array.isArray(booking.status_history) ? booking.status_history : [];
   const canReopen = ["completed", "cancelled", "no_show"].includes(booking.status);
+  const canComplete = !["completed", "cancelled"].includes(booking.status);
+  const hasEmail = !!booking.customer_email;
 
   return (
     <div className="fixed inset-0 z-[200] bg-[#0B192C]/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" data-testid="booking-detail-modal">
@@ -95,6 +122,26 @@ export default function BookingDetailModal({ booking, onClose, onChanged, onOpen
             >
               <Send className="w-3.5 h-3.5" /> {resendBusy ? "Sending…" : "Re-email invoice"}
             </button>
+            <button
+              onClick={() => setPayEmailOpen(true)}
+              disabled={!hasEmail}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#0B3B5C] text-[#0B3B5C] bg-white px-4 py-2 text-xs font-black uppercase tracking-wider hover:bg-[#0B3B5C] hover:text-white active:scale-95 disabled:opacity-50"
+              title={hasEmail ? "Send a one-tap pay link + invoice PDF to the guest" : "Guest has no email on file"}
+              data-testid="booking-detail-email-payment"
+            >
+              <Receipt className="w-3.5 h-3.5" /> Email for payment
+            </button>
+            {canComplete && (
+              <button
+                onClick={completeNow}
+                disabled={completeBusy}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#059669] text-[#047857] bg-white px-4 py-2 text-xs font-black uppercase tracking-wider hover:bg-[#059669] hover:text-white active:scale-95 disabled:opacity-50"
+                title="Mark the ride complete + fire the trip-complete rating ping"
+                data-testid="booking-detail-complete"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" /> {completeBusy ? "Completing…" : "Mark complete"}
+              </button>
+            )}
             {canReopen && (
               <button
                 onClick={() => setReopenOpen(true)}
@@ -197,6 +244,93 @@ export default function BookingDetailModal({ booking, onClose, onChanged, onOpen
           onDone={() => { setReopenOpen(false); onChanged?.(); onClose(); onOpenIncidental?.(booking); }}
         />
       )}
+      {payEmailOpen && (
+        <SendPaymentEmailDialog
+          booking={booking}
+          onClose={() => setPayEmailOpen(false)}
+          onDone={() => { setPayEmailOpen(false); onChanged?.(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * SendPaymentEmailDialog — admin composes an optional personal note
+ * ("Driver mentioned you'd prefer card over Zelle — here's the link")
+ * then fires an email with a one-tap pay button + the invoice PDF
+ * attached. Rate-limited server-side to 1 send per 60s per booking.
+ */
+function SendPaymentEmailDialog({ booking, onClose, onDone }) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const paid = (booking.payment_status || "").toLowerCase() === "paid";
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/admin/bookings/${booking.id}/send-payment-email`, {
+        message: note.trim() || undefined,
+      });
+      if (data.sent) {
+        toast.success(`Email sent to ${data.to}`);
+      } else {
+        toast.error(`Email provider error: ${data.error || "unknown"}`);
+      }
+      onDone();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Send failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[220] bg-[#0B192C]/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" data-testid="send-payment-email-dialog">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
+        <div className="p-6 border-b border-[#E2E8F0] bg-gradient-to-r from-[#0B3B5C]/5 to-transparent">
+          <div className="text-xs tracking-[0.3em] uppercase text-[#0B3B5C] font-black inline-flex items-center gap-1">
+            <Receipt className="w-3.5 h-3.5" /> {paid ? "Resend receipt" : "Email for payment"}
+          </div>
+          <h2 className="serif text-xl text-[#0B3B5C] mt-1">
+            Send to <strong>{booking.customer_email}</strong>
+          </h2>
+          <p className="text-xs text-[#64748B] mt-1.5">
+            {paid
+              ? "The guest will get a thank-you email with the branded invoice PDF attached."
+              : <>They'll get a one-tap pay button for <strong>{money(booking.total)}</strong> plus the invoice PDF.</>
+            }
+          </p>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-[10px] uppercase tracking-[0.25em] text-[#64748B] font-black mb-2">
+              Note to guest (optional)
+            </label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              maxLength={600}
+              placeholder="e.g. 'As we discussed on the phone, here's your pay link…'"
+              className="w-full rounded-xl border border-[#E2E8F0] py-2 px-3 text-sm resize-none"
+              data-testid="payment-email-note"
+            />
+            <div className="text-[10px] text-[#94a3b8] text-right mt-1">{note.length}/600</div>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button onClick={onClose} className="rounded-full border border-[#E2E8F0] px-4 py-2 text-sm" data-testid="payment-email-cancel">Cancel</button>
+            <button
+              onClick={submit}
+              disabled={busy}
+              className="rounded-full bg-[#0B3B5C] text-white px-4 py-2 text-sm font-semibold hover:bg-[#132a4a] disabled:opacity-60"
+              data-testid="payment-email-send"
+            >
+              {busy ? "Sending…" : paid ? "Send receipt" : "Send pay link"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

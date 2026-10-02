@@ -245,7 +245,7 @@ def build_receipt_pdf(booking: dict) -> bytes:
     if vat_amount:
         amt_rows.append(["Bahamas VAT (10%)", f"${vat_amount:,.2f}"])
     if processing_fee:
-        amt_rows.append(["Processing fee (4.5%)", f"${processing_fee:,.2f}"])
+        amt_rows.append(["Processing fee (5%)", f"${processing_fee:,.2f}"])
     if deposit:
         amt_rows.append(["Refundable rental deposit (hold)", f"${deposit:,.2f}"])
     if tip:
@@ -281,34 +281,71 @@ def build_receipt_pdf(booking: dict) -> bytes:
         p,
     ))
 
-    # QR footer — reuses the signed boarding-pass endpoint so the same
-    # token works on the paper copy. Falls back to a text-only footer on
-    # any rendering error so an offline deploy still ships the invoice.
+    # ── Footer: Code128 barcode of the booking ID + QR for boarding pass ──
+    # Scan the Code128 at the podium / dispatch desk — it decodes the booking
+    # ID so staff can pull it up without typing. QR takes guests straight to
+    # the live boarding pass. Both are regenerated per-PDF so a reprint keeps
+    # working.
     try:
         import qrcode as _qrcode
         from io import BytesIO as _BIO
+        from reportlab.graphics.barcode import code128 as _code128
+
         qr = _qrcode.QRCode(version=1, box_size=4, border=1)
         qr.add_data(f"https://roxtaxi.com/booking/{booking['id']}/pass")
         qr.make(fit=True)
-        img = qr.make_image(fill_color=NAVY, back_color="white")
+        # qrcode uses PIL under the hood, which requires string/tuple colors
+        # — reportlab's HexColor object would raise. Hex string works both
+        # here and in the Image embed below.
+        img = qr.make_image(fill_color="#0B3B5C", back_color="white")
         qrbuf = _BIO()
         img.save(qrbuf, format="PNG")
         qrbuf.seek(0)
         qr_img = Image(qrbuf, width=0.9 * inch, height=0.9 * inch)
+
+        # Code128 is already a reportlab Flowable — drop it straight into
+        # the Table cell. humanReadable=True prints the booking id below
+        # the bars so staff can type it if the scanner fails.
+        bc = _code128.Code128(
+            str(booking.get("id", "")),
+            barHeight=0.55 * inch,
+            humanReadable=True,
+            barWidth=0.013 * inch,
+        )
+
         story.append(Spacer(1, 20))
+        # Big-type contact row — number must be VERY easy to find on a
+        # printed invoice. Red-ish accent so it pops off a greyscale print.
+        contact = ParagraphStyle("contact", parent=styles["Normal"],
+                                 fontName="Helvetica-Bold", fontSize=13,
+                                 textColor=NAVY, leading=16, spaceAfter=2)
+        contact_sub = ParagraphStyle("csub", parent=styles["Normal"],
+                                     fontName="Helvetica", fontSize=9,
+                                     textColor=GREY, leading=12)
+        story.append(Paragraph(
+            "Call / WhatsApp: <font color='#D4A94A'>+1 (242) 432-2587</font>",
+            contact,
+        ))
+        story.append(Paragraph(
+            "hello@roxtaxi.com · roxtaxi.com · Nassau, New Providence, The Bahamas",
+            contact_sub,
+        ))
+        story.append(Spacer(1, 10))
+
         footer_tbl = Table(
             [[qr_img,
               Paragraph(
-                "<b>Rox Taxi Service &amp; Tours</b><br/>"
-                "Nassau, New Providence · The Bahamas<br/>"
-                "hello@roxtaxi.com · WhatsApp +1 (242) 432-2587<br/>"
-                "Scan the QR to open your boarding pass + live tracker.",
+                "<b>Scan QR</b> for your live boarding pass + driver tracker.<br/>"
+                "<b>Scan barcode</b> at pickup — the driver verifies your booking in one tap.<br/>"
+                "<font color='#64748B'>Keep this receipt. Rox Taxi Service &amp; Tours · TIN on file.</font>",
                 small,
-              )]],
-            colWidths=[1.1 * inch, 4.9 * inch],
+              ),
+              bc]],
+            colWidths=[1.0 * inch, 3.6 * inch, 1.9 * inch],
         )
         footer_tbl.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (2, 0), (2, 0), "RIGHT"),
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
             ("RIGHTPADDING", (0, 0), (-1, -1), 0),
         ]))
@@ -316,8 +353,8 @@ def build_receipt_pdf(booking: dict) -> bytes:
     except Exception:  # noqa: BLE001
         story.append(Spacer(1, 24))
         story.append(Paragraph(
-            "Rox Taxi Service &amp; Tours · Nassau, New Providence · The Bahamas<br/>"
-            "hello@roxtaxi.com · WhatsApp +1 (242) 432-2587 · Keep this receipt for your records.",
+            "<b>Call / WhatsApp: +1 (242) 432-2587</b> · hello@roxtaxi.com<br/>"
+            "Rox Taxi Service &amp; Tours · Nassau, New Providence · The Bahamas · Keep this receipt for your records.",
             small,
         ))
 

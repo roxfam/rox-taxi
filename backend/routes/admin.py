@@ -681,6 +681,220 @@ async def reopen_booking(booking_id: str, req: ReopenRequest,
     return {"ok": True, "booking_id": booking["id"], "previous_status": prev}
 
 
+# ─── Mark a booking complete from the admin dashboard ─────────────────
+# The driver mobile app already flips bookings to `completed`, but admin
+# often needs to close out a ride the driver forgot to tap (or a Zelle
+# booking paid on-site). Idempotent: no-op if already completed.
+class CompleteRequest(BaseModel):
+    note: Optional[str] = None  # optional free-text ("Paid cash on site", "No show converted", etc.)
+
+
+@router.post("/admin/bookings/{booking_id}/complete")
+async def admin_complete_booking(booking_id: str, req: CompleteRequest,
+                                   _: str = Depends(_require_admin_placeholder)):
+    """Admin shortcut: mark a booking as completed. Appends to the
+    status_history audit trail and triggers the trip-complete guest ping
+    exactly once (matches the driver-mobile flow). No-op if already
+    completed so repeat taps don't double-notify."""
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    prev = booking.get("status", "unknown")
+    if prev == "completed":
+        return {"ok": True, "already_completed": True, "booking_id": booking["id"]}
+
+    now = _now_iso()
+    history_entry = {
+        "from": prev,
+        "to": "completed",
+        "reason": (req.note or "").strip()[:200] or "Admin marked complete",
+        "actor": "admin",
+        "at": now,
+        "intent": "admin_complete",
+    }
+    update_set: Dict[str, Any] = {
+        "status": "completed",
+        "completed_at": now,
+        "updated_at": now,
+    }
+    if req.note:
+        update_set["admin_note"] = req.note.strip()[:200]
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$set": update_set, "$push": {"status_history": history_entry}},
+    )
+
+    # Fire the trip-complete guest ping (1-tap rating + driver tip top-up)
+    # best-effort; failures don't block the admin action.
+    fresh = await _db.bookings.find_one({"id": booking["id"]})
+    try:
+        if not booking.get("trip_complete_notified_at"):
+            prefs = await _db.site_config.find_one({"_id": "main"}) or {}
+            from notifications import notify_guest_trip_complete  # noqa: PLC0415
+            report = notify_guest_trip_complete(_clean(dict(fresh)), prefs)
+            await _db.bookings.update_one(
+                {"id": booking["id"]},
+                {"$set": {
+                    "trip_complete_notified_at": now,
+                    "trip_complete_notification": report,
+                }},
+            )
+    except Exception as e:  # noqa: BLE001
+        logging.warning("admin complete trip-ping failed for %s: %s", booking["id"], e)
+
+    return {"ok": True, "booking_id": booking["id"], "previous_status": prev}
+
+
+# ─── Email a payment-request link to the guest ────────────────────────
+# For bookings created via phone / in-person where payment is still
+# outstanding (Zelle pending, held card, etc.). Sends a one-tap pay link
+# so the guest doesn't have to log in. Also usable to re-send the PDF
+# invoice as an attachment when the guest claims they lost the email.
+class SendPaymentEmailRequest(BaseModel):
+    message: Optional[str] = None  # optional owner note shown above the pay button
+
+
+@router.post("/admin/bookings/{booking_id}/send-payment-email")
+async def admin_send_payment_email(booking_id: str, req: SendPaymentEmailRequest,
+                                     _: str = Depends(_require_admin_placeholder)):
+    """Send a `please pay` email to the guest with a one-click Stripe
+    checkout URL + the invoice PDF attached. Works whether or not the
+    booking is already paid — if paid, the email becomes a thank-you
+    receipt reprint. Rate-limited to once per 60s per booking to prevent
+    accidental double-sends from a trigger-happy admin."""
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    to_email = (booking.get("customer_email") or "").strip()
+    if not to_email:
+        raise HTTPException(400, "Booking has no customer_email on file")
+
+    # Rate limit — reject if sent within the last 60s.
+    last_sent = booking.get("payment_email_last_sent_at")
+    if last_sent:
+        try:
+            delta = (datetime.now(timezone.utc) - datetime.fromisoformat(last_sent.replace("Z", "+00:00"))).total_seconds()
+            if delta < 60:
+                raise HTTPException(429, f"Payment email already sent {int(delta)}s ago — try again in {60-int(delta)}s")
+        except (ValueError, TypeError):
+            pass  # malformed timestamp — allow the send
+
+    paid = (booking.get("payment_status") or "").lower() == "paid"
+    bid = booking["id"]
+    total = float(booking.get("total") or 0)
+    guest_name = booking.get("customer_name") or "there"
+    item_name = booking.get("item_name") or "your booking"
+    owner_note = (req.message or "").strip()[:600]
+
+    base = "https://roxtaxi.com"
+    track_url = f"{base}/track?id={bid}"
+    pay_url = f"{base}/pay?id={bid}" if not paid else ""
+    invoice_url = f"{base}/api/bookings/{bid}/receipt.pdf"
+
+    subject = (
+        f"Your Rox invoice {bid} — paid in full ✓"
+        if paid else
+        f"Complete your Rox payment — Booking {bid} · ${total:,.2f}"
+    )
+
+    pay_cta_html = "" if paid else (
+        f'<a href="{pay_url}" style="display:inline-block;background:#D4A94A;color:#0B3B5C;'
+        f'text-decoration:none;font-weight:800;padding:14px 28px;border-radius:999px;font-size:15px;'
+        f'box-shadow:0 8px 24px rgba(212,169,74,0.35);">Pay ${total:,.2f} securely →</a>'
+    )
+    note_html = (
+        f'<div style="background:#FBF7EF;border-left:3px solid #D4A94A;padding:12px 14px;'
+        f'margin:14px 0;border-radius:8px;font-size:13px;color:#0B3B5C;">'
+        f'<strong>Note from your driver:</strong> {owner_note}</div>'
+        if owner_note else ""
+    )
+
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:800;">
+        {"Paid in full" if paid else "Payment pending"}
+      </div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;line-height:1.15;">
+        Hi {guest_name.split(" ")[0]}, {"here's your receipt" if paid else "please finish your Rox booking"}.
+      </h1>
+      <p style="color:#64748B;font-size:14px;margin:12px 0 0;">
+        {"Thanks for choosing Rox — your invoice is attached and also available online below." if paid else f"Tap the button below to pay <strong>${total:,.2f}</strong> for <strong>{item_name}</strong> (Booking {bid}). Takes about 20 seconds and uses your card securely via Stripe."}
+      </p>
+      {note_html}
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;margin-top:18px;text-align:center;">
+        <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#64748B;font-weight:700;">Booking</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:22px;color:#0B3B5C;margin-top:4px;">{bid}</div>
+        <div style="color:#64748B;font-size:13px;margin-top:4px;">{item_name}</div>
+        <div style="margin-top:18px;">{pay_cta_html}</div>
+      </div>
+      <div style="margin:22px 0 4px;">
+        <a href="{invoice_url}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;font-size:13px;">Download invoice PDF</a>
+        <a href="{track_url}" style="display:inline-block;margin-left:8px;background:#F1F5F9;color:#0B3B5C;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px;font-size:13px;">Track booking</a>
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:22px;">
+        Questions? Call or WhatsApp +1 (242) 432-2587 · Rox Taxi Service &amp; Tours · Nassau, Bahamas
+      </p>
+    </div>
+    """
+    text = (
+        f"Hi {guest_name},\n\n"
+        + (f"Thanks for choosing Rox — your invoice for booking {bid} is attached and online: {invoice_url}\n" if paid else
+           f"Please complete your Rox payment of ${total:,.2f} for booking {bid}.\n"
+           f"Pay here: {pay_url}\n"
+           f"Invoice: {invoice_url}\n")
+        + (f"\nNote from your driver: {owner_note}\n" if owner_note else "")
+        + f"\nTrack booking: {track_url}\n"
+        f"Questions? WhatsApp +1 (242) 432-2587\n\n"
+        f"— Rox Taxi Service & Tours"
+    )
+
+    # Attach the branded invoice PDF so the guest has an offline copy.
+    attachments = []
+    try:
+        from pdf_utils import build_receipt_pdf  # noqa: PLC0415
+        pdf_bytes = build_receipt_pdf(dict(booking))
+        attachments.append({
+            "filename": f"Rox-Invoice-{bid}.pdf",
+            "content": pdf_bytes,
+            "mime_type": "application/pdf",
+        })
+    except Exception as e:  # noqa: BLE001
+        logging.warning("payment-email invoice attach failed for %s: %s", bid, e)
+
+    from notifications import send_email  # noqa: PLC0415
+    result = send_email(
+        to_email, subject, html, text,
+        category="payment",
+        attachments=attachments or None,
+    )
+
+    now = _now_iso()
+    await _db.bookings.update_one(
+        {"id": bid},
+        {"$set": {
+            "payment_email_last_sent_at": now,
+            "payment_email_last_result": result,
+        }, "$push": {
+            "payment_email_log": {
+                "sent_at": now,
+                "to": to_email,
+                "subject": subject,
+                "paid_at_send": paid,
+                "note": owner_note or None,
+                "result": result,
+            },
+        }},
+    )
+    return {
+        "ok": True,
+        "booking_id": bid,
+        "sent": result.get("sent", False),
+        "provider": result.get("provider"),
+        "error": result.get("error"),
+        "to": to_email,
+    }
+
+
 @router.post("/admin/payments/zelle-mark-paid")
 async def mark_zelle_paid(req: ZelleMark, admin: str = Depends(_require_admin_placeholder)):
     """Manually mark a Zelle-paid booking as received. Updates booking status,
