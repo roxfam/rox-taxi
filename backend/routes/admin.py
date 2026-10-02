@@ -450,6 +450,171 @@ async def reject_zelle_proof(
     return {"ok": True, "booking_id": booking["id"], "payment_status": booking.get("payment_status")}
 
 
+# ─── Payment Recovery / Dunning — email + SMS for bookings whose payment
+# never actually reached our Stripe account (common when the preview env
+# was pointing at the shared `sk_test_emergent` sandbox) ────────────────
+class DunningRequest(BaseModel):
+    scope: str = "stripe_test"  # 'stripe_test' | 'unpaid' | 'custom'
+    booking_ids: Optional[List[str]] = None
+    send_sms: bool = True
+    send_email: bool = True
+    note: Optional[str] = None  # extra line admin wants to prepend
+
+
+async def _dunning_filter(scope: str, booking_ids: Optional[List[str]]) -> dict:
+    """Translate a dunning scope into a Mongo filter.
+    - stripe_test → bookings marked paid via a cs_test_ Stripe session (never hit live Stripe)
+    - unpaid     → every booking that is still unpaid
+    - custom     → whichever booking_ids the admin ticked
+    All filters exclude cancelled bookings.
+    """
+    base = {"status": {"$ne": "cancelled"}}
+    if scope == "custom":
+        ids = [bid.upper() for bid in (booking_ids or []) if bid]
+        if not ids:
+            return {**base, "id": {"$in": []}}  # empty filter → zero rows
+        return {**base, "id": {"$in": ids}}
+    if scope == "unpaid":
+        base["payment_status"] = {"$ne": "paid"}
+        return base
+    # stripe_test — find bookings whose only payment transaction is a
+    # cs_test_* session (shared sandbox never hit the owner's real Stripe)
+    tx_cursor = _db.payment_transactions.find(
+        {"session_id": {"$regex": "^cs_test_"}, "payment_status": {"$in": ["paid", "completed"]}},
+        projection={"booking_id": 1},
+    )
+    bids = []
+    async for t in tx_cursor:
+        if t.get("booking_id"):
+            bids.append(t["booking_id"])
+    if not bids:
+        return {**base, "id": {"$in": []}}
+    return {**base, "id": {"$in": list(set(bids))}}
+
+
+@router.get("/admin/dunning/candidates")
+async def dunning_candidates(scope: str = "stripe_test", limit: int = 200,
+                              _: str = Depends(_require_admin_placeholder)):
+    """Preview who will receive a payment-recovery nudge before firing it."""
+    filt = await _dunning_filter(scope, None)
+    cur = _db.bookings.find(filt).sort("booking_date", -1).limit(max(1, min(int(limit), 500)))
+    rows = []
+    async for b in cur:
+        rows.append({
+            "id": b["id"],
+            "customer_name": b.get("customer_name"),
+            "customer_email": b.get("customer_email"),
+            "customer_phone": b.get("customer_phone"),
+            "item_name": b.get("item_name"),
+            "booking_date": b.get("booking_date"),
+            "total": b.get("total"),
+            "payment_status": b.get("payment_status"),
+            "payment_method": b.get("payment_method"),
+            "dunning_sent_at": b.get("dunning_sent_at"),
+            "dunning_count": b.get("dunning_count", 0),
+        })
+    return {"scope": scope, "count": len(rows), "candidates": rows}
+
+
+@router.post("/admin/dunning/send-payment-reminder")
+async def send_dunning(req: DunningRequest,
+                        _: str = Depends(_require_admin_placeholder)):
+    """Send a payment-recovery email (+ optional SMS) to every matching
+    booking. Each message contains a fresh /pay/{bookingId} link that
+    routes through the CURRENT Stripe key, plus Zelle + PayPal fallbacks."""
+    filt = await _dunning_filter(req.scope, req.booking_ids)
+    cur = _db.bookings.find(filt).limit(500)
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    base_url = (os.environ.get("SITE_BASE_URL") or "https://roxtaxi.com").rstrip("/")
+    zelle_email = (cfg.get("zelle_email") or os.environ.get("ZELLE_EMAIL") or "").strip()
+    zelle_phone = (cfg.get("zelle_phone") or os.environ.get("ZELLE_PHONE") or "").strip()
+    note = (req.note or "").strip()
+
+    results = {"attempted": 0, "email_sent": 0, "sms_sent": 0, "skipped": 0, "rows": []}
+    now = _now_iso()
+    async for b in cur:
+        results["attempted"] += 1
+        row = {"id": b["id"], "email": None, "sms": None}
+        if not b.get("customer_email") and not b.get("customer_phone"):
+            results["skipped"] += 1
+            row["skipped"] = "no contact channel"
+            results["rows"].append(row)
+            continue
+        guest_first = (b.get("customer_name") or "there").split(" ")[0]
+        pay_url = f"{base_url}/pay/{b['id']}"
+        total = float(b.get("total") or 0)
+
+        # ── Email ────────────────────────────────────────────────
+        if req.send_email and b.get("customer_email"):
+            subject = f"Action needed: payment not received for booking {b['id']}"
+            html = f"""
+            <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:28px;background:#FAF9F6;">
+              <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#DC2626;font-weight:800;">Payment Not Received</div>
+              <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;line-height:1.15;">Hi {guest_first}, we need to collect on booking {b['id']}.</h1>
+              <p style="color:#64748B;font-size:14.5px;margin:14px 0 0;line-height:1.6;">
+                A reconciliation of our Stripe account shows your payment of
+                <strong>${total:.2f}</strong> for <em>{b.get('item_name') or 'your trip'}</em>
+                never actually settled on our end. Our checkout was briefly routed through a test
+                sandbox during a platform migration, so the charge may not have left your bank
+                either — but <strong>we never received the money</strong>.
+              </p>
+              {f'<p style="color:#64748B;font-size:14px;margin:12px 0 0;line-height:1.6;background:#FFF7E6;border-left:3px solid #D4A94A;padding:12px 14px;border-radius:6px;">{note}</p>' if note else ''}
+              <p style="color:#64748B;font-size:14.5px;margin:14px 0 0;line-height:1.6;">
+                Please re-send payment using any option below. Your booking is <strong>held</strong>,
+                not cancelled — once we see it, you're confirmed and nothing else is needed.
+              </p>
+              <div style="margin:22px 0;text-align:center;">
+                <a href="{pay_url}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:800;padding:14px 28px;border-radius:999px;font-size:15px;">Pay ${total:.2f} securely →</a>
+                <div style="color:#94a3b8;font-size:11px;margin-top:10px;">Opens card checkout · Stripe · encrypted</div>
+              </div>
+              {f'''<div style="background:#fff;border:1px solid #E2E8F0;border-radius:14px;padding:16px;margin-top:8px;">
+                <div style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#64748B;font-weight:700;">Or Zelle (no fees)</div>
+                {f'<div style="font-family:monospace;color:#0B3B5C;font-weight:600;margin-top:4px;">{zelle_email}</div>' if zelle_email else ''}
+                {f'<div style="font-family:monospace;color:#0B3B5C;font-weight:600;">{zelle_phone}</div>' if zelle_phone else ''}
+                <div style="font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#64748B;margin-top:10px;">Memo</div>
+                <div style="font-family:monospace;color:#0B3B5C;font-weight:600;">{b['id']}</div>
+                <div style="font-size:11px;color:#94a3b8;margin-top:8px;">Upload your transfer screenshot at <a href="{pay_url}" style="color:#0B3B5C;">{pay_url}</a> after sending.</div>
+              </div>''' if zelle_email or zelle_phone else ''}
+              <p style="color:#94a3b8;font-size:12px;margin-top:22px;">
+                Questions? Reply to this email — I read every one personally.<br/>
+                — Rox Taxi Service &amp; Tours · Nassau · Booking <span style="font-family:monospace;">{b['id']}</span>
+              </p>
+            </div>
+            """
+            try:
+                from notifications import send_email  # noqa: PLC0415
+                r = send_email(b["customer_email"], subject, html, category="dunning")
+                if r.get("sent"):
+                    results["email_sent"] += 1
+                row["email"] = r
+            except Exception as e:  # noqa: BLE001
+                row["email"] = {"sent": False, "error": str(e)}
+
+        # ── SMS ──────────────────────────────────────────────────
+        if req.send_sms and b.get("customer_phone"):
+            sms = (
+                f"Rox Taxi: payment of ${total:.2f} for booking {b['id']} "
+                f"wasn't received on our end. Please re-pay: {pay_url} "
+                f"(booking still held — not cancelled)."
+            )
+            try:
+                from notifications import send_sms  # noqa: PLC0415
+                r = send_sms(b["customer_phone"], sms)
+                if r.get("sent"):
+                    results["sms_sent"] += 1
+                row["sms"] = r
+            except Exception as e:  # noqa: BLE001
+                row["sms"] = {"sent": False, "error": str(e)}
+
+        await _db.bookings.update_one(
+            {"id": b["id"]},
+            {"$set": {"dunning_sent_at": now, "dunning_last_scope": req.scope},
+             "$inc": {"dunning_count": 1}},
+        )
+        results["rows"].append(row)
+    return results
+
+
 @router.post("/admin/payments/zelle-mark-paid")
 async def mark_zelle_paid(req: ZelleMark, admin: str = Depends(_require_admin_placeholder)):
     """Manually mark a Zelle-paid booking as received. Updates booking status,

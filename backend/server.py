@@ -1429,6 +1429,12 @@ async def seed_db():
         asyncio.create_task(_flight_status_loop())
     except Exception as e:  # noqa: BLE001
         logging.warning("flight-status loop start warn: %s", e)
+    # 6 AM Nassau dispatcher digest — once-a-day SMS summarising every
+    # airport pickup for the day with flight numbers + current status.
+    try:
+        asyncio.create_task(_dispatcher_digest_loop())
+    except Exception as e:  # noqa: BLE001
+        logging.warning("dispatcher digest loop start warn: %s", e)
     # ── Owner-SMS routing cache — refreshed every 60s from site_config ──
     # notifications.send_owner_sms() reads this cache on every call, so
     # subscription + quiet-hours edits go live within a minute of save.
@@ -3677,6 +3683,110 @@ async def _flight_watcher_loop() -> None:
         except Exception as e:  # noqa: BLE001
             log.warning("flight-watcher tick err: %s", e)
         await asyncio.sleep(15 * 60)
+
+
+# ─── Dispatcher Daily Digest ───────────────────────────────────────
+# At 6 AM Nassau time (= 10:00 UTC year-round, EST, no DST), SMS every
+# admin + employee a one-glance summary of today's airport pickups:
+# flight number, scheduled pickup time, current flight status snapshot.
+# Idempotent per calendar day via `site_config.dispatcher_digest_last_date`.
+DISPATCHER_DIGEST_INTERVAL_SECONDS = int(os.environ.get("DISPATCHER_DIGEST_INTERVAL_SECONDS", "300"))  # 5-min poll granularity
+DISPATCHER_DIGEST_HOUR_UTC = int(os.environ.get("DISPATCHER_DIGEST_HOUR_UTC", "11"))  # 6 AM Nassau EST → 11:00 UTC
+
+
+async def _dispatcher_digest_loop() -> None:
+    log = logging.getLogger("rox.dispatcher_digest")
+    while True:
+        try:
+            await _run_dispatcher_digest_tick()
+        except Exception as e:  # noqa: BLE001
+            log.warning("digest tick error: %s", e)
+        await asyncio.sleep(DISPATCHER_DIGEST_INTERVAL_SECONDS)
+
+
+async def _run_dispatcher_digest_tick(force: bool = False) -> Optional[str]:
+    """If the clock has crossed `DISPATCHER_DIGEST_HOUR_UTC` and we haven't
+    sent today's digest yet, build + send it. Returns the SMS body if we
+    sent, else None. `force=True` bypasses the once-a-day guard (used by
+    the manual admin trigger)."""
+    log = logging.getLogger("rox.dispatcher_digest")
+    now = datetime.now(timezone.utc)
+    today_iso = now.date().isoformat()
+
+    cfg = await db.site_config.find_one({"_id": "main"}) or {}
+    if not force:
+        if cfg.get("dispatcher_digest_last_date") == today_iso:
+            return None
+        if now.hour < DISPATCHER_DIGEST_HOUR_UTC:
+            return None
+
+    # Day window = [00:00, 23:59] UTC of today — generous enough that any
+    # Nassau pickup for the local calendar day gets picked up.
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    day_end   = now.replace(hour=23, minute=59, second=59).isoformat()
+    cur = db.bookings.find({
+        "status": {"$nin": ["cancelled", "completed", "no_show"]},
+        "booking_date": {"$gte": day_start, "$lte": day_end},
+    }).sort("booking_date", 1)
+
+    pickups = []
+    async for b in cur:
+        if not _is_airport_bound(b):
+            continue
+        try:
+            dt = _parse_booking_date(b.get("booking_date", ""))
+        except Exception:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        local_hhmm = dt.astimezone(timezone(timedelta(hours=-5))).strftime("%I:%M%p").lstrip("0")
+        fn = (b.get("flight_number") or "").strip() or "no-flight"
+        snap = None
+        if fn and fn != "no-flight":
+            try:
+                snap = await _fetch_flight_full(fn)
+            except Exception:
+                snap = None
+        status = ((snap or {}).get("status") or "scheduled").lower()
+        arr = (snap or {}).get("arrival") or {}
+        delay = int(arr.get("delay_minutes") or 0)
+        tag = f"{status}{f' +{delay}m' if delay >= 30 else ''}"
+        guest = (b.get("customer_name") or "guest").split(" ")[0]
+        pickups.append(f"- {local_hhmm} {fn} ({tag}) · {guest} · {b['id']}")
+
+    if not pickups:
+        await db.site_config.update_one(
+            {"_id": "main"},
+            {"$set": {"dispatcher_digest_last_date": today_iso,
+                      "dispatcher_digest_last_sent_at": now.isoformat(),
+                      "dispatcher_digest_last_count": 0}},
+            upsert=True,
+        )
+        log.info("no airport pickups today — stamping as sent to skip until tomorrow")
+        return None
+
+    header = f"🚕 Rox Dispatch · {now.astimezone(timezone(timedelta(hours=-5))):%a %b %d}"
+    body = header + "\n" + "\n".join(pickups[:10])
+    if len(pickups) > 10:
+        body += f"\n…+{len(pickups)-10} more in /admin"
+
+    try:
+        from notifications import send_owner_sms  # noqa: PLC0415
+        send_owner_sms(body=body, kind="dispatch", force_priority=True)
+    except Exception as e:  # noqa: BLE001
+        log.warning("send_owner_sms failed: %s", e)
+        return None
+
+    await db.site_config.update_one(
+        {"_id": "main"},
+        {"$set": {"dispatcher_digest_last_date": today_iso,
+                  "dispatcher_digest_last_sent_at": now.isoformat(),
+                  "dispatcher_digest_last_count": len(pickups),
+                  "dispatcher_digest_last_body": body}},
+        upsert=True,
+    )
+    log.info("dispatcher digest sent (%s airport pickups)", len(pickups))
+    return body
 
 
 async def _run_flight_watcher_tick() -> int:

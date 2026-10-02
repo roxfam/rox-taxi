@@ -23,6 +23,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Payment Recovery (dunning) + Dispatcher Daily Digest
+- **PaymentRecoveryCard** mounted on `/admin` — one-click dunning tool for bookings whose Stripe payment never actually settled on the owner's account (the sandbox-leftover case). Preview candidates by scope (**stripe_test** = only cs_test_ sessions marked paid, **unpaid** = every unpaid booking), optional admin note prepended to the email, Email + SMS toggles, outstanding-dollar rollup, nudge counter per row. Sends `/pay/{bookingId}` deep links that automatically route through the CURRENT STRIPE_API_KEY — so once the live key is in `.env`, every re-pay lands in the real Stripe account.
+- Backend: `GET /api/admin/dunning/candidates?scope=…` + `POST /api/admin/dunning/send-payment-reminder`. Per-booking stamps `dunning_sent_at`, `dunning_count`, `dunning_last_scope` so the UI shows re-send history. SMS message is 1-segment aware.
+- **Dispatcher Daily Digest** (`_dispatcher_digest_loop`, 5-min poll granularity, fires at 11:00 UTC = 6 AM Nassau EST): single SMS to admin + employee roster summarising today's airport pickups — one line per booking with scheduled Nassau time, flight number, current AviationStack status + delay badge, guest first name, and booking id. Idempotent per calendar day via `site_config.dispatcher_digest_last_date`. Auto-stamps as sent when no airport pickups so no spam. Verified via dry-run (`force=True`).
+
 ### Feb 2026 — Flight events timeline + live SMS drill booking
 - **FlightEventsPanel** admin modal (opens from a ✈ `BA253` button next to any booking's service name when `flight_number` is set). Shows:
   - Current AviationStack snapshot: departure/arrival IATA, airport names, scheduled/estimated/actual times, delay minutes.
