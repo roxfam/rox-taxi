@@ -27,8 +27,9 @@ export default function WeeklyReportCard() {
       ]);
       setData(rep.data);
       setHealth(h.data);
-    } catch {
-      // silent — card just hides on error
+    } catch (err) {
+      // Card auto-hides on error; log so we see failures during QA.
+      console.warn("[WeeklyReportCard] load failed:", err);
     } finally {
       setLoading(false);
     }

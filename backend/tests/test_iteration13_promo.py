@@ -17,7 +17,7 @@ def _load_frontend_env():
 _load_frontend_env()
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 ADMIN_EMAIL = "admin@roxtaxi.com"
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
 
 SEED_PRICES = {
     "rentals": {"spark-compact": 65.0, "sentra-orange": 39.0, "trax-suv": 125.0,

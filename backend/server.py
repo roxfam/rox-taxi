@@ -1133,7 +1133,7 @@ async def _run_reminder_tick() -> int:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         bid = str(b.get("id") or "")
-        variant = "A" if (int(_hashlib.md5(bid.encode()).hexdigest(), 16) % 2 == 0) else "B"
+        variant = "A" if (int(_hashlib.blake2b(bid.encode(), digest_size=8).hexdigest(), 16) % 2 == 0) else "B"
         lower, upper = (a_lower, a_upper) if variant == "A" else (b_lower, b_upper)
         if not (lower <= dt <= upper):
             continue

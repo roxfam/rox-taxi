@@ -5,6 +5,7 @@ Endpoints under test:
 - POST /api/my/bookings/{booking_id}/extend/checkout
 """
 import os
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -54,7 +55,7 @@ def rental_vehicle():
 def customer():
     """Register a fresh customer, return session token + email + user_id."""
     email = f"test_ext_{uuid.uuid4().hex[:8]}@example.com"
-    password = "TestPass123!"
+    password = os.environ.get("TEST_USER_PASSWORD", "TestPass123!")
     s = requests.Session()
     r = s.post(f"{API}/auth/register", json={"name": "Test Ext", "email": email, "password": password}, timeout=30)
     assert r.status_code == 200, r.text

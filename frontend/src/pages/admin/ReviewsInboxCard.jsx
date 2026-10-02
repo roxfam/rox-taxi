@@ -26,7 +26,10 @@ export default function ReviewsInboxCard() {
       ]);
       setData(inbox.data);
       setGbpConnected(!!gbp.data?.connected);
-    } catch { /* silent — card just stays empty */ }
+    } catch (err) {
+      // Card stays empty on failure; log so QA sees it.
+      console.warn("[ReviewsInboxCard] load failed:", err);
+    }
     finally { setBusy(false); }
   };
   useEffect(() => { load(); }, []);

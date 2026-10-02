@@ -8,7 +8,7 @@ from PIL import Image
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://bahamas-taxi-tours.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = "roxfam2509@gmail.com"
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
 
 
 def _png_bytes(size=(400, 300), color=(120, 180, 220)):

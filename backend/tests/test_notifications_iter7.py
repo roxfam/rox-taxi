@@ -32,7 +32,7 @@ BASE_URL = _read_base_url()
 API = f"{BASE_URL}/api"
 
 ADMIN_EMAIL = "admin@roxtaxi.com"
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
 
 
 def _next_open_date() -> str:

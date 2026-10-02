@@ -8,7 +8,7 @@ import hashlib
 
 
 def _variant_for(booking_id: str) -> str:
-    return "A" if (int(hashlib.md5(booking_id.encode()).hexdigest(), 16) % 2 == 0) else "B"
+    return "A" if (int(hashlib.blake2b(booking_id.encode(), digest_size=8).hexdigest(), 16) % 2 == 0) else "B"
 
 
 def test_variant_bucketing_is_deterministic():

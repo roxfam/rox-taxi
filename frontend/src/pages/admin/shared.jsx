@@ -21,7 +21,11 @@ export function fallbackCopy(text, onSuccess) {
     const ok = document.execCommand("copy");
     document.body.removeChild(ta);
     if (ok) onSuccess?.();
-  } catch { /* best-effort */ }
+  } catch (err) {
+    // Clipboard API blocked (iframe, insecure context, etc). Log so we
+    // can see it in devtools during QA; still swallowed for the user.
+    console.warn("[copy] execCommand copy failed:", err);
+  }
 }
 
 export function F({ l, v, on, type = "text", textarea, testid }) {
