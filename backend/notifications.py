@@ -126,26 +126,42 @@ def _sender_for_category(category: Optional[str]) -> Optional[str]:
 
 
 def send_email(to_email: str, subject: str, html: str, text: Optional[str] = None,
-               category: Optional[str] = None) -> dict:
-    """Send email via SendGrid if configured, otherwise fall back to plain SMTP
-    (Namecheap Private Email, Gmail SMTP, or any generic SMTP host).
+               category: Optional[str] = None,
+               attachments: Optional[list] = None) -> dict:
+    """Send email via SendGrid if configured, otherwise fall back to plain SMTP.
 
     Args:
         category: optional routing hint — "confirmation", "quotes", "info".
             When set, the From: address is resolved from EMAIL_FROM_<CATEGORY>
             for both SendGrid and SMTP paths.
+        attachments: optional list of dicts `{filename, content, mime_type}`
+            where `content` is raw bytes. Attached to BOTH SendGrid and SMTP
+            paths so invoice PDFs land in the guest's inbox offline-usable.
 
     Returns a status dict: {sent, provider, error}.
     """
     api_key = get_secret("SENDGRID_API_KEY", "").strip()
     sender_sg = _sender_for_category(category) or get_secret("SENDGRID_FROM_EMAIL", "").strip()
+    attachments = attachments or []
 
     # 1) SendGrid path
     if api_key and sender_sg:
         try:
             from sendgrid import SendGridAPIClient
-            from sendgrid.helpers.mail import Mail
+            from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
+            import base64 as _b64
             message = Mail(from_email=sender_sg, to_emails=to_email, subject=subject, html_content=html, plain_text_content=text or "")
+            for a in attachments:
+                try:
+                    att = Attachment(
+                        FileContent(_b64.b64encode(a["content"]).decode()),
+                        FileName(a.get("filename", "attachment")),
+                        FileType(a.get("mime_type", "application/octet-stream")),
+                        Disposition("attachment"),
+                    )
+                    message.add_attachment(att)
+                except Exception as ex:  # noqa: BLE001
+                    logger.warning("SendGrid attachment add failed: %s", ex)
             resp = SendGridAPIClient(api_key).send(message)
             if 200 <= resp.status_code < 300:
                 return {"sent": True, "provider": "sendgrid", "error": None}
@@ -196,16 +212,32 @@ def send_email(to_email: str, subject: str, html: str, text: Optional[str] = Non
         import smtplib, ssl
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
+        from email.mime.application import MIMEApplication
 
-        msg = MIMEMultipart("alternative")
+        # When attachments are present we need a "mixed" top-level so
+        # Apple Mail / Gmail / Outlook all show the paperclip icon; the
+        # text + html go inside a nested "alternative" part.
+        if attachments:
+            msg = MIMEMultipart("mixed")
+            body = MIMEMultipart("alternative")
+            if text:
+                body.attach(MIMEText(text, "plain"))
+            body.attach(MIMEText(html, "html"))
+            msg.attach(body)
+            for a in attachments:
+                part = MIMEApplication(a["content"], _subtype=(a.get("mime_type", "application/octet-stream").split("/")[-1] or "octet-stream"))
+                part.add_header("Content-Disposition", "attachment", filename=a.get("filename", "attachment"))
+                msg.attach(part)
+        else:
+            msg = MIMEMultipart("alternative")
+            if text:
+                msg.attach(MIMEText(text, "plain"))
+            msg.attach(MIMEText(html, "html"))
         msg["Subject"] = subject
         msg["From"] = header_from
         msg["To"] = to_email
         if reply_to:
             msg["Reply-To"] = reply_to
-        if text:
-            msg.attach(MIMEText(text, "plain"))
-        msg.attach(MIMEText(html, "html"))
 
         if port == 465:
             ctx = ssl.create_default_context()
@@ -900,7 +932,22 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
     """
 
     if email_enabled and booking.get("customer_email"):
-        result = send_email(booking["customer_email"], subject, html, body_text, category="confirmation")
+        # Attach the branded invoice PDF when the booking is paid so the
+        # guest has a real receipt offline — no round-trip required.
+        attachments = []
+        if _paid:
+            try:
+                from pdf_utils import build_receipt_pdf
+                pdf_bytes = build_receipt_pdf(booking)
+                attachments.append({
+                    "filename": f"Rox-Invoice-{booking['id']}.pdf",
+                    "content": pdf_bytes,
+                    "mime_type": "application/pdf",
+                })
+            except Exception as ex:  # noqa: BLE001
+                logger.warning("invoice attachment build err: %s", ex)
+        result = send_email(booking["customer_email"], subject, html, body_text,
+                             category="confirmation", attachments=attachments or None)
         report["email"].update(result)
     else:
         report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
@@ -1007,8 +1054,32 @@ def send_booking_reminder(booking: dict, prefs: Optional[dict] = None, driver_nu
             f"Dropoff: {booking.get('dropoff_location','—')}\n"
             f"Pax: {booking.get('passengers', 1)}"
         )
-        result = send_sms(driver_number, driver_sms)
-        report["driver_sms"].update(result)
+        # Fan out to EVERY owner cellphone in ADMIN_SMS_NUMBER (not just
+        # the single driver_number). `kind="booking"` honours each
+        # recipient's subscription + quiet-hours preference.
+        report["driver_sms"].update(send_owner_sms(driver_sms, kind="booking"))
+
+    # Admin email digest — matches the fan-out above so the owner has a
+    # written record of today's manifest, not just an SMS.
+    owner_email = (get_secret("ADMIN_EMAIL") or "").strip()
+    report.setdefault("admin_email", {"sent": False, "provider": "none", "error": None,
+                                       "enabled": bool(owner_email)})
+    if owner_email:
+        admin_subject = f"🚕 Day-of reminder · Booking {booking['id']} · {booking['booking_date']}"
+        admin_html = f"""
+        <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#FAF9F6;">
+          <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Day-of reminder</div>
+          <h2 style="font-family:Georgia,serif;color:#0B3B5C;margin:4px 0 8px;">{booking['item_name']}</h2>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:#0B3B5C;">{booking['id']}</div>
+          <pre style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#334155;white-space:pre-wrap;">Guest:   {booking['customer_name']} · {booking.get('customer_phone','')}
+Date:    {booking['booking_date']}
+Pickup:  {booking.get('pickup_location','—')}
+Dropoff: {booking.get('dropoff_location','—')}
+Pax:     {booking.get('passengers', 1)}</pre>
+          <a href="https://roxtaxi.com/admin/bookings/{booking['id']}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;padding:10px 20px;border-radius:999px;margin-top:12px;font-weight:700;">Open in admin →</a>
+        </div>
+        """
+        report["admin_email"].update(send_email(owner_email, admin_subject, admin_html, driver_sms if driver_number else "", category="admin"))
 
     return report
 

@@ -812,6 +812,34 @@ async def admin_update_deposit(booking_id: str, req: DepositUpdate, admin_email:
     return result
 
 
+@router.post("/admin/bookings/{booking_id}/resend-invoice")
+async def admin_resend_invoice(booking_id: str, _: str = Depends(_admin_dep)):
+    """One-tap resend of just the paid invoice (not the full confirmation).
+
+    Only valid for `payment_status == "paid"` bookings. Reuses
+    `notify_booking_confirmed` so the attached PDF is the same branded
+    invoice guests get on first payment. Stamps `invoice_resent_at` so
+    admins can see when the last manual resend fired.
+    """
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    if (booking.get("payment_status") or "").lower() != "paid":
+        raise HTTPException(400, "Invoice is only available after payment is confirmed.")
+    prefs = {"notify_email_enabled": True, "notify_sms_enabled": True}
+    try:
+        report = _notify_fn(_clean(dict(booking)), prefs)
+    except Exception as e:  # noqa: BLE001
+        logging.warning("resend invoice err: %s", e)
+        raise HTTPException(500, f"Invoice send error: {e}") from e
+    sent_at = _now_iso()
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$set": {"invoice_resent_at": sent_at, "invoice_resent_report": report}},
+    )
+    return {"booking_id": booking["id"], "report": report, "sent_at": sent_at}
+
+
 @router.post("/admin/bookings/{booking_id}/resend-notification")
 async def admin_resend_notification(booking_id: str, body: Optional[Dict[str, Any]] = None, _: str = Depends(_admin_dep)):
     """Manually re-send the booking-confirmation email + SMS.

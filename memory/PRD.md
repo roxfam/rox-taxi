@@ -23,6 +23,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Day-of reminder now fans out to every owner phone + email
+- `send_booking_reminder` upgraded: the single `driver_number` SMS was replaced by `send_owner_sms(kind="booking")`, so EVERY number in `ADMIN_SMS_NUMBER` gets the day-of manifest (currently +12424322587, +12424285524). Honours each recipient's subscription + quiet-hours + priority-override preferences.
+- New `admin_email` section in the reminder report — the owner also gets a branded "Day-of reminder" HTML email with the full manifest (guest, phone, pickup, dropoff, pax) + a one-tap link to open the booking in admin.
+- Guest SMS + guest email + per-booking idempotency (`reminder_sent_at`) unchanged — still fires once when the trip is in the next 24h via `_booking_reminder_loop()`.
+- Verified live: all 4 channels (guest email, guest SMS, owner fan-out SMS, admin email) returned `sent: True` on the test booking.
+
 ### Feb 2026 — Post-payment invoice delivery
 - **`notify_booking_confirmed` now attaches a "Download invoice (PDF) →" button** inside the confirmation email + the invoice link is appended to the SMS whenever `payment_status == "paid"`. The invoice section is suppressed for Zelle/pending-payment bookings so we never promise a receipt before the money lands.
 - Links target the existing `GET /api/bookings/:id/receipt.pdf` endpoint (uses `pdf_utils.build_receipt_pdf`) — includes full line-item breakdown with VAT, processing fee, and deposit.

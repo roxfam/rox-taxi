@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money, BACKEND_URL } from "../lib/api";
-import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car } from "lucide-react";
+import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart, Cell } from "recharts";
 import SignupCountriesCard from "./admin/SignupCountriesCard";
 import WarmLeadCard from "./admin/WarmLeadCard";
@@ -622,6 +622,22 @@ function NotifyCell({ booking, onRefresh }) {
     );
   };
 
+  const resendInvoice = async () => {
+    setResending(true);
+    try {
+      const { data } = await api.post(`/admin/bookings/${booking.id}/resend-invoice`);
+      const rep = data?.report || {};
+      if (rep.email?.sent) toast.success(`Invoice emailed via ${rep.email.provider}`);
+      else toast.error(rep.email?.error || "Email send failed");
+      if (rep.sms?.sent) toast.success(`Invoice SMS sent via ${rep.sms.provider}`);
+      onRefresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Resend failed");
+    } finally {
+      setResending(false);
+    }
+  };
+
   const resend = async (force = false) => {
     setResending(true);
     try {
@@ -677,6 +693,17 @@ function NotifyCell({ booking, onRefresh }) {
             title="Show provider & error details"
           >
             {expanded ? "Hide" : "Details"}
+          </button>
+        )}
+        {paid && (
+          <button
+            onClick={resendInvoice}
+            disabled={resending}
+            className="text-[9px] px-1.5 py-1 rounded bg-[#D4A94A]/15 text-[#0B3B5C] hover:bg-[#D4A94A] hover:text-white font-bold inline-flex items-center gap-1 disabled:opacity-50"
+            data-testid={`resend-invoice-${booking.id}`}
+            title="Email the branded PDF invoice to the guest"
+          >
+            <FileText className="w-3 h-3" /> Invoice
           </button>
         )}
       </div>

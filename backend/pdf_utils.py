@@ -195,6 +195,9 @@ def build_receipt_pdf(booking: dict) -> bytes:
     if booking.get("service_type") == "rental":
         rows.append(["Days", str(booking.get("days", 1))])
     rows.append(["Payment method", str(booking.get("payment_method", "-")).title()])
+    _driver = booking.get("driver_name") or booking.get("assigned_driver") or ""
+    if _driver:
+        rows.append(["Driver", _driver])
 
     story.append(Paragraph("Details", h2))
     dtl = Table(rows, colWidths=[1.7 * inch, 4.3 * inch], hAlign="LEFT")
@@ -214,12 +217,39 @@ def build_receipt_pdf(booking: dict) -> bytes:
     base = float(booking.get("price", 0)) * max(1, int(booking.get("days", 1)))
     lug = float(booking.get("luggage_fee", 0))
     pax = float(booking.get("passenger_fee", 0))
-    total = float(booking.get("total", base + lug + pax))
+    deposit = float(booking.get("deposit_amount", 0) or 0)
+    airport_dropoff = float(booking.get("rental_airport_dropoff_fee", 0) or 0)
+    bridge_toll = float(booking.get("bridge_toll_fee", 0) or 0)
+    additional_driver = float(booking.get("additional_driver_fee", 0) or 0)
+    baby_seat = float(booking.get("baby_seat_fee", 0) or 0)
+    tip = float(booking.get("tip_amount", 0) or 0)
+    vat_amount = float(booking.get("vat_amount", 0) or 0)
+    processing_fee = float(booking.get("processing_fee", 0) or 0)
+    subtotal = float(booking.get("subtotal_before_tax", 0) or (base + lug + pax + bridge_toll + additional_driver + baby_seat + airport_dropoff))
+    total = float(booking.get("total", 0))
     amt_rows = [["Base fare" if booking.get("service_type") != "rental" else f"Rental × {booking.get('days',1)} day(s)", f"${base:,.2f}"]]
     if lug:
         amt_rows.append([f"Extra luggage ({booking.get('extra_luggage',0)} × $3)", f"${lug:,.2f}"])
     if pax:
         amt_rows.append(["Group fee (3+ passengers)", f"${pax:,.2f}"])
+    if bridge_toll:
+        amt_rows.append(["Paradise Island bridge toll", f"${bridge_toll:,.2f}"])
+    if additional_driver:
+        amt_rows.append(["Additional driver(s)", f"${additional_driver:,.2f}"])
+    if baby_seat:
+        amt_rows.append(["Baby seat(s)", f"${baby_seat:,.2f}"])
+    if airport_dropoff:
+        amt_rows.append(["Airport drop-off surcharge", f"${airport_dropoff:,.2f}"])
+    # Subtotal + VAT + processing — matches the live booking API.
+    amt_rows.append(["Subtotal", f"${subtotal:,.2f}"])
+    if vat_amount:
+        amt_rows.append(["Bahamas VAT (10%)", f"${vat_amount:,.2f}"])
+    if processing_fee:
+        amt_rows.append(["Processing fee (4.5%)", f"${processing_fee:,.2f}"])
+    if deposit:
+        amt_rows.append(["Refundable rental deposit (hold)", f"${deposit:,.2f}"])
+    if tip:
+        amt_rows.append(["Driver tip (gratuity)", f"${tip:,.2f}"])
     amt_rows.append(["Total", f"${total:,.2f}"])
 
     tot = Table(amt_rows, colWidths=[4.5 * inch, 1.5 * inch], hAlign="LEFT")
@@ -246,16 +276,50 @@ def build_receipt_pdf(booking: dict) -> bytes:
     story.append(Spacer(1, 18))
     story.append(Paragraph("Cancellation policy", h2))
     story.append(Paragraph(
-        "Cancel 48+ hours before service to receive a refund minus a 15% cancellation fee. Cancellations within 48 hours are non-refundable.",
+        "Taxi, tour, and excursion bookings: cancellations made at least 48 hours before service are refunded minus a <b>20% cancellation fee</b>. Cancellations within 48 hours are non-refundable. "
+        "Car rentals: base fare refunded when 48+ hours notice is given; the refundable security deposit is always released back once the vehicle is returned undamaged.",
         p,
     ))
 
-    story.append(Spacer(1, 24))
-    story.append(Paragraph(
-        "Rox Taxi Service &amp; Tours · Nassau, New Providence · The Bahamas<br/>"
-        "hello@roxtaxi.com · facebook.com/roxtaxiservice · Keep this receipt for your records.",
-        small,
-    ))
+    # QR footer — reuses the signed boarding-pass endpoint so the same
+    # token works on the paper copy. Falls back to a text-only footer on
+    # any rendering error so an offline deploy still ships the invoice.
+    try:
+        import qrcode as _qrcode
+        from io import BytesIO as _BIO
+        qr = _qrcode.QRCode(version=1, box_size=4, border=1)
+        qr.add_data(f"https://roxtaxi.com/booking/{booking['id']}/pass")
+        qr.make(fit=True)
+        img = qr.make_image(fill_color=NAVY, back_color="white")
+        qrbuf = _BIO()
+        img.save(qrbuf, format="PNG")
+        qrbuf.seek(0)
+        qr_img = Image(qrbuf, width=0.9 * inch, height=0.9 * inch)
+        story.append(Spacer(1, 20))
+        footer_tbl = Table(
+            [[qr_img,
+              Paragraph(
+                "<b>Rox Taxi Service &amp; Tours</b><br/>"
+                "Nassau, New Providence · The Bahamas<br/>"
+                "hello@roxtaxi.com · WhatsApp +1 (242) 432-2587<br/>"
+                "Scan the QR to open your boarding pass + live tracker.",
+                small,
+              )]],
+            colWidths=[1.1 * inch, 4.9 * inch],
+        )
+        footer_tbl.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        story.append(footer_tbl)
+    except Exception:  # noqa: BLE001
+        story.append(Spacer(1, 24))
+        story.append(Paragraph(
+            "Rox Taxi Service &amp; Tours · Nassau, New Providence · The Bahamas<br/>"
+            "hello@roxtaxi.com · WhatsApp +1 (242) 432-2587 · Keep this receipt for your records.",
+            small,
+        ))
 
     doc_pdf.build(story)
     return buf.getvalue()
