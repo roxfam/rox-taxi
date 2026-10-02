@@ -60,6 +60,25 @@ class TipLookupRequest(BaseModel):
     contact: str  # email OR last 4 digits of phone
 
 
+async def _verify_guest(bid: str, contact: str) -> dict:
+    """Shared verifier used by both the tip lookup and the broader
+    booking lookup. Raises HTTPException on mismatch; returns the raw
+    booking doc on success."""
+    bid = (bid or "").strip().upper()
+    contact = (contact or "").strip().lower()
+    if len(bid) < 4 or len(contact) < 4:
+        raise HTTPException(400, "Booking ID and contact are both required")
+    b = await _db.bookings.find_one({"id": bid})
+    if not b:
+        raise HTTPException(404, "No booking matches that number")
+    email_ok = contact == (b.get("customer_email") or "").strip().lower()
+    phone_digits = "".join(ch for ch in (b.get("customer_phone") or "") if ch.isdigit())
+    phone_ok = len(contact) == 4 and contact.isdigit() and phone_digits.endswith(contact)
+    if not (email_ok or phone_ok):
+        raise HTTPException(401, "Could not verify your booking — double-check the email or last-4-digit phone")
+    return b
+
+
 @router.post("/bookings/tip-lookup")
 async def tip_lookup(req: TipLookupRequest):
     """Guest-facing lookup: enter booking number + the email you booked
@@ -68,25 +87,10 @@ async def tip_lookup(req: TipLookupRequest):
     Only returns a token for completed OR picked_up trips."""
     if _db is None:
         raise HTTPException(500, "DB not configured")
-    bid = (req.booking_id or "").strip().upper()
-    contact = (req.contact or "").strip().lower()
-    if len(bid) < 4 or len(contact) < 4:
-        raise HTTPException(400, "Booking ID and contact are both required")
-
-    b = await _db.bookings.find_one({"id": bid})
-    if not b:
-        raise HTTPException(404, "No booking matches that number")
+    b = await _verify_guest(req.booking_id, req.contact)
     if b.get("status") not in {"completed", "picked_up"}:
         raise HTTPException(409, "Tip lookup is available after your driver has picked you up or completed the trip")
-
-    # Match EITHER full email OR last-4-digit phone
-    email_ok = contact == (b.get("customer_email") or "").strip().lower()
-    phone_digits = "".join(ch for ch in (b.get("customer_phone") or "") if ch.isdigit())
-    phone_ok = len(contact) == 4 and contact.isdigit() and phone_digits.endswith(contact)
-    if not (email_ok or phone_ok):
-        # Deliberately vague — don't tell them WHICH field was wrong
-        raise HTTPException(401, "Could not verify your booking — double-check the email or last-4-digit phone")
-
+    bid = b["id"]
     token = _tip_token(bid)
     return {
         "booking_id": bid,
@@ -94,6 +98,59 @@ async def tip_lookup(req: TipLookupRequest):
         "tip_url": f"{_public_base_url}/tip-topup?id={bid}&t={token}",
         "driver_name": b.get("driver_name") or b.get("assigned_driver") or "",
         "trip": b.get("item_name") or "",
+    }
+
+
+@router.post("/bookings/guest-lookup")
+async def booking_guest_lookup(req: TipLookupRequest):
+    """Public "find my booking" — enter booking number + email (or last 4
+    phone) to pull a redacted summary. Guest can then re-pay, upload a
+    Zelle proof, add a tip, or download their invoice from one page.
+    Returns ONLY the fields a guest already knows about their own trip,
+    plus action URLs for each thing they can do right now based on
+    current status + payment status."""
+    if _db is None:
+        raise HTTPException(500, "DB not configured")
+    b = await _verify_guest(req.booking_id, req.contact)
+    bid = b["id"]
+    base = _public_base_url
+    status = b.get("status") or "pending"
+    pay_status = b.get("payment_status") or "unpaid"
+
+    actions: dict = {"pay_url": None, "tip_url": None, "zelle_proof_url": None,
+                     "invoice_url": None, "track_url": None}
+    if pay_status != "paid":
+        actions["pay_url"] = f"{base}/pay/{bid}"
+        actions["zelle_proof_url"] = f"{base}/pay/{bid}#zelle-proof"
+    if status in {"completed", "picked_up"}:
+        actions["tip_url"] = f"{base}/tip-topup?id={bid}&t={_tip_token(bid)}"
+    if pay_status == "paid":
+        actions["invoice_url"] = f"{base}/api/bookings/{bid}/receipt.pdf"
+    if status not in {"completed", "cancelled", "no_show"}:
+        actions["track_url"] = f"{base}/track?booking={bid}"
+
+    return {
+        "booking_id": bid,
+        "customer_name": b.get("customer_name"),
+        "customer_email": b.get("customer_email"),
+        "customer_phone": b.get("customer_phone"),
+        "status": status,
+        "payment_status": pay_status,
+        "payment_method": b.get("payment_method"),
+        "service_type": b.get("service_type"),
+        "item_name": b.get("item_name"),
+        "booking_date": b.get("booking_date"),
+        "pickup_location": b.get("pickup_location"),
+        "dropoff_location": b.get("dropoff_location"),
+        "passengers": b.get("passengers"),
+        "flight_number": b.get("flight_number"),
+        "subtotal": b.get("subtotal"),
+        "total": b.get("total"),
+        "tip_amount": b.get("tip_amount") or 0,
+        "customer_rating": b.get("customer_rating"),
+        "driver_name": b.get("driver_name") or b.get("assigned_driver"),
+        "zelle_proof_status": b.get("zelle_proof_status"),
+        "actions": actions,
     }
 
 

@@ -54,6 +54,7 @@ const NassauWithReagan = lazy(() => import("./pages/NassauWithReagan"));
 const ReferFriend = lazy(() => import("./pages/ReferFriend"));
 const TipTopUp = lazy(() => import("./pages/TipTopUp"));
 const TipLookup = lazy(() => import("./pages/TipLookup"));
+const MyBookingLookup = lazy(() => import("./pages/MyBookingLookup"));
 import { AuthProvider } from "./lib/auth";
 
 import { useVisitorBeacon } from "./hooks/useVisitorBeacon";
@@ -114,6 +115,8 @@ function AppRouter() {
       <Route path="/refer" element={<CustomerShell><ReferFriend /></CustomerShell>} />
       <Route path="/tip-topup" element={<CustomerShell><TipTopUp /></CustomerShell>} />
       <Route path="/tip" element={<CustomerShell><TipLookup /></CustomerShell>} />
+      <Route path="/my-booking" element={<CustomerShell><MyBookingLookup /></CustomerShell>} />
+      <Route path="/find-booking" element={<CustomerShell><MyBookingLookup /></CustomerShell>} />
       <Route path="/tours/ardastra" element={<CustomerShell><Ardastra /></CustomerShell>} />
       <Route path="/tours/atlantis" element={<CustomerShell><Atlantis /></CustomerShell>} />
       <Route path="/tours/blue-lagoon" element={<CustomerShell><BlueLagoon /></CustomerShell>} />
