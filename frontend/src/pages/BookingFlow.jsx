@@ -430,6 +430,32 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
           <div className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Booking</div>
           <h2 className="serif text-2xl sm:text-3xl text-[#0B3B5C] mt-1">{item.name}</h2>
           <div className="mt-2 mono text-[#E86A3C] font-semibold">{money(item.price)}{serviceType === "rental" ? " / day" : ""}</div>
+          {item.age_requirement && (
+            <div
+              className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#0B3B5C]/5 border border-[#0B3B5C]/15 px-3 py-1 text-[11px] font-semibold text-[#0B3B5C]"
+              data-testid="booking-item-age-req"
+            >
+              {item.age_requirement}
+            </div>
+          )}
+          {Array.isArray(item.includes) && item.includes.length > 0 && (
+            <div
+              className="mt-4 rounded-xl bg-[#FBF7EF] border border-[#D4A94A]/30 p-3"
+              data-testid="booking-item-includes"
+            >
+              <div className="text-[10.5px] tracking-[0.2em] uppercase text-[#0B3B5C] font-black mb-1.5">
+                What's included
+              </div>
+              <ul className="space-y-1 text-[12.5px] text-[#334155] leading-snug">
+                {item.includes.map((inc, idx) => (
+                  <li key={idx} className="flex items-start gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#059669] shrink-0 mt-0.5" />
+                    <span>{inc}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="overflow-y-auto p-6 sm:p-8 space-y-5">

@@ -11,6 +11,7 @@ import AttachRateCard from "./admin/AttachRateCard";
 import ReviewsInboxCard from "./admin/ReviewsInboxCard";
 import ReferralLeaderboardCard from "./admin/ReferralLeaderboardCard";
 import WeeklyReportCard from "./admin/WeeklyReportCard";
+import IncidentalModal from "./admin/IncidentalModal";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -28,6 +29,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [focusedId, setFocusedId] = useState("");
   const [depositModal, setDepositModal] = useState(null); // { booking, action: 'released'|'forfeited' }
+  const [incidentalBooking, setIncidentalBooking] = useState(null); // booking row for card-hold / zelle modal
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [authMethods, setAuthMethods] = useState(null);
   const [nudgeStats, setNudgeStats] = useState(null);
@@ -413,6 +415,15 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-4 py-3">
                         <NotifyCell booking={b} onRefresh={load} />
+                        <button
+                          onClick={() => setIncidentalBooking(b)}
+                          className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded bg-[#0B3B5C]/8 text-[#0B3B5C] hover:bg-[#0B3B5C] hover:text-white"
+                          data-testid={`admin-incidental-btn-${b.id}`}
+                          title="Hold card on file (Stripe), send Zelle request, or charge saved card"
+                        >
+                          <ShieldCheck className="w-3 h-3" />
+                          {b.card_hold?.payment_method_id ? `Card ••${b.card_hold.card_last4}` : "Hold card / Zelle"}
+                        </button>
                       </td>
                       <td className="px-4 py-3">
                         <select
@@ -442,6 +453,14 @@ export default function AdminDashboard() {
           action={depositModal.action}
           onClose={() => setDepositModal(null)}
           onDone={() => { setDepositModal(null); load(); }}
+        />
+      )}
+
+      {incidentalBooking && (
+        <IncidentalModal
+          booking={incidentalBooking}
+          onClose={() => setIncidentalBooking(null)}
+          onDone={() => { load(); }}
         />
       )}
     </div>

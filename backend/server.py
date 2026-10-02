@@ -4865,6 +4865,7 @@ payments_module.configure(
     notify_fn=notify_booking_confirmed,
     now_iso_fn=now_iso,
     clean_fn=clean,
+    require_admin=require_admin,
 )
 api_router.include_router(payments_module.router)
 

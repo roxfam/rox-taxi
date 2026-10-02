@@ -566,6 +566,33 @@ export default function Tours() {
             <div className="p-6">
               <h3 className="serif text-2xl text-[#0B3B5C] leading-tight">{t.name}</h3>
               <p className="text-sm text-[#64748B] mt-2 leading-relaxed">{t.description}</p>
+              {t.age_requirement && (
+                <div
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#0B3B5C]/5 border border-[#0B3B5C]/15 px-3 py-1 text-[11px] font-semibold text-[#0B3B5C]"
+                  data-testid={`tour-age-req-${t.id}`}
+                >
+                  <Users className="w-3.5 h-3.5 text-[#D4A94A]" />
+                  {t.age_requirement}
+                </div>
+              )}
+              {Array.isArray(t.includes) && t.includes.length > 0 && (
+                <div
+                  className="mt-4 rounded-xl bg-[#FBF7EF] border border-[#D4A94A]/30 p-3"
+                  data-testid={`tour-includes-${t.id}`}
+                >
+                  <div className="text-[10.5px] tracking-[0.2em] uppercase text-[#0B3B5C] font-black mb-1.5">
+                    What's included
+                  </div>
+                  <ul className="space-y-1 text-[12.5px] text-[#334155] leading-snug">
+                    {t.includes.map((inc, idx) => (
+                      <li key={idx} className="flex items-start gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[#059669] shrink-0 mt-0.5" />
+                        <span>{inc}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="mt-6 flex items-center justify-between">
                 <PromoPrice price={t.price} promo={t.promo} />
                 <button

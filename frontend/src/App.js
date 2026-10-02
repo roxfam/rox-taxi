@@ -33,6 +33,8 @@ const ComingSoon = lazy(() => import("./pages/ComingSoon"));
 const Pay = lazy(() => import("./pages/Pay"));
 const PaymentSuccess = lazy(() => import("./pages/PaymentReturn").then((m) => ({ default: m.PaymentSuccess })));
 const PaymentCancel = lazy(() => import("./pages/PaymentReturn").then((m) => ({ default: m.PaymentCancel })));
+const CardHoldSuccess = lazy(() => import("./pages/CardHoldReturn").then((m) => ({ default: m.CardHoldSuccess })));
+const CardHoldCancel = lazy(() => import("./pages/CardHoldReturn").then((m) => ({ default: m.CardHoldCancel })));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminManage = lazy(() => import("./pages/AdminManage"));
@@ -125,6 +127,8 @@ function AppRouter() {
       <Route path="/reset-password" element={<CustomerShell><ResetPassword /></CustomerShell>} />
       <Route path="/payment/success" element={<CustomerShell><PaymentSuccess /></CustomerShell>} />
       <Route path="/payment/cancel" element={<CustomerShell><PaymentCancel /></CustomerShell>} />
+      <Route path="/card-hold/success" element={<CustomerShell><CardHoldSuccess /></CustomerShell>} />
+      <Route path="/card-hold/cancel" element={<CustomerShell><CardHoldCancel /></CustomerShell>} />
       <Route path="/upload-license/:bookingId" element={<UploadLicense />} />
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={<AdminDashboard />} />

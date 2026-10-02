@@ -11,11 +11,15 @@ from pydantic import BaseModel
 
 import httpx
 
+from fastapi import Depends, Header
+from typing import List
+
 from emergentintegrations.payments.stripe.checkout import (
     StripeCheckout, CheckoutSessionRequest,
 )
 
 import paypal_client
+import card_hold as _card_hold
 
 
 # -- shared state, populated by server.py via configure() -------------------
@@ -24,16 +28,22 @@ _stripe_api_key: str = ""
 _notify = None
 _now_iso = None
 _clean = None
+_require_admin = None
 
 
-def configure(db, stripe_api_key: str, notify_fn, now_iso_fn, clean_fn):
+def configure(db, stripe_api_key: str, notify_fn, now_iso_fn, clean_fn, require_admin=None):
     """Called once at app startup so this module gets a handle to shared state."""
-    global _db, _stripe_api_key, _notify, _now_iso, _clean
+    global _db, _stripe_api_key, _notify, _now_iso, _clean, _require_admin
     _db = db
     _stripe_api_key = stripe_api_key
     _notify = notify_fn
     _now_iso = now_iso_fn
     _clean = clean_fn
+    _require_admin = require_admin
+
+
+def _admin_dep(authorization: Optional[str] = Header(None)):
+    return _require_admin(authorization) if callable(_require_admin) else None
 
 
 router = APIRouter()
@@ -350,3 +360,239 @@ async def attempt_deposit_refund(booking: Dict[str, Any], amount: float, reason:
             return {"refunded": False, "provider": "stripe", "error": str(e)}
 
     return {"refunded": False, "provider": booking.get("payment_method", "manual"), "error": "Manual payment method — issue refund by hand"}
+
+
+# ─── Card-on-File (Stripe SetupIntents via Checkout `setup` mode) ─────────
+# Lets admins email/SMS a guest a one-time Stripe link to securely store
+# a card. Later, admin can charge that card off-session for incidentals,
+# rental damage, or late-return fees. Uses raw Stripe REST so we don't
+# depend on `emergentintegrations` supporting setup mode.
+class CardHoldCreateRequest(BaseModel):
+    origin_url: str
+    send_sms: bool = True
+    send_email: bool = True
+
+
+class CardHoldChargeRequest(BaseModel):
+    amount: float
+    reason: str
+
+
+@router.post("/admin/bookings/{booking_id}/card-hold/create")
+async def card_hold_create(
+    booking_id: str,
+    req: CardHoldCreateRequest,
+    _: str = Depends(_admin_dep),
+):
+    """Create a Stripe Checkout Session in `setup` mode and (optionally)
+    text/email the link to the guest so they can securely save a card
+    on file for later admin-triggered charges."""
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+
+    # The shared `sk_test_emergent` key is a proxied sandbox — it only works
+    # through the emergentintegrations library, not raw Stripe REST. Setup
+    # mode requires a real Stripe key (claimable sandbox or live).
+    if (_stripe_api_key or "").strip().lower() in ("sk_test_emergent", ""):
+        raise HTTPException(
+            503,
+            "Card-on-file needs a real Stripe key. Claim your Stripe sandbox from the "
+            "Payments tab, or use Zelle request for now.",
+        )
+
+    origin = req.origin_url.rstrip("/")
+    success_url = f"{origin}/card-hold/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/card-hold/cancel?booking_id={booking['id']}"
+    try:
+        session = await _card_hold.create_setup_checkout(
+            stripe_key=_stripe_api_key,
+            booking=booking,
+            success_url=success_url,
+            cancel_url=cancel_url,
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.exception("card-hold create failed")
+        raise HTTPException(502, f"Stripe error: {e}") from e
+
+    hold_doc = {
+        "session_id": session["id"],
+        "status": session.get("status") or "open",
+        "payment_method_id": None,
+        "customer_id": None,
+        "card_brand": None,
+        "card_last4": None,
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
+        "charges": [],
+    }
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$set": {"card_hold": hold_doc}},
+    )
+
+    # Fire optional SMS + email with the secure link.
+    link = session.get("url") or ""
+    notification = {"sms": {"sent": False}, "email": {"sent": False}}
+    guest_first = (booking.get("customer_name") or "Guest").split(" ")[0]
+    if req.send_sms and booking.get("customer_phone") and link:
+        try:
+            from notifications import send_sms  # noqa: PLC0415
+            sms_body = (
+                f"Hi {guest_first}, Rox Taxi here. Please securely save a card "
+                f"on file for your booking {booking['id']}: {link} "
+                f"(no charge now — only if damage/incidentals apply)."
+            )
+            notification["sms"] = send_sms(booking["customer_phone"], sms_body)
+        except Exception as e:  # noqa: BLE001
+            notification["sms"] = {"sent": False, "error": str(e)}
+    if req.send_email and booking.get("customer_email") and link:
+        try:
+            from notifications import send_email  # noqa: PLC0415
+            html = (
+                f"<p>Hi {guest_first},</p>"
+                f"<p>Please securely save a card on file for your Rox Taxi booking "
+                f"<strong>{booking['id']}</strong>. You will <strong>not be charged</strong> now — "
+                f"the card is only used if incidental charges apply (damage, late return, extra cleaning).</p>"
+                f"<p><a href='{link}' style='display:inline-block;padding:12px 20px;background:#0B3B5C;"
+                f"color:#fff;border-radius:8px;text-decoration:none;'>Save card securely</a></p>"
+                f"<p style='font-size:12px;color:#64748B;'>Powered by Stripe. Rox Taxi never sees your card number.</p>"
+            )
+            notification["email"] = send_email(
+                booking["customer_email"],
+                f"Save a card on file for booking {booking['id']}",
+                html,
+            )
+        except Exception as e:  # noqa: BLE001
+            notification["email"] = {"sent": False, "error": str(e)}
+
+    return {
+        "booking_id": booking["id"],
+        "session_id": session["id"],
+        "checkout_url": link,
+        "status": hold_doc["status"],
+        "notification": notification,
+    }
+
+
+async def _refresh_card_hold(booking: Dict[str, Any]) -> Dict[str, Any]:
+    """Fetches the latest status from Stripe, extracts payment_method +
+    customer when the setup completed, and persists the result on the
+    booking. Returns the refreshed `card_hold` sub-doc."""
+    hold = booking.get("card_hold") or {}
+    session_id = hold.get("session_id")
+    if not session_id:
+        return hold
+    session = await _card_hold.retrieve_setup_session(_stripe_api_key, session_id)
+    hold["status"] = session.get("status") or hold.get("status")
+    hold["customer_id"] = session.get("customer") or hold.get("customer_id")
+    setup_intent_id = session.get("setup_intent")
+    if setup_intent_id and not hold.get("payment_method_id"):
+        si = await _card_hold.retrieve_setup_intent(_stripe_api_key, setup_intent_id)
+        pm_id = si.get("payment_method")
+        if pm_id:
+            hold["payment_method_id"] = pm_id
+            try:
+                pm = await _card_hold.retrieve_payment_method(_stripe_api_key, pm_id)
+                card = (pm.get("card") or {})
+                hold["card_brand"] = card.get("brand")
+                hold["card_last4"] = card.get("last4")
+                hold["card_exp_month"] = card.get("exp_month")
+                hold["card_exp_year"] = card.get("exp_year")
+            except Exception:  # noqa: BLE001
+                pass
+    hold["updated_at"] = _now_iso()
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$set": {"card_hold": hold}},
+    )
+    return hold
+
+
+@router.get("/admin/bookings/{booking_id}/card-hold/status")
+async def card_hold_status(booking_id: str, _: str = Depends(_admin_dep)):
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    if not (booking.get("card_hold") or {}).get("session_id"):
+        return {"booking_id": booking["id"], "card_hold": None}
+    try:
+        hold = await _refresh_card_hold(booking)
+    except Exception as e:  # noqa: BLE001
+        logging.warning("card-hold status refresh failed: %s", e)
+        raise HTTPException(502, f"Stripe error: {e}") from e
+    return {"booking_id": booking["id"], "card_hold": hold}
+
+
+@router.get("/card-hold/status/{session_id}")
+async def card_hold_public_status(session_id: str):
+    """Public, unauthenticated poll used by the guest's success page.
+    Returns only `{status, saved}` — never the payment_method id."""
+    booking = await _db.bookings.find_one({"card_hold.session_id": session_id})
+    if not booking:
+        raise HTTPException(404, "Session not found")
+    try:
+        hold = await _refresh_card_hold(booking)
+    except Exception as e:  # noqa: BLE001
+        logging.warning("card-hold public refresh failed: %s", e)
+        hold = booking.get("card_hold") or {}
+    return {
+        "status": hold.get("status"),
+        "saved": bool(hold.get("payment_method_id")),
+        "booking_id": booking["id"],
+    }
+
+
+@router.post("/admin/bookings/{booking_id}/card-hold/charge")
+async def card_hold_charge(
+    booking_id: str,
+    req: CardHoldChargeRequest,
+    _: str = Depends(_admin_dep),
+):
+    """Off-session charge against a previously saved card. Reason + amount
+    are stored under `card_hold.charges` for audit."""
+    if req.amount <= 0:
+        raise HTTPException(400, "Amount must be greater than zero")
+    reason = (req.reason or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(400, "Reason is required (min 3 chars)")
+
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    hold = booking.get("card_hold") or {}
+    if not hold.get("payment_method_id") or not hold.get("customer_id"):
+        raise HTTPException(409, "No card on file for this booking yet")
+
+    amount_cents = int(round(float(req.amount) * 100))
+    try:
+        pi = await _card_hold.charge_saved_card(
+            stripe_key=_stripe_api_key,
+            customer_id=hold["customer_id"],
+            payment_method_id=hold["payment_method_id"],
+            amount_cents=amount_cents,
+            reason=reason,
+            booking_id=booking["id"],
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.exception("card-hold charge failed")
+        raise HTTPException(502, f"Stripe charge error: {e}") from e
+
+    charge_record = {
+        "payment_intent_id": pi.get("id"),
+        "amount": float(req.amount),
+        "amount_cents": amount_cents,
+        "reason": reason,
+        "status": pi.get("status"),
+        "created_at": _now_iso(),
+    }
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$push": {"card_hold.charges": charge_record},
+         "$set": {"card_hold.updated_at": _now_iso()}},
+    )
+    return {
+        "booking_id": booking["id"],
+        "charge": charge_record,
+        "payment_intent_status": pi.get("status"),
+    }

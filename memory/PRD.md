@@ -23,6 +23,17 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Dolphin Swim excursion + Admin Card-on-File / Zelle incidentals
+- **New excursion live**: "Dolphin Swim — Blue Lagoon Island" at $265 (+ VAT + processing fee). Fields added: `age_requirement`, `includes` (6-item list). Tour cards + booking modal now render a "What's Included" box + age-req pill when a tour exposes these fields.
+- **Admin Incidental Modal** (new `IncidentalModal.jsx`) opens from a per-row "Hold card / Zelle" button on `/admin`. Three tabs:
+  1. **Stripe card hold** — creates a Stripe Checkout session in `mode=setup`, SMS + emails the guest a secure link. On return, backend polls the SetupIntent, extracts `payment_method` + `customer`, and surfaces "Visa •••• 4242" on the admin row. Guards: friendly 503 when `STRIPE_API_KEY` is the shared `sk_test_emergent` sandbox (raw REST needs a real/claimed key).
+  2. **Zelle request** — admin enters amount + reason; backend texts & emails the guest with Zelle email/phone + memo = `{bookingId} · {reason}`. Audit trail stored on `booking.zelle_requests[]`.
+  3. **Charge card** — off-session PaymentIntent charges the saved card for incidentals. Audit trail on `booking.card_hold.charges[]`.
+- New backend module `/app/backend/card_hold.py` wraps the Stripe REST surface (setup checkout, retrieve session/intent/pm, charge saved card).
+- New routes in `routes/payments.py`: `POST /admin/bookings/{id}/card-hold/{create,charge}`, `GET /admin/bookings/{id}/card-hold/status`, public `GET /card-hold/status/{session_id}`.
+- New route in `routes/admin.py`: `POST /admin/bookings/{id}/zelle-request`.
+- New frontend pages: `/card-hold/success` + `/card-hold/cancel` (polling Stripe setup confirmation).
+
 ### Feb 2026 — Day-of reminder now fans out to every owner phone + email
 - `send_booking_reminder` upgraded: the single `driver_number` SMS was replaced by `send_owner_sms(kind="booking")`, so EVERY number in `ADMIN_SMS_NUMBER` gets the day-of manifest (currently +12424322587, +12424285524). Honours each recipient's subscription + quiet-hours + priority-override preferences.
 - New `admin_email` section in the reminder report — the owner also gets a branded "Day-of reminder" HTML email with the full manifest (guest, phone, pickup, dropoff, pax) + a one-tap link to open the booking in admin.

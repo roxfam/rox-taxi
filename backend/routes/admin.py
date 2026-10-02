@@ -174,6 +174,100 @@ class ZelleMark(BaseModel):
     booking_id: str
 
 
+class ZelleRequest(BaseModel):
+    amount: float
+    reason: str
+    send_sms: bool = True
+    send_email: bool = True
+
+
+@router.post("/admin/bookings/{booking_id}/zelle-request")
+async def send_zelle_request(
+    booking_id: str,
+    req: ZelleRequest,
+    _: str = Depends(_require_admin_placeholder),
+):
+    """Send the guest a Zelle payment request (SMS + email) for an
+    incidental amount tied to a booking — damage, late-return, extra
+    cleaning, or any off-booking charge. Admin reconciles later with the
+    existing `zelle-mark-paid` endpoint once funds land."""
+    if req.amount <= 0:
+        raise HTTPException(400, "Amount must be greater than zero")
+    reason = (req.reason or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(400, "Reason is required (min 3 chars)")
+
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    zelle_email = (cfg.get("zelle_email") or os.environ.get("ZELLE_EMAIL") or "").strip()
+    zelle_phone = (cfg.get("zelle_phone") or os.environ.get("ZELLE_PHONE") or "").strip()
+    if not zelle_email and not zelle_phone:
+        raise HTTPException(503, "No Zelle recipient configured — add one in Site Config.")
+
+    guest_first = (booking.get("customer_name") or "Guest").split(" ")[0]
+    memo = f"{booking['id']} · {reason[:60]}"
+    recipient_line = " / ".join([x for x in (zelle_email, zelle_phone) if x])
+    amount_str = f"${req.amount:.2f}"
+
+    notification = {"sms": {"sent": False}, "email": {"sent": False}}
+    if req.send_sms and booking.get("customer_phone"):
+        try:
+            from notifications import send_sms  # noqa: PLC0415
+            sms_body = (
+                f"Hi {guest_first}, Rox Taxi: please send {amount_str} via Zelle "
+                f"for '{reason[:80]}' on booking {booking['id']}. "
+                f"Recipient: {recipient_line}. Memo: {memo}. Thank you!"
+            )
+            notification["sms"] = send_sms(booking["customer_phone"], sms_body)
+        except Exception as e:  # noqa: BLE001
+            notification["sms"] = {"sent": False, "error": str(e)}
+    if req.send_email and booking.get("customer_email"):
+        try:
+            from notifications import send_email  # noqa: PLC0415
+            html = (
+                f"<p>Hi {guest_first},</p>"
+                f"<p>Rox Taxi has requested a <strong>{amount_str}</strong> Zelle payment on "
+                f"booking <strong>{booking['id']}</strong> for <em>{reason}</em>.</p>"
+                f"<div style='padding:14px;background:#FBF7EF;border:1px solid #D4A94A33;border-radius:12px;'>"
+                f"<div style='font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:#64748B;'>Send Zelle to</div>"
+                + (f"<div style='font-family:monospace;color:#0B3B5C;font-weight:600;'>{zelle_email}</div>" if zelle_email else "")
+                + (f"<div style='font-family:monospace;color:#0B3B5C;font-weight:600;'>{zelle_phone}</div>" if zelle_phone else "")
+                + f"<div style='margin-top:10px;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:#64748B;'>Memo (important)</div>"
+                f"<div style='font-family:monospace;color:#0B3B5C;font-weight:600;'>{memo}</div>"
+                f"</div>"
+                f"<p style='font-size:12px;color:#64748B;'>Reply to this email once sent — we'll confirm the moment it lands.</p>"
+            )
+            notification["email"] = send_email(
+                booking["customer_email"],
+                f"Zelle request · {amount_str} · booking {booking['id']}",
+                html,
+            )
+        except Exception as e:  # noqa: BLE001
+            notification["email"] = {"sent": False, "error": str(e)}
+
+    request_record = {
+        "amount": float(req.amount),
+        "reason": reason,
+        "memo": memo,
+        "zelle_email": zelle_email,
+        "zelle_phone": zelle_phone,
+        "created_at": _now_iso(),
+        "notification": notification,
+    }
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$push": {"zelle_requests": request_record},
+         "$set": {"zelle_requests_updated_at": _now_iso()}},
+    )
+    return {
+        "booking_id": booking["id"],
+        "request": request_record,
+    }
+
+
 @router.post("/admin/payments/zelle-mark-paid")
 async def mark_zelle_paid(req: ZelleMark, admin: str = Depends(_require_admin_placeholder)):
     """Manually mark a Zelle-paid booking as received. Updates booking status,
