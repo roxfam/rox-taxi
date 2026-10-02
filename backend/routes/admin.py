@@ -935,21 +935,101 @@ async def mark_zelle_paid(req: ZelleMark, admin: str = Depends(_require_admin_pl
 
 @router.post("/admin/payments/{payment_id}/refund")
 async def refund_payment(payment_id: str, admin: str = Depends(_require_admin_placeholder)):
-    """Trigger a full refund for a Stripe or PayPal transaction. Refunds
-    are dispatched via the shared `_attempt_deposit_refund` helper (already
-    wired to both providers via `configure()`)."""
+    """Trigger a full refund for a Stripe or PayPal transaction.
+
+    The refund amount defaults to whatever's left on the booking's total
+    (so a double-click doesn't attempt a double-refund). Refunds are
+    dispatched via the shared `_attempt_deposit_refund` helper (already
+    wired to both providers via `configure()`), then the guest receives
+    an email receipt confirming the amount + ETA.
+    """
     tx = await _db.payment_transactions.find_one({"session_id": payment_id})
     if not tx:
         raise HTTPException(404, "Payment not found")
     booking = await _db.bookings.find_one({"id": tx.get("booking_id")})
     if not booking:
         raise HTTPException(404, "Related booking not found")
-    result = await _attempt_deposit_refund(booking, reason="Admin-initiated refund via Payments panel")
+
+    # Amount to refund — total minus whatever was previously refunded.
+    # Falls back to tx.amount when the booking total is missing (older
+    # payment-link records). Rounded to avoid float-dust failures.
+    already = float(booking.get("refunded_amount") or 0.0)
+    amt = float(booking.get("total") or tx.get("amount") or 0.0)
+    refund_amount = round(max(0.0, amt - already), 2)
+    if refund_amount < 0.01:
+        raise HTTPException(409, "Nothing left to refund on this booking")
+
+    try:
+        result = await _attempt_deposit_refund(
+            booking,
+            refund_amount,
+            "Admin-initiated refund via Payments panel",
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.exception("admin refund dispatch failed for %s", payment_id)
+        raise HTTPException(502, f"Refund provider error: {e}") from e
+
+    now = _now_iso()
+    refunded_ok = bool(result.get("refunded"))
+    new_status = "refunded" if refunded_ok else "refund_pending"
+
+    # Update ledger
     await _db.payment_transactions.update_one(
         {"session_id": payment_id},
-        {"$set": {"status": "refunded", "payment_status": "refunded", "updated_at": _now_iso(), "refund_info": result}},
+        {"$set": {
+            "status": new_status,
+            "payment_status": new_status,
+            "updated_at": now,
+            "refund_info": result,
+            "refund_amount": refund_amount,
+        }},
     )
-    return {"ok": True, "payment_id": payment_id, "refund": result}
+    # Mirror onto the booking so dashboards + guest lookup show it.
+    booking_update: Dict[str, Any] = {
+        "payment_status": new_status,
+        "updated_at": now,
+    }
+    if refunded_ok:
+        booking_update["refunded_amount"] = round(already + refund_amount, 2)
+        booking_update["refunded_at"] = now
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$set": booking_update,
+         "$push": {"refund_history": {
+             "at": now, "amount": refund_amount,
+             "actor": admin, "provider": result.get("provider"),
+             "refund_id": result.get("refund_id"),
+             "status": result.get("status"), "ok": refunded_ok,
+             "error": result.get("error"),
+         }}},
+    )
+
+    # Email the guest a receipt — on provider success it's the "money is
+    # on its way" confirmation; on provider failure it still fires with a
+    # "manual refund within 2 business days" wording so there's no silence.
+    try:
+        from notifications import notify_refund_issued  # noqa: PLC0415
+        prefs = await _db.site_config.find_one({"_id": "main"}) or {}
+        fresh = await _db.bookings.find_one({"id": booking["id"]}) or booking
+        notify_refund_issued(
+            _clean(dict(fresh)),
+            amount=refund_amount,
+            provider=result.get("provider"),
+            refund_id=result.get("refund_id"),
+            ok=refunded_ok,
+            error=result.get("error"),
+            prefs=prefs,
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.warning("refund email dispatch failed for %s: %s", payment_id, e)
+
+    return {
+        "ok": True,
+        "payment_id": payment_id,
+        "amount": refund_amount,
+        "refund": result,
+        "payment_status": new_status,
+    }
 
 
 # ─── Bulk blackout for maintenance / hurricane / insurance days ───────

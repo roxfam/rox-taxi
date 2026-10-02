@@ -937,6 +937,101 @@ def notify_booking_received(booking: dict, prefs: Optional[dict] = None) -> dict
     return report
 
 
+def notify_refund_issued(
+    booking: dict, *, amount: float, provider: Optional[str] = None,
+    refund_id: Optional[str] = None, ok: bool = True,
+    error: Optional[str] = None, prefs: Optional[dict] = None,
+) -> dict:
+    """Email the guest a refund receipt.
+
+    When the provider API returned OK (`ok=True`) we tell the guest the
+    money is on its way (5–10 business days). When it didn't, we still
+    email them with a `manual refund within 2 business days` wording so
+    there's no silence while admin processes it by hand.
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    report = {"email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled}}
+    if not email_enabled or not booking.get("customer_email"):
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+        return report
+
+    bid = booking["id"]
+    first = (booking.get("customer_name") or "there").split(" ")[0]
+    provider_label = {
+        "stripe": "your original credit card",
+        "paypal": "your PayPal account",
+    }.get((provider or "").lower(), "your original payment method")
+    eta_line = (
+        "You'll see it back on " + provider_label + " within 5–10 business days."
+        if ok else
+        "Our team will manually complete the refund to " + provider_label + " within 2 business days — "
+        "we'll email you the moment it clears."
+    )
+    status_badge = (
+        '<span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#D1FAE5;color:#065F46;font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;">Refund sent</span>'
+        if ok else
+        '<span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#FEF3C7;color:#92400E;font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;">Manual refund in progress</span>'
+    )
+    refund_id_html = (
+        f'<div style="color:#64748B;font-size:13px;margin-top:4px;">Refund reference: <span style="font-family:\'JetBrains Mono\',monospace;">{refund_id}</span></div>'
+        if refund_id else ""
+    )
+
+    subject = (
+        f"Refund of {_fmt_money(amount)} sent for booking {bid}"
+        if ok else
+        f"Refund of {_fmt_money(amount)} is on the way — booking {bid}"
+    )
+    text = (
+        f"Hi {first},\n\n"
+        f"We've " + ("issued" if ok else "scheduled") + f" a refund of {_fmt_money(amount)} for your Rox booking {bid}.\n"
+        f"{eta_line}\n\n"
+        + (f"Refund reference: {refund_id}\n\n" if refund_id else "")
+        + (f"Service: {booking.get('item_name','booking')}\n"
+           f"Original total: {_fmt_money(booking.get('total',0))}\n\n")
+        + "Questions? WhatsApp +1 (242) 432-2587 or reply to this email.\n"
+        + "— Rox Taxi Service & Tours"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:800;">
+        Refund notice
+      </div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;line-height:1.15;">
+        Hi {first}, your refund of <span style="color:#059669;">{_fmt_money(amount)}</span> is sorted.
+      </h1>
+      <p style="color:#64748B;font-size:14px;margin:12px 0 0;">{eta_line}</p>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;margin-top:18px;">
+        {status_badge}
+        <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#64748B;font-weight:700;margin-top:12px;">Booking</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#0B3B5C;margin-top:4px;">{bid}</div>
+        <div style="color:#64748B;font-size:13px;margin-top:4px;">{booking.get('item_name','booking')}</div>
+        {refund_id_html}
+        <hr style="border:none;border-top:1px solid #E2E8F0;margin:16px 0;">
+        <div style="display:flex;justify-content:space-between;color:#64748B;font-size:13px;">
+          <span>Original total</span><span>{_fmt_money(booking.get('total',0))}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;color:#059669;font-size:16px;font-weight:700;margin-top:4px;">
+          <span>Refunded</span><span>{_fmt_money(amount)}</span>
+        </div>
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:22px;">
+        Rox Taxi Service &amp; Tours · Nassau, Bahamas · WhatsApp +1 (242) 432-2587
+      </p>
+    </div>
+    """
+    result = send_email(booking["customer_email"], subject, html, text, category="payment")
+    report["email"].update(result)
+    report["ok"] = ok
+    report["amount"] = amount
+    if error:
+        report["provider_error"] = error
+    return report
+
+
+
+
 def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dict:
     """Send email + SMS on confirmed booking.
 
