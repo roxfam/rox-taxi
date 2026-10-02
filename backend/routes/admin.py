@@ -46,8 +46,14 @@ router = APIRouter()
 # runtime by `configure()` in this same module. Using a real function
 # (rather than a lambda) so FastAPI can introspect the Authorization
 # header dependency correctly.
-def _require_admin_placeholder(authorization: Optional[str] = Header(None)):
-    return _require_admin(authorization) if callable(_require_admin) else None
+def _require_admin_placeholder(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    x_csrf_token: Optional[str] = Header(None, alias="X-CSRF-Token"),
+):
+    # Forwards every FastAPI-resolved param to server.py's require_admin
+    # so cookie-session + CSRF validation keep working through this shim.
+    return _require_admin(request, authorization, x_csrf_token) if callable(_require_admin) else None
 
 
 # ── Referral Analytics (admin) ──────────────────────────────────────────────
@@ -1058,10 +1064,14 @@ class GroupInquiryStatusUpdate(BaseModel):
 # ---- Dependency shim so this router can reuse server.py's require_admin ----
 # Defined UP HERE (before any endpoint) so `Depends(_admin_dep)` in
 # decorator signatures further down resolves at module import time.
-def _admin_dep(authorization: Optional[str] = Header(None)) -> str:
+def _admin_dep(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    x_csrf_token: Optional[str] = Header(None, alias="X-CSRF-Token"),
+) -> str:
     if _require_admin is None:
         raise HTTPException(500, "Admin dependency not configured")
-    return _require_admin(authorization)
+    return _require_admin(request, authorization, x_csrf_token)
 
 
 @router.get("/admin/analytics/addon-attach-rate")

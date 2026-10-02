@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { isAdminAuthed } from "../lib/api";
 import CatalogPanel from "./admin/CatalogPanel";
 import ImagesPanel from "./admin/ImagesPanel";
 import MessagesPanel from "./admin/MessagesPanel";
@@ -47,7 +48,7 @@ export default function AdminManage() {
   const nav = useNavigate();
 
   useEffect(() => {
-    if (!localStorage.getItem("admin_token")) nav("/admin/login");
+    if (!isAdminAuthed()) nav("/admin/login");
   }, [nav]);
 
   useEffect(() => {

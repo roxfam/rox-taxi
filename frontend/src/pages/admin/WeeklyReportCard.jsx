@@ -52,9 +52,10 @@ export default function WeeklyReportCard() {
   const previewEmail = async () => {
     setPreviewing(true);
     try {
-      const token = localStorage.getItem("admin_token");
+      // Cookie-based auth — httpOnly admin_session is forwarded by the
+      // browser when `credentials: 'include'` is set.
       const res = await fetch(`${BACKEND_URL}/api/admin/analytics/weekly-report/preview?days=${days}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();

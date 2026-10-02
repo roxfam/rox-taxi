@@ -23,6 +23,15 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Admin auth hardening · localStorage → httpOnly cookie + CSRF
+- **Why**: Code-review flag P1. Admin JWT lived in `localStorage` and shipped on every request as `Authorization: Bearer`. Any XSS in the admin bundle could siphon the token.
+- **Backend** (`routes/auth.py`, `server.py`): `/auth/login` now **also** issues two cookies on success — `admin_session` (httpOnly, Secure, SameSite=Lax, 7 d) carrying the JWT and `admin_csrf` (readable by JS, Secure, same 7 d) carrying a 32-byte random token. New `/auth/admin-logout` clears both. `require_admin()` was rewritten to read the cookie first; on mutating methods (POST/PUT/PATCH/DELETE) it enforces the CSRF double-submit (`X-CSRF-Token` header must match the `admin_csrf` cookie via `hmac.compare_digest`). Legacy Bearer flow still works unchanged so no sessions break mid-deploy (CSRF skipped for Bearer since cross-origin JS can't forge Authorization).
+- **Sub-router shims** (`routes/admin.py`, `routes/analytics.py`, `routes/seo.py`, `routes/gbp.py`): updated the `_admin_dep` / `_require_admin_placeholder` wrappers to forward `(request, authorization, x_csrf_token)` through to the shared `require_admin`.
+- **Frontend** (`lib/api.js`): axios instance now has `withCredentials: true`; request interceptor auto-attaches `X-CSRF-Token` from the `admin_csrf` cookie on mutating methods. Added `isAdminAuthed()`, `clearAdminAuth()`, `adminLogout()` helpers so admin pages don't poke at storage directly. Legacy `localStorage.admin_token` is still read as a one-shot migration fallback.
+- **Frontend pages migrated**: `AdminLogin`, `AdminDashboard`, `AdminManage`, `AdminGroups`, `DriverManifest`, `admin/PaymentsPanel`, `admin/WeeklyReportCard`, `admin/VisitorsPanel`, `admin/ContentPanel`. All stale `localStorage.getItem("admin_token")` guards, manual `Authorization: Bearer` headers, and the leaky `?token=` PDF query-param URL have been replaced with cookie-based patterns (`credentials: 'include'` on raw fetches, no header for axios calls).
+- **Regression tests**: `/app/backend/tests/test_admin_cookie_auth.py` — 7 tests covering login cookie flags, cookie-only GET, CSRF-required POST, wrong-CSRF rejection, legacy Bearer compat, and logout cookie expiry. All pass.
+- Verified end-to-end via curl: cookie-only GET → 200; POST w/o CSRF → 403; POST w/ CSRF → 200; POST w/ wrong CSRF → 403; Bearer legacy → 200; logout → expired `Set-Cookie`.
+
 ### Feb 2026 — Bug fix · Admin 405 noise + Catalog kind regex guard
 - Admin dashboard occasionally showed `405 Method Not Allowed` on `/api/admin/dashboard/kpis` + `/api/admin/payments/summary`. Root cause: parameterized `/admin/{kind}/{item_id}` catch-all was matching these URLs (kind=dashboard, item_id=kpis) and returning 405 on wrong HTTP method.
 - **Fix**: narrowed the catalog catch-all with a `Path(..., pattern="^(tours|taxi_services|rentals)$")` regex guard AND registered explicit `api_route` 404 handlers at the end of `admin.py` for `/admin/dashboard/{tail:path}` and `/admin/payments/{tail:path}` (registered last, so the real `/admin/payments/zelle-mark-paid` + `/admin/payments/{payment_id}/refund` still take priority). Unknown admin sub-paths now return a clean 404 instead of a noisy 405.
@@ -223,3 +232,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Admin login: `roxfam2509@gmail.com` / `admin123`
 - Owner SMS: +12424322587
 - Cron secret: `WEBHOOK_CRON_SECRET`
+
+### Feb 2026 — Remaining P2 refactoring backlog
+- **Split BookingFlow Modal** (`BookingModal.jsx`, 1264 lines) → `BookingSteps` + `BookingForm` + `BookingSummary` so future booking tweaks stop touching a single giant file.
+- **Notifications Template Refactor** (`notifications.py`) → extract Jinja2 templates for `send_email`, `send_owner_sms`, `send_dispatcher_digest` so each top-level function drops <20 lines.
+- **ChatWidget Rewrite** (`ChatWidget.jsx`, complexity 83) → split into `MessageList` + `MessageInput` + `useChatConnection`.
+- **license_ai.py Refactor** → break into smaller helpers.
+- **Array-index-as-key** fixes in dynamic admin lists (`VisitorsPanel`, `ReviewsPanel`).

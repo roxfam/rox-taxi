@@ -15,8 +15,8 @@ export default function ContentPanel() {
   useEffect(() => {
     (async () => {
       try {
-        const token = localStorage.getItem("admin_token");
-        const { data } = await api.get("/admin/content", { headers: { Authorization: `Bearer ${token}` } });
+        // Shared axios instance sends admin_session cookie + CSRF.
+        const { data } = await api.get("/admin/content");
         setContent({
           hero_taglines: data.hero_taglines || [],
           about_copy: data.about_copy || "",
@@ -32,8 +32,7 @@ export default function ContentPanel() {
   const save = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem("admin_token");
-      await api.patch("/admin/content", content, { headers: { Authorization: `Bearer ${token}` } });
+      await api.patch("/admin/content", content);
       toast.success("Content saved");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Save failed");

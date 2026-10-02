@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { api } from "../lib/api";
+import { api, isAdminAuthed, adminLogout } from "../lib/api";
 import { RefreshCw, LogOut, Heart } from "lucide-react";
 
 const STATUSES = ["new", "contacted", "quoted", "won", "lost"];
@@ -22,7 +22,7 @@ export default function AdminGroups() {
   };
 
   useEffect(() => {
-    if (!localStorage.getItem("admin_token")) { nav("/admin/login"); return; }
+    if (!isAdminAuthed()) { nav("/admin/login"); return; }
     load();
   }, [nav]);
 
@@ -51,7 +51,7 @@ export default function AdminGroups() {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={load} className="p-2 rounded-md hover:bg-[#F1F5F9]" data-testid="admin-groups-refresh"><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></button>
-            <button onClick={() => { localStorage.removeItem("admin_token"); nav("/admin/login"); }} className="text-sm flex items-center gap-2 rounded-md px-3 py-1.5 hover:bg-[#F1F5F9]"><LogOut className="w-4 h-4" /> Sign out</button>
+            <button onClick={async () => { await adminLogout(); nav("/admin/login"); }} className="text-sm flex items-center gap-2 rounded-md px-3 py-1.5 hover:bg-[#F1F5F9]"><LogOut className="w-4 h-4" /> Sign out</button>
           </div>
         </div>
       </header>

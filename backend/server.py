@@ -389,16 +389,45 @@ def make_admin_token(email: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 
-def require_admin(authorization: Optional[str] = Header(None)) -> str:
-    if not authorization or not authorization.startswith("Bearer "):
+def require_admin(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    x_csrf_token: Optional[str] = Header(None, alias="X-CSRF-Token"),
+) -> str:
+    """Admin auth dependency.
+
+    New flow: reads the httpOnly `admin_session` JWT from the request
+    cookie. For mutating methods (POST/PUT/PATCH/DELETE), enforces the
+    CSRF double-submit — the request must present an `X-CSRF-Token`
+    header that matches the readable `admin_csrf` cookie.
+
+    Legacy flow: falls back to `Authorization: Bearer <jwt>` so any
+    client that hasn't been upgraded (and old automated tests) still
+    authenticates. Bearer requests skip CSRF since the attacker can't
+    forge an Authorization header cross-origin.
+    """
+    import hmac
+    token = None
+    source = None
+    cookie_token = request.cookies.get("admin_session") if request else None
+    if cookie_token:
+        token = cookie_token
+        source = "cookie"
+    elif authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+        source = "bearer"
+    if not token:
         raise HTTPException(401, "Missing token")
-    token = authorization.split(" ", 1)[1]
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
     except jwt.PyJWTError:
         raise HTTPException(401, "Invalid token")
     if payload.get("role") != "admin":
         raise HTTPException(403, "Admins only")
+    if source == "cookie" and request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        cookie_csrf = request.cookies.get("admin_csrf") or ""
+        if not cookie_csrf or not x_csrf_token or not hmac.compare_digest(cookie_csrf, x_csrf_token):
+            raise HTTPException(403, "CSRF validation failed")
     return payload["sub"]
 
 

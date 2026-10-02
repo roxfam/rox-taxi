@@ -558,8 +558,36 @@ async def _clear_login_failures(email: str, ip: str) -> None:
         pass
 
 
+def _issue_admin_cookies(response: Response, email: str) -> tuple[str, str]:
+    """Issue httpOnly `admin_session` JWT + readable `admin_csrf` cookies.
+
+    The CSRF value is intentionally cookie-readable so JS can echo it as
+    `X-CSRF-Token` on mutating requests — the server then double-submits
+    the two to confirm the request came from this origin. Secure flag is
+    on by default and can be opted-out for local http via COOKIE_SECURE=false.
+
+    Returns (jwt_token, csrf_token) so callers can also return them in
+    the JSON body during the Bearer→cookie migration window.
+    """
+    token = make_admin_token(email)
+    csrf = secrets.token_urlsafe(32)
+    secure = (os.environ.get("COOKIE_SECURE", "true").lower() != "false")
+    max_age = 60 * 60 * 24 * 7  # 7 days — matches admin JWT exp
+    response.set_cookie(
+        key="admin_session", value=token,
+        httponly=True, secure=secure, samesite="lax",
+        max_age=max_age, path="/",
+    )
+    response.set_cookie(
+        key="admin_csrf", value=csrf,
+        httponly=False, secure=secure, samesite="lax",
+        max_age=max_age, path="/",
+    )
+    return token, csrf
+
+
 @router.post("/auth/login")
-async def admin_login(req: LoginRequest, request: Request):
+async def admin_login(req: LoginRequest, request: Request, response: Response):
     ip = _client_ip(request)
     await _check_login_rate_limit(req.email, ip)
     if req.email.lower() != _admin_email.lower():
@@ -569,7 +597,18 @@ async def admin_login(req: LoginRequest, request: Request):
         await _record_login_failure(req.email, ip)
         raise HTTPException(401, "Invalid credentials")
     await _clear_login_failures(req.email, ip)
-    return {"token": make_admin_token(req.email), "email": req.email}
+    token, csrf = _issue_admin_cookies(response, req.email)
+    # `token` is kept in the body for backward-compat with any client
+    # that still reads localStorage — new flow is pure cookie + CSRF.
+    return {"email": req.email, "token": token, "csrf_token": csrf}
+
+
+@router.post("/auth/admin-logout")
+async def admin_logout(response: Response):
+    """Clear admin session + CSRF cookies. Idempotent; always 200."""
+    response.delete_cookie("admin_session", path="/")
+    response.delete_cookie("admin_csrf", path="/")
+    return {"ok": True}
 
 
 @router.post("/auth/session")

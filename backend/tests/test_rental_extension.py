@@ -5,7 +5,6 @@ Endpoints under test:
 - POST /api/my/bookings/{booking_id}/extend/checkout
 """
 import os
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 

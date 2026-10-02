@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { api, money } from "../lib/api";
+import { api, money, isAdminAuthed, adminLogout, clearAdminAuth } from "../lib/api";
 import { Phone, MessageCircle, MapPin, ArrowRight, RefreshCw, LogOut, Calendar, User, Navigation, Trophy, Zap, Users } from "lucide-react";
 
 // Mobile-first "today's runs" screen for the driver / dispatcher.
@@ -36,7 +36,7 @@ export default function DriverManifest() {
   const [leaderboard, setLeaderboard] = useState(null);
 
   useEffect(() => {
-    if (!localStorage.getItem("admin_token")) nav("/admin/login");
+    if (!isAdminAuthed()) nav("/admin/login");
   }, [nav]);
 
   // Pull the team on-time leaderboard once on mount. Failures are silent —
@@ -54,7 +54,7 @@ export default function DriverManifest() {
       setBookings(Array.isArray(data?.bookings) ? data.bookings : []);
     } catch (e) {
       if (e?.response?.status === 401) {
-        localStorage.removeItem("admin_token");
+        clearAdminAuth();
         nav("/admin/login");
         return;
       }
@@ -106,7 +106,7 @@ export default function DriverManifest() {
             </div>
           </div>
           <button
-            onClick={() => { localStorage.removeItem("admin_token"); nav("/admin/login"); }}
+            onClick={async () => { await adminLogout(); nav("/admin/login"); }}
             className="text-white/60 hover:text-white text-xs inline-flex items-center gap-1"
             data-testid="driver-manifest-logout"
           >

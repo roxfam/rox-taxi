@@ -23,8 +23,10 @@ export default function PaymentsPanel() {
   const load = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("admin_token");
-      const { data } = await api.get("/admin/payments", { headers: { Authorization: `Bearer ${token}` } });
+      // Admin auth is now the httpOnly `admin_session` cookie (sent via
+      // `withCredentials: true` on the shared axios instance). CSRF
+      // token is auto-attached by the request interceptor.
+      const { data } = await api.get("/admin/payments");
       setData(data);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to load payments");
@@ -50,8 +52,7 @@ export default function PaymentsPanel() {
   const markZelle = async (bookingId) => {
     if (!window.confirm(`Mark Zelle payment received for booking ${bookingId}?`)) return;
     try {
-      const token = localStorage.getItem("admin_token");
-      await api.post("/admin/payments/zelle-mark-paid", { booking_id: bookingId }, { headers: { Authorization: `Bearer ${token}` } });
+      await api.post("/admin/payments/zelle-mark-paid", { booking_id: bookingId });
       toast.success(`Zelle payment for ${bookingId} confirmed`);
       load();
     } catch (e) {
@@ -62,8 +63,7 @@ export default function PaymentsPanel() {
   const refund = async (paymentId) => {
     if (!window.confirm("Issue a full refund? This cannot be undone.")) return;
     try {
-      const token = localStorage.getItem("admin_token");
-      await api.post(`/admin/payments/${encodeURIComponent(paymentId)}/refund`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      await api.post(`/admin/payments/${encodeURIComponent(paymentId)}/refund`, {});
       toast.success("Refund issued");
       load();
     } catch (e) {

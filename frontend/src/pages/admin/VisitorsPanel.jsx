@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import { api } from "../../lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Badge } from "../../components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { ArrowDown, ArrowUp, Globe2, MonitorSmartphone, Users, TrendingUp, Download } from "lucide-react";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const SORT_FIELDS = [
   { key: "ts", label: "Time" },
@@ -37,17 +35,14 @@ export default function VisitorsPanel() {
   const [skip, setSkip] = useState(0);
   const limit = 50;
 
-  const token = useMemo(() => localStorage.getItem("admin_token") || "", []);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
-
   async function load() {
-    if (!token) return;  // wait for admin_token before hitting the API
     setLoading(true);
     try {
+      // Shared `api` instance carries the admin_session cookie + CSRF
+      // header via its interceptor, so no manual Authorization needed.
       const [s, l] = await Promise.all([
-        axios.get(`${API}/admin/visitors/summary`, { headers, params: { hours: windowHrs } }),
-        axios.get(`${API}/admin/visitors`, {
-          headers,
+        api.get(`/admin/visitors/summary`, { params: { hours: windowHrs } }),
+        api.get(`/admin/visitors`, {
           params: {
             sort, order, limit, skip,
             hours: windowHrs,

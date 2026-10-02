@@ -15,8 +15,13 @@ export default function AdminLogin() {
     setLoading(true);
     try {
       const { data } = await api.post("/auth/login", { email, password });
-      localStorage.setItem("admin_token", data.token);
-      localStorage.setItem("admin_email", data.email);
+      // Session + CSRF live in httpOnly / readable cookies now; we only
+      // store a non-sensitive email sentinel so the UI can short-circuit
+      // the "am I signed in?" guard before the first API round-trip.
+      sessionStorage.setItem("admin_email", data.email);
+      // Clear any legacy localStorage token from the pre-cookie era.
+      localStorage.removeItem("admin_token");
+      localStorage.removeItem("admin_email");
       toast.success("Welcome back");
       nav("/admin");
     } catch (err) {

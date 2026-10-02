@@ -52,10 +52,14 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GBP_SCOPE = "https://www.googleapis.com/auth/business.manage"
 
 
-def _admin_dep(authorization: Optional[str] = Header(None)) -> str:
+def _admin_dep(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    x_csrf_token: Optional[str] = Header(None, alias="X-CSRF-Token"),
+) -> str:
     if _require_admin is None:
         raise HTTPException(500, "Admin dependency not configured")
-    return _require_admin(authorization)
+    return _require_admin(request, authorization, x_csrf_token)
 
 
 def _oauth_creds():

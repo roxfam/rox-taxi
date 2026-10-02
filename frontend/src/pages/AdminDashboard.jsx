@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { api, money, BACKEND_URL } from "../lib/api";
+import { api, money, BACKEND_URL, isAdminAuthed, adminLogout, clearAdminAuth } from "../lib/api";
 import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart, Cell } from "recharts";
 import SignupCountriesCard from "./admin/SignupCountriesCard";
@@ -72,7 +72,7 @@ export default function AdminDashboard() {
       setReasonStats(rs.data);
     } catch (e) {
       if (e?.response?.status === 401) {
-        localStorage.removeItem("admin_token");
+        clearAdminAuth();
         nav("/admin/login");
       }
     } finally {
@@ -81,7 +81,7 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    if (!localStorage.getItem("admin_token")) { nav("/admin/login"); return; }
+    if (!isAdminAuthed()) { nav("/admin/login"); return; }
     load();
     const t = setInterval(load, 30000);
     return () => clearInterval(t);
@@ -157,8 +157,8 @@ export default function AdminDashboard() {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("admin_token");
+  const logout = async () => {
+    await adminLogout();
     nav("/admin/login");
   };
 
@@ -848,9 +848,10 @@ function NotifyCell({ booking, onRefresh }) {
 async function downloadNotificationsCsv() {
   toast.info("Exporting last 30 days…");
   try {
-    const token = localStorage.getItem("admin_token");
+    // Cookie-based auth: `credentials: 'include'` ships the httpOnly
+    // admin_session automatically — no Bearer header needed.
     const res = await fetch(`${BACKEND_URL}/api/admin/notifications/report.csv?days=30`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
@@ -1669,18 +1670,34 @@ function BlackoutReasonCard({ data, year, onYearChange }) {
         >
           <Download className="w-3 h-3" /> CSV
         </button>
-        <a
-          href={`${process.env.REACT_APP_BACKEND_URL}/api/admin/analytics/blackout-reasons/pdf?year=${year}&token=${encodeURIComponent(localStorage.getItem("admin_token") || "")}`}
-          onClick={(e) => {
-            if (empty) { e.preventDefault(); return; }
+        <button
+          type="button"
+          onClick={async () => {
+            if (empty) return;
             toast.success("Building branded PDF…");
+            try {
+              // Fetch with cookie auth, then open the PDF blob in a new
+              // tab. Avoids leaking the admin JWT in the URL (the old
+              // `?token=...` approach) and works with the httpOnly cookie.
+              const res = await fetch(`${BACKEND_URL}/api/admin/analytics/blackout-reasons/pdf?year=${year}`, {
+                credentials: "include",
+              });
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              const blob = await res.blob();
+              const url = URL.createObjectURL(blob);
+              window.open(url, "_blank", "noopener");
+              setTimeout(() => URL.revokeObjectURL(url), 60000);
+            } catch (err) {
+              toast.error(`PDF export failed: ${err.message || err}`);
+            }
           }}
+          disabled={empty}
           data-testid="admin-blackout-pdf-export"
           className={`inline-flex items-center gap-1 rounded-lg border border-[#B91C1C] text-[#B91C1C] hover:bg-[#B91C1C] hover:text-white text-xs font-semibold px-3 py-1.5 transition-colors ${empty ? "opacity-40 cursor-not-allowed" : ""}`}
           title="Print an insurance-ready branded PDF of this matrix"
         >
           <Download className="w-3 h-3" /> PDF
-        </a>
+        </button>
         <select
           value={year}
           onChange={(e) => onYearChange && onYearChange(Number(e.target.value))}
