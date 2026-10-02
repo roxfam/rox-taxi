@@ -1,135 +1,103 @@
 {
-  "project_name": "Rox Bahamas Admin Console Modernization Blueprint",
-  "theme": "Island Luxury SaaS (Navy #0B3B5C, Warm Sand #FBF7EF / Off-White, Gold Accent #D4A94A, Emerald #059669)",
-  "app_type": "dashboard",
-  "archetype": "LUXURY_PRECISION",
+  "project_name": "Rox Taxi Admin Manage Redesign",
+  "archetype": "THE PERFORMANCE PRO / COMMAND CENTER",
+  "theme": "LIGHT & SLEEK NAVY-GOLD COMMAND CENTER",
+  "context": "Dashboard & Admin Panel",
   "typography": {
-    "headings": {
-      "family": "Cormorant Garamond, Georgia, serif",
-      "class": "serif",
-      "h1": "text-2xl sm:text-3xl font-bold tracking-tight text-[#0B3B5C]",
-      "h2": "text-lg sm:text-xl font-bold tracking-tight text-[#0B3B5C]",
-      "h3": "text-base font-semibold text-[#0B3B5C]"
-    },
-    "body": {
-      "family": "Outfit, ui-sans-serif, system-ui",
-      "class": "font-sans text-sm text-[#0B3B5C]",
-      "subtext": "text-xs text-[#64748B]"
-    },
-    "mono": {
-      "family": "JetBrains Mono, SF Mono, monospace",
-      "class": "mono font-semibold text-xs text-[#0B3B5C]"
+    "heading_font": "Outfit, Cormorant Garamond, sans-serif",
+    "body_font": "Outfit, system-ui, sans-serif",
+    "mono_font": "JetBrains Mono, monospace",
+    "hierarchy": {
+      "page_title": "text-2xl lg:text-3xl font-bold tracking-tight text-[#0B3B5C]",
+      "section_header": "text-lg sm:text-xl font-semibold text-[#0B192C]",
+      "card_title": "text-base font-semibold text-[#0B3B5C]",
+      "subtitle": "text-xs font-semibold uppercase tracking-widest text-[#64748B]",
+      "body": "text-sm text-[#334155]",
+      "mono_price": "font-mono font-bold text-[#E86A3C]"
     }
   },
   "colors": {
-    "brand_primary": "#0B3B5C",
-    "brand_accent": "#D4A94A",
-    "brand_bg": "#F8FAFC",
+    "primary": "#0B3B5C",
+    "primary_dark": "#0B192C",
+    "accent_gold": "#D4A94A",
+    "accent_gold_muted": "#D4A94A20",
+    "accent_coral": "#E86A3C",
+    "background_canvas": "#F1F5F9",
     "card_bg": "#FFFFFF",
     "border_subtle": "#E2E8F0",
-    "border_accent": "rgba(212, 169, 74, 0.3)",
-    "text_main": "#0B3B5C",
+    "border_gold": "#D4A94A40",
+    "text_dark": "#0B192C",
     "text_muted": "#64748B",
-    "status": {
-      "confirmed_bg": "rgba(5, 150, 105, 0.1)",
-      "confirmed_text": "#059669",
-      "pending_bg": "rgba(232, 106, 60, 0.1)",
-      "pending_text": "#E86A3C",
-      "deposit_held_bg": "rgba(212, 169, 74, 0.12)",
-      "deposit_held_text": "#B8860B",
-      "alert_bg": "rgba(220, 38, 38, 0.1)",
-      "alert_text": "#DC2626"
-    }
+    "text_light_muted": "#94A3B8",
+    "status_success": "#059669",
+    "status_danger": "#DC2626"
   },
-  "information_architecture": {
-    "layout_mode": "Collapsible Collapsible Left-Sidebar (Desktop) + Sticky Header with Mobile Bottom Drawer",
-    "sections": [
-      {
-        "id": "overview",
-        "title": "Live Operations & KPIs",
-        "placement": "Main Dashboard Top Grid",
-        "components": ["KPI Stats Bar (4-Column Bento)", "Rental Deposits Spotlight (Luxury Glass Card)", "Live Booking Stream with Quick Filter Chips"]
-      },
-      {
-        "id": "analytics_hub",
-        "title": "Intelligence & Health Analytics",
-        "placement": "Tabbed Bento Grid (Overview vs Analytics vs Audit)",
-        "tabs": ["Revenue & Conversions", "Deliverability & Auth", "Security & GPS Audit"],
-        "components": [
-          "WeeklyReportCard",
-          "AttachRateCard",
-          "TaxiAddonCard",
-          "AuthMethodsCard",
-          "DeliverabilitySummaryCard",
-          "PickupAuditCard",
-          "WarmLeadCard",
-          "SignupCountriesCard",
-          "BlackoutReasonCard",
-          "PhotoNudgeCard",
-          "ReviewsInboxCard",
-          "ReferralLeaderboardCard"
-        ]
-      },
-      {
-        "id": "management_panels",
-        "title": "Specialised Catalog & Operations",
-        "placement": "Side Navigation Drawer / Tabs",
-        "panels": ["Home Slides", "Tours Catalog", "Taxi Routes", "Rentals Fleet", "Licenses & Permits", "Visitors Log", "Promotions & Codes", "Reviews Inbox", "Driver Spotlights", "Image Gallery Health", "Guest Photos Moderation", "Messages & SMS", "Payments Log", "Site Config & Tokens"]
-      }
-    ]
+  "layout_and_navigation": {
+    "header": "Sticky glassmorphism header with backdrop-blur-xl bg-white/90 border-b border-[#E2E8F0] z-[80] h-16 flex items-center justify-between px-6 lg:px-10",
+    "tab_navigation": {
+      "strategy": "Categorized dual-tier navigation or grouped pill tabs with badge indicators and subtle icons",
+      "groups": [
+        {
+          "category": "Catalog & Services",
+          "tabs": ["home_slides", "tours", "taxi_services", "rentals"]
+        },
+        {
+          "category": "Compliance & Guests",
+          "tabs": ["licenses", "visitors", "drivers", "reviews", "gallery"]
+        },
+        {
+          "category": "Marketing & Sales",
+          "tabs": ["promotions", "content"]
+        },
+        {
+          "category": "Operations & System",
+          "tabs": ["messages", "payments", "site", "owner_sms", "tokens", "images", "image_health"]
+        }
+      ],
+      "tab_button_style": "Active: bg-[#0B3B5C] text-white shadow-sm ring-1 ring-[#0B3B5C]; Inactive: bg-white text-[#64748B] hover:text-[#0B3B5C] border border-[#E2E8F0] hover:border-[#D4A94A] transition-all rounded-lg text-xs font-semibold px-3.5 py-2 flex items-center gap-1.5"
+    },
+    "catalog_grid": {
+      "card_container": "bg-white rounded-2xl border border-[#E2E8F0] shadow-sm hover:shadow-md transition-all overflow-hidden",
+      "header_toolbar": "p-5 bg-[#F8FAFC] border-b border-[#E2E8F0] flex justify-between items-center gap-4 flex-wrap",
+      "item_row": "p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 border-b border-[#E2E8F0] hover:bg-[#F8FAFC]/80 transition-colors group"
+    }
   },
   "visual_enhancers": {
-    "card_styles": "bg-white border border-[#E2E8F0] rounded-2xl shadow-[0_2px_8px_rgba(11,59,92,0.04)] hover:shadow-[0_8px_24px_rgba(11,59,92,0.08)] transition-all duration-300",
-    "glass_accents": "backdrop-blur-md bg-white/80 border border-white/60 shadow-sm",
-    "micro_interactions": "hover:-translate-y-0.5 active:scale-[0.98] transition-transform duration-200",
-    "skeleton_loaders": "animate-pulse bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100 rounded-lg"
-  },
-  "component_specifications": {
-    "kpi_cards": {
-      "grid": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6",
-      "style": "p-5 bg-white rounded-2xl border border-[#E2E8F0] flex items-center justify-between hover:border-[#D4A94A]/50 transition-colors",
-      "stat_item": "Icon inside colored soft badge (3-line metric layout: title uppercase tracking-wider text-[11px] text-[#64748B], main value serif text-2xl font-bold text-[#0B3B5C], trend indicator text-xs font-semibold)"
+    "photo_dropzone": "relative w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 border-dashed border-[#CBD5E1] hover:border-[#D4A94A] transition-all cursor-pointer bg-[#F8FAFC] flex items-center justify-center group/drop shadow-inner",
+    "badges": {
+      "promo": "bg-gradient-to-r from-[#E86A3C] to-[#D55A30] text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1",
+      "item_count": "bg-[#0B3B5C]/10 text-[#0B3B5C] text-xs font-bold px-2.5 py-1 rounded-full border border-[#0B3B5C]/15"
     },
-    "bookings_table": {
-      "wrapper": "rounded-2xl border border-[#E2E8F0] bg-white overflow-hidden shadow-sm",
-      "header_filters": "p-4 border-b border-[#E2E8F0] flex flex-wrap items-center justify-between gap-3 bg-[#F8FAFC]",
-      "table_style": "w-full text-left text-sm border-collapse",
-      "row_style": "border-t border-[#E2E8F0] hover:bg-[#F8FAFC]/80 transition-colors duration-150 align-top",
-      "status_chips": "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider",
-      "notify_cell": "Collapsible inline drawer with provider status badge (Green check for sent, Red alert badge for error with expandable debug details and 1-tap Force Resend button)"
-    },
-    "notify_drawer": {
-      "toggle_button": "text-[10px] font-bold px-2 py-0.5 rounded bg-[#F1F5F9] text-[#0B3B5C] hover:bg-[#0B3B5C] hover:text-white transition-colors",
-      "content_box": "mt-2 p-3 bg-[#FAF9F6] border border-[#E2E8F0] rounded-xl text-xs space-y-1 text-[#0B3B5C]"
-    }
+    "action_buttons": "p-2 rounded-lg text-[#64748B] hover:text-[#0B3B5C] hover:bg-[#F1F5F9] transition-colors border border-transparent hover:border-[#E2E8F0]"
   },
-  "mobile_strategy": {
-    "viewport_adaptation": "Full-width stack on screens < 768px, sticky bottom action bar for primary filters/search, horizontally scrollable data tables with fixed left code column",
-    "field_owner_features": "Large touch targets (min 44px height), direct phone action buttons for driver dispatches, high-contrast text for outdoor daylight usage"
-  },
-  "image_urls": [
-    {
-      "category": "hero_background",
-      "url": "https://images.unsplash.com/photo-1746252000638-7c7e27f29dc3?crop=entropy&cs=srgb&fm=jpg&q=85",
-      "description": "Bahamas turquoise clear water beach for luxury header accent"
-    },
-    {
-      "category": "boat_tour",
-      "url": "https://images.unsplash.com/photo-1754272900570-09847f6bbeb0?crop=entropy&cs=srgb&fm=jpg&q=85",
-      "description": "Aerial view of luxury tour boats in Nassau Bahamas"
-    }
+  "required_data_testids": [
+    "admin-manage",
+    "admin-manage-logo",
+    "admin-nav-bookings",
+    "admin-nav-manage",
+    "admin-manage-back",
+    "admin-tab-{key}",
+    "admin-bulk-blackout-btn",
+    "admin-add-item-btn",
+    "admin-item-{id}",
+    "admin-photo-drop-{id}",
+    "admin-item-promo-{id}",
+    "admin-price-edit-{id}",
+    "admin-history-{id}",
+    "admin-edit-{id}",
+    "admin-delete-{id}"
   ],
   "instructions_to_main_agent": [
-    "Refactor AdminDashboard.jsx into a clean, tabbed & side-nav layout without removing any backend API queries or state variables.",
-    "Preserve all data-testid attributes (e.g. data-testid='admin-dashboard', data-testid='admin-stats', data-testid='notify-cell-...') so test suites continue to pass seamlessly.",
-    "Elevate visual aesthetics to luxury SaaS standards using subtle borders, generous spacing, serif Cormorant Garamond headings, and clear status chip indicators.",
-    "Ensure the NotifyCell component provides quick inline toggle for email/SMS provider error details with clear force-resend actions.",
-    "Add skeleton loading cards during initial fetch to remove jarring layout shifts."
+    "1. Preserve ALL existing React logic, routing params, state hooks, and data-testid attributes in AdminManage.jsx and CatalogPanel.jsx.",
+    "2. Upgrade the header of /admin/manage to match the modern command-console visual language of /admin (backdrop blur, deep navy title, gold badge highlights, sleek navigation links).",
+    "3. Restructure the 18 tabs into logical category groups with quick category toggles or visual section breaks, using high-contrast pill styling and clear active states.",
+    "4. Overhaul CatalogPanel.jsx layout: Replace the flat generic list with a sleek, modern card-list layout featuring rich thumbnail dropzones, prominent price typography, badges, and quick-action icon toolbars.",
+    "5. Ensure full responsiveness across desktop, tablet, and mobile while maintaining crisp APCA-compliant contrast across all elements."
   ],
   "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
-    "Do NOT use transparent backgrounds on popovers or sticky headers; use backdrop-blur with semi-opaque background (e.g. bg-white/90 backdrop-blur-md).",
-    "All interactive elements MUST maintain WCAG AA contrast against background hues.",
-    "Add data-testid to all newly introduced tab toggles, buttons, and row actions.",
-    "Ensure mobile breakpoints accommodate 320px-414px displays cleanly for field operation."
+    "Never use generic centered layouts or un-tinted pure white/gray containers.",
+    "Keep borders subtle (1px #E2E8F0) and use layered shadows for depth.",
+    "Always set explicit hover text colors whenever changing hover background colors.",
+    "Preserve all data-testid attributes exactly as declared in existing files."
   ]
 }

@@ -130,9 +130,9 @@ export default function SiteConfigPanel() {  const [cfg, setCfg] = useState({ fa
           </div>
 
           <div className="mt-4 rounded-xl bg-[#F0FDF4] border border-[#BBF7D0] p-3">
-            <div className="text-[11px] font-semibold text-[#166534] uppercase tracking-widest mb-1">Instant re-crawl</div>
+            <div className="text-[11px] font-semibold text-[#166534] uppercase tracking-widest mb-1">Instant re-crawl · Bing / Yandex / Seznam</div>
             <div className="text-xs text-[#166534]/80 leading-relaxed mb-2">
-              Push your sitemap to Bing + Yandex + Seznam right now (IndexNow). Handy after a big price update, new tour, or car addition. Google auto-discovers via sitemap.xml — no push needed.
+              Push your sitemap to Bing + Yandex + Seznam right now (IndexNow). Handy after a big price update, new tour, or car addition.
             </div>
             <button
               type="button"
@@ -140,7 +140,7 @@ export default function SiteConfigPanel() {  const [cfg, setCfg] = useState({ fa
               onClick={async () => {
                 try {
                   const r = await api.post("/admin/seo/indexnow-ping", {});
-                  if (r.data?.ok) toast.success(`Search engines pinged (${r.data.count} URLs).`);
+                  if (r.data?.ok) toast.success(`Pushed to Bing + Yandex + Seznam (${r.data.count} URLs).`);
                   else toast.error("Ping failed. Try again in a minute.");
                 } catch { toast.error("Ping failed."); }
               }}
@@ -148,6 +148,57 @@ export default function SiteConfigPanel() {  const [cfg, setCfg] = useState({ fa
             >
               Ping Bing + Yandex now
             </button>
+          </div>
+
+          {/* ─── Google Search Console manual submission ───
+              Google deprecated the sitemap-ping endpoint in June 2023 — the ONLY
+              way to force a re-crawl now is manual submission in GSC. The deep
+              link below opens the Sitemaps panel pre-filtered to the user's
+              property if they're logged in, otherwise prompts for login. */}
+          <div className="mt-3 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] p-3" data-testid="gsc-submit-card">
+            <div className="text-[11px] font-semibold text-[#1E40AF] uppercase tracking-widest mb-1">Google Search Console · manual re-submit</div>
+            <div className="text-xs text-[#1E40AF]/80 leading-relaxed mb-2">
+              Google removed the auto-ping endpoint in June 2023. To push the <strong>19 fresh URLs</strong> (including Dolphin Swim + 6 new FAQ entries) into Google's crawl queue this week, open Search Console and resubmit the sitemap in 3 clicks:
+            </div>
+            <ol className="list-decimal list-inside text-[11px] text-[#1E40AF]/90 space-y-1 mb-3">
+              <li>Pick your property (<span className="mono">roxtaxi.com</span>) in the top-left dropdown</li>
+              <li>Sidebar → <strong>Sitemaps</strong> → paste <span className="mono bg-white px-1 rounded">sitemap.xml</span> → <strong>Submit</strong></li>
+              <li>Repeat for <span className="mono bg-white px-1 rounded">api/sitemap.xml</span> (the dynamic 41-URL feed)</li>
+            </ol>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href="https://search.google.com/search-console/sitemaps"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="gsc-open-sitemaps"
+                className="inline-flex items-center gap-1.5 rounded-full bg-[#1E40AF] text-white text-xs font-bold px-4 py-2 hover:bg-[#1E3A8A]"
+              >
+                Open Search Console → Sitemaps ↗
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText("https://roxtaxi.com/sitemap.xml");
+                  toast.success("Sitemap URL copied — paste into GSC");
+                }}
+                data-testid="gsc-copy-sitemap-url"
+                className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[#1E40AF] text-[#1E40AF] text-xs font-bold px-4 py-2 hover:bg-[#1E40AF] hover:text-white"
+              >
+                Copy sitemap URL
+              </button>
+              <a
+                href="https://search.google.com/search-console/inspect?resource_id=sc-domain%3Aroxtaxi.com&utm_source=rox-admin"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="gsc-url-inspection"
+                className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[#1E40AF] text-[#1E40AF] text-xs font-bold px-4 py-2 hover:bg-[#1E40AF] hover:text-white"
+              >
+                URL Inspection ↗
+              </a>
+            </div>
+            <div className="mt-2 text-[10.5px] text-[#64748B] leading-relaxed">
+              <strong>Tip:</strong> after you submit, use <em>URL Inspection</em> → paste <span className="mono">/tours?book=dolphin-swim-blue-lagoon</span> → <em>Request Indexing</em>. Google will fast-track that single URL within 24-48h.
+            </div>
           </div>
         </div>
 

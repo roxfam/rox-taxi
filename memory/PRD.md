@@ -23,6 +23,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Bug fix · Admin 405 noise + Catalog kind regex guard
+- Admin dashboard occasionally showed `405 Method Not Allowed` on `/api/admin/dashboard/kpis` + `/api/admin/payments/summary`. Root cause: parameterized `/admin/{kind}/{item_id}` catch-all was matching these URLs (kind=dashboard, item_id=kpis) and returning 405 on wrong HTTP method.
+- **Fix**: narrowed the catalog catch-all with a `Path(..., pattern="^(tours|taxi_services|rentals)$")` regex guard AND registered explicit `api_route` 404 handlers at the end of `admin.py` for `/admin/dashboard/{tail:path}` and `/admin/payments/{tail:path}` (registered last, so the real `/admin/payments/zelle-mark-paid` + `/admin/payments/{payment_id}/refund` still take priority). Unknown admin sub-paths now return a clean 404 instead of a noisy 405.
+- Verified: `/api/admin/tours`, `/api/admin/taxi_services`, `/api/admin/rentals`, `/api/admin/payments`, `/api/admin/bookings`, `/api/admin/zelle-proofs/pending` all still 200. `/api/admin/dashboard/kpis` + `/api/admin/payments/summary` now 404.
+
 ### Feb 2026 — Payment Recovery (dunning) + Dispatcher Daily Digest
 - **PaymentRecoveryCard** mounted on `/admin` — one-click dunning tool for bookings whose Stripe payment never actually settled on the owner's account (the sandbox-leftover case). Preview candidates by scope (**stripe_test** = only cs_test_ sessions marked paid, **unpaid** = every unpaid booking), optional admin note prepended to the email, Email + SMS toggles, outstanding-dollar rollup, nudge counter per row. Sends `/pay/{bookingId}` deep links that automatically route through the CURRENT STRIPE_API_KEY — so once the live key is in `.env`, every re-pay lands in the real Stripe account.
 - Backend: `GET /api/admin/dunning/candidates?scope=…` + `POST /api/admin/dunning/send-payment-reminder`. Per-booking stamps `dunning_sent_at`, `dunning_count`, `dunning_last_scope` so the UI shows re-send history. SMS message is 1-segment aware.

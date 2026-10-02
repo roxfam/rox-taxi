@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File, Body, Form, Request
+from fastapi import Path as FPath  # alias to avoid clash with pathlib.Path imported below
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -3279,8 +3280,46 @@ def _coll_by_kind(kind: str):
     return {"tours": _db.tours, "taxi_services": _db.taxi_services, "rentals": _db.rentals}.get(kind)
 
 
+# Regex constrains the `/admin/{kind}` catch-all family to real catalog
+# kinds only. Without this, FastAPI happily matched URLs like
+# `/admin/dashboard/kpis` and `/admin/payments/summary` as
+# kind=dashboard,item_id=kpis — then returned 405 (path matched, wrong
+# method) on every GET/POST probe and polluted the logs. Narrow the
+# pattern so unknown URLs cleanly 404 instead.
+_KIND_REGEX = "^(tours|taxi_services|rentals)$"
+
+
+# ─── Catch-all 404s for unknown admin sub-paths ───────────────────
+# Registered BEFORE the `/admin/{kind}/{item_id}` family so stale probes
+# to `/api/admin/dashboard/kpis` and `/api/admin/payments/summary` (which
+# used to match as kind=dashboard,item_id=kpis) now cleanly return 404
+# instead of a noisy 405. The real `/admin/payments` + `.../zelle-mark-
+# paid` + `.../{payment_id}/refund` are registered earlier in the file
+# (lines ~114, 677, 713) so they still take priority.
+@router.api_route(
+    "/admin/dashboard/{tail:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"],
+    include_in_schema=False,
+)
+async def _admin_dashboard_404(tail: str):
+    raise HTTPException(404, f"Unknown admin dashboard path: /{tail}")
+
+
+@router.api_route(
+    "/admin/payments/{tail:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"],
+    include_in_schema=False,
+)
+async def _admin_payments_catchall(tail: str):
+    raise HTTPException(404, f"Unknown admin payments path: /{tail}")
+
+
 @router.post("/admin/{kind}")
-async def admin_create_item(kind: str, item: ItemUpsert, admin_email: str = Depends(_admin_dep)):
+async def admin_create_item(
+    kind: str = FPath(..., pattern=_KIND_REGEX),
+    item: ItemUpsert = Body(...),
+    admin_email: str = Depends(_admin_dep),
+):
     coll = _coll_by_kind(kind)
     if coll is None:
         raise HTTPException(404, "Unknown collection")
@@ -3300,7 +3339,10 @@ async def admin_create_item(kind: str, item: ItemUpsert, admin_email: str = Depe
 
 
 @router.get("/admin/{kind}")
-async def admin_list_items(kind: str, _: str = Depends(_admin_dep)):
+async def admin_list_items(
+    kind: str = FPath(..., pattern=_KIND_REGEX),
+    _: str = Depends(_admin_dep),
+):
     coll = _coll_by_kind(kind)
     if coll is None:
         raise HTTPException(404, "Unknown collection")
@@ -3309,7 +3351,12 @@ async def admin_list_items(kind: str, _: str = Depends(_admin_dep)):
 
 
 @router.put("/admin/{kind}/{item_id}")
-async def admin_update_item(kind: str, item_id: str, item: ItemUpsert, admin_email: str = Depends(_admin_dep)):
+async def admin_update_item(
+    kind: str = FPath(..., pattern=_KIND_REGEX),
+    item_id: str = FPath(...),
+    item: ItemUpsert = Body(...),
+    admin_email: str = Depends(_admin_dep),
+):
     coll = _coll_by_kind(kind)
     if coll is None:
         raise HTTPException(404, "Unknown collection")
@@ -3338,7 +3385,12 @@ async def admin_update_item(kind: str, item_id: str, item: ItemUpsert, admin_ema
 
 
 @router.patch("/admin/{kind}/{item_id}/price")
-async def admin_update_price(kind: str, item_id: str, req: PriceUpdate, admin_email: str = Depends(_admin_dep)):
+async def admin_update_price(
+    kind: str = FPath(..., pattern=_KIND_REGEX),
+    item_id: str = FPath(...),
+    req: PriceUpdate = Body(...),
+    admin_email: str = Depends(_admin_dep),
+):
     """Dedicated price-change endpoint that appends to price_history.
 
     Kept separate from the full PUT so the admin UI can offer a lightweight
@@ -3377,7 +3429,11 @@ async def admin_update_price(kind: str, item_id: str, req: PriceUpdate, admin_em
 
 
 @router.get("/admin/{kind}/{item_id}/price-history")
-async def admin_price_history(kind: str, item_id: str, _: str = Depends(_admin_dep)):
+async def admin_price_history(
+    kind: str = FPath(..., pattern=_KIND_REGEX),
+    item_id: str = FPath(...),
+    _: str = Depends(_admin_dep),
+):
     coll = _coll_by_kind(kind)
     if coll is None:
         raise HTTPException(404, "Unknown collection")
@@ -3395,7 +3451,11 @@ async def admin_price_history(kind: str, item_id: str, _: str = Depends(_admin_d
 
 
 @router.delete("/admin/{kind}/{item_id}")
-async def admin_delete_item(kind: str, item_id: str, _: str = Depends(_admin_dep)):
+async def admin_delete_item(
+    kind: str = FPath(..., pattern=_KIND_REGEX),
+    item_id: str = FPath(...),
+    _: str = Depends(_admin_dep),
+):
     coll = _coll_by_kind(kind)
     if coll is None:
         raise HTTPException(404, "Unknown collection")
