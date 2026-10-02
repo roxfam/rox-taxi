@@ -13,6 +13,7 @@ import ReferralLeaderboardCard from "./admin/ReferralLeaderboardCard";
 import WeeklyReportCard from "./admin/WeeklyReportCard";
 import IncidentalModal from "./admin/IncidentalModal";
 import ZelleProofCard from "./admin/ZelleProofCard";
+import FlightEventsPanel from "./admin/FlightEventsPanel";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -31,6 +32,7 @@ export default function AdminDashboard() {
   const [focusedId, setFocusedId] = useState("");
   const [depositModal, setDepositModal] = useState(null); // { booking, action: 'released'|'forfeited' }
   const [incidentalBooking, setIncidentalBooking] = useState(null); // booking row for card-hold / zelle modal
+  const [flightBooking, setFlightBooking] = useState(null); // booking row for flight events timeline
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [authMethods, setAuthMethods] = useState(null);
   const [nudgeStats, setNudgeStats] = useState(null);
@@ -371,6 +373,21 @@ export default function AdminDashboard() {
                       <td className="px-4 py-3">
                         <div className="text-[#0B3B5C]">{b.item_name}</div>
                         <div className="text-xs text-[#64748B]">{b.service_type}</div>
+                        {b.flight_number && (
+                          <button
+                            onClick={() => setFlightBooking(b)}
+                            className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded bg-[#0B3B5C]/5 text-[#0B3B5C] hover:bg-[#0B3B5C] hover:text-white"
+                            data-testid={`admin-flight-events-btn-${b.id}`}
+                            title="Flight events timeline + latest AviationStack snapshot"
+                          >
+                            ✈ {b.flight_number}
+                            {Array.isArray(b.flight_events) && b.flight_events.length > 0 && (
+                              <span className="ml-0.5 inline-flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-[#D4A94A] text-[9px] text-[#0B192C] font-black px-1">
+                                {b.flight_events.length}
+                              </span>
+                            )}
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-[#64748B]">{new Date(b.booking_date).toLocaleString()}</td>
                       <td className="px-4 py-3 mono text-[#E86A3C] font-semibold">{money(b.total)}</td>
@@ -467,6 +484,13 @@ export default function AdminDashboard() {
           booking={incidentalBooking}
           onClose={() => setIncidentalBooking(null)}
           onDone={() => { load(); }}
+        />
+      )}
+
+      {flightBooking && (
+        <FlightEventsPanel
+          booking={flightBooking}
+          onClose={() => setFlightBooking(null)}
         />
       )}
     </div>

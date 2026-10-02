@@ -23,6 +23,14 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Flight events timeline + live SMS drill booking
+- **FlightEventsPanel** admin modal (opens from a ✈ `BA253` button next to any booking's service name when `flight_number` is set). Shows:
+  - Current AviationStack snapshot: departure/arrival IATA, airport names, scheduled/estimated/actual times, delay minutes.
+  - Last-checked timestamp.
+  - Vertical event timeline of every `flight_events[]` fired (`departed`, `landed`, `dep_delay_30/60/90…`, `arr_delay_30/60/90…`) with icon + colour per event type.
+  - Empty-state banner when the watch window hasn't opened yet.
+- **Live SMS drill booking seeded**: `DRILL-A9064A` for Saturday Oct 3, 2026 at 6 PM UTC (2 PM Nassau), guest phone `+1 (347) 751-5251`, flight **BA253** (JFK → NAS daily British Airways). Flight-status loop will auto fan-out to admin + employee SMS roster on departure / 30-min+ delay / landed over the next 24 h. Script is idempotent — re-running updates the existing drill booking instead of creating duplicates.
+
 ### Feb 2026 — Flight status fan-out + Admin Zelle Proof Card
 - **Flight-status day-of fan-out** (`_flight_status_loop` in `server.py`, polls every 20 min): for every airport-pickup booking with a `flight_number`, hits AviationStack and fans out SMS to **admin + employee roster** (via `send_owner_sms(kind="dispatch", force_priority=True)`) on three transitions:
   1. `departed` → "✈ BA253 departed JFK → NAS (guest, booking X, pickup 2:15 PM). ETA …"
