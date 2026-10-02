@@ -1423,6 +1423,12 @@ async def seed_db():
         asyncio.create_task(_review_followup_loop())
     except Exception as e:  # noqa: BLE001
         logging.warning("review follow-up loop start warn: %s", e)
+    # Day-of flight status fan-out to admin + employees (departure / landed
+    # / delay transitions). Idempotent via `booking.flight_events`.
+    try:
+        asyncio.create_task(_flight_status_loop())
+    except Exception as e:  # noqa: BLE001
+        logging.warning("flight-status loop start warn: %s", e)
     # ── Owner-SMS routing cache — refreshed every 60s from site_config ──
     # notifications.send_owner_sms() reads this cache on every call, so
     # subscription + quiet-hours edits go live within a minute of save.
@@ -3498,6 +3504,163 @@ async def _run_review_followup_tick() -> int:
         except Exception as e:  # noqa: BLE001
             log.warning("review follow-up send fail for %s: %s", b.get("id"), e)
     return sent
+
+
+async def _fetch_flight_full(flight_number: str) -> Optional[Dict[str, Any]]:
+    """Query AviationStack for the full flight snapshot. Returns a dict
+    with departure/arrival timestamps + statuses + delays, or None on
+    any failure. Honors the same cache as `_fetch_flight_delay_minutes`.
+    """
+    key = os.environ.get("AVIATIONSTACK_API_KEY", "").strip()
+    if not key or not flight_number:
+        return None
+    fn = flight_number.strip().upper().replace(" ", "")
+    if len(fn) < 3 or len(fn) > 10:
+        return None
+    now_ts = datetime.now(timezone.utc).timestamp()
+    cached = _FLIGHT_CACHE.get(fn)
+    if cached and (now_ts - cached["_ts"]) < _FLIGHT_CACHE_TTL_SEC:
+        return cached["data"] if isinstance(cached["data"], dict) else None
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as ac:
+            r = await ac.get("http://api.aviationstack.com/v1/flights",
+                             params={"access_key": key, "flight_iata": fn, "limit": 1})
+        if r.status_code != 200:
+            return None
+        flights = (r.json() or {}).get("data") or []
+        if not flights:
+            return None
+        f = flights[0]
+        snap = {
+            "status": f.get("flight_status"),
+            "flight_date": f.get("flight_date"),
+            "airline": (f.get("airline") or {}).get("name"),
+            "departure": {
+                "airport": (f.get("departure") or {}).get("airport"),
+                "iata":    (f.get("departure") or {}).get("iata"),
+                "scheduled": (f.get("departure") or {}).get("scheduled"),
+                "estimated": (f.get("departure") or {}).get("estimated"),
+                "actual":    (f.get("departure") or {}).get("actual"),
+                "delay_minutes": (f.get("departure") or {}).get("delay"),
+            },
+            "arrival": {
+                "airport":   (f.get("arrival") or {}).get("airport"),
+                "iata":      (f.get("arrival") or {}).get("iata"),
+                "scheduled": (f.get("arrival") or {}).get("scheduled"),
+                "estimated": (f.get("arrival") or {}).get("estimated"),
+                "actual":    (f.get("arrival") or {}).get("actual"),
+                "delay_minutes": (f.get("arrival") or {}).get("delay"),
+            },
+        }
+        _FLIGHT_CACHE[fn] = {"data": snap, "_ts": now_ts}
+        return snap
+    except Exception:  # noqa: BLE001
+        return None
+
+
+# ─── Day-of flight status fan-out (admin + employees) ─────────────────
+# For airport-pickup bookings with a `flight_number`, poll AviationStack
+# every 20 min on the day of the trip and fire SMS to admin + employees
+# on three state transitions: active (departed), landed, and delay>=30m.
+# Each event is idempotent via a stamp in `booking.flight_events`.
+FLIGHT_STATUS_INTERVAL_SECONDS = int(os.environ.get("FLIGHT_STATUS_INTERVAL_SECONDS", "1200"))  # 20 min
+
+
+async def _flight_status_loop() -> None:
+    log = logging.getLogger("rox.flight_status")
+    while True:
+        try:
+            fired = await _run_flight_status_tick()
+            if fired:
+                log.info("flight-status tick: fired=%s", fired)
+        except Exception as e:  # noqa: BLE001
+            log.warning("tick error: %s", e)
+        await asyncio.sleep(FLIGHT_STATUS_INTERVAL_SECONDS)
+
+
+async def _run_flight_status_tick() -> int:
+    """Fan-out day-of flight status updates (departure, landed, significant
+    delay) to admin + employee SMS recipients. Idempotent per-event via
+    `booking.flight_events`."""
+    log = logging.getLogger("rox.flight_status")
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(hours=6)
+    window_end   = now + timedelta(hours=24)
+
+    cur = db.bookings.find({
+        "status": {"$nin": ["cancelled", "completed", "no_show"]},
+        "flight_number": {"$exists": True, "$ne": ""},
+    })
+    fired = 0
+    async for b in cur:
+        try:
+            dt = _parse_booking_date(b.get("booking_date", ""))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        # Only watch flights for bookings happening in [-6h, +24h].
+        if not (window_start <= dt <= window_end):
+            continue
+        fn = (b.get("flight_number") or "").strip()
+        snap = await _fetch_flight_full(fn)
+        if not snap:
+            continue
+
+        events_fired = list(b.get("flight_events") or [])
+        new_events = []
+        guest_name = (b.get("customer_name") or "guest").split(" ")[0]
+        trip = b.get("item_name") or "airport transfer"
+        dep = snap.get("departure") or {}
+        arr = snap.get("arrival") or {}
+        status = (snap.get("status") or "").lower()
+        dep_delay = int(dep.get("delay_minutes") or 0)
+        arr_delay = int(arr.get("delay_minutes") or 0)
+
+        if status == "active" and "departed" not in events_fired:
+            new_events.append(("departed",
+                f"✈ {fn} departed {dep.get('iata') or ''} → {arr.get('iata') or ''} "
+                f"({guest_name}, booking {b['id']}, pickup {dt:%I:%M%p %b %d}). "
+                f"ETA {arr.get('estimated') or arr.get('scheduled') or 'TBA'}."
+            ))
+        if status == "landed" and "landed" not in events_fired:
+            new_events.append(("landed",
+                f"🛬 {fn} LANDED at {arr.get('iata') or 'destination'}. "
+                f"{guest_name} (booking {b['id']}) — head to pickup for {trip}."
+            ))
+        if dep_delay >= 30 and f"dep_delay_{dep_delay//30*30}" not in events_fired:
+            new_events.append((f"dep_delay_{dep_delay//30*30}",
+                f"⏱ {fn} departure delayed +{dep_delay} min. "
+                f"{guest_name} (booking {b['id']}) pickup may need to slide."
+            ))
+        if arr_delay >= 30 and f"arr_delay_{arr_delay//30*30}" not in events_fired:
+            new_events.append((f"arr_delay_{arr_delay//30*30}",
+                f"⏱ {fn} arrival delayed +{arr_delay} min. "
+                f"{guest_name} (booking {b['id']}) ETA now {arr.get('estimated') or 'TBA'}."
+            ))
+
+        if not new_events:
+            continue
+
+        # Fan out each new event to admin + employees via owner SMS roster
+        from notifications import send_owner_sms  # noqa: PLC0415
+        for tag, msg in new_events:
+            try:
+                send_owner_sms(body=msg, kind="dispatch", force_priority=True)
+                events_fired.append(tag)
+                fired += 1
+            except Exception as e:  # noqa: BLE001
+                log.warning("flight-status fan-out fail %s/%s: %s", b.get("id"), tag, e)
+
+        await db.bookings.update_one(
+            {"id": b["id"]},
+            {"$set": {
+                "flight_events": events_fired,
+                "flight_last_snapshot": snap,
+                "flight_last_checked_at": now.isoformat(),
+            }},
+        )
+    return fired
 
 
 async def _flight_watcher_loop() -> None:

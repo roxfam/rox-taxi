@@ -23,6 +23,15 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Flight status fan-out + Admin Zelle Proof Card
+- **Flight-status day-of fan-out** (`_flight_status_loop` in `server.py`, polls every 20 min): for every airport-pickup booking with a `flight_number`, hits AviationStack and fans out SMS to **admin + employee roster** (via `send_owner_sms(kind="dispatch", force_priority=True)`) on three transitions:
+  1. `departed` → "✈ BA253 departed JFK → NAS (guest, booking X, pickup 2:15 PM). ETA …"
+  2. `landed` → "🛬 BA253 LANDED at NAS. Guest (booking X) — head to pickup."
+  3. `delay ≥ 30 min` (buckets of 30 min so repeat delays re-fire once) — both departure + arrival sides.
+  Watch window = pickup ± [6h back, 24h forward]. Idempotent per-event via `booking.flight_events[]`. Uses the existing AviationStack cache so no quota blowout.
+- **New helper `_fetch_flight_full`** returns the full flight snapshot (airline, departure/arrival IATA, scheduled/estimated/actual times, delay minutes). Stored on `booking.flight_last_snapshot` for admin visibility.
+- **Admin Zelle Proof Card** mounted on `/admin` (`ZelleProofCard.jsx`): shows every pending Zelle proof with inline thumbnail/lightbox, Approve (atomic flip to paid + fires guest confirmation + owner "payment received" SMS), and Reject (with preset reasons + guest SMS explaining why). Auto-hides when no proofs are pending.
+
 ### Feb 2026 — Post-service review follow-up + Dolphin Swim home showcase + PayPal Vault + Zelle proof + incidentals
 - **Review follow-up loop** (`_review_followup_loop` in `server.py`, fires every 30 min): 24h after `completed_at` the guest gets a dedicated SMS + email asking for a Google review. Idempotent via `review_followup_sent_at`. Skips guests who already got the 5-star growth-loop prompt. 7-day retro-fill window.
 - **Dolphin Swim showcase on home page** — gold-ribbon hero section above Packages with two CTAs: "Book with Rox · $265" (deep-link into booking modal) + "Official site" (direct link to `bluelagoonisland.com/experience/dolphin-swim/`). Includes a side panel listing the 5 inclusions. Same external link now also lives on the tour card itself.
