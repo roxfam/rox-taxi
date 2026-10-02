@@ -1417,6 +1417,12 @@ async def seed_db():
         asyncio.create_task(_license_maintenance_loop())
     except Exception as e:  # noqa: BLE001
         logging.warning("license maintenance loop start warn: %s", e)
+    # 24-48h post-trip Google review follow-up — fires for every completed
+    # booking (idempotent via `review_followup_sent_at`).
+    try:
+        asyncio.create_task(_review_followup_loop())
+    except Exception as e:  # noqa: BLE001
+        logging.warning("review follow-up loop start warn: %s", e)
     # ── Owner-SMS routing cache — refreshed every 60s from site_config ──
     # notifications.send_owner_sms() reads this cache on every call, so
     # subscription + quiet-hours edits go live within a minute of save.
@@ -3412,6 +3418,86 @@ async def _airport_reminder_loop() -> None:
         except Exception as e:  # noqa: BLE001
             log.warning("tick error: %s", e)
         await asyncio.sleep(AIRPORT_REMINDER_INTERVAL_SECONDS)
+
+
+# ─── Post-service Google review follow-up ────────────────────────────
+# 24-48h after a completed trip, nudge the guest for a Google review.
+# Idempotent via `review_followup_sent_at`. Independent of the in-app
+# 5-star growth loop (that only fires for guests who actually rate).
+REVIEW_FOLLOWUP_INTERVAL_SECONDS = int(os.environ.get("REVIEW_FOLLOWUP_INTERVAL_SECONDS", "1800"))  # 30 min
+REVIEW_FOLLOWUP_DELAY_HOURS = int(os.environ.get("REVIEW_FOLLOWUP_DELAY_HOURS", "24"))
+REVIEW_FOLLOWUP_WINDOW_HOURS = int(os.environ.get("REVIEW_FOLLOWUP_WINDOW_HOURS", "168"))  # 7-day retro-fill cap
+
+
+async def _review_followup_loop() -> None:
+    log = logging.getLogger("rox.review_followup")
+    while True:
+        try:
+            sent = await _run_review_followup_tick()
+            if sent:
+                log.info("review follow-up tick: sent=%s", sent)
+        except Exception as e:  # noqa: BLE001
+            log.warning("tick error: %s", e)
+        await asyncio.sleep(REVIEW_FOLLOWUP_INTERVAL_SECONDS)
+
+
+async def _run_review_followup_tick() -> int:
+    """Find bookings completed `REVIEW_FOLLOWUP_DELAY_HOURS` ago (and within
+    the retro window) that haven't been pinged yet. Fires the dedicated
+    review follow-up SMS + email. Skips 5★ raters who already got the
+    growth-loop prompt. Returns the number of nudges sent this tick.
+    """
+    log = logging.getLogger("rox.review_followup")
+    now = datetime.now(timezone.utc)
+    oldest = (now - timedelta(hours=REVIEW_FOLLOWUP_WINDOW_HOURS)).isoformat()
+    newest = (now - timedelta(hours=REVIEW_FOLLOWUP_DELAY_HOURS)).isoformat()
+
+    cfg = await db.site_config.find_one({"_id": "main"}) or {}
+    prefs = {
+        "notify_email_enabled": cfg.get("notify_email_enabled", True),
+        "notify_sms_enabled":   cfg.get("notify_sms_enabled",   True),
+    }
+    review_url = (
+        cfg.get("google_review_url")
+        or os.environ.get("GOOGLE_REVIEW_URL")
+        or "https://g.page/r/CYy0V1JN5XwtEAI/review"
+    )
+
+    cur = db.bookings.find({
+        "status": "completed",
+        "completed_at": {"$gte": oldest, "$lte": newest},
+        "review_followup_sent_at": {"$exists": False},
+        # Skip 5-star raters — they already got the Google review prompt
+        # through the in-app growth loop. Covers both branches:
+        # (1) booking has no rating OR rating < 5
+        # (2) booking rated 5 but growth-loop email never fired (rare)
+        "$or": [
+            {"customer_rating": {"$exists": False}},
+            {"customer_rating": {"$lt": 5}},
+            {"google_review_prompt_sent_at": {"$exists": False}},
+        ],
+    })
+
+    from notifications import notify_guest_review_followup  # noqa: PLC0415
+    sent = 0
+    async for b in cur:
+        if not b.get("customer_email") and not b.get("customer_phone"):
+            continue
+        try:
+            report = await asyncio.to_thread(
+                notify_guest_review_followup, dict(b), review_url, prefs,
+            )
+            await db.bookings.update_one(
+                {"id": b["id"]},
+                {"$set": {
+                    "review_followup_sent_at": now.isoformat(),
+                    "review_followup_report": report,
+                }},
+            )
+            sent += 1
+        except Exception as e:  # noqa: BLE001
+            log.warning("review follow-up send fail for %s: %s", b.get("id"), e)
+    return sent
 
 
 async def _flight_watcher_loop() -> None:

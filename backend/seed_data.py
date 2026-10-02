@@ -24,6 +24,7 @@ TOURS_SEED: List[Dict] = [
          "Fresh water showers and full restroom facilities",
          "Locker during your animal interaction",
      ],
+     "external_booking_url": "https://www.bluelagoonisland.com/experience/dolphin-swim/",
      "image_url": "https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/pewidk7h_medium.jpg",
      "category": "excursion", "active": True},
     {"id": "atlantis-tour", "name": "Paradise Island & Atlantis City Tour", "price": 55.0, "duration": "3 hours",

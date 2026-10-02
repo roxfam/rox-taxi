@@ -23,6 +23,15 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Post-service review follow-up + Dolphin Swim home showcase + PayPal Vault + Zelle proof + incidentals
+- **Review follow-up loop** (`_review_followup_loop` in `server.py`, fires every 30 min): 24h after `completed_at` the guest gets a dedicated SMS + email asking for a Google review. Idempotent via `review_followup_sent_at`. Skips guests who already got the 5-star growth-loop prompt. 7-day retro-fill window.
+- **Dolphin Swim showcase on home page** — gold-ribbon hero section above Packages with two CTAs: "Book with Rox · $265" (deep-link into booking modal) + "Official site" (direct link to `bluelagoonisland.com/experience/dolphin-swim/`). Includes a side panel listing the 5 inclusions. Same external link now also lives on the tour card itself.
+- **PayPal Vault** backend added — `create_vault_setup_token`, `exchange_vault_setup_token`, `charge_vaulted` in `paypal_client.py`. New admin routes in `payments.py`: `POST /admin/bookings/{id}/paypal-vault/{create,finalize,charge}` + `GET .../status`. Mirrors the Stripe card-hold pattern — admin sends a PayPal link, guest approves, admin can later off-session charge for incidentals.
+- **Zelle payment proof workflow** — public `POST /bookings/{id}/zelle-proof` lets a guest upload a screenshot of their transfer (stored via Emergent Object Storage). Admin reviews via `GET /admin/zelle-proofs/pending`, then `POST .../zelle-proof/approve` (atomic flip to paid + fires confirmation + owner "payment received" SMS) or `POST .../zelle-proof/reject` (texts guest why).
+- **Incidental Zelle requests** — admin can text/email guest a Zelle payment request (`POST /admin/bookings/{id}/zelle-request`) with amount + reason + memo. History stored on `booking.zelle_requests[]`.
+- **Stripe card-on-file endpoints** gracefully return 503 when `STRIPE_API_KEY=sk_test_emergent` (shared Emergent sandbox cannot be used via raw Stripe REST). Lights up automatically when the owner wires their own live `STRIPE_API_KEY` via Manage → Secrets.
+- **⚠ CRITICAL note**: last 5 "paid" bookings in prod DB were all Zelle (manually marked). Current `STRIPE_API_KEY=sk_test_emergent` — Stripe payments cannot reach the owner's live Stripe account until the live key is pasted into Manage → Secrets. Bahamas (BS) is NOT eligible for Stripe claimable sandbox, so the US-LLC key is the only path.
+
 ### Feb 2026 — Dolphin Swim excursion + Admin Card-on-File / Zelle incidentals
 - **New excursion live**: "Dolphin Swim — Blue Lagoon Island" at $265 (+ VAT + processing fee). Fields added: `age_requirement`, `includes` (6-item list). Tour cards + booking modal now render a "What's Included" box + age-req pill when a tour exposes these fields.
 - **Admin Incidental Modal** (new `IncidentalModal.jsx`) opens from a per-row "Hold card / Zelle" button on `/admin`. Three tabs:

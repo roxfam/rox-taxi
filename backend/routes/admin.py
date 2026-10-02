@@ -11,7 +11,7 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File, Body, Request
+from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File, Body, Form, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -266,6 +266,188 @@ async def send_zelle_request(
         "booking_id": booking["id"],
         "request": request_record,
     }
+
+
+# ─── Zelle Payment Proof — guest upload + admin review workflow ──────────
+@router.post("/bookings/{booking_id}/zelle-proof")
+async def submit_zelle_proof(
+    booking_id: str,
+    file: UploadFile = File(...),
+    memo: str = Form(""),
+):
+    """PUBLIC endpoint — guest uploads a Zelle screenshot (bank receipt)
+    proving they sent payment. Admin approves/rejects on `/admin`."""
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    if booking.get("payment_status") == "paid":
+        raise HTTPException(409, "Booking is already paid")
+
+    content = await file.read()
+    if len(content) == 0 or len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Image must be between 1 byte and 10 MB")
+
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower()
+    if ext not in {"png", "jpg", "jpeg", "webp", "gif", "pdf"}:
+        ext = "png"
+    filename = f"zelleproof_{booking['id']}_{uuid.uuid4().hex[:12]}.{ext}"
+    content_type_map = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                         "webp": "image/webp", "gif": "image/gif", "pdf": "application/pdf"}
+    ctype = content_type_map.get(ext, "application/octet-stream")
+    # Store in Emergent Object Storage so the proof survives deploys and
+    # is served through /api/uploads/{filename} (storage.get_object).
+    try:
+        from storage import put_object  # noqa: PLC0415
+        stored = put_object(filename, content, ctype)
+    except Exception as e:  # noqa: BLE001
+        logging.exception("zelle-proof object-store put failed")
+        raise HTTPException(500, f"Could not save proof: {e}") from e
+    if not stored:
+        raise HTTPException(503, "Object storage is not available — try again in a moment.")
+
+    proof = {
+        "id": uuid.uuid4().hex[:12],
+        "url": f"/api/uploads/{filename}",
+        "filename": filename,
+        "memo": (memo or "")[:300],
+        "size": len(content),
+        "status": "pending",
+        "submitted_at": _now_iso(),
+    }
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$push": {"zelle_proofs": proof},
+         "$set": {"zelle_proof_status": "pending",
+                  "zelle_proof_submitted_at": _now_iso()}},
+    )
+    # Owner alert — bypass quiet hours since it's a payment event
+    try:
+        from notifications import send_owner_sms  # noqa: PLC0415
+        send_owner_sms(
+            body=(
+                f"🧾 Zelle proof uploaded for {booking['id']} by "
+                f"{booking.get('customer_name','guest')} — review in /admin."
+            ),
+            kind="payment",
+            force_priority=True,
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.warning("zelle-proof owner alert err: %s", e)
+    return {"booking_id": booking["id"], "proof": proof}
+
+
+class ZelleProofDecision(BaseModel):
+    proof_id: str
+    reason: Optional[str] = None
+
+
+@router.get("/admin/zelle-proofs/pending")
+async def list_pending_zelle_proofs(_: str = Depends(_require_admin_placeholder)):
+    """Returns every booking with a pending Zelle proof awaiting admin review."""
+    cursor = _db.bookings.find({
+        "zelle_proof_status": "pending",
+        "payment_status": {"$ne": "paid"},
+    }).sort("zelle_proof_submitted_at", -1).limit(100)
+    rows = []
+    async for b in cursor:
+        pending = [p for p in (b.get("zelle_proofs") or []) if p.get("status") == "pending"]
+        if not pending:
+            continue
+        rows.append({
+            "id": b["id"],
+            "customer_name": b.get("customer_name"),
+            "customer_email": b.get("customer_email"),
+            "customer_phone": b.get("customer_phone"),
+            "item_name": b.get("item_name"),
+            "total": b.get("total"),
+            "submitted_at": b.get("zelle_proof_submitted_at"),
+            "proofs": pending,
+        })
+    return rows
+
+
+@router.post("/admin/bookings/{booking_id}/zelle-proof/approve")
+async def approve_zelle_proof(
+    booking_id: str,
+    req: ZelleProofDecision,
+    _: str = Depends(_require_admin_placeholder),
+):
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    proofs = booking.get("zelle_proofs") or []
+    if not any(p.get("id") == req.proof_id for p in proofs):
+        raise HTTPException(404, "Proof not found on this booking")
+    now = _now_iso()
+    await _db.bookings.update_one(
+        {"id": booking["id"], "zelle_proofs.id": req.proof_id},
+        {"$set": {
+            "zelle_proofs.$.status": "approved",
+            "zelle_proofs.$.decided_at": now,
+            "zelle_proofs.$.decision_reason": req.reason or "Approved",
+            "zelle_proof_status": "approved",
+            "payment_status": "paid",
+            "status": "confirmed",
+            "updated_at": now,
+        }},
+    )
+    await _db.payment_transactions.insert_one({
+        "session_id": f"zelle-proof-{req.proof_id}",
+        "provider": "zelle",
+        "booking_id": booking["id"],
+        "amount": float(booking.get("total") or 0),
+        "currency": "usd",
+        "status": "completed",
+        "payment_status": "paid",
+        "proof_id": req.proof_id,
+        "approved_by": "admin",
+        "created_at": now,
+        "updated_at": now,
+    })
+    fresh = await _db.bookings.find_one({"id": booking["id"]})
+    try:
+        prefs = await _db.site_config.find_one({"_id": "main"}) or {}
+        _notify_fn(_clean(dict(fresh)), prefs)
+        from notifications import notify_owner_payment_received  # noqa: PLC0415
+        notify_owner_payment_received(_clean(dict(fresh)), provider="zelle")
+    except Exception as e:  # noqa: BLE001
+        logging.warning("zelle-proof approve notify err: %s", e)
+    return {"ok": True, "booking_id": booking["id"], "payment_status": "paid"}
+
+
+@router.post("/admin/bookings/{booking_id}/zelle-proof/reject")
+async def reject_zelle_proof(
+    booking_id: str,
+    req: ZelleProofDecision,
+    _: str = Depends(_require_admin_placeholder),
+):
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    now = _now_iso()
+    reason = (req.reason or "Could not verify the transfer").strip()
+    res = await _db.bookings.update_one(
+        {"id": booking["id"], "zelle_proofs.id": req.proof_id},
+        {"$set": {
+            "zelle_proofs.$.status": "rejected",
+            "zelle_proofs.$.decided_at": now,
+            "zelle_proofs.$.decision_reason": reason,
+            "zelle_proof_status": "rejected",
+            "updated_at": now,
+        }},
+    )
+    if not res.modified_count:
+        raise HTTPException(404, "Proof not found")
+    try:
+        from notifications import send_sms, send_email  # noqa: PLC0415
+        if booking.get("customer_phone"):
+            send_sms(
+                booking["customer_phone"],
+                f"Rox Taxi: your Zelle proof on {booking['id']} wasn't verified. {reason} — please check amount + memo and re-upload at /pay/{booking['id']}.",
+            )
+    except Exception as e:  # noqa: BLE001
+        logging.warning("zelle-proof reject notify err: %s", e)
+    return {"ok": True, "booking_id": booking["id"], "payment_status": booking.get("payment_status")}
 
 
 @router.post("/admin/payments/zelle-mark-paid")

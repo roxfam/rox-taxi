@@ -543,6 +543,149 @@ async def card_hold_public_status(session_id: str):
     }
 
 
+# ─── PayPal Vault (incidental card-hold alternative to Stripe) ──────────
+class PayPalVaultCreateRequest(BaseModel):
+    origin_url: str
+
+
+class PayPalVaultChargeRequest(BaseModel):
+    amount: float
+    reason: str
+
+
+@router.post("/admin/bookings/{booking_id}/paypal-vault/create")
+async def paypal_vault_create(
+    booking_id: str,
+    req: PayPalVaultCreateRequest,
+    _: str = Depends(_admin_dep),
+):
+    if not paypal_client.is_configured():
+        raise HTTPException(503, "PayPal is not configured on the server")
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+
+    origin = req.origin_url.rstrip("/")
+    return_url = f"{origin}/card-hold/success?via=paypal&booking_id={booking['id']}"
+    cancel_url = f"{origin}/card-hold/cancel?booking_id={booking['id']}"
+    try:
+        token_data = await paypal_client.create_vault_setup_token(
+            booking_id=booking["id"],
+            return_url=return_url,
+            cancel_url=cancel_url,
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.exception("paypal vault setup failed")
+        raise HTTPException(502, f"PayPal error: {e}") from e
+
+    vault_doc = {
+        "setup_token_id": token_data["id"],
+        "approve_url": token_data.get("approve_url"),
+        "payment_token_id": None,
+        "status": "pending",
+        "charges": [],
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
+    }
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$set": {"paypal_vault": vault_doc}},
+    )
+    return {
+        "booking_id": booking["id"],
+        "setup_token_id": token_data["id"],
+        "approve_url": token_data.get("approve_url"),
+    }
+
+
+@router.post("/admin/bookings/{booking_id}/paypal-vault/finalize")
+async def paypal_vault_finalize(booking_id: str, _: str = Depends(_admin_dep)):
+    """Exchange the approved setup token for a permanent payment token.
+    Idempotent — safe to call repeatedly from an admin poll button."""
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    vault = booking.get("paypal_vault") or {}
+    setup_token = vault.get("setup_token_id")
+    if not setup_token:
+        raise HTTPException(409, "No PayPal vault setup pending")
+    if vault.get("payment_token_id"):
+        return {"booking_id": booking["id"], "paypal_vault": vault}
+    try:
+        pm = await paypal_client.exchange_vault_setup_token(setup_token)
+    except Exception as e:  # noqa: BLE001
+        logging.exception("paypal vault exchange failed")
+        raise HTTPException(502, f"PayPal error: {e}") from e
+
+    source = (pm.get("payment_source") or {}).get("paypal") or {}
+    vault.update({
+        "payment_token_id": pm.get("id"),
+        "customer_id": (pm.get("customer") or {}).get("id"),
+        "payer_email": source.get("email_address"),
+        "payer_name": (source.get("name") or {}).get("given_name"),
+        "status": "saved",
+        "updated_at": _now_iso(),
+    })
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$set": {"paypal_vault": vault}},
+    )
+    return {"booking_id": booking["id"], "paypal_vault": vault}
+
+
+@router.get("/admin/bookings/{booking_id}/paypal-vault/status")
+async def paypal_vault_status(booking_id: str, _: str = Depends(_admin_dep)):
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    return {"booking_id": booking["id"], "paypal_vault": booking.get("paypal_vault")}
+
+
+@router.post("/admin/bookings/{booking_id}/paypal-vault/charge")
+async def paypal_vault_charge(
+    booking_id: str,
+    req: PayPalVaultChargeRequest,
+    _: str = Depends(_admin_dep),
+):
+    if req.amount <= 0:
+        raise HTTPException(400, "Amount must be greater than zero")
+    reason = (req.reason or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(400, "Reason is required (min 3 chars)")
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    vault = booking.get("paypal_vault") or {}
+    vault_id = vault.get("payment_token_id")
+    if not vault_id:
+        raise HTTPException(409, "No PayPal payment method vaulted yet for this booking")
+    try:
+        order = await paypal_client.charge_vaulted(
+            vault_id=vault_id,
+            amount=float(req.amount),
+            booking_id=booking["id"],
+            description=reason,
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.exception("paypal vault charge failed")
+        raise HTTPException(502, f"PayPal error: {e}") from e
+
+    status = (order.get("status") or "").upper()
+    charge_record = {
+        "order_id": order.get("id"),
+        "amount": float(req.amount),
+        "reason": reason,
+        "status": status,
+        "created_at": _now_iso(),
+    }
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$push": {"paypal_vault.charges": charge_record},
+         "$set": {"paypal_vault.updated_at": _now_iso()}},
+    )
+    return {"booking_id": booking["id"], "charge": charge_record, "order_status": status}
+
+
 @router.post("/admin/bookings/{booking_id}/card-hold/charge")
 async def card_hold_charge(
     booking_id: str,

@@ -168,6 +168,95 @@ def extract_capture_id(capture_response: Dict[str, Any]) -> Optional[str]:
         return None
 
 
+async def create_vault_setup_token(booking_id: str, return_url: str, cancel_url: str) -> Dict[str, Any]:
+    """Create a PayPal Vault setup token so the payer can authorize us to
+    store their PayPal account for future off-session charges. Returns
+    {id, approve_url, raw}."""
+    token = await _access_token()
+    body = {
+        "payment_source": {
+            "paypal": {
+                "usage_type": "MERCHANT",
+                "customer_type": "CONSUMER",
+                "experience_context": {
+                    "return_url": return_url,
+                    "cancel_url": cancel_url,
+                    "shipping_preference": "NO_SHIPPING",
+                    "vault_instruction": "ON_PAYER_APPROVAL",
+                },
+            }
+        },
+        "custom_id": booking_id,
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.post(
+            f"{_base_url()}/v3/vault/setup-tokens",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json=body,
+        )
+    if r.status_code >= 400:
+        logger.error("PayPal vault setup failed: %s %s", r.status_code, r.text)
+        r.raise_for_status()
+    data = r.json()
+    approve_url = next((l["href"] for l in data.get("links", []) if l.get("rel") == "approve"), None)
+    return {"id": data["id"], "approve_url": approve_url, "raw": data}
+
+
+async def exchange_vault_setup_token(setup_token_id: str) -> Dict[str, Any]:
+    """After the payer approves, exchange the setup token for a permanent
+    payment token that can be charged off-session via `charge_vaulted`."""
+    token = await _access_token()
+    body = {"payment_source": {"token": {"id": setup_token_id, "type": "SETUP_TOKEN"}}}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.post(
+            f"{_base_url()}/v3/vault/payment-tokens",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json=body,
+        )
+    if r.status_code >= 400:
+        logger.error("PayPal vault exchange failed: %s %s", r.status_code, r.text)
+        r.raise_for_status()
+    return r.json()
+
+
+async def charge_vaulted(vault_id: str, amount: float, booking_id: str,
+                          description: str = "", currency: str = "USD") -> Dict[str, Any]:
+    """Off-session charge against a previously-vaulted PayPal payment token."""
+    token = await _access_token()
+    body = {
+        "intent": "CAPTURE",
+        "purchase_units": [{
+            "reference_id": booking_id,
+            "custom_id": booking_id,
+            "description": description or f"Rox Taxi incidental on {booking_id}",
+            "amount": {"currency_code": currency, "value": f"{float(amount):.2f}"},
+        }],
+        "payment_source": {"paypal": {"vault_id": vault_id}},
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.post(
+            f"{_base_url()}/v2/checkout/orders",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json=body,
+        )
+    if r.status_code >= 400:
+        logger.error("PayPal vault charge failed: %s %s", r.status_code, r.text)
+        r.raise_for_status()
+    return r.json()
+
+
 def public_config() -> Dict[str, Any]:
     """Safe subset for the frontend (client_id + mode). Never expose the secret."""
     mode = (os.environ.get("PAYPAL_MODE") or "sandbox").lower()
