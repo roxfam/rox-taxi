@@ -3,7 +3,7 @@
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
     <url>
         <loc>https://roxtaxi.com/</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>daily</changefreq>
         <priority>1.00</priority>
         <image:image>
@@ -14,7 +14,7 @@
     </url>
     <url>
         <loc>https://roxtaxi.com/taxi</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>weekly</changefreq>
         <priority>0.95</priority>
         <image:image>
@@ -24,47 +24,58 @@
     </url>
     <url>
         <loc>https://roxtaxi.com/tours</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>weekly</changefreq>
         <priority>0.95</priority>
         <image:image>
             <image:loc>https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/wfm658r1_bahamas-blue-lagoon-island-private-beach-paradise-aerial.jpg</image:loc>
-            <image:title>Nassau Bahamas tours and excursions — Blue Lagoon, Atlantis, Baha Mar</image:title>
+            <image:title>Nassau Bahamas tours and excursions — Blue Lagoon, Atlantis, Baha Mar, Dolphin Swim</image:title>
         </image:image>
     </url>
     <url>
-        <loc>https://roxtaxi.com/tours/atlantis</loc>
-        <lastmod>2026-08-03</lastmod>
+        <loc>https://roxtaxi.com/tours?book=dolphin-swim-blue-lagoon</loc>
+        <lastmod>2026-02-15</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.9</priority>
+        <image:image>
+            <image:loc>https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/pewidk7h_medium.jpg</image:loc>
+            <image:title>Swim with Dolphins at Blue Lagoon Island Bahamas — Nassau Dolphin Swim Excursion</image:title>
+            <image:caption>Nassau swim with dolphins at Blue Lagoon Island — foot push finale, buffet lunch, round-trip ferry included</image:caption>
+        </image:image>
+    </url>
+    <url>
+        <loc>https://roxtaxi.com/tours/blue-lagoon</loc>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.85</priority>
     </url>
     <url>
-        <loc>https://roxtaxi.com/tours/blue-lagoon</loc>
-        <lastmod>2026-08-03</lastmod>
+        <loc>https://roxtaxi.com/tours/atlantis</loc>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.85</priority>
     </url>
     <url>
         <loc>https://roxtaxi.com/tours/baha-mar</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.85</priority>
     </url>
     <url>
         <loc>https://roxtaxi.com/tours/ardastra</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
     <url>
         <loc>https://roxtaxi.com/rentals</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>weekly</changefreq>
         <priority>0.9</priority>
     </url>
     <url>
         <loc>https://roxtaxi.com/travel-to-nassau</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>weekly</changefreq>
         <priority>0.9</priority>
         <image:image>
@@ -75,7 +86,7 @@
     </url>
     <url>
         <loc>https://roxtaxi.com/cruise-groups-nassau</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>weekly</changefreq>
         <priority>0.9</priority>
         <image:image>
@@ -85,57 +96,51 @@
         </image:image>
     </url>
     <url>
+        <loc>https://roxtaxi.com/tip</loc>
+        <lastmod>2026-02-15</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    <url>
         <loc>https://roxtaxi.com/gallery</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>weekly</changefreq>
         <priority>0.7</priority>
     </url>
     <url>
         <loc>https://roxtaxi.com/groups</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>monthly</changefreq>
-        <priority>0.7</priority>
+        <priority>0.75</priority>
     </url>
     <url>
         <loc>https://roxtaxi.com/wedding-builder</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>monthly</changefreq>
-        <priority>0.7</priority>
+        <priority>0.75</priority>
     </url>
     <url>
-        <loc>https://roxtaxi.com/track</loc>
-        <lastmod>2026-08-03</lastmod>
+        <loc>https://roxtaxi.com/refer</loc>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>monthly</changefreq>
-        <priority>0.5</priority>
+        <priority>0.6</priority>
     </url>
     <url>
         <loc>https://roxtaxi.com/about</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>monthly</changefreq>
-        <priority>0.6</priority>
+        <priority>0.65</priority>
     </url>
     <url>
         <loc>https://roxtaxi.com/contact</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>monthly</changefreq>
-        <priority>0.6</priority>
-    </url>
-    <url>
-        <loc>https://roxtaxi.com/pay</loc>
-        <lastmod>2026-08-03</lastmod>
-        <changefreq>monthly</changefreq>
-        <priority>0.4</priority>
+        <priority>0.65</priority>
     </url>
     <url>
         <loc>https://roxtaxi.com/gift-cards</loc>
-        <lastmod>2026-08-03</lastmod>
+        <lastmod>2026-02-15</lastmod>
         <changefreq>monthly</changefreq>
-        <priority>0.55</priority>
-    </url>
-    <url>
-        <loc>https://roxtaxi.com/signup</loc>
-        <lastmod>2026-08-03</lastmod>
-        <changefreq>yearly</changefreq>
-        <priority>0.3</priority>
+        <priority>0.6</priority>
     </url>
 </urlset>

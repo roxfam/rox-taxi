@@ -615,6 +615,65 @@ async def send_dunning(req: DunningRequest,
     return results
 
 
+# ─── Reopen a completed / cancelled booking so admin can assess a
+# post-trip penalty (damage, late return, no-show fee, etc.). The
+# status flips back to `confirmed` + an audit entry is appended to
+# `status_history[]` so the full lifecycle is preserved. ─────────────
+class ReopenRequest(BaseModel):
+    reason: str
+    reset_payment: bool = False  # True → also flip payment_status back to unpaid
+
+
+@router.post("/admin/bookings/{booking_id}/reopen")
+async def reopen_booking(booking_id: str, req: ReopenRequest,
+                          _: str = Depends(_require_admin_placeholder)):
+    reason = (req.reason or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(400, "Reason is required (min 3 chars)")
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    prev = booking.get("status", "unknown")
+    if prev not in {"completed", "cancelled", "no_show"}:
+        raise HTTPException(409, f"Booking is already open (status={prev})")
+
+    now = _now_iso()
+    history_entry = {
+        "from": prev,
+        "to": "confirmed",
+        "reason": reason,
+        "actor": "admin",
+        "at": now,
+        "intent": "reopen_for_penalty",
+    }
+    update = {
+        "$set": {
+            "status": "confirmed",
+            "reopened_at": now,
+            "reopened_reason": reason,
+            "updated_at": now,
+        },
+        "$push": {"status_history": history_entry},
+    }
+    if req.reset_payment:
+        update["$set"]["payment_status"] = "unpaid"
+    await _db.bookings.update_one({"id": booking["id"]}, update)
+    # Audit SMS to owner — this is a payment-adjacent event
+    try:
+        from notifications import send_owner_sms  # noqa: PLC0415
+        send_owner_sms(
+            body=(
+                f"🔓 Reopened {booking['id']} ({prev} → confirmed) for penalty — "
+                f"'{reason[:80]}'."
+            ),
+            kind="payment",
+            force_priority=True,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    return {"ok": True, "booking_id": booking["id"], "previous_status": prev}
+
+
 @router.post("/admin/payments/zelle-mark-paid")
 async def mark_zelle_paid(req: ZelleMark, admin: str = Depends(_require_admin_placeholder)):
     """Manually mark a Zelle-paid booking as received. Updates booking status,

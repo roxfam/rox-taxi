@@ -15,6 +15,7 @@ import IncidentalModal from "./admin/IncidentalModal";
 import ZelleProofCard from "./admin/ZelleProofCard";
 import FlightEventsPanel from "./admin/FlightEventsPanel";
 import PaymentRecoveryCard from "./admin/PaymentRecoveryCard";
+import BookingDetailModal from "./admin/BookingDetailModal";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -34,6 +35,7 @@ export default function AdminDashboard() {
   const [depositModal, setDepositModal] = useState(null); // { booking, action: 'released'|'forfeited' }
   const [incidentalBooking, setIncidentalBooking] = useState(null); // booking row for card-hold / zelle modal
   const [flightBooking, setFlightBooking] = useState(null); // booking row for flight events timeline
+  const [detailBooking, setDetailBooking] = useState(null); // booking row for full-detail modal
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [authMethods, setAuthMethods] = useState(null);
   const [nudgeStats, setNudgeStats] = useState(null);
@@ -354,7 +356,14 @@ export default function AdminDashboard() {
                   return (
                     <tr key={b.id} className="border-t border-[#E2E8F0] hover:bg-[#F8FAFC] align-top" data-testid={`admin-row-${b.id}`}>
                       <td className="px-4 py-3 mono text-[#0B3B5C] font-semibold">
-                        {b.id}
+                        <button
+                          onClick={() => setDetailBooking(b)}
+                          className="hover:text-[#D4A94A] hover:underline transition inline-flex items-center gap-1"
+                          data-testid={`admin-booking-open-${b.id}`}
+                          title="Open full booking detail · invoice · reopen"
+                        >
+                          {b.id}
+                        </button>
                         {focusedId === b.id && !b.reassigned_to_backup_at && (
                           <button
                             type="button"
@@ -497,6 +506,15 @@ export default function AdminDashboard() {
         <FlightEventsPanel
           booking={flightBooking}
           onClose={() => setFlightBooking(null)}
+        />
+      )}
+
+      {detailBooking && (
+        <BookingDetailModal
+          booking={detailBooking}
+          onClose={() => setDetailBooking(null)}
+          onChanged={() => load()}
+          onOpenIncidental={(b) => setIncidentalBooking(b)}
         />
       )}
     </div>

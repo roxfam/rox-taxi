@@ -54,6 +54,49 @@ def _verify_tip_token(booking_id: str, token: str) -> bool:
     return bool(token) and hmac.compare_digest(_tip_token(booking_id), token.strip())
 
 
+# ── Public lookup — guest looks up their booking by number + contact ───
+class TipLookupRequest(BaseModel):
+    booking_id: str
+    contact: str  # email OR last 4 digits of phone
+
+
+@router.post("/bookings/tip-lookup")
+async def tip_lookup(req: TipLookupRequest):
+    """Guest-facing lookup: enter booking number + the email you booked
+    with (or the last 4 digits of your phone) and we hand you back a
+    signed tip link so you can top up without needing the original SMS.
+    Only returns a token for completed OR picked_up trips."""
+    if _db is None:
+        raise HTTPException(500, "DB not configured")
+    bid = (req.booking_id or "").strip().upper()
+    contact = (req.contact or "").strip().lower()
+    if len(bid) < 4 or len(contact) < 4:
+        raise HTTPException(400, "Booking ID and contact are both required")
+
+    b = await _db.bookings.find_one({"id": bid})
+    if not b:
+        raise HTTPException(404, "No booking matches that number")
+    if b.get("status") not in {"completed", "picked_up"}:
+        raise HTTPException(409, "Tip lookup is available after your driver has picked you up or completed the trip")
+
+    # Match EITHER full email OR last-4-digit phone
+    email_ok = contact == (b.get("customer_email") or "").strip().lower()
+    phone_digits = "".join(ch for ch in (b.get("customer_phone") or "") if ch.isdigit())
+    phone_ok = len(contact) == 4 and contact.isdigit() and phone_digits.endswith(contact)
+    if not (email_ok or phone_ok):
+        # Deliberately vague — don't tell them WHICH field was wrong
+        raise HTTPException(401, "Could not verify your booking — double-check the email or last-4-digit phone")
+
+    token = _tip_token(bid)
+    return {
+        "booking_id": bid,
+        "token": token,
+        "tip_url": f"{_public_base_url}/tip-topup?id={bid}&t={token}",
+        "driver_name": b.get("driver_name") or b.get("assigned_driver") or "",
+        "trip": b.get("item_name") or "",
+    }
+
+
 # ── Public endpoints ────────────────────────────────────────────────────────
 class TipTopupSubmit(BaseModel):
     amount: float = Field(..., ge=1, le=500)
