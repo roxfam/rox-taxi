@@ -1219,7 +1219,7 @@ def send_return_leg_nudge(booking: dict, driver_number: Optional[str] = None, pr
         guest_sms = (
             f"Hi {first_name}! Your Rox driver is heading back for you 🌊 — "
             f"arriving in 30 min at {pickup} for the {return_time} pickup. "
-            f"Time to grab your towels! Booking #{booking['id']}."
+            f"Booking #{booking['id']}."
         )
         if maps_link:
             guest_sms += f"\nMap the pickup: {maps_link}"

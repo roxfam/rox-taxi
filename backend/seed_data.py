@@ -113,12 +113,8 @@ _ADDON_AIRPORT = [
 _ADDON_CRUISE = [
     {"id": "wharf-greeter", "label": "Meet-with-sign at Prince George Wharf", "price": 5.0, "price_mode": "flat",
      "description": "Driver waits with a Rox placard at the cruise-port taxi stand."},
-    {"id": "cold-drinks", "label": "Chilled Kalik + water pack", "price": 6.0, "price_mode": "flat",
-     "description": "Ice-cold Kalik beer + bottled water waiting in the cab."},
 ]
 _ADDON_BEACH = [
-    {"id": "cooler-towels", "label": "Cooler + towels loaner", "price": 8.0, "price_mode": "flat",
-     "description": "Rox-branded cooler and 4 beach towels waiting in the trunk (returned on pickup)."},
     {"id": "beach-picnic", "label": "Bahamian picnic snack pack", "price": 12.0, "price_mode": "per_person",
      "description": "Conch fritters, Bahamian mac, and a fresh coconut per person."},
 ]
