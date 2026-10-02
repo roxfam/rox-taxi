@@ -23,6 +23,17 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Post-payment invoice delivery
+- **`notify_booking_confirmed` now attaches a "Download invoice (PDF) →" button** inside the confirmation email + the invoice link is appended to the SMS whenever `payment_status == "paid"`. The invoice section is suppressed for Zelle/pending-payment bookings so we never promise a receipt before the money lands.
+- Links target the existing `GET /api/bookings/:id/receipt.pdf` endpoint (uses `pdf_utils.build_receipt_pdf`) — includes full line-item breakdown with VAT, processing fee, and deposit.
+- Admin can resend any time via the existing `POST /api/admin/bookings/:id/resend-notification` endpoint (NotifyCell "resend" button).
+- Verified: paid booking → confirmation email + SMS with invoice link both sent; pending booking → invoice section correctly suppressed; `/receipt.pdf` returns a valid `application/pdf` response.
+
+### Feb 2026 — Owner SMS on EVERY booking + EVERY payment (already shipped)
+- `notify_owner_booking_created` fans out to every number in `ADMIN_SMS_NUMBER` via `send_owner_sms(kind="booking")`.
+- `notify_owner_payment_received` fans out via `send_owner_sms(kind="payment")`.
+- `payment` is in the default `priority_kinds` list so these alerts break through quiet-hours automatically; `booking` is auto-promoted to priority when total ≥ `owner_sms_high_value_threshold` (default $500).
+
 ### Feb 2026 — Front-page slide rename
 - Renamed hero slide **"Rose Island reefs." → "Pearl & Athol Island."** (id: `hero-rose-island` → `hero-pearl-athol-island`) — subtitle preserved.
 - Renamed hero slide **"Junkanoo golden hour." → "Junkanoo Beach."** (id: `hero-junkanoo` → `hero-junkanoo-beach`) — subtitle preserved.

@@ -854,6 +854,23 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
     _base = "https://roxtaxi.com"
     _pass_url = f"{_base}/booking/{booking['id']}/pass"
     _qr_img_url = f"{_base}/api/bookings/{booking['id']}/qr.png"
+    _invoice_url = f"{_base}/api/bookings/{booking['id']}/receipt.pdf"
+    # Invoice section is only shown AFTER payment settles — the
+    # `payment_status == "paid"` gate avoids promising guests an invoice
+    # for a Zelle booking that hasn't been reconciled yet.
+    _paid = (booking.get("payment_status") or "").lower() == "paid"
+    _invoice_html = (
+        f"""
+      <!-- Paid invoice — issued automatically once payment settles -->
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:20px;margin-top:20px;">
+        <div style="font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#059669;font-weight:700;">Payment received ✓</div>
+        <div style="color:#0B3B5C;font-size:18px;margin-top:4px;font-weight:700;">Your invoice is ready</div>
+        <div style="color:#64748B;font-size:13px;margin-top:4px;">PDF receipt with the full line-item breakdown, VAT, and processing fee.</div>
+        <a href="{_invoice_url}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px;font-size:13px;margin-top:12px;">Download invoice (PDF) →</a>
+      </div>
+        """
+        if _paid else ""
+    )
     html = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
       <h1 style="font-family:Georgia,serif;color:#1A365D;margin:0 0 8px;">You're booked!</h1>
@@ -866,6 +883,7 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
         <div style="color:#64748B;font-size:14px;margin-top:4px;">Date: {booking['booking_date']}</div>
         <div style="color:#64748B;font-size:14px;">Total: <span style="color:#FF7F50;font-weight:600;">{_fmt_money(booking.get('total',0))}</span></div>
       </div>
+      {_invoice_html}
 
       <!-- Boarding pass with QR — driver scans this at pickup -->
       <div style="background:#0B3B5C;color:#fff;border-radius:16px;padding:24px;margin-top:20px;text-align:center;">
@@ -888,7 +906,11 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
         report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
 
     if sms_enabled and booking.get("customer_phone"):
-        sms = f"Rox Taxi: Booking {booking['id']} confirmed for {booking['item_name']} on {booking['booking_date']}. Total {_fmt_money(booking.get('total',0))}. Pickup pass (driver scans this): roxtaxi.com/booking/{booking['id']}/pass"
+        _tail = f" · Invoice: {_invoice_url}" if _paid else ""
+        sms = (
+            f"Rox Taxi: Booking {booking['id']} confirmed for {booking['item_name']} on {booking['booking_date']}. "
+            f"Total {_fmt_money(booking.get('total',0))}. Pickup pass (driver scans this): {_pass_url}{_tail}"
+        )
         result = send_sms(booking["customer_phone"], sms)
         report["sms"].update(result)
     else:
