@@ -17,6 +17,8 @@ import FlightEventsPanel from "./admin/FlightEventsPanel";
 import PaymentRecoveryCard from "./admin/PaymentRecoveryCard";
 import BookingDetailModal from "./admin/BookingDetailModal";
 import AdminSessionsCard from "./admin/AdminSessionsCard";
+import StripeLiveCheckCard from "./admin/StripeLiveCheckCard";
+import WeekendSurchargeCard from "./admin/WeekendSurchargeCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -270,14 +272,24 @@ export default function AdminDashboard() {
             Auto-hides when there are no pending proofs. */}
         <ZelleProofCard />
 
+        {/* Stripe live-mode diagnostic — flags "my live site says sandbox"
+            immediately with the current STRIPE_API_KEY prefix + last-session
+            prefix and action-specific suggestions. */}
+        <StripeLiveCheckCard />
+
         {/* Payment Recovery / Dunning — bookings whose Stripe payment never
             actually settled on the owner's account (test sandbox leftovers).
             One-click email + SMS to each with a fresh pay link. */}
         <PaymentRecoveryCard />
 
         {/* Admin "Signed-in devices" — every live admin cookie session with
-            per-row Revoke. Auto-hides when only the current session exists. */}
+            per-row Revoke + Trust. Auto-hides when only the current session
+            exists AND no trusted devices are configured. */}
         <AdminSessionsCard />
+
+        {/* Sunday-pickup weekend surcharge admin control — flows live to
+            the next reschedule-quote without a backend restart. */}
+        <WeekendSurchargeCard />
 
         {/* Reviews Inbox — every un-replied 5★ Google review with an
             AI-drafted thank-you ready to fire. Auto-hides when the

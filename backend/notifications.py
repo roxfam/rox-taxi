@@ -1046,6 +1046,128 @@ def notify_refund_issued(
     return report
 
 
+def notify_reschedule_confirmation(
+    booking: dict, *, old_pickup_iso: str, new_pickup_iso: str,
+    new_return_iso: Optional[str] = None, price_delta: float = 0.0,
+    old_total: Optional[float] = None, new_total: Optional[float] = None,
+    qr_url: str = "", pass_url: str = "",
+    prefs: Optional[dict] = None,
+) -> dict:
+    """Email the guest a reschedule confirmation.
+
+    Includes:
+      - Old vs new pickup time (formatted)
+      - Updated boarding-pass QR embedded + "Open full boarding pass" CTA
+      - Itemised price-change line when the weekend surcharge is adjusted
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    report = {"sent": False, "provider": "none", "error": None, "enabled": email_enabled}
+    if not email_enabled or not booking.get("customer_email"):
+        report["error"] = "Disabled by admin" if not email_enabled else "No email address"
+        return report
+
+    def _fmt(iso: Optional[str]) -> str:
+        if not iso:
+            return "—"
+        try:
+            from datetime import datetime as _dt
+            d = _dt.fromisoformat(iso.replace("Z", "+00:00"))
+            return d.strftime("%A, %b %-d · %-I:%M %p")
+        except Exception:  # noqa: BLE001
+            return iso[:16]
+
+    bid = booking["id"]
+    first = (booking.get("customer_name") or "there").split(" ")[0]
+    svc = booking.get("item_name") or booking.get("service_type") or "booking"
+    old_s = _fmt(old_pickup_iso)
+    new_s = _fmt(new_pickup_iso)
+    return_s = _fmt(new_return_iso) if new_return_iso else ""
+
+    # Price-delta line — only renders when there's a surcharge change.
+    delta_html = ""
+    delta_text = ""
+    if price_delta and old_total is not None and new_total is not None:
+        if price_delta > 0:
+            tone = ("background:#FEF3C7;border-left:3px solid #D97706;",
+                    "#92400E", "weekend surcharge added")
+        else:
+            tone = ("background:#D1FAE5;border-left:3px solid #059669;",
+                    "#065F46", "weekend surcharge removed")
+        sign = "+" if price_delta > 0 else "−"
+        delta_html = (
+            f'<div style="{tone[0]}border-radius:8px;padding:14px 16px;margin-top:14px;">'
+            f'<div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:{tone[1]};font-weight:800;">Price change · {tone[2]}</div>'
+            f'<div style="margin-top:6px;color:#0B3B5C;font-size:13px;">'
+            f'<div style="display:flex;justify-content:space-between;color:#64748B;">'
+            f'<span>Previous total</span><span>{_fmt_money(old_total)}</span></div>'
+            f'<div style="display:flex;justify-content:space-between;color:{tone[1]};font-weight:700;margin-top:2px;">'
+            f'<span>Adjustment</span><span>{sign}{_fmt_money(abs(price_delta))}</span></div>'
+            f'<div style="display:flex;justify-content:space-between;color:#0B3B5C;font-weight:800;margin-top:4px;padding-top:6px;border-top:1px solid rgba(0,0,0,.08);">'
+            f'<span>New total</span><span>{_fmt_money(new_total)}</span></div>'
+            f'</div></div>'
+        )
+        delta_text = (
+            f"\nPrice adjustment: {sign}{_fmt_money(abs(price_delta))}\n"
+            f"Previous total: {_fmt_money(old_total)}\n"
+            f"New total:      {_fmt_money(new_total)}\n"
+        )
+
+    return_block = f'<div style="color:#64748B;font-size:13px;margin-top:4px;">Return: {return_s}</div>' if return_s else ""
+    qr_block = (
+        f'<div style="text-align:center;margin-top:18px;">'
+        f'<div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Updated pickup QR</div>'
+        f'<img src="{qr_url}" alt="Pickup QR" style="width:160px;height:160px;margin:10px auto;display:block;border:1px solid #EFE7D5;padding:8px;background:#fff;border-radius:12px;" />'
+        f'<a href="{pass_url}" style="display:inline-block;color:#0B3B5C;font-size:13px;font-weight:700;text-decoration:none;border-bottom:1px solid #0B3B5C;">Open full boarding pass →</a>'
+        f'</div>'
+        if qr_url else ""
+    )
+
+    subject = f"Rebooked — {new_s} · {bid}"
+    text = (
+        f"Hi {first},\n\n"
+        f"Your Rox booking {bid} is rebooked.\n"
+        f"Was: {old_s}\n"
+        f"Now: {new_s}\n"
+        + (f"Return: {return_s}\n" if return_s else "")
+        + delta_text
+        + f"\nService: {svc}\n"
+        + f"Boarding pass: {pass_url}\n\n"
+        + "— Rox Taxi Service & Tours · WhatsApp +1 (242) 432-2587"
+    )
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
+      <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:800;">
+        Reschedule confirmed
+      </div>
+      <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;line-height:1.15;">
+        Hi {first}, your pickup is moved.
+      </h1>
+      <p style="color:#64748B;font-size:14px;margin:12px 0 0;">
+        We've updated your Rox booking <strong>{bid}</strong>. Here's the new plan:
+      </p>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;margin-top:16px;">
+        <div style="display:flex;justify-content:space-between;color:#94A3B8;font-size:12px;text-decoration:line-through;">
+          <span>Was</span><span>{old_s}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;color:#0B3B5C;font-size:16px;font-weight:800;margin-top:6px;">
+          <span>Now</span><span>{new_s}</span>
+        </div>
+        {return_block}
+        <div style="color:#64748B;font-size:12px;margin-top:10px;">{svc}</div>
+        {delta_html}
+        {qr_block}
+      </div>
+      <p style="color:#94a3b8;font-size:11px;margin-top:22px;">
+        Rox Taxi Service &amp; Tours · Nassau, Bahamas · WhatsApp +1 (242) 432-2587
+      </p>
+    </div>
+    """
+    result = send_email(booking["customer_email"], subject, html, text, category="confirmation")
+    report.update(result)
+    return report
+
+
 def notify_new_admin_device(
     *, to_email: Optional[str], sub: str, device: str, ip: str,
     city: Optional[str], when_iso: str, revoke_url: str,

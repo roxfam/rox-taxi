@@ -3678,6 +3678,10 @@ _KIND_REGEX = "^(tours|taxi_services|rentals)$"
 # who is logged in — and revoke any session they don't recognise. The
 # revoke button inserts the token hash into `admin_revoked_tokens` so
 # `require_admin` 401s on the next request from that cookie.
+#
+# Also includes the TRUSTED-DEVICES surface: admins can mark a device/
+# city combo as safe so routine logins from their laptop stop firing the
+# "new admin device" alert on every session.
 import hashlib as _admin_hashlib
 
 
@@ -3772,6 +3776,199 @@ async def revoke_admin_session(
         upsert=True,
     )
     return {"ok": True, "session_prefix": session_prefix}
+
+
+# ─── Trusted admin devices ───────────────────────────────────────────
+@router.get("/admin/trusted-devices")
+async def list_trusted_devices(admin: str = Depends(_require_admin_placeholder)):
+    out = []
+    async for td in _db.admin_trusted_devices.find({"sub": admin}).sort("trusted_at", -1):
+        out.append({
+            "id": str(td.get("_id")),
+            "device_signature": td.get("device_signature"),
+            "city": td.get("city"),
+            "trusted_at": td["trusted_at"].isoformat() if isinstance(td.get("trusted_at"), datetime) else td.get("trusted_at"),
+            "label": td.get("label") or "",
+        })
+    return {"devices": out, "count": len(out)}
+
+
+class TrustDeviceRequest(BaseModel):
+    session_prefix: Optional[str] = None    # trust the device behind THIS session row
+    device_signature: Optional[str] = None  # or trust an arbitrary signature+city combo
+    city: Optional[str] = None
+    label: Optional[str] = Field(None, max_length=60)
+
+
+@router.post("/admin/trusted-devices")
+async def trust_device(
+    req: TrustDeviceRequest,
+    admin: str = Depends(_require_admin_placeholder),
+):
+    """Mark a device as trusted so future logins from the same device/city
+    combo for `admin` skip the "new admin device" alert.
+
+    Call with EITHER `session_prefix` (easy: pulls signature+city from the
+    `admin_sessions` row) OR an explicit `device_signature` + `city`.
+    """
+    signature = (req.device_signature or "").strip()
+    city = (req.city or "").strip()
+    if req.session_prefix:
+        if len(req.session_prefix) < 8:
+            raise HTTPException(400, "Invalid session id")
+        sess = await _db.admin_sessions.find_one({
+            "sub": admin,
+            "token_hash": {"$regex": f"^{req.session_prefix}"},
+        })
+        if not sess:
+            raise HTTPException(404, "Session not found for this admin")
+        signature = (sess.get("device_signature")
+                     or _admin_parse_ua(sess.get("last_ua") or sess.get("ua") or "")
+                     or "")
+        city = (sess.get("city") or "").strip()
+    if not signature:
+        raise HTTPException(400, "device_signature required")
+
+    now = datetime.now(timezone.utc)
+    await _db.admin_trusted_devices.update_one(
+        {"sub": admin, "device_signature": signature, "city": city.lower()},
+        {"$set": {
+            "sub": admin,
+            "device_signature": signature,
+            "city": city.lower(),
+            "label": (req.label or "")[:60],
+            "trusted_at": now,
+        }},
+        upsert=True,
+    )
+    # Mirror on the admin_sessions rows so the Sessions Monitor UI shows
+    # the trusted-ribbon for every current session that matches.
+    await _db.admin_sessions.update_many(
+        {"sub": admin, "device_signature": signature},
+        {"$set": {"trusted": True}},
+    )
+    return {"ok": True, "device_signature": signature, "city": city.lower()}
+
+
+@router.delete("/admin/trusted-devices/{device_id}")
+async def untrust_device(
+    device_id: str,
+    admin: str = Depends(_require_admin_placeholder),
+):
+    from bson import ObjectId
+    try:
+        _id = ObjectId(device_id)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(400, "Invalid device id")
+    doc = await _db.admin_trusted_devices.find_one({"_id": _id, "sub": admin})
+    if not doc:
+        raise HTTPException(404, "Trusted device not found")
+    await _db.admin_trusted_devices.delete_one({"_id": _id})
+    # Clear the ribbon on any matching sessions
+    await _db.admin_sessions.update_many(
+        {"sub": admin, "device_signature": doc.get("device_signature")},
+        {"$set": {"trusted": False}},
+    )
+    return {"ok": True}
+
+
+# ─── Stripe live-mode diagnostic ─────────────────────────────────────
+# Dashboard card calls this to tell the owner "you ARE in sandbox" / "you
+# ARE in live mode". Includes the key prefix so the owner can tell at a
+# glance which env the deployed backend is using.
+@router.get("/admin/stripe-live-check")
+async def stripe_live_check(admin: str = Depends(_require_admin_placeholder)):
+    key = (os.environ.get("STRIPE_API_KEY") or "").strip()
+    prefix = key[:8] if key else ""
+    is_sandbox_proxy = (key.lower() == "sk_test_emergent")
+    is_test = key.startswith("sk_test_")
+    is_live = key.startswith("sk_live_")
+    webhook_secret_set = bool((os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip())
+
+    # Peek at the most recent payment_transactions row so we can also
+    # show whether real sessions have landed with a `cs_live_` prefix.
+    last_tx = await _db.payment_transactions.find_one(
+        {}, sort=[("created_at", -1)],
+    )
+    last_session_prefix = ""
+    last_session_created = None
+    if last_tx:
+        sid = last_tx.get("session_id") or ""
+        last_session_prefix = sid[:8] if sid else ""
+        last_session_created = last_tx.get("created_at")
+
+    suggestions = []
+    if is_sandbox_proxy:
+        suggestions.append(
+            "You're on the shared Emergent sandbox (sk_test_emergent). "
+            "No funds reach your Stripe account. Paste your real sk_live_... "
+            "key into backend/.env on your VPS, rebuild, and restart."
+        )
+    elif is_test:
+        suggestions.append(
+            "You're using a Stripe TEST key (sk_test_...). "
+            "No real money flows. Swap in your sk_live_... key when ready."
+        )
+    elif is_live:
+        if not webhook_secret_set:
+            suggestions.append(
+                "Live key is set but STRIPE_WEBHOOK_SECRET is missing — "
+                "payments will complete but the webhook won't update bookings."
+            )
+    else:
+        suggestions.append("STRIPE_API_KEY is missing or malformed.")
+
+    return {
+        "key_prefix": prefix + ("…" if key else ""),
+        "mode": "live" if is_live else ("test" if is_test else "unknown"),
+        "is_sandbox_proxy": is_sandbox_proxy,
+        "is_live": is_live,
+        "webhook_secret_set": webhook_secret_set,
+        "last_session_prefix": last_session_prefix,
+        "last_session_created": last_session_created,
+        "suggestions": suggestions,
+    }
+
+
+# ─── Weekend surcharge toggle ────────────────────────────────────────
+@router.get("/admin/weekend-surcharge")
+async def get_weekend_surcharge(_: str = Depends(_require_admin_placeholder)):
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    ws = cfg.get("weekend_surcharge") or {}
+    return {
+        "enabled": bool(ws.get("enabled", True)),
+        "amount_usd": float(ws.get("amount_usd", 15.0) or 0.0),
+        "service_types": ws.get("service_types") or ["taxi", "tour"],
+    }
+
+
+class WeekendSurchargeRequest(BaseModel):
+    enabled: Optional[bool] = None
+    amount_usd: Optional[float] = Field(None, ge=0.0, le=500.0)
+    service_types: Optional[List[str]] = None
+
+
+@router.put("/admin/weekend-surcharge")
+async def set_weekend_surcharge(
+    req: WeekendSurchargeRequest,
+    _: str = Depends(_require_admin_placeholder),
+):
+    patch: Dict[str, Any] = {}
+    if req.enabled is not None:
+        patch["weekend_surcharge.enabled"] = bool(req.enabled)
+    if req.amount_usd is not None:
+        patch["weekend_surcharge.amount_usd"] = round(float(req.amount_usd), 2)
+    if req.service_types is not None:
+        # Only accept the known service type labels
+        allowed = {"taxi", "tour", "rental", "excursion"}
+        cleaned = [s.lower() for s in req.service_types if s and s.lower() in allowed]
+        patch["weekend_surcharge.service_types"] = cleaned
+    if not patch:
+        raise HTTPException(400, "Nothing to update")
+    patch["updated_at"] = _now_iso()
+    await _db.site_config.update_one({"_id": "main"}, {"$set": patch}, upsert=True)
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    return cfg.get("weekend_surcharge") or {}
 
 
 # ─── Catch-all 404s for unknown admin sub-paths ───────────────────

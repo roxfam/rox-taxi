@@ -232,14 +232,32 @@ CANCELLATION_APPLIES_TO = {"taxi", "tour", "excursion"}  # rentals handled separ
 CLOSED_WEEKDAYS = {5}
 CLOSED_APPLIES_TO = {"taxi", "rental"}
 
-# ─── Weekend pricing ─────────────────────────────────────────────────
-# Sunday pickups get a flat surcharge on top of the base fare because
-# weekend dispatch availability is limited and Saturday is closed. Only
-# applies to taxi + tour (not rentals, which are priced per-day already).
-# Used by the guest-reschedule quote so a date swap from weekday → Sunday
-# surfaces the delta BEFORE the guest confirms the new pickup.
+# ─── Weekend surcharge (admin-configurable) ──────────────────────────
+# Default values; a `weekend_surcharge` dict in `site_config` can override:
+#   {enabled: bool, amount_usd: float, service_types: [str]}
 WEEKEND_SURCHARGE_USD = 15.0
 WEEKEND_SURCHARGE_APPLIES_TO = {"taxi", "tour"}
+
+
+async def _weekend_surcharge_config() -> dict:
+    """Reads the live admin-managed weekend-surcharge toggle. Falls back
+    to the hard-coded defaults when `site_config.weekend_surcharge` is
+    missing or malformed."""
+    try:
+        cfg = await db.site_config.find_one({"_id": "main"}) or {}
+        ws = cfg.get("weekend_surcharge") or {}
+    except Exception:  # noqa: BLE001
+        ws = {}
+    enabled = bool(ws.get("enabled", True))
+    amount = float(ws.get("amount_usd", WEEKEND_SURCHARGE_USD) or 0.0)
+    services = ws.get("service_types")
+    if not isinstance(services, list) or not services:
+        services = list(WEEKEND_SURCHARGE_APPLIES_TO)
+    return {
+        "enabled": enabled,
+        "amount_usd": amount,
+        "service_types": [s.lower() for s in services],
+    }
 
 
 def _is_weekend_pickup(dt: datetime) -> bool:
@@ -3001,11 +3019,15 @@ async def get_fees():
 # are swallowed so a Twilio outage can't break the user-facing API.
 async def _notify_reschedule(booking: dict, old_pickup: str, new_pickup: str,
                               new_return: Optional[str] = None,
-                              actor: str = "guest") -> dict:
-    """Fire owner + guest SMS for any rescheduled booking. Returns a dict
-    with per-channel delivery status for the audit log."""
+                              actor: str = "guest",
+                              price_delta: float = 0.0,
+                              old_total: Optional[float] = None,
+                              new_total: Optional[float] = None) -> dict:
+    """Fire owner + guest SMS AND a guest confirmation email for any
+    rescheduled booking. Returns a dict with per-channel delivery status
+    for the audit log."""
     try:
-        from notifications import send_owner_sms, send_sms  # noqa: PLC0415
+        from notifications import send_owner_sms, send_sms, notify_reschedule_confirmation  # noqa: PLC0415
     except Exception:  # noqa: BLE001
         return {"error": "notifications module unavailable"}
 
@@ -3044,6 +3066,24 @@ async def _notify_reschedule(booking: dict, old_pickup: str, new_pickup: str,
             report["guest_sms"] = send_sms(phone, guest_body[:600])
         except Exception as e:  # noqa: BLE001
             report["guest_sms"] = {"sent": False, "error": str(e)}
+
+    # Guest confirmation email — includes the pickup QR + itemised price
+    # delta so there's a durable record of the rebook in their inbox.
+    try:
+        prefs = await db.site_config.find_one({"_id": "main"}) or {}
+        site_url = (os.environ.get("SITE_BASE_URL") or "https://roxtaxi.com").rstrip("/")
+        qr_url = f"{site_url}/api/bookings/{bid}/qr.png"
+        pass_url = f"{site_url}/booking/{bid}/pass"
+        report["guest_email"] = notify_reschedule_confirmation(
+            booking,
+            old_pickup_iso=old_pickup, new_pickup_iso=new_pickup,
+            new_return_iso=new_return, price_delta=price_delta,
+            old_total=old_total, new_total=new_total,
+            qr_url=qr_url, pass_url=pass_url,
+            prefs=prefs,
+        )
+    except Exception as e:  # noqa: BLE001
+        report["guest_email"] = {"sent": False, "error": str(e)}
     return report
 
 
@@ -3089,24 +3129,27 @@ async def reschedule_quote(booking_id: str, new_pickup: str, email: Optional[str
         old_dt = None
 
     svc_type = (doc.get("service_type") or "").lower()
-    applies = svc_type in WEEKEND_SURCHARGE_APPLIES_TO
+    ws_cfg = await _weekend_surcharge_config()
+    applies = (ws_cfg["enabled"]
+               and svc_type in set(ws_cfg["service_types"]))
+    surcharge_usd = float(ws_cfg["amount_usd"] or 0.0)
     old_weekend = bool(old_dt and _is_weekend_pickup(old_dt)) if applies else False
     new_weekend = bool(_is_weekend_pickup(new_dt)) if applies else False
 
     delta = 0.0
     if applies:
         if new_weekend and not old_weekend:
-            delta = WEEKEND_SURCHARGE_USD
+            delta = surcharge_usd
         elif old_weekend and not new_weekend:
-            delta = -WEEKEND_SURCHARGE_USD
+            delta = -surcharge_usd
 
     old_total = float(doc.get("total") or 0.0)
     new_total = round(max(0.0, old_total + delta), 2)
     if delta > 0:
-        msg = (f"Heads up — Sunday pickups carry a ${WEEKEND_SURCHARGE_USD:.0f} "
+        msg = (f"Heads up — Sunday pickups carry a ${surcharge_usd:.0f} "
                f"weekend surcharge. Your new total will be ${new_total:.2f}.")
     elif delta < 0:
-        msg = (f"Nice — moving off a Sunday removes the ${WEEKEND_SURCHARGE_USD:.0f} "
+        msg = (f"Nice — moving off a Sunday removes the ${surcharge_usd:.0f} "
                f"weekend surcharge. Your new total will be ${new_total:.2f}.")
     elif applies and (old_weekend or new_weekend):
         msg = "Weekend pickup — no price change (already included)."
@@ -3120,7 +3163,8 @@ async def reschedule_quote(booking_id: str, new_pickup: str, email: Optional[str
         "old_total": round(old_total, 2),
         "new_total": new_total,
         "delta": round(delta, 2),
-        "weekend_surcharge_usd": WEEKEND_SURCHARGE_USD,
+        "weekend_surcharge_usd": surcharge_usd,
+        "surcharge_enabled": ws_cfg["enabled"],
         "old_weekend": old_weekend,
         "new_weekend": new_weekend,
         "applies": applies,
@@ -3172,7 +3216,10 @@ async def guest_reschedule(booking_id: str, req: GuestRescheduleRequest):
     # Compute weekend-surcharge delta BEFORE we mutate so the audit entry
     # captures exactly what the guest saw in the quote step.
     svc_type = (doc.get("service_type") or "").lower()
-    applies_wk = svc_type in WEEKEND_SURCHARGE_APPLIES_TO
+    ws_cfg = await _weekend_surcharge_config()
+    applies_wk = (ws_cfg["enabled"]
+                  and svc_type in set(ws_cfg["service_types"]))
+    surcharge_usd = float(ws_cfg["amount_usd"] or 0.0)
     try:
         _old_dt = _parse_booking_date(old_pickup) if old_pickup else None
         if _old_dt and _old_dt.tzinfo is None:
@@ -3184,9 +3231,9 @@ async def guest_reschedule(booking_id: str, req: GuestRescheduleRequest):
     delta = 0.0
     if applies_wk:
         if new_wk and not old_wk:
-            delta = WEEKEND_SURCHARGE_USD
+            delta = surcharge_usd
         elif old_wk and not new_wk:
-            delta = -WEEKEND_SURCHARGE_USD
+            delta = -surcharge_usd
     old_total = float(doc.get("total") or 0.0)
     new_total = round(max(0.0, old_total + delta), 2)
 
@@ -3230,6 +3277,7 @@ async def guest_reschedule(booking_id: str, req: GuestRescheduleRequest):
     fresh = await db.bookings.find_one({"id": doc["id"]})
     sms_report = await _notify_reschedule(
         fresh or doc, old_pickup, new_dt.isoformat(), new_return_iso, actor="guest",
+        price_delta=delta, old_total=old_total, new_total=new_total,
     )
     await db.bookings.update_one(
         {"id": doc["id"]},

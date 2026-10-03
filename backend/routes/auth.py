@@ -643,11 +643,23 @@ async def _record_admin_session(
                 except Exception:  # noqa: BLE001
                     pass
                 seen_signatures.add((sig, city.lower()))
-            is_new_device = (not is_first_ever) and (
-                (new_device_signature, new_city.lower()) not in seen_signatures
-            )
+            # Trusted-device list — admins can mark a device/city combo
+            # as safe so routine logins from their laptop don't ping their
+            # phone over and over. Loaded here, compared below.
+            trusted_signatures = set()
+            try:
+                async for td in _db.admin_trusted_devices.find({"sub": email}):
+                    trusted_signatures.add((
+                        (td.get("device_signature") or "").strip(),
+                        (td.get("city") or "").strip().lower(),
+                    ))
+            except Exception:  # noqa: BLE001
+                pass
+            new_combo = (new_device_signature, new_city.lower())
+            is_new_device = (not is_first_ever) and (new_combo not in seen_signatures)
+            is_trusted = new_combo in trusted_signatures
         except Exception:  # noqa: BLE001
-            pass
+            is_trusted = False
 
         await _db.admin_sessions.update_one(
             {"token_hash": token_hash},
@@ -663,14 +675,15 @@ async def _record_admin_session(
                 "last_ip": ip,
                 "device_signature": new_device_signature,
                 "city": new_city,
+                "trusted": is_trusted,
             }},
             upsert=True,
         )
 
         # Owner alert on brand-new device — never block login, always
-        # fire-and-forget. First-ever admin session is suppressed (we
-        # don't want to spam the admin about their own setup).
-        if is_new_device:
+        # fire-and-forget. Suppressed for first-ever session (admin's own
+        # setup) and for devices already in the trusted list.
+        if is_new_device and not is_trusted:
             try:
                 import asyncio as _aio
                 from notifications import notify_new_admin_device
