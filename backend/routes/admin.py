@@ -934,14 +934,21 @@ async def mark_zelle_paid(req: ZelleMark, admin: str = Depends(_require_admin_pl
 
 
 @router.post("/admin/payments/{payment_id}/refund")
-async def refund_payment(payment_id: str, admin: str = Depends(_require_admin_placeholder)):
-    """Trigger a full refund for a Stripe or PayPal transaction.
+async def refund_payment(
+    payment_id: str,
+    body: Optional[Dict[str, Any]] = Body(None),
+    admin: str = Depends(_require_admin_placeholder),
+):
+    """Trigger a full-or-partial refund for a Stripe or PayPal transaction.
 
-    The refund amount defaults to whatever's left on the booking's total
-    (so a double-click doesn't attempt a double-refund). Refunds are
-    dispatched via the shared `_attempt_deposit_refund` helper (already
-    wired to both providers via `configure()`), then the guest receives
-    an email receipt confirming the amount + ETA.
+    Request body (all optional):
+      - `amount`: USD float. When omitted, refunds the full remaining
+        balance (`total - already_refunded`). When present, must be
+        > 0 and ≤ the remaining balance.
+
+    Refunds are dispatched via the shared `_attempt_deposit_refund`
+    helper (wired to both providers via `configure()`), then the guest
+    receives an email receipt confirming the amount + ETA.
     """
     tx = await _db.payment_transactions.find_one({"session_id": payment_id})
     if not tx:
@@ -955,9 +962,25 @@ async def refund_payment(payment_id: str, admin: str = Depends(_require_admin_pl
     # payment-link records). Rounded to avoid float-dust failures.
     already = float(booking.get("refunded_amount") or 0.0)
     amt = float(booking.get("total") or tx.get("amount") or 0.0)
-    refund_amount = round(max(0.0, amt - already), 2)
-    if refund_amount < 0.01:
+    remaining = round(max(0.0, amt - already), 2)
+    if remaining < 0.01:
         raise HTTPException(409, "Nothing left to refund on this booking")
+
+    requested = (body or {}).get("amount")
+    if requested is None:
+        refund_amount = remaining
+    else:
+        try:
+            refund_amount = round(float(requested), 2)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Invalid refund amount")
+        if refund_amount <= 0:
+            raise HTTPException(400, "Refund amount must be greater than zero")
+        if refund_amount > remaining + 0.001:
+            raise HTTPException(
+                400,
+                f"Refund amount ${refund_amount:.2f} exceeds remaining ${remaining:.2f}",
+            )
 
     try:
         result = await _attempt_deposit_refund(
@@ -971,7 +994,16 @@ async def refund_payment(payment_id: str, admin: str = Depends(_require_admin_pl
 
     now = _now_iso()
     refunded_ok = bool(result.get("refunded"))
-    new_status = "refunded" if refunded_ok else "refund_pending"
+    # Partial-refund aware ledger status:
+    #   - full remaining refunded + ok → "refunded"
+    #   - partial refunded + ok → "partially_refunded"
+    #   - provider failed → "refund_pending"
+    new_already = round(already + refund_amount, 2) if refunded_ok else already
+    is_now_fully_refunded = refunded_ok and (abs(amt - new_already) < 0.01)
+    if refunded_ok:
+        new_status = "refunded" if is_now_fully_refunded else "partially_refunded"
+    else:
+        new_status = "refund_pending"
 
     # Update ledger
     await _db.payment_transactions.update_one(
@@ -990,7 +1022,7 @@ async def refund_payment(payment_id: str, admin: str = Depends(_require_admin_pl
         "updated_at": now,
     }
     if refunded_ok:
-        booking_update["refunded_amount"] = round(already + refund_amount, 2)
+        booking_update["refunded_amount"] = new_already
         booking_update["refunded_at"] = now
     await _db.bookings.update_one(
         {"id": booking["id"]},
@@ -1027,9 +1059,57 @@ async def refund_payment(payment_id: str, admin: str = Depends(_require_admin_pl
         "ok": True,
         "payment_id": payment_id,
         "amount": refund_amount,
+        "remaining_after": round(max(0.0, amt - new_already), 2),
         "refund": result,
         "payment_status": new_status,
     }
+
+
+@router.post("/admin/payments/{payment_id}/resend-refund-email")
+async def resend_refund_email(
+    payment_id: str,
+    admin: str = Depends(_require_admin_placeholder),
+):
+    """Re-fire the refund receipt email using the booking's most recent
+    refund entry. Useful when the guest never received the first one.
+    Returns the delivery report so admin can see provider status."""
+    tx = await _db.payment_transactions.find_one({"session_id": payment_id})
+    if not tx:
+        raise HTTPException(404, "Payment not found")
+    booking = await _db.bookings.find_one({"id": tx.get("booking_id")})
+    if not booking:
+        raise HTTPException(404, "Related booking not found")
+
+    history = booking.get("refund_history") or []
+    if not history:
+        raise HTTPException(409, "No refund has been issued yet for this booking")
+    # Prefer the most recent SUCCESSFUL refund; otherwise take the latest.
+    last_ok = next((h for h in reversed(history) if h.get("ok")), None)
+    last = last_ok or history[-1]
+
+    try:
+        from notifications import notify_refund_issued  # noqa: PLC0415
+        prefs = await _db.site_config.find_one({"_id": "main"}) or {}
+        report = notify_refund_issued(
+            _clean(dict(booking)),
+            amount=float(last.get("amount") or 0.0),
+            provider=last.get("provider"),
+            refund_id=last.get("refund_id"),
+            ok=bool(last.get("ok")),
+            error=last.get("error"),
+            prefs=prefs,
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.exception("refund email resend failed for %s", payment_id)
+        raise HTTPException(502, f"Email send failed: {e}") from e
+
+    # Stamp the booking so admins can see when it was last re-sent.
+    await _db.bookings.update_one(
+        {"id": booking["id"]},
+        {"$set": {"refund_email_last_resent_at": _now_iso(),
+                  "refund_email_last_resent_by": admin}},
+    )
+    return {"ok": True, "payment_id": payment_id, "report": report, "amount": last.get("amount")}
 
 
 # ─── Bulk blackout for maintenance / hurricane / insurance days ───────
@@ -3593,6 +3673,108 @@ def _coll_by_kind(kind: str):
 # method) on every GET/POST probe and polluted the logs. Narrow the
 # pattern so unknown URLs cleanly 404 instead.
 _KIND_REGEX = "^(tours|taxi_services|rentals)$"
+
+
+# ─── Admin sessions monitor (signed-in devices) ───────────────────
+# Lists every live admin session (JWT not expired AND not revoked) with
+# device, IP, issued-at, last-seen so the owner can see from the dashboard
+# who is logged in — and revoke any session they don't recognise. The
+# revoke button inserts the token hash into `admin_revoked_tokens` so
+# `require_admin` 401s on the next request from that cookie.
+import hashlib as _admin_hashlib
+
+
+def _admin_parse_ua(ua: str) -> str:
+    ua = ua or ""
+    browser = "Browser"
+    if "Chrome" in ua and "Edg" not in ua and "OPR" not in ua:
+        browser = "Chrome"
+    elif "Firefox" in ua:
+        browser = "Firefox"
+    elif "Safari" in ua and "Chrome" not in ua:
+        browser = "Safari"
+    elif "Edg" in ua:
+        browser = "Edge"
+    os_name = "Unknown"
+    if "iPhone" in ua or "iPad" in ua:
+        os_name = "iOS"
+    elif "Android" in ua:
+        os_name = "Android"
+    elif "Macintosh" in ua or "Mac OS" in ua:
+        os_name = "macOS"
+    elif "Windows" in ua:
+        os_name = "Windows"
+    elif "Linux" in ua:
+        os_name = "Linux"
+    return f"{browser} on {os_name}" if os_name != "Unknown" else browser
+
+
+@router.get("/admin/sessions")
+async def list_admin_sessions(
+    request: Request,
+    _: str = Depends(_require_admin_placeholder),
+    authorization: Optional[str] = Header(None),
+):
+    cur_token = request.cookies.get("admin_session") or ""
+    if not cur_token and authorization and authorization.startswith("Bearer "):
+        cur_token = authorization.split(" ", 1)[1]
+    cur_hash = _admin_hashlib.sha256(cur_token.encode()).hexdigest() if cur_token else ""
+    revoked = {
+        d["token_hash"] async for d in
+        _db.admin_revoked_tokens.find({}, {"token_hash": 1, "_id": 0})
+    }
+    now = datetime.now(timezone.utc)
+    out = []
+    async for s in _db.admin_sessions.find({}).sort("last_seen_at", -1):
+        th = s.get("token_hash")
+        if th in revoked:
+            continue
+        exp = s.get("expires_at")
+        # Mongo may hand us back a naive datetime depending on the driver
+        # settings — normalise to UTC-aware before comparing.
+        if isinstance(exp, datetime):
+            exp_aware = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
+            if exp_aware < now:
+                continue
+        out.append({
+            "id": (th or "")[:16],
+            "token_hash_prefix": (th or "")[:16],
+            "sub": s.get("sub"),
+            "device": _admin_parse_ua(s.get("last_ua") or s.get("ua") or ""),
+            "ip": s.get("last_ip") or s.get("ip") or "",
+            "issued_at": s["issued_at"].isoformat() if isinstance(s.get("issued_at"), datetime) else s.get("issued_at"),
+            "last_seen_at": s["last_seen_at"].isoformat() if isinstance(s.get("last_seen_at"), datetime) else s.get("last_seen_at"),
+            "expires_at": exp.isoformat() if isinstance(exp, datetime) else exp,
+            "current": bool(cur_hash and th == cur_hash),
+        })
+    return {"sessions": out, "count": len(out)}
+
+
+@router.post("/admin/sessions/{session_prefix}/revoke")
+async def revoke_admin_session(
+    session_prefix: str,
+    _: str = Depends(_require_admin_placeholder),
+):
+    if not session_prefix or len(session_prefix) < 8:
+        raise HTTPException(400, "Invalid session id")
+    doc = await _db.admin_sessions.find_one({
+        "token_hash": {"$regex": f"^{session_prefix}"},
+    })
+    if not doc:
+        raise HTTPException(404, "Session not found")
+    expires_at = doc.get("expires_at") or (datetime.now(timezone.utc) + timedelta(days=7))
+    await _db.admin_revoked_tokens.update_one(
+        {"token_hash": doc["token_hash"]},
+        {"$setOnInsert": {
+            "token_hash": doc["token_hash"],
+            "revoked_at": datetime.now(timezone.utc),
+            "expires_at": expires_at,
+            "sub": doc.get("sub"),
+            "revoked_from": "admin_sessions_monitor",
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "session_prefix": session_prefix}
 
 
 # ─── Catch-all 404s for unknown admin sub-paths ───────────────────

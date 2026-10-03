@@ -448,6 +448,19 @@ async def require_admin(
         revoked = None  # fail-open on transient Mongo blip rather than lock out admins
     if revoked:
         raise HTTPException(401, "Session revoked — please sign in again")
+    # Bump `last_seen_at` on the admin_sessions roster (fire-and-forget).
+    # Guarded so a Mongo blip never breaks admin auth.
+    try:
+        await db.admin_sessions.update_one(
+            {"token_hash": token_hash},
+            {"$set": {"last_seen_at": datetime.now(timezone.utc),
+                      "last_ip": ((request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                                   if request and request.headers.get("x-forwarded-for")
+                                   else (request.client.host if request and request.client else "")) or "")[:64],
+                      "last_ua": (request.headers.get("user-agent") or "")[:400] if request else ""}},
+        )
+    except Exception:  # noqa: BLE001
+        pass
     return payload["sub"]
 
 
@@ -1538,6 +1551,13 @@ async def seed_db():
         # underlying JWT would've died anyway (7-day admin session).
         await db.admin_revoked_tokens.create_index("token_hash", unique=True)
         await db.admin_revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
+        # Admin "signed-in devices" roster. One row per issued admin JWT with
+        # a TTL on `expires_at` so expired sessions drop out automatically.
+        # `require_admin` bumps `last_seen_at` on every authenticated hit so
+        # the dashboard shows accurate activity.
+        await db.admin_sessions.create_index("token_hash", unique=True)
+        await db.admin_sessions.create_index("expires_at", expireAfterSeconds=0)
+        await db.admin_sessions.create_index("sub")
         # Stripe webhook dedupe — Stripe retries deliver the same event id;
         # a unique index flips the retry into a cheap duplicate-key noop.
         await db.stripe_webhook_events.create_index("event_id", unique=True)
@@ -5543,6 +5563,7 @@ auth_module.configure(
     admin_email=ADMIN_EMAIL,
     admin_password_hash=ADMIN_PASSWORD_HASH,
     idle_timeout_minutes=IDLE_TIMEOUT_MINUTES,
+    require_admin=require_admin,
 )
 api_router.include_router(auth_module.router)
 

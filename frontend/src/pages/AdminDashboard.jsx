@@ -16,6 +16,7 @@ import ZelleProofCard from "./admin/ZelleProofCard";
 import FlightEventsPanel from "./admin/FlightEventsPanel";
 import PaymentRecoveryCard from "./admin/PaymentRecoveryCard";
 import BookingDetailModal from "./admin/BookingDetailModal";
+import AdminSessionsCard from "./admin/AdminSessionsCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -273,6 +274,10 @@ export default function AdminDashboard() {
             actually settled on the owner's account (test sandbox leftovers).
             One-click email + SMS to each with a fresh pay link. */}
         <PaymentRecoveryCard />
+
+        {/* Admin "Signed-in devices" — every live admin cookie session with
+            per-row Revoke. Auto-hides when only the current session exists. */}
+        <AdminSessionsCard />
 
         {/* Reviews Inbox — every un-replied 5★ Google review with an
             AI-drafted thank-you ready to fire. Auto-hides when the

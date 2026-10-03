@@ -67,6 +67,7 @@ _jwt_secret: str = ""
 _admin_email: str = ""
 _admin_password_hash: str = ""
 _idle_timeout_minutes: int = 60
+_require_admin: Optional[Callable] = None
 
 
 def configure(**kw):
@@ -586,6 +587,43 @@ def _issue_admin_cookies(response: Response, email: str) -> tuple[str, str]:
     return token, csrf
 
 
+async def _record_admin_session(
+    *, token: str, email: str, request: Optional["Request"],
+) -> None:
+    """Insert a row into `admin_sessions` so the Sessions Monitor UI can
+    list "Signed-in devices" and let the owner revoke individual sessions.
+    """
+    if _db is None:
+        return
+    try:
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        now = datetime.now(timezone.utc)
+        ua = ""
+        ip = ""
+        if request is not None:
+            ua = (request.headers.get("user-agent") or "")[:400]
+            xff = request.headers.get("x-forwarded-for", "")
+            ip = (xff.split(",")[0].strip() if xff
+                  else (request.client.host if request.client else ""))[:64]
+        await _db.admin_sessions.update_one(
+            {"token_hash": token_hash},
+            {"$set": {
+                "token_hash": token_hash,
+                "sub": email,
+                "issued_at": now,
+                "expires_at": now + timedelta(days=7),
+                "last_seen_at": now,
+                "ua": ua,
+                "ip": ip,
+                "last_ua": ua,
+                "last_ip": ip,
+            }},
+            upsert=True,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
 @router.post("/auth/login")
 async def admin_login(req: LoginRequest, request: Request, response: Response):
     ip = _client_ip(request)
@@ -598,6 +636,7 @@ async def admin_login(req: LoginRequest, request: Request, response: Response):
         raise HTTPException(401, "Invalid credentials")
     await _clear_login_failures(req.email, ip)
     token, csrf = _issue_admin_cookies(response, req.email)
+    await _record_admin_session(token=token, email=req.email, request=request)
     # `token` is kept in the body for backward-compat with any client
     # that still reads localStorage — new flow is pure cookie + CSRF.
     return {"email": req.email, "token": token, "csrf_token": csrf}
