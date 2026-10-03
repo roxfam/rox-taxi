@@ -945,11 +945,11 @@ async def refund_payment(
       - `amount`: USD float. When omitted, refunds the full remaining
         balance (`total - already_refunded`). When present, must be
         > 0 and ≤ the remaining balance.
-
-    Refunds are dispatched via the shared `_attempt_deposit_refund`
-    helper (wired to both providers via `configure()`), then the guest
-    receives an email receipt confirming the amount + ETA.
+      - `reason`: short admin note (<= 240 chars). Lands verbatim on the
+        audit entry AND on the guest's receipt email.
     """
+    body = body or {}
+    reason = (body.get("reason") or "").strip()[:240]
     tx = await _db.payment_transactions.find_one({"session_id": payment_id})
     if not tx:
         raise HTTPException(404, "Payment not found")
@@ -957,16 +957,13 @@ async def refund_payment(
     if not booking:
         raise HTTPException(404, "Related booking not found")
 
-    # Amount to refund — total minus whatever was previously refunded.
-    # Falls back to tx.amount when the booking total is missing (older
-    # payment-link records). Rounded to avoid float-dust failures.
     already = float(booking.get("refunded_amount") or 0.0)
     amt = float(booking.get("total") or tx.get("amount") or 0.0)
     remaining = round(max(0.0, amt - already), 2)
     if remaining < 0.01:
         raise HTTPException(409, "Nothing left to refund on this booking")
 
-    requested = (body or {}).get("amount")
+    requested = body.get("amount")
     if requested is None:
         refund_amount = remaining
     else:
@@ -986,7 +983,7 @@ async def refund_payment(
         result = await _attempt_deposit_refund(
             booking,
             refund_amount,
-            "Admin-initiated refund via Payments panel",
+            reason or "Admin-initiated refund via Payments panel",
         )
     except Exception as e:  # noqa: BLE001
         logging.exception("admin refund dispatch failed for %s", payment_id)
@@ -994,10 +991,6 @@ async def refund_payment(
 
     now = _now_iso()
     refunded_ok = bool(result.get("refunded"))
-    # Partial-refund aware ledger status:
-    #   - full remaining refunded + ok → "refunded"
-    #   - partial refunded + ok → "partially_refunded"
-    #   - provider failed → "refund_pending"
     new_already = round(already + refund_amount, 2) if refunded_ok else already
     is_now_fully_refunded = refunded_ok and (abs(amt - new_already) < 0.01)
     if refunded_ok:
@@ -1005,7 +998,6 @@ async def refund_payment(
     else:
         new_status = "refund_pending"
 
-    # Update ledger
     await _db.payment_transactions.update_one(
         {"session_id": payment_id},
         {"$set": {
@@ -1014,9 +1006,9 @@ async def refund_payment(
             "updated_at": now,
             "refund_info": result,
             "refund_amount": refund_amount,
+            "refund_reason": reason,
         }},
     )
-    # Mirror onto the booking so dashboards + guest lookup show it.
     booking_update: Dict[str, Any] = {
         "payment_status": new_status,
         "updated_at": now,
@@ -1033,12 +1025,10 @@ async def refund_payment(
              "refund_id": result.get("refund_id"),
              "status": result.get("status"), "ok": refunded_ok,
              "error": result.get("error"),
+             "reason": reason,
          }}},
     )
 
-    # Email the guest a receipt — on provider success it's the "money is
-    # on its way" confirmation; on provider failure it still fires with a
-    # "manual refund within 2 business days" wording so there's no silence.
     try:
         from notifications import notify_refund_issued  # noqa: PLC0415
         prefs = await _db.site_config.find_one({"_id": "main"}) or {}
@@ -1051,6 +1041,7 @@ async def refund_payment(
             ok=refunded_ok,
             error=result.get("error"),
             prefs=prefs,
+            reason=reason,
         )
     except Exception as e:  # noqa: BLE001
         logging.warning("refund email dispatch failed for %s: %s", payment_id, e)
@@ -1059,6 +1050,7 @@ async def refund_payment(
         "ok": True,
         "payment_id": payment_id,
         "amount": refund_amount,
+        "reason": reason,
         "remaining_after": round(max(0.0, amt - new_already), 2),
         "refund": result,
         "payment_status": new_status,
@@ -1068,11 +1060,14 @@ async def refund_payment(
 @router.post("/admin/payments/{payment_id}/resend-refund-email")
 async def resend_refund_email(
     payment_id: str,
+    body: Optional[Dict[str, Any]] = Body(None),
     admin: str = Depends(_require_admin_placeholder),
 ):
     """Re-fire the refund receipt email using the booking's most recent
-    refund entry. Useful when the guest never received the first one.
-    Returns the delivery report so admin can see provider status."""
+    refund entry. Optional body `{reason: str}` overrides the stored
+    reason on this one-off send (useful if the original was blank or
+    the operator wants to clarify)."""
+    override_reason = ((body or {}).get("reason") or "").strip()[:240]
     tx = await _db.payment_transactions.find_one({"session_id": payment_id})
     if not tx:
         raise HTTPException(404, "Payment not found")
@@ -1083,9 +1078,9 @@ async def resend_refund_email(
     history = booking.get("refund_history") or []
     if not history:
         raise HTTPException(409, "No refund has been issued yet for this booking")
-    # Prefer the most recent SUCCESSFUL refund; otherwise take the latest.
     last_ok = next((h for h in reversed(history) if h.get("ok")), None)
     last = last_ok or history[-1]
+    reason = override_reason or (last.get("reason") or "").strip()
 
     try:
         from notifications import notify_refund_issued  # noqa: PLC0415
@@ -1098,18 +1093,20 @@ async def resend_refund_email(
             ok=bool(last.get("ok")),
             error=last.get("error"),
             prefs=prefs,
+            reason=reason,
         )
     except Exception as e:  # noqa: BLE001
         logging.exception("refund email resend failed for %s", payment_id)
         raise HTTPException(502, f"Email send failed: {e}") from e
 
-    # Stamp the booking so admins can see when it was last re-sent.
     await _db.bookings.update_one(
         {"id": booking["id"]},
         {"$set": {"refund_email_last_resent_at": _now_iso(),
-                  "refund_email_last_resent_by": admin}},
+                  "refund_email_last_resent_by": admin,
+                  "refund_email_last_resent_reason": reason}},
     )
-    return {"ok": True, "payment_id": payment_id, "report": report, "amount": last.get("amount")}
+    return {"ok": True, "payment_id": payment_id, "report": report,
+            "amount": last.get("amount"), "reason": reason}
 
 
 # ─── Bulk blackout for maintenance / hurricane / insurance days ───────

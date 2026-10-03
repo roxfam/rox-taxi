@@ -228,6 +228,15 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ---
 
+### Feb 2026 — Partial refund reason · Reschedule weekend-surcharge quote · New-admin-device alert
+- **Partial refund reason** (`routes/admin.py refund_payment` + `resend_refund_email`): refund/resend endpoints now accept `{reason}` (≤240 chars). Reason is written to `payment_transactions.refund_reason`, pushed into each `refund_history[]` entry, and rendered as a gold-bordered call-out inside the guest's email receipt. Resend-refund-email also accepts an optional override reason so admins can clarify a prior send without re-issuing the refund.
+- **PaymentsPanel refund modal**: added textarea with 240-char counter + placeholder examples. Resend-email prompts for an optional note before firing.
+- **Guest-side reschedule price delta** (`server.py`): new `WEEKEND_SURCHARGE_USD=15` applied to taxi + tour bookings when the pickup lands on Sunday (Saturday remains the closed day). New `GET /api/bookings/{id}/reschedule-quote?new_pickup=ISO` returns `{old_total, new_total, delta, weekend_transition, message}` with no mutation — the Track-page dialog calls this live as the guest scrubs the date picker. `POST /guest-reschedule` applies the delta to `booking.total` and stamps the `reschedule_history[]` audit entry with `price_delta`, `weekend_transition`, `old_total`, `new_total`.
+- **Track-page RescheduleDialog**: new modal (not previously present) with datetime-local picker, live-debounced price-quote preview (amber "surcharge" callout / green "savings" callout / neutral "no change"), email verification field, and dynamic button copy ("Pay $15 & reschedule" / "Reschedule (-$15)" / "Confirm reschedule").
+- **New-admin-device alert** (`routes/auth.py _record_admin_session` + `notifications.notify_new_admin_device`): every admin login now compares the parsed device signature (Chrome on macOS, etc.) + city against the last 20 `admin_sessions` rows for that admin. First-ever login is suppressed; any subsequent login from an unseen device-and-city combo fires a priority owner SMS AND an email with device/IP/city/when and a direct link to the Sessions Monitor to revoke if it wasn't them.
+- **JWT uniqueness fix** (`routes/auth.py make_admin_token`): added `jti` (random nonce) claim so two logins in the same second produce different JWTs — critical for the sessions-monitor revoke flow, which hashes the whole JWT.
+- **Regression tests**: new `test_reschedule_quote.py` (6 tests: weekday↔Sunday deltas, zero-change weekday↔weekday, non-applicable rental, apply-delta-on-reschedule, wrong-email-blocked). Partial refund suite extended; all 30 pytest tests pass (27 + 1 skipped + 2 live-mode gated).
+
 ## Key Data
 - Admin login: `roxfam2509@gmail.com` / `admin123`
 - Owner SMS: +12424322587

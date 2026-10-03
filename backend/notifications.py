@@ -941,6 +941,7 @@ def notify_refund_issued(
     booking: dict, *, amount: float, provider: Optional[str] = None,
     refund_id: Optional[str] = None, ok: bool = True,
     error: Optional[str] = None, prefs: Optional[dict] = None,
+    reason: Optional[str] = None,
 ) -> dict:
     """Email the guest a refund receipt.
 
@@ -948,6 +949,10 @@ def notify_refund_issued(
     money is on its way (5–10 business days). When it didn't, we still
     email them with a `manual refund within 2 business days` wording so
     there's no silence while admin processes it by hand.
+
+    Optional `reason` surfaces on the receipt — admins can jot a short
+    note (e.g. "Weather cancel", "Rate adjustment") that lands verbatim
+    in both the audit trail and the guest's inbox.
     """
     prefs = prefs or {}
     email_enabled = prefs.get("notify_email_enabled", True) is not False
@@ -977,6 +982,15 @@ def notify_refund_issued(
         f'<div style="color:#64748B;font-size:13px;margin-top:4px;">Refund reference: <span style="font-family:\'JetBrains Mono\',monospace;">{refund_id}</span></div>'
         if refund_id else ""
     )
+    _reason = (reason or "").strip()
+    reason_html = (
+        f'<div style="margin-top:14px;padding:12px 14px;background:#F8FAFC;border-left:3px solid #D4A94A;border-radius:6px;">'
+        f'<div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Reason</div>'
+        f'<div style="color:#0B3B5C;font-size:14px;margin-top:3px;">{_reason}</div>'
+        f'</div>'
+        if _reason else ""
+    )
+    reason_text = f"\nReason: {_reason}\n" if _reason else ""
 
     subject = (
         f"Refund of {_fmt_money(amount)} sent for booking {bid}"
@@ -988,6 +1002,7 @@ def notify_refund_issued(
         f"We've " + ("issued" if ok else "scheduled") + f" a refund of {_fmt_money(amount)} for your Rox booking {bid}.\n"
         f"{eta_line}\n\n"
         + (f"Refund reference: {refund_id}\n\n" if refund_id else "")
+        + reason_text
         + (f"Service: {booking.get('item_name','booking')}\n"
            f"Original total: {_fmt_money(booking.get('total',0))}\n\n")
         + "Questions? WhatsApp +1 (242) 432-2587 or reply to this email.\n"
@@ -1008,6 +1023,7 @@ def notify_refund_issued(
         <div style="font-family:'JetBrains Mono',monospace;font-size:20px;color:#0B3B5C;margin-top:4px;">{bid}</div>
         <div style="color:#64748B;font-size:13px;margin-top:4px;">{booking.get('item_name','booking')}</div>
         {refund_id_html}
+        {reason_html}
         <hr style="border:none;border-top:1px solid #E2E8F0;margin:16px 0;">
         <div style="display:flex;justify-content:space-between;color:#64748B;font-size:13px;">
           <span>Original total</span><span>{_fmt_money(booking.get('total',0))}</span>
@@ -1027,6 +1043,68 @@ def notify_refund_issued(
     report["amount"] = amount
     if error:
         report["provider_error"] = error
+    return report
+
+
+def notify_new_admin_device(
+    *, to_email: Optional[str], sub: str, device: str, ip: str,
+    city: Optional[str], when_iso: str, revoke_url: str,
+) -> dict:
+    """Owner alert: a brand-new admin device just signed in.
+
+    Fired by `routes/auth.py` when the login's device signature doesn't
+    match any existing admin_sessions row for that admin (sub). Fans out
+    an owner SMS via `send_owner_sms` AND an email so the owner can tap
+    through to the Sessions Monitor and revoke if it wasn't them.
+    """
+    location = f"{city} · " if city else ""
+    sms_body = (
+        f"🔐 NEW ADMIN LOGIN: {device} ({location}IP {ip or 'unknown'}) "
+        f"signed into {sub}. If this wasn't you, open /admin and revoke the session."
+    )
+    report = {"kind": "new_admin_device",
+              "sms": {"sent": False, "provider": "none", "error": None},
+              "email": {"sent": False, "provider": "none", "error": None}}
+    try:
+        report["sms"].update(send_owner_sms(sms_body[:600], kind="security", force_priority=True))
+    except Exception as e:  # noqa: BLE001
+        report["sms"]["error"] = str(e)
+    if to_email:
+        html = f"""
+        <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;margin:0 auto;padding:28px;background:#FAF9F6;">
+          <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#DC2626;font-weight:800;">
+            New admin device
+          </div>
+          <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:24px;">
+            Someone just signed into admin on a new device.
+          </h1>
+          <p style="color:#64748B;font-size:14px;margin:14px 0 0;">
+            If this was you, you can safely ignore this email. If it wasn't,
+            open the Sessions Monitor and revoke the session immediately.
+          </p>
+          <div style="background:#fff;border:1px solid #E2E8F0;border-radius:14px;padding:18px;margin-top:16px;">
+            <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#64748B;font-weight:700;">Device</div>
+            <div style="color:#0B3B5C;font-size:16px;margin-top:3px;font-weight:600;">{device}</div>
+            <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#64748B;font-weight:700;margin-top:12px;">Location / IP</div>
+            <div style="color:#0B3B5C;font-size:14px;margin-top:3px;">{city or 'Unknown city'} — {ip or 'unknown'}</div>
+            <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#64748B;font-weight:700;margin-top:12px;">When</div>
+            <div style="color:#0B3B5C;font-size:14px;margin-top:3px;">{when_iso}</div>
+          </div>
+          <a href="{revoke_url}" style="display:inline-block;background:#DC2626;color:#fff;text-decoration:none;font-weight:700;padding:11px 20px;border-radius:999px;margin-top:16px;font-size:13px;">
+            Review signed-in devices →
+          </a>
+          <p style="color:#94a3b8;font-size:11px;margin-top:22px;">
+            Rox Taxi admin security · If you need help, reply to this email.
+          </p>
+        </div>
+        """
+        try:
+            report["email"].update(send_email(
+                to_email, "[Rox Admin] New device signed in", html,
+                sms_body, category="admin",
+            ))
+        except Exception as e:  # noqa: BLE001
+            report["email"]["error"] = str(e)
     return report
 
 

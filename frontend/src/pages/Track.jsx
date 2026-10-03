@@ -59,7 +59,6 @@ export default function Track() {
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
-
   const fetchBooking = async (id) => {
     if (!id) return;
     setLoading(true);
@@ -302,6 +301,176 @@ export default function Track() {
           </div>
         </section>
       )}
+
+      {booking && rescheduleOpen && (
+        <RescheduleDialog
+          booking={booking}
+          onClose={() => setRescheduleOpen(false)}
+          onDone={() => { setRescheduleOpen(false); fetchBooking(booking.id); }}
+        />
+      )}
+    </div>
+  );
+}
+
+
+function RescheduleDialog({ booking, onClose, onDone }) {
+  // Pre-fill with the current booking's pickup, truncated to the shape
+  // `datetime-local` wants (YYYY-MM-DDTHH:MM, no seconds / tz suffix).
+  const toLocalInput = (iso) => {
+    try {
+      const d = new Date(iso);
+      const tzOffsetMs = d.getTimezoneOffset() * 60_000;
+      return new Date(d.getTime() - tzOffsetMs).toISOString().slice(0, 16);
+    } catch { return ""; }
+  };
+  const [newPickup, setNewPickup] = useState(toLocalInput(booking.booking_date));
+  const [email, setEmail] = useState("");
+  const [quote, setQuote] = useState(null);
+  const [quoting, setQuoting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Live-quote the price impact as the guest scrubs the date. Debounced
+  // so a slow typist doesn't fire 10 requests per second.
+  useEffect(() => {
+    if (!newPickup) { setQuote(null); return; }
+    let alive = true;
+    setQuoting(true);
+    const handle = setTimeout(async () => {
+      try {
+        const iso = new Date(newPickup).toISOString();
+        const { data } = await api.get(
+          `/bookings/${booking.id}/reschedule-quote`,
+          { params: { new_pickup: iso } },
+        );
+        if (alive) setQuote(data);
+      } catch (e) {
+        if (alive) setQuote(null);
+      } finally {
+        if (alive) setQuoting(false);
+      }
+    }, 350);
+    return () => { alive = false; clearTimeout(handle); };
+  }, [newPickup, booking.id]);
+
+  const submit = async () => {
+    if (!email.trim()) {
+      toast.error("Please enter the email on your booking to confirm.");
+      return;
+    }
+    if (!newPickup) {
+      toast.error("Pick a new pickup date and time.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const iso = new Date(newPickup).toISOString();
+      const { data } = await api.post(
+        `/bookings/${booking.id}/guest-reschedule`,
+        { new_pickup: iso, email: email.trim() },
+      );
+      if (data.price_delta > 0) {
+        toast.success(`Rescheduled — your new total is ${money(data.new_total)}.`);
+      } else if (data.price_delta < 0) {
+        toast.success(`Rescheduled — ${money(Math.abs(data.price_delta))} refunded off your total.`);
+      } else {
+        toast.success("Rescheduled — a confirmation SMS is on the way.");
+      }
+      onDone();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Reschedule failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const deltaPositive = (quote?.delta || 0) > 0.001;
+  const deltaNegative = (quote?.delta || 0) < -0.001;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" data-testid="reschedule-dialog">
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-[10px] tracking-[0.24em] uppercase text-[#D4A94A] font-bold">Reschedule</div>
+            <h3 className="serif text-2xl text-[#0B3B5C] mt-1">Pick a new time</h3>
+            <div className="text-xs text-[#64748B] mt-1">Booking <span className="mono">{booking.id}</span></div>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-[#F1F5F9]" data-testid="reschedule-close">
+            <X className="w-4 h-4 text-[#64748B]" />
+          </button>
+        </div>
+
+        <label className="block text-xs font-bold text-[#0B3B5C] mt-5 mb-1">New pickup</label>
+        <input
+          type="datetime-local"
+          value={newPickup}
+          onChange={(e) => setNewPickup(e.target.value)}
+          className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3B5C]/20"
+          data-testid="reschedule-new-pickup"
+        />
+
+        {/* Live price delta surfaces the weekend-surcharge the moment the
+            picker crosses weekday→Sunday (or vice versa). */}
+        {quote && (
+          <div
+            className={`mt-3 rounded-lg border p-3 text-sm ${
+              deltaPositive ? "bg-amber-50 border-amber-200 text-amber-900"
+              : deltaNegative ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+              : "bg-[#F8FAFC] border-[#E2E8F0] text-[#64748B]"
+            }`}
+            data-testid="reschedule-quote"
+          >
+            <div className="font-semibold" data-testid="reschedule-quote-message">{quote.message}</div>
+            {(deltaPositive || deltaNegative) && (
+              <div className="flex items-center justify-between mt-1.5 text-xs">
+                <span>Current {money(quote.old_total)}</span>
+                <span className="mono font-bold">
+                  → {money(quote.new_total)}
+                  <span className="ml-1 opacity-80">({deltaPositive ? "+" : ""}{money(quote.delta)})</span>
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+        {quoting && !quote && (
+          <div className="mt-3 text-xs text-[#64748B]">Checking price…</div>
+        )}
+
+        <label className="block text-xs font-bold text-[#0B3B5C] mt-4 mb-1">Email on your booking</label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3B5C]/20"
+          data-testid="reschedule-email"
+        />
+
+        <div className="flex gap-2 mt-5">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-full border border-[#E2E8F0] py-2.5 text-sm font-semibold text-[#0B3B5C] hover:bg-[#F1F5F9]"
+            data-testid="reschedule-cancel"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={submitting || !newPickup || !email}
+            className="flex-1 rounded-full bg-[#0B3B5C] text-white py-2.5 text-sm font-bold hover:bg-[#132a4a] disabled:opacity-50"
+            data-testid="reschedule-submit"
+          >
+            {submitting ? "Rescheduling…" : (
+              deltaPositive ? `Pay ${money(quote.delta)} & reschedule`
+              : deltaNegative ? `Reschedule (-${money(Math.abs(quote.delta))})`
+              : "Confirm reschedule"
+            )}
+          </button>
+        </div>
+        <p className="text-[11px] text-[#64748B] mt-3 text-center">
+          Reschedules fire an SMS to both you and dispatch. Up to 2 hr before pickup.
+        </p>
+      </div>
     </div>
   );
 }

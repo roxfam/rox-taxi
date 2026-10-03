@@ -232,6 +232,24 @@ CANCELLATION_APPLIES_TO = {"taxi", "tour", "excursion"}  # rentals handled separ
 CLOSED_WEEKDAYS = {5}
 CLOSED_APPLIES_TO = {"taxi", "rental"}
 
+# ─── Weekend pricing ─────────────────────────────────────────────────
+# Sunday pickups get a flat surcharge on top of the base fare because
+# weekend dispatch availability is limited and Saturday is closed. Only
+# applies to taxi + tour (not rentals, which are priced per-day already).
+# Used by the guest-reschedule quote so a date swap from weekday → Sunday
+# surfaces the delta BEFORE the guest confirms the new pickup.
+WEEKEND_SURCHARGE_USD = 15.0
+WEEKEND_SURCHARGE_APPLIES_TO = {"taxi", "tour"}
+
+
+def _is_weekend_pickup(dt: datetime) -> bool:
+    """Sunday only. Saturday is closed (see CLOSED_WEEKDAYS) so it's not a
+    bookable day in the first place — we don't need to charge for it."""
+    try:
+        return dt.weekday() == 6  # Sunday
+    except Exception:  # noqa: BLE001
+        return False
+
 
 def _parse_booking_date(s: str) -> datetime:
     """Best-effort ISO parse of 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:MM' etc."""
@@ -3037,6 +3055,79 @@ class GuestRescheduleRequest(BaseModel):
     new_return_time: Optional[str] = None        # HH:MM in 24h clock
 
 
+@api_router.get("/bookings/{booking_id}/reschedule-quote")
+async def reschedule_quote(booking_id: str, new_pickup: str, email: Optional[str] = None):
+    """Preview the price impact of moving `booking_id` to `new_pickup`.
+
+    Returns the old pickup, new pickup, weekend surcharge delta, and a
+    friendly `message` string the Track-page RescheduleDialog can render
+    live as the guest scrubs the date picker. Does NOT mutate anything.
+
+    The surcharge logic matches `guest_reschedule`: weekday → Sunday adds
+    WEEKEND_SURCHARGE_USD; Sunday → weekday removes it. Any other
+    transition is a $0 delta.
+    """
+    doc = await db.bookings.find_one({"id": booking_id.upper()})
+    if not doc:
+        raise HTTPException(404, "Booking not found")
+    if email:
+        if (doc.get("customer_email") or "").strip().lower() != email.strip().lower():
+            raise HTTPException(403, "Email on file doesn't match this booking")
+
+    try:
+        new_dt = datetime.fromisoformat(new_pickup.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(400, "new_pickup must be an ISO-8601 datetime")
+    if new_dt.tzinfo is None:
+        new_dt = new_dt.replace(tzinfo=timezone.utc)
+
+    try:
+        old_dt = _parse_booking_date(doc["booking_date"])
+        if old_dt.tzinfo is None:
+            old_dt = old_dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        old_dt = None
+
+    svc_type = (doc.get("service_type") or "").lower()
+    applies = svc_type in WEEKEND_SURCHARGE_APPLIES_TO
+    old_weekend = bool(old_dt and _is_weekend_pickup(old_dt)) if applies else False
+    new_weekend = bool(_is_weekend_pickup(new_dt)) if applies else False
+
+    delta = 0.0
+    if applies:
+        if new_weekend and not old_weekend:
+            delta = WEEKEND_SURCHARGE_USD
+        elif old_weekend and not new_weekend:
+            delta = -WEEKEND_SURCHARGE_USD
+
+    old_total = float(doc.get("total") or 0.0)
+    new_total = round(max(0.0, old_total + delta), 2)
+    if delta > 0:
+        msg = (f"Heads up — Sunday pickups carry a ${WEEKEND_SURCHARGE_USD:.0f} "
+               f"weekend surcharge. Your new total will be ${new_total:.2f}.")
+    elif delta < 0:
+        msg = (f"Nice — moving off a Sunday removes the ${WEEKEND_SURCHARGE_USD:.0f} "
+               f"weekend surcharge. Your new total will be ${new_total:.2f}.")
+    elif applies and (old_weekend or new_weekend):
+        msg = "Weekend pickup — no price change (already included)."
+    else:
+        msg = "No price change for this date."
+
+    return {
+        "booking_id": doc["id"],
+        "old_pickup": doc.get("booking_date"),
+        "new_pickup": new_dt.isoformat(),
+        "old_total": round(old_total, 2),
+        "new_total": new_total,
+        "delta": round(delta, 2),
+        "weekend_surcharge_usd": WEEKEND_SURCHARGE_USD,
+        "old_weekend": old_weekend,
+        "new_weekend": new_weekend,
+        "applies": applies,
+        "message": msg,
+    }
+
+
 @api_router.post("/bookings/{booking_id}/guest-reschedule")
 async def guest_reschedule(booking_id: str, req: GuestRescheduleRequest):
     """Lets a guest shift their own pickup from the Track page — no email
@@ -3078,10 +3169,33 @@ async def guest_reschedule(booking_id: str, req: GuestRescheduleRequest):
             pass
 
     old_pickup = doc.get("booking_date", "")
+    # Compute weekend-surcharge delta BEFORE we mutate so the audit entry
+    # captures exactly what the guest saw in the quote step.
+    svc_type = (doc.get("service_type") or "").lower()
+    applies_wk = svc_type in WEEKEND_SURCHARGE_APPLIES_TO
+    try:
+        _old_dt = _parse_booking_date(old_pickup) if old_pickup else None
+        if _old_dt and _old_dt.tzinfo is None:
+            _old_dt = _old_dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        _old_dt = None
+    old_wk = bool(_old_dt and _is_weekend_pickup(_old_dt)) if applies_wk else False
+    new_wk = bool(_is_weekend_pickup(new_dt)) if applies_wk else False
+    delta = 0.0
+    if applies_wk:
+        if new_wk and not old_wk:
+            delta = WEEKEND_SURCHARGE_USD
+        elif old_wk and not new_wk:
+            delta = -WEEKEND_SURCHARGE_USD
+    old_total = float(doc.get("total") or 0.0)
+    new_total = round(max(0.0, old_total + delta), 2)
+
     set_doc: Dict[str, Any] = {
         "booking_date": new_dt.isoformat(),
         "last_guest_reschedule_at": now.isoformat(),
     }
+    if abs(delta) > 0.001:
+        set_doc["total"] = new_total
     if req.new_return_date:
         set_doc["return_date"] = req.new_return_date.strip()[:16]
     if req.new_return_time:
@@ -3094,6 +3208,13 @@ async def guest_reschedule(booking_id: str, req: GuestRescheduleRequest):
         "to_pickup": new_dt.isoformat(),
         "return_date": set_doc.get("return_date"),
         "return_time": set_doc.get("return_time"),
+        "price_delta": round(delta, 2),
+        "old_total": round(old_total, 2),
+        "new_total": new_total,
+        "weekend_transition": (
+            "weekday_to_weekend" if (new_wk and not old_wk)
+            else ("weekend_to_weekday" if (old_wk and not new_wk) else "none")
+        ),
     }
     await db.bookings.update_one(
         {"id": doc["id"]},
@@ -3121,6 +3242,9 @@ async def guest_reschedule(booking_id: str, req: GuestRescheduleRequest):
         "new_pickup": new_dt.isoformat(),
         "return_date": set_doc.get("return_date"),
         "return_time": set_doc.get("return_time"),
+        "price_delta": round(delta, 2),
+        "old_total": round(old_total, 2),
+        "new_total": new_total,
         "sms": sms_report,
     }
 

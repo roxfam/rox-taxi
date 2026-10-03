@@ -115,7 +115,13 @@ class ResetPasswordRequest(BaseModel):
 
 
 def make_admin_token(email: str) -> str:
-    payload = {"sub": email, "role": "admin", "exp": _now_utc() + timedelta(days=7)}
+    # `jti` (JWT ID) guarantees two logins in the same second produce
+    # DIFFERENT tokens — critical for the sessions-monitor revoke flow,
+    # which hashes the whole JWT and expects every active session to
+    # have a unique hash.
+    payload = {"sub": email, "role": "admin",
+               "jti": secrets.token_urlsafe(12),
+               "exp": _now_utc() + timedelta(days=7)}
     return jwt.encode(payload, _jwt_secret, algorithm="HS256")
 
 
@@ -592,6 +598,9 @@ async def _record_admin_session(
 ) -> None:
     """Insert a row into `admin_sessions` so the Sessions Monitor UI can
     list "Signed-in devices" and let the owner revoke individual sessions.
+    Also fires a security alert the FIRST time a given admin signs in from
+    a brand-new device signature (new browser+OS, OR same device from a
+    new city).
     """
     if _db is None:
         return
@@ -605,6 +614,41 @@ async def _record_admin_session(
             xff = request.headers.get("x-forwarded-for", "")
             ip = (xff.split(",")[0].strip() if xff
                   else (request.client.host if request.client else ""))[:64]
+        new_device_signature = _parse_ua(ua)
+        new_city = ""
+        try:
+            geo = await _geo_for_ip(ip)
+            new_city = (geo.get("city") or "").strip()
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Compare against prior admin sessions for this `sub`. If no row
+        # matches BOTH the device signature AND the city, this is a brand-
+        # new device from the admin's PoV and we fire a security alert.
+        is_first_ever = False
+        is_new_device = False
+        try:
+            prior_count = await _db.admin_sessions.count_documents({"sub": email})
+            is_first_ever = (prior_count == 0)
+            # Scan the few most-recent sessions and compare parsed device
+            # signatures directly — more accurate than a single Mongo
+            # equality check against raw UA strings.
+            seen_signatures = set()
+            async for s in _db.admin_sessions.find({"sub": email}).limit(20):
+                sig = _parse_ua(s.get("last_ua") or s.get("ua") or "")
+                city = ""
+                try:
+                    g = await _geo_for_ip(s.get("last_ip") or s.get("ip") or "")
+                    city = (g.get("city") or "").strip()
+                except Exception:  # noqa: BLE001
+                    pass
+                seen_signatures.add((sig, city.lower()))
+            is_new_device = (not is_first_ever) and (
+                (new_device_signature, new_city.lower()) not in seen_signatures
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
         await _db.admin_sessions.update_one(
             {"token_hash": token_hash},
             {"$set": {
@@ -617,9 +661,32 @@ async def _record_admin_session(
                 "ip": ip,
                 "last_ua": ua,
                 "last_ip": ip,
+                "device_signature": new_device_signature,
+                "city": new_city,
             }},
             upsert=True,
         )
+
+        # Owner alert on brand-new device — never block login, always
+        # fire-and-forget. First-ever admin session is suppressed (we
+        # don't want to spam the admin about their own setup).
+        if is_new_device:
+            try:
+                import asyncio as _aio
+                from notifications import notify_new_admin_device
+                site_url = _site_base_url()
+                _aio.create_task(_aio.to_thread(
+                    notify_new_admin_device,
+                    to_email=email,
+                    sub=email,
+                    device=new_device_signature,
+                    ip=ip,
+                    city=new_city,
+                    when_iso=now.isoformat(),
+                    revoke_url=f"{site_url}/admin#sessions",
+                ))
+            except Exception:  # noqa: BLE001
+                pass
     except Exception:  # noqa: BLE001
         pass
 

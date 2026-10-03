@@ -56,7 +56,12 @@ def test_kill_switch_bearer_replay():
 
 
 def _create_booking():
-    future = (datetime.now(timezone.utc) + timedelta(days=14)).replace(microsecond=0)
+    # Shift forward until we land on a non-Saturday (Saturday pickups are
+    # blocked by the server; test fixture must dodge the closed day).
+    base = datetime.now(timezone.utc) + timedelta(days=14)
+    while base.weekday() == 5:  # Saturday
+        base += timedelta(days=1)
+    future = base.replace(microsecond=0)
     body = {
         "service_type": "taxi", "item_id": "airport-nassau",
         "item_name": "LPIA → Downtown", "price": 40,

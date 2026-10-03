@@ -62,17 +62,19 @@ export default function PaymentsPanel() {
   };
 
   const openRefund = (r) => {
-    // Remaining = full amount captured minus any refunds already recorded
-    // on this transaction. Default the input to the full remaining so a
-    // single click behaves exactly like the old full-refund button.
     const already = Number(r.refund_amount || 0);
     const remaining = Math.max(0, Number(r.amount || 0) - already);
-    setRefundModal({ row: r, amount: remaining.toFixed(2), remaining, busy: false });
+    setRefundModal({ row: r, amount: remaining.toFixed(2), remaining, reason: "", busy: false });
+  };
+
+  const refund = async (paymentId, { amount, reason }) => {
+    await api.post(`/admin/payments/${encodeURIComponent(paymentId)}/refund`, { amount, reason });
   };
 
   const confirmRefund = async () => {
     if (!refundModal) return;
     const amt = Number(refundModal.amount);
+    const reason = (refundModal.reason || "").trim();
     if (!Number.isFinite(amt) || amt <= 0) {
       toast.error("Enter a refund amount greater than $0.");
       return;
@@ -85,7 +87,7 @@ export default function PaymentsPanel() {
     try {
       const { data: res } = await api.post(
         `/admin/payments/${encodeURIComponent(refundModal.row.id)}/refund`,
-        { amount: amt },
+        { amount: amt, reason },
       );
       if (res?.refund?.refunded === false) {
         toast.warning("Provider could not auto-refund — guest emailed with manual follow-up ETA.");
@@ -101,9 +103,14 @@ export default function PaymentsPanel() {
   };
 
   const resendRefundEmail = async (r) => {
+    const extra = window.prompt("Add a short note for this re-send (optional, leave blank to keep the original reason):", "");
+    if (extra === null) return; // user cancelled
     setResending((p) => ({ ...p, [r.id]: true }));
     try {
-      const { data: res } = await api.post(`/admin/payments/${encodeURIComponent(r.id)}/resend-refund-email`);
+      const { data: res } = await api.post(
+        `/admin/payments/${encodeURIComponent(r.id)}/resend-refund-email`,
+        extra ? { reason: extra } : {},
+      );
       const sent = res?.report?.email?.sent;
       toast[sent ? "success" : "warning"](sent
         ? `Refund email re-sent to ${r.customer_email || "guest"}`
@@ -312,6 +319,20 @@ export default function PaymentsPanel() {
                 </button>
               ))}
             </div>
+
+            <label className="block text-xs font-bold text-[#0B3B5C] mt-4 mb-1">
+              Reason <span className="font-normal text-[#64748B]">(optional — shown on guest receipt)</span>
+            </label>
+            <textarea
+              rows={2}
+              maxLength={240}
+              value={refundModal.reason || ""}
+              onChange={(e) => setRefundModal((m) => ({ ...m, reason: e.target.value }))}
+              placeholder="e.g. Weather cancellation · duplicate charge · goodwill adjustment"
+              className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#0B3B5C]/20"
+              data-testid="refund-reason-input"
+            />
+            <div className="text-[10px] text-[#64748B] text-right mt-0.5">{(refundModal.reason || "").length}/240</div>
 
             <div className="flex gap-2 mt-5">
               <button
