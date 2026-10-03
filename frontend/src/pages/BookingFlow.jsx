@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle, HandCoins } from "lucide-react";
+import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle, HandCoins, Calendar } from "lucide-react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { api, money, BACKEND_URL } from "../lib/api";
 import { DateTimePicker } from "../components/DateTimePicker";
@@ -10,6 +10,47 @@ import { trackLead, trackPurchase, trackInitiateCheckout } from "../lib/fbpixel"
 // Rental 2-day minimum — module-scoped so linters see it inside submit()
 // without stale-scope false-positives.
 const RENTAL_MIN_DAYS = 2;
+
+
+// Public weekend-surcharge banner — fetches the live admin config and
+// surfaces the "+$X Sunday" note the moment a guest selects a Sunday
+// pickup. Silent for non-applicable services or when the admin has
+// toggled the surcharge off. Cached in-memory so repeated opens of the
+// booking modal don't fire the request every time.
+let _ws_cache = null;
+async function _loadWsConfig() {
+  if (_ws_cache) return _ws_cache;
+  try {
+    const { data } = await api.get("/public/weekend-surcharge");
+    _ws_cache = data;
+    return data;
+  } catch {
+    return { enabled: false, amount_usd: 0, service_types: [] };
+  }
+}
+
+function WeekendSurchargePreview({ bookingDate, serviceType }) {
+  const [cfg, setCfg] = useState(null);
+  useEffect(() => { _loadWsConfig().then(setCfg); }, []);
+  if (!cfg || !cfg.enabled || !bookingDate) return null;
+  const services = (cfg.service_types || []).map((s) => s.toLowerCase());
+  if (!services.includes((serviceType || "").toLowerCase())) return null;
+  let isSunday = false;
+  try { isSunday = new Date(bookingDate).getDay() === 0; } catch { return null; }
+  if (!isSunday) return null;
+  return (
+    <div
+      className="mt-2 flex items-start gap-2 rounded-lg border border-[#D4A94A]/40 bg-[#FBF7EF] px-3 py-2"
+      data-testid="weekend-surcharge-preview"
+    >
+      <Calendar className="w-4 h-4 text-[#D4A94A] shrink-0 mt-0.5" />
+      <div className="text-xs text-[#0B3B5C] leading-snug">
+        <span className="font-bold">Sunday pickup · +${Number(cfg.amount_usd).toFixed(0)} surcharge</span>
+        <span className="text-[#64748B]"> — weekend dispatch availability is limited. Already included in the total shown.</span>
+      </div>
+    </div>
+  );
+}
 
 function isClosedDate(dateStr, days = 1) {
   if (!dateStr) return false;
@@ -477,6 +518,10 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     includeTime={serviceType !== "rental"}
                     testid="booking-date"
                     placeholder={serviceType === "rental" ? "Select pickup date" : "Select date & time"}
+                  />
+                  <WeekendSurchargePreview
+                    bookingDate={form.booking_date}
+                    serviceType={serviceType}
                   />
                 </div>
                 <div className="sm:col-span-2">

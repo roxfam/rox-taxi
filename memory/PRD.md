@@ -244,6 +244,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - **Weekend surcharge toggle** (`WEEKEND_SURCHARGE_USD` → `site_config.weekend_surcharge`): new `_weekend_surcharge_config()` reader + `GET/PUT /admin/weekend-surcharge` endpoints. Admin card has on/off toggle, USD amount input (0–500), and per-service-type pills (taxi/tour/excursion/rental). Changes land live for the next `GET /reschedule-quote` and `POST /guest-reschedule` call without a deploy.
 - **Regression tests**: all 30 existing tests still green after the refactor (`test_reschedule_quote.py`, `test_partial_refund_and_resend.py`, `test_admin_sessions_monitor.py`, `test_live_payment_smoke.py`, `test_admin_cookie_auth.py`, `test_kill_switch_and_rebook.py`).
 
+### Feb 2026 — Trusted device nicknames · Public weekend-surcharge preview · Session geolocation
+- **Trusted device nicknames** (`PATCH /admin/trusted-devices/{id}`): new endpoint renames a trusted device without an untrust+re-trust round-trip. UI: the trusted-device chip label is now a tappable button that opens a prompt pre-filled with the current label (max 60 chars). 404 on unknown id; same `sub` scope guard as the existing CRUD.
+- **Public weekend-surcharge preview**: new `GET /api/public/weekend-surcharge` (no auth) returns `{enabled, amount_usd, service_types}` for the booking modal. `WeekendSurchargePreview` component in `BookingFlow.jsx` watches the pickup date; the moment it lands on a Sunday for an applicable service, a gold-bordered "+$15 Sunday surcharge" callout slides in under the date picker. Silent on non-Sunday / non-applicable services / when admin toggles the surcharge off. Config is cached in a module-level variable so repeated modal opens don't re-fetch.
+- **Session geolocation**: `GET /admin/sessions` now resolves the stored IP through the existing `visitor_geo_cache` and surfaces `{location, city, country, ip}` fields. AdminSessionsCard renders "Nassau, Bahamas" (or similar) as the primary location line with the raw IP demoted to a mono sub-line underneath. Falls back cleanly to the IP when no geo entry exists yet.
+
 ## Key Data
 - Admin login: `roxfam2509@gmail.com` / `admin123`
 - Owner SMS: +12424322587

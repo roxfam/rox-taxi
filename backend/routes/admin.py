@@ -3731,18 +3731,37 @@ async def list_admin_sessions(
         if th in revoked:
             continue
         exp = s.get("expires_at")
-        # Mongo may hand us back a naive datetime depending on the driver
-        # settings — normalise to UTC-aware before comparing.
         if isinstance(exp, datetime):
             exp_aware = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
             if exp_aware < now:
                 continue
+        # Resolve a human-readable location from the cached IP geo. We
+        # prefer the city we stamped at insert, then fall back to a live
+        # cache lookup so sessions created before this column existed
+        # still get a label.
+        location = (s.get("city") or "").strip()
+        country = ""
+        ip = s.get("last_ip") or s.get("ip") or ""
+        try:
+            geo_doc = await _db.visitor_geo_cache.find_one({"_id": ip}) if ip else None
+            geo = (geo_doc or {}).get("geo") or {}
+            if not location:
+                location = (geo.get("city") or "").strip()
+            country = (geo.get("country") or "").strip()
+        except Exception:  # noqa: BLE001
+            pass
+        label_parts = [p for p in [location, country] if p]
+        location_label = ", ".join(label_parts) if label_parts else (ip or "Unknown")
         out.append({
             "id": (th or "")[:16],
             "token_hash_prefix": (th or "")[:16],
             "sub": s.get("sub"),
             "device": _admin_parse_ua(s.get("last_ua") or s.get("ua") or ""),
-            "ip": s.get("last_ip") or s.get("ip") or "",
+            "ip": ip,
+            "location": location_label,
+            "city": location,
+            "country": country,
+            "trusted": bool(s.get("trusted")),
             "issued_at": s["issued_at"].isoformat() if isinstance(s.get("issued_at"), datetime) else s.get("issued_at"),
             "last_seen_at": s["last_seen_at"].isoformat() if isinstance(s.get("last_seen_at"), datetime) else s.get("last_seen_at"),
             "expires_at": exp.isoformat() if isinstance(exp, datetime) else exp,
@@ -3870,6 +3889,52 @@ async def untrust_device(
         {"$set": {"trusted": False}},
     )
     return {"ok": True}
+
+
+class RenameDeviceRequest(BaseModel):
+    label: str = Field("", max_length=60)
+
+
+@router.patch("/admin/trusted-devices/{device_id}")
+async def rename_trusted_device(
+    device_id: str,
+    req: RenameDeviceRequest,
+    admin: str = Depends(_require_admin_placeholder),
+):
+    """Change a trusted device's friendly label (e.g. "Office MacBook")
+    without having to untrust+re-trust it."""
+    from bson import ObjectId
+    try:
+        _id = ObjectId(device_id)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(400, "Invalid device id")
+    label = (req.label or "").strip()[:60]
+    result = await _db.admin_trusted_devices.update_one(
+        {"_id": _id, "sub": admin},
+        {"$set": {"label": label}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Trusted device not found")
+    doc = await _db.admin_trusted_devices.find_one({"_id": _id})
+    return {
+        "ok": True,
+        "id": device_id,
+        "label": doc.get("label", "") if doc else label,
+    }
+
+
+# ─── Public weekend-surcharge config (no auth) ───────────────────────
+# Lets the public booking modal preview the Sunday-pickup surcharge
+# BEFORE the guest commits — not just on reschedule.
+@router.get("/public/weekend-surcharge")
+async def public_weekend_surcharge():
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    ws = cfg.get("weekend_surcharge") or {}
+    return {
+        "enabled": bool(ws.get("enabled", True)),
+        "amount_usd": float(ws.get("amount_usd", 15.0) or 0.0),
+        "service_types": ws.get("service_types") or ["taxi", "tour"],
+    }
 
 
 # ─── Stripe live-mode diagnostic ─────────────────────────────────────

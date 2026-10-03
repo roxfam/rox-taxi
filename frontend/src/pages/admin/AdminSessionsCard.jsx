@@ -105,6 +105,21 @@ export default function AdminSessionsCard() {
     }
   };
 
+  const renameTrusted = async (td) => {
+    const next = window.prompt(
+      "Rename this trusted device (max 60 chars):",
+      td.label || td.device_signature || "",
+    );
+    if (next === null) return;
+    try {
+      await api.patch(`/admin/trusted-devices/${td.id}`, { label: next.slice(0, 60) });
+      toast.success("Device renamed");
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Rename failed");
+    }
+  };
+
   // Hide the whole card when there's only the current session AND no
   // trusted devices to manage.
   if (!loading && otherCount === 0 && trusted.length === 0) return null;
@@ -157,8 +172,14 @@ export default function AdminSessionsCard() {
                 </div>
                 <div className="text-[11px] text-[#64748B] mt-0.5 mono">{s.sub}</div>
               </td>
-              <td className="px-5 py-3 text-[#64748B]">
-                <div className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /><span>{s.ip || "—"}</span></div>
+              <td className="px-5 py-3 text-[#64748B]" data-testid={`admin-session-location-${s.id}`}>
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>{s.location || s.ip || "—"}</span>
+                </div>
+                {s.ip && s.location && s.location !== s.ip && (
+                  <div className="text-[10px] text-[#94A3B8] mt-0.5 mono ml-5">{s.ip}</div>
+                )}
               </td>
               <td className="px-5 py-3 text-[#64748B]">{timeAgo(s.issued_at)}</td>
               <td className="px-5 py-3 text-[#64748B]">
@@ -213,7 +234,14 @@ export default function AdminSessionsCard() {
                 data-testid={`admin-trusted-device-${td.id}`}
               >
                 <Check className="w-3 h-3 text-emerald-600" />
-                <span className="text-xs text-[#0B3B5C] font-semibold">{td.label || td.device_signature}</span>
+                <button
+                  onClick={() => renameTrusted(td)}
+                  className="text-xs text-[#0B3B5C] font-semibold hover:underline"
+                  title="Rename device"
+                  data-testid={`admin-trusted-rename-${td.id}`}
+                >
+                  {td.label || td.device_signature}
+                </button>
                 {td.city && <span className="text-[10px] text-[#64748B]">· {td.city}</span>}
                 <button
                   onClick={() => untrust(td)}
