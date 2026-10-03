@@ -233,6 +233,14 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Owner SMS: +12424322587
 - Cron secret: `WEBHOOK_CRON_SECRET`
 
+### Feb 2026 — Stripe webhook `/api/webhooks/stripe` with official SDK
+- **New endpoint** `POST /api/webhooks/stripe` in `routes/payments.py` using the official `stripe` Python SDK (v14.4.1). Reads the RAW request body via `await request.body()` BEFORE any JSON middleware so `stripe.Webhook.construct_event` can verify the `Stripe-Signature` header against `STRIPE_WEBHOOK_SECRET`.
+- **Fast 200**: provisioning is deferred to `FastAPI BackgroundTasks` so Stripe's 30 s timeout never hits a slow DB write. Response is `{"received": true}` the moment signature + idempotency check pass.
+- **Idempotency**: new `stripe_webhook_events` Mongo collection with unique index on `event_id`. Duplicate event id → cheap `{"received": true, "idempotent_replay": true}` 200. Matches Stripe's at-least-once delivery guarantee.
+- **Handled events**: `checkout.session.completed` → marks booking paid + provisions downstream notifications. Also `payment_intent.succeeded` (for direct card-on-file charges) and `charge.refunded` (mirrors Stripe-dashboard refunds back onto our ledger).
+- **Env guard**: 503 if `STRIPE_WEBHOOK_SECRET` is missing (safer than 500); 400 on bad payload / signature mismatch so Stripe retries only on genuine transient errors.
+- The old `/api/webhook/stripe` endpoint (emergentintegrations-based) is kept intact for backwards-compat; the new `/webhooks/stripe` path is the recommended one going forward.
+
 ### Feb 2026 — Refund fix + guest refund email
 - **Bug fix**: `POST /admin/payments/{id}/refund` was crashing with `TypeError` because `_attempt_deposit_refund` requires `(booking, amount, reason)` but the admin endpoint was only passing `(booking, reason=...)`. Guest got "Refund failed" every click. Fixed by computing `refund_amount = total − already_refunded` and threading it through.
 - **Guest refund email** (`notifications.notify_refund_issued`): new helper fires an email receipt the moment admin taps Refund — green "Refund sent" badge + 5-10 bday ETA on success, "Manual refund in 2 bday" wording when the provider API returns an error so there's no silence.

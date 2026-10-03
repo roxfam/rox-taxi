@@ -1538,6 +1538,10 @@ async def seed_db():
         # underlying JWT would've died anyway (7-day admin session).
         await db.admin_revoked_tokens.create_index("token_hash", unique=True)
         await db.admin_revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
+        # Stripe webhook dedupe — Stripe retries deliver the same event id;
+        # a unique index flips the retry into a cheap duplicate-key noop.
+        await db.stripe_webhook_events.create_index("event_id", unique=True)
+        await db.stripe_webhook_events.create_index("received_at")
     except Exception as e:  # noqa: BLE001
         logging.warning("auth index create warn: %s", e)
     # Idempotent seed. `price` + `price_history` are ONLY set on first insert so

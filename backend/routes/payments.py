@@ -5,11 +5,13 @@ Stripe key and notification callback, then `include_router(router)`.
 """
 from typing import Optional, Dict, Any
 import logging
+import os
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from pydantic import BaseModel
 
 import httpx
+import stripe  # official SDK — used for webhook signature verification
 
 from fastapi import Depends, Header
 from typing import List
@@ -184,6 +186,129 @@ async def stripe_webhook(request: Request):
         booking_id = (result.metadata or {}).get("booking_id")
         await _mark_paid(result.session_id, booking_id)
     return {"status": "ok"}
+
+
+# ─── Official Stripe SDK webhook — recommended endpoint ───────────────
+# Replaces the emergentintegrations handler above for new installs. Uses
+# `stripe.Webhook.construct_event` against the RAW request body (the only
+# way to validate `Stripe-Signature`) and returns 200 immediately — all
+# provisioning work is pushed into `BackgroundTasks` so Stripe's 30 s
+# timeout can never fail retries on a slow DB.
+#
+# Idempotency: we `insert_one` the event id into `stripe_webhook_events`
+# first; a duplicate key means we've already handled it, so we early-200.
+# This matches Stripe's "at-least-once" delivery guarantee.
+async def _process_stripe_event(event: dict) -> None:
+    """Background task: provision whatever the event implies.
+
+    Keep this handler SHORT and SAFE — any raised exception is logged and
+    swallowed so Stripe doesn't retry forever on a bad booking state.
+    """
+    etype = event.get("type", "")
+    data = (event.get("data") or {}).get("object") or {}
+    event_id = event.get("id", "")
+    try:
+        if etype == "checkout.session.completed":
+            # Primary provisioning signal — subscription / booking / user.
+            session_id = data.get("id")
+            payment_status = (data.get("payment_status") or "").lower()
+            metadata = data.get("metadata") or {}
+            booking_id = metadata.get("booking_id")
+            if payment_status == "paid":
+                await _mark_paid(session_id, booking_id)
+        elif etype == "payment_intent.succeeded":
+            # Covers direct PaymentIntents (no Checkout — card-on-file charges).
+            pi_id = data.get("id")
+            booking_id = (data.get("metadata") or {}).get("booking_id")
+            if booking_id:
+                await _db.payment_transactions.update_one(
+                    {"booking_id": booking_id, "stripe_payment_intent": pi_id},
+                    {"$set": {"status": "paid", "payment_status": "paid",
+                              "updated_at": _now_iso()}},
+                )
+                await _db.bookings.update_one(
+                    {"id": booking_id},
+                    {"$set": {"payment_status": "paid", "updated_at": _now_iso()}},
+                )
+        elif etype == "charge.refunded":
+            # Mirror Stripe-side refunds (eg. refunds issued directly in
+            # the Stripe dashboard) back onto our booking + tx ledger.
+            charge = data
+            amt_refunded = float(charge.get("amount_refunded", 0) or 0) / 100.0
+            pi_id = charge.get("payment_intent")
+            if pi_id:
+                tx = await _db.payment_transactions.find_one({"stripe_payment_intent": pi_id})
+                if tx:
+                    await _db.payment_transactions.update_one(
+                        {"_id": tx["_id"]},
+                        {"$set": {"status": "refunded", "payment_status": "refunded",
+                                  "refund_amount": amt_refunded,
+                                  "updated_at": _now_iso()}},
+                    )
+                    await _db.bookings.update_one(
+                        {"id": tx["booking_id"]},
+                        {"$set": {"refunded_amount": amt_refunded,
+                                  "refunded_at": _now_iso(),
+                                  "payment_status": "refunded",
+                                  "updated_at": _now_iso()}},
+                    )
+        # Any other event type — just acked and recorded. Add branches as
+        # new provisioning rules come online.
+    except Exception as e:  # noqa: BLE001
+        logging.exception("stripe webhook handler failed for %s: %s", event_id, e)
+
+
+@router.post("/webhooks/stripe")
+async def stripe_webhook_v2(request: Request, background: BackgroundTasks):
+    """Official-SDK Stripe webhook.
+
+    - Reads the RAW request body via `await request.body()` BEFORE any
+      JSON middleware would consume it — mandatory for signature check.
+    - Verifies `Stripe-Signature` with the SDK's `construct_event` using
+      `STRIPE_WEBHOOK_SECRET` from env.
+    - Deduplicates on event id via Mongo unique index.
+    - Returns `{"received": true}` 200 immediately; provisioning runs in
+      a FastAPI BackgroundTask so Stripe's 30 s timeout is never hit.
+    """
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    if not webhook_secret:
+        logging.error("STRIPE_WEBHOOK_SECRET missing — refusing webhook")
+        raise HTTPException(503, "Webhook secret not configured")
+
+    # Raw bytes — DO NOT decode-and-re-encode; signature is over the exact bytes.
+    payload = await request.body()
+    sig_header = request.headers.get("Stripe-Signature") or request.headers.get("stripe-signature") or ""
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+    except ValueError as e:
+        # Malformed payload (not JSON) — Stripe treats non-2xx as retry.
+        logging.warning("stripe webhook bad payload: %s", e)
+        raise HTTPException(400, "Invalid payload") from e
+    except stripe.error.SignatureVerificationError as e:
+        # Signature didn't match — reject so a bad actor can't poison state.
+        logging.warning("stripe webhook signature mismatch: %s", e)
+        raise HTTPException(400, "Invalid signature") from e
+
+    # Idempotent record — a unique index on event_id makes replays no-ops.
+    try:
+        await _db.stripe_webhook_events.insert_one({
+            "event_id": event["id"],
+            "type": event.get("type"),
+            "received_at": _now_iso(),
+        })
+    except Exception as e:  # noqa: BLE001
+        # Duplicate key means Stripe retried a payload we've already acked.
+        if "duplicate key" in str(e).lower() or "E11000" in str(e):
+            return {"received": True, "idempotent_replay": True}
+        # Any other DB error — log but still fire the handler so we don't
+        # miss a provisioning signal because of a transient Mongo blip.
+        logging.warning("stripe webhook idempotency write failed: %s", e)
+
+    # Return 200 BEFORE doing provisioning work — Stripe only wants a fast
+    # ack; everything slow goes into the background task queue.
+    background.add_task(_process_stripe_event, event)
+    return {"received": True}
 
 
 # -- PayPal Checkout (Smart Buttons) -----------------------------------------
