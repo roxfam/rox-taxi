@@ -30,10 +30,6 @@ export default function GuestChat() {
   const [params] = useSearchParams();
   const token = params.get("t") || "";
   const typingTimerRef = useRef(0);
-  const dispatchIsTyping = () => {
-    const [t, _setT] = [dispatchTypingAt, null];
-    return t && (Date.now() - new Date(t).getTime()) < 5000;
-  };
   const [messages, setMessages] = useState([]);
   const [meta, setMeta] = useState(null);
   const [dispatchReadAt, setDispatchReadAt] = useState(null);
