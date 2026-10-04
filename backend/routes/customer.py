@@ -306,3 +306,103 @@ async def wallet_delete(pm_id: str, user: dict = _current_user()):
         {"$pull": {"payment_methods": {"id": pm_id}}},
     )
     return {"ok": True}
+
+
+# ─────────────────── Pay-with-Saved-Card (one-tap re-book) ─────────────
+# Off-session PaymentIntent flow for authenticated customers who already
+# have a Stripe PaymentMethod in their Trip Wallet. We default to charging
+# the booking's `balance_due` when present (deposit flow), falling back to
+# `total` for a brand-new unpaid booking.
+class PayWithWalletRequest(BaseModel):
+    payment_method_id: str
+
+
+@router.post("/my/bookings/{booking_id}/pay-with-wallet")
+async def pay_with_wallet(
+    booking_id: str, req: PayWithWalletRequest, user: dict = _current_user(),
+):
+    user_doc = await _db.users.find_one({"user_id": user["user_id"]}) or {}
+    customer_id = user_doc.get("stripe_customer_id")
+    if not customer_id:
+        raise HTTPException(400, "No saved Stripe profile yet. Add a card to your wallet first.")
+    saved = [pm for pm in (user_doc.get("payment_methods") or []) if pm.get("id") == req.payment_method_id]
+    if not saved:
+        raise HTTPException(404, "That card isn't in your wallet.")
+    pm_meta = saved[0]
+
+    booking = await _db.bookings.find_one({
+        "id": booking_id.upper(),
+        "customer_email": user_doc.get("email"),
+    })
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    if (booking.get("status") or "").lower() in {"cancelled", "refunded"}:
+        raise HTTPException(409, "This booking is no longer billable.")
+
+    balance_due = float(booking.get("balance_due") or 0.0)
+    total = float(booking.get("total") or 0.0)
+    # Balance-due wins (deposit flow); otherwise charge the full total.
+    amount = balance_due if balance_due > 0.0 else total
+    if amount < 0.50:
+        raise HTTPException(409, "Nothing to charge — booking is already paid.")
+    pay_mode = "balance" if balance_due > 0.0 else "full"
+
+    data = {
+        "amount": str(int(round(amount * 100))),
+        "currency": "usd",
+        "customer": customer_id,
+        "payment_method": req.payment_method_id,
+        "off_session": "true",
+        "confirm": "true",
+        "description": f"Rox Taxi · {booking_id.upper()} · {pay_mode}"[:999],
+        "metadata[booking_id]": booking_id.upper(),
+        "metadata[pay_mode]": pay_mode,
+        "metadata[source]": "trip_wallet",
+    }
+    try:
+        intent = await _stripe_post("/payment_intents", data)
+    except HTTPException as e:
+        # Stripe surfaces card-decline / authentication-required as 402 on
+        # the PI create response; we pass that through verbatim so the UI
+        # can prompt the guest to confirm/update the card.
+        raise HTTPException(e.status_code or 402, f"Card declined: {e.detail}") from e
+
+    status = (intent.get("status") or "").lower()
+    now = _now_iso()
+    await _db.payment_transactions.insert_one({
+        "session_id": intent["id"],
+        "stripe_payment_intent": intent["id"],
+        "provider": "stripe",
+        "booking_id": booking_id.upper(),
+        "amount": amount,
+        "pay_mode": pay_mode,
+        "status": "completed" if status == "succeeded" else "initiated",
+        "payment_status": "paid" if status == "succeeded" else "pending",
+        "payment_method_id": req.payment_method_id,
+        "created_at": now, "updated_at": now,
+    })
+
+    if status == "succeeded":
+        # Re-use the shared post-payment pipeline so the balance clears,
+        # paid-in-full receipt fires, and notifications stay in-sync with
+        # the hosted-checkout flow.
+        try:
+            from routes import payments as pay_mod  # noqa: PLC0415
+            await pay_mod._mark_paid(intent["id"], booking_id.upper())
+        except Exception:  # noqa: BLE001
+            # Best-effort — the webhook will reconcile on its own
+            pass
+        return {
+            "status": "paid",
+            "amount": amount,
+            "pay_mode": pay_mode,
+            "card": {"brand": pm_meta.get("brand"), "last4": pm_meta.get("last4")},
+        }
+    # requires_action / processing — surface it so UI can route to Stripe's
+    # 3DS confirmation page.
+    return {
+        "status": status or "pending",
+        "amount": amount,
+        "pay_mode": pay_mode,
+        "client_secret": intent.get("client_secret"),
+    }

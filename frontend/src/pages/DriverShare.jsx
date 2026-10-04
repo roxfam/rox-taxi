@@ -6,6 +6,7 @@ import {
   MapPin, Play, Pause, Signal, AlertTriangle, Check, BellRing,
   Navigation2, Flag, Ban, User, Phone, MessageCircle, Camera, X, Zap, HelpCircle,
 } from "lucide-react";
+import DriverChatPanel from "./DriverChatPanel";
 
 // Driver mobile console — /driver/:booking_id
 // Two responsibilities in one screen:
@@ -344,6 +345,12 @@ export default function DriverShare() {
             Tapping "I've arrived" auto-sends an SMS + email to the guest.
           </div>
         </div>
+      )}
+
+      {/* Photo handoff proof — camera capture on mobile, receipts for no-show
+          disputes and rental delivery-condition claims. */}
+      {booking && !isClosed && (
+        <DriverChatPanel />
       )}
 
       {/* Photo handoff proof — camera capture on mobile, receipts for no-show

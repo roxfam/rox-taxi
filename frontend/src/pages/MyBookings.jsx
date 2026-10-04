@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import ExtendRentalModal from "./ExtendRentalModal";
 import WalletCard from "./WalletCard";
 import TripWalletCard from "./TripWalletCard";
+import PayWithWalletButton from "./PayWithWalletButton";
 
 export default function MyBookings() {
   const { user, loading, logout } = useAuth();
@@ -415,9 +416,12 @@ export default function MyBookings() {
 
                 <div className="mt-4 pt-4 border-t border-[#F1F5F9] flex flex-wrap gap-2">
                   {showPay && (
-                    <Link to={`/pay/${b.id}`} data-testid={`mybookings-pay-${b.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white text-xs font-semibold px-3.5 py-2">
-                      <CreditCard className="w-3.5 h-3.5" /> Pay balance
-                    </Link>
+                    <>
+                      <PayWithWalletButton booking={b} onPaid={loadBookings} />
+                      <Link to={`/pay/${b.id}`} data-testid={`mybookings-pay-${b.id}`} className="inline-flex items-center gap-1.5 rounded-full border border-[#E86A3C] bg-white text-[#E86A3C] hover:bg-[#E86A3C] hover:text-white text-xs font-semibold px-3.5 py-2">
+                        <CreditCard className="w-3.5 h-3.5" /> New card
+                      </Link>
+                    </>
                   )}
                   <a href={`${BACKEND_URL}/api/bookings/${b.id}/receipt.pdf`} target="_blank" rel="noreferrer" data-testid={`mybookings-receipt-${b.id}`} className="inline-flex items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-white hover:border-[#0B3B5C] text-[#0B3B5C] text-xs font-semibold px-3.5 py-2">
                     <Download className="w-3.5 h-3.5" /> Download receipt

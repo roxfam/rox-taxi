@@ -1813,6 +1813,18 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
                 })
             except Exception as ex:  # noqa: BLE001
                 logger.warning("invoice attachment build err: %s", ex)
+        # Always attach the .ics on confirmation (deposit OR full-pay) so
+        # the pickup lands in the guest's calendar the day it's locked in.
+        try:
+            ics_bytes = _build_booking_ics(booking)
+            if ics_bytes:
+                attachments.append({
+                    "filename": f"Rox-{booking['id']}.ics",
+                    "content": ics_bytes,
+                    "mime_type": "text/calendar; charset=utf-8; method=PUBLISH",
+                })
+        except Exception as ex:  # noqa: BLE001
+            logger.warning("confirmed .ics attachment err: %s", ex)
         result = send_email(booking["customer_email"], subject, html, body_text,
                              category="confirmation", attachments=attachments or None)
         report["email"].update(result)

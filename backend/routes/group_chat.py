@@ -6,19 +6,20 @@ a HMAC-signed token emailed with the booking confirmation so no customer
 account is required. Admin access uses the shared `require_admin` dep.
 
 Collection: `group_chat_messages`
-    { id, booking_id, author, author_name, body, created_at }
+    { id, booking_id, author, author_name, body, image_url, created_at }
 
 Owner is pinged via SMS when the planner posts; the planner is emailed
-when admin posts.
+when admin posts. Drivers can read the thread 1h before pickup via a
+read-only endpoint scoped to the booking URL.
 """
 import hmac
 import hashlib
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
 from pydantic import BaseModel, Field
 
 
@@ -59,8 +60,9 @@ def _check_token(booking_id: str, token: str) -> None:
 
 
 class ChatMessageIn(BaseModel):
-    body: str = Field(..., min_length=1, max_length=2000)
+    body: str = Field("", max_length=2000)
     author_name: Optional[str] = None
+    image_url: Optional[str] = Field(None, max_length=500)
 
 
 async def _list_messages(booking_id: str) -> List[Dict[str, Any]]:
@@ -108,9 +110,12 @@ async def admin_chat_send(
         "booking_id": booking_id.upper(),
         "author": "dispatch",
         "author_name": msg.author_name or "Rox Dispatch",
-        "body": msg.body.strip(),
+        "body": (msg.body or "").strip(),
+        "image_url": msg.image_url,
         "created_at": _now_iso(),
     }
+    if not doc["body"] and not doc["image_url"]:
+        raise HTTPException(400, "Message cannot be empty.")
     await _db.group_chat_messages.insert_one(doc)
     # Email the planner when admin posts so they aren't blind to the
     # thread. Fire-and-forget — a Resend/Twilio miss shouldn't 500 the
@@ -161,9 +166,12 @@ async def guest_chat_send(booking_id: str, msg: ChatMessageIn, t: str = Query(..
         "booking_id": booking_id.upper(),
         "author": "guest",
         "author_name": msg.author_name or booking.get("customer_name") or "Guest",
-        "body": msg.body.strip(),
+        "body": (msg.body or "").strip(),
+        "image_url": msg.image_url,
         "created_at": _now_iso(),
     }
+    if not doc["body"] and not doc["image_url"]:
+        raise HTTPException(400, "Message cannot be empty.")
     await _db.group_chat_messages.insert_one(doc)
     # Owner SMS so dispatch sees the planner's message in real time.
     try:
@@ -176,3 +184,87 @@ async def guest_chat_send(booking_id: str, msg: ChatMessageIn, t: str = Query(..
     except Exception:  # noqa: BLE001
         pass
     return {"ok": True, "message": _clean(doc)}
+
+
+
+# ─── Image uploads (shared by admin + guest sides) ─────────────────────
+# Store in Emergent Object Storage; return a signed URL the chat UI can
+# render inline. Guest side requires the booking HMAC token so random
+# uploads can't flood our bucket.
+_MAX_IMG_BYTES = 5 * 1024 * 1024  # 5 MB — covers phone-size JPEGs comfortably
+_ALLOWED_IMG = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic"}
+
+
+async def _store_chat_image(booking_id: str, author: str, upload: UploadFile) -> str:
+    content_type = (upload.content_type or "").lower()
+    if content_type not in _ALLOWED_IMG:
+        raise HTTPException(400, "Only JPEG/PNG/WebP/GIF/HEIC images are allowed.")
+    data = await upload.read()
+    if not data or len(data) > _MAX_IMG_BYTES:
+        raise HTTPException(400, "Image must be between 1 byte and 5 MB.")
+    ext = (upload.filename.rsplit(".", 1)[-1] if "." in (upload.filename or "") else "jpg").lower()[:5]
+    name = f"chat/{booking_id}/{author}-{uuid.uuid4().hex[:10]}.{ext}"
+    try:
+        from storage import put_object  # noqa: PLC0415
+        ok = put_object(name, data, content_type)
+        if not ok:
+            raise RuntimeError("object storage unavailable")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Could not upload image: {e}") from e
+    return f"/api/uploads/{name}"
+
+
+@router.post("/admin/chat/{booking_id}/upload")
+async def admin_chat_upload(
+    booking_id: str, file: UploadFile = File(...), _: str = Depends(_admin_dep),
+):
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    url = await _store_chat_image(booking_id.upper(), "dispatch", file)
+    return {"image_url": url}
+
+
+@router.post("/chat/{booking_id}/upload")
+async def guest_chat_upload(
+    booking_id: str, t: str = Query(...), file: UploadFile = File(...),
+):
+    _check_token(booking_id.upper(), t)
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    url = await _store_chat_image(booking_id.upper(), "guest", file)
+    return {"image_url": url}
+
+
+# ─── Driver read-only view (1 h before pickup, no auth) ────────────────
+# The driver's capability-token is the booking_id in the URL — same model
+# as `/driver/{booking_id}`. We only expose the chat 60 min before the
+# scheduled pickup so idle historical chats never leak once a trip is in
+# flight. Driver cannot post — strictly read-only.
+@router.get("/driver/chat/{booking_id}")
+async def driver_chat_view(booking_id: str):
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    status = (booking.get("status") or "").lower()
+    in_progress = status in {"driver_assigned", "en_route", "arrived"}
+    try:
+        d = datetime.fromisoformat(str(booking.get("booking_date", "")).replace("Z", "+00:00"))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        delta = d - datetime.now(timezone.utc)
+        within_window = delta <= timedelta(hours=1) and delta >= timedelta(hours=-6)
+    except Exception:  # noqa: BLE001
+        within_window = False
+    if not (in_progress or within_window):
+        return {"booking_id": booking_id.upper(), "visible": False,
+                "reason": "Driver chat opens 60 min before pickup.", "messages": []}
+    messages = await _list_messages(booking_id.upper())
+    return {
+        "booking_id": booking_id.upper(),
+        "visible": True,
+        "customer_name": booking.get("customer_name"),
+        "item_name": booking.get("item_name"),
+        "messages": messages,
+    }
