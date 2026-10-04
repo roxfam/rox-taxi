@@ -68,6 +68,7 @@ _STATIC_URLS: List[dict] = [
     {"loc": "/travel-to-nassau", "priority": 0.85, "changefreq": "weekly"},
     {"loc": "/cruise-groups-nassau", "priority": 0.85, "changefreq": "weekly"},
     {"loc": "/groups", "priority": 0.85, "changefreq": "monthly"},
+    {"loc": "/groups/book", "priority": 0.9,  "changefreq": "weekly"},
     {"loc": "/wedding-builder", "priority": 0.85, "changefreq": "monthly"},
     {"loc": "/gallery", "priority": 0.75, "changefreq": "weekly"},
     {"loc": "/wall", "priority": 0.65, "changefreq": "weekly"},

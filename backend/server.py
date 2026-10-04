@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, Response, Cookie, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request, Response, Cookie, UploadFile, File, Form, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -3918,6 +3918,112 @@ async def resume_checkout_by_token(token: str, email: str):
     except Exception:  # noqa: BLE001
         pass
     return clean(doc)
+
+
+# ---------------- Deposit → Balance Capture Reminder -----------------
+# Group bookings pay a deposit upfront (balance_due > 0). 48 h before
+# the trip date, cron fires an email + SMS with a one-tap `/pay-balance`
+# link so admins don't chase payments by hand.
+# ---------------------------------------------------------------------
+
+
+def _make_balance_token(booking_id: str) -> str:
+    """HMAC token so the one-tap balance pay URL can't be guessed by
+    anyone with just the booking ID. 16 hex chars = ~64 bits of entropy."""
+    import hmac as _hmac  # noqa: PLC0415
+    secret = (
+        os.environ.get("BOOKING_LINK_SECRET")
+        or os.environ.get("WEBHOOK_CRON_SECRET")
+        or "rox-balance-fallback"
+    ).encode()
+    return _hmac.new(secret, f"balance:{booking_id}".encode(), _hashlib.sha256).hexdigest()[:16]
+
+
+@api_router.post("/bookings/{booking_id}/pay-balance")
+async def pay_balance(booking_id: str, t: str = Query(...)):
+    """Create a Stripe Checkout session for the booking's `balance_due`.
+
+    The caller MUST include the HMAC token `?t=…` issued in the reminder
+    email/SMS — a guest can't scrape booking IDs and pay random balances.
+    """
+    if t != _make_balance_token(booking_id):
+        raise HTTPException(403, "Invalid or expired balance link")
+    booking = await db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    balance = float(booking.get("balance_due") or 0.0)
+    if balance < 0.01:
+        raise HTTPException(409, "This booking has no balance remaining.")
+
+    try:
+        from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+        api_key = (os.environ.get("STRIPE_API_KEY") or "sk_test_emergent").strip()
+        base_url = os.environ.get("SITE_BASE_URL", "https://roxtaxi.com").rstrip("/")
+        checkout = StripeCheckout(api_key=api_key, webhook_url=f"{base_url}/api/webhooks/stripe")
+        session = await checkout.create_checkout_session(CheckoutSessionRequest(
+            amount=balance, currency="usd",
+            success_url=f"{base_url}/track?id={booking_id}&balance_paid=1",
+            cancel_url=f"{base_url}/track?id={booking_id}",
+            metadata={"booking_id": booking_id, "pay_mode": "balance"},
+        ))
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("balance checkout err")
+        raise HTTPException(502, f"Payment session could not be created: {e}") from e
+
+    now = now_iso()
+    await db.payment_transactions.insert_one({
+        "session_id": session.session_id, "provider": "stripe",
+        "booking_id": booking_id, "amount": balance,
+        "status": "initiated", "payment_status": "pending",
+        "pay_mode": "balance", "created_at": now,
+    })
+    return {"checkout_url": session.url, "session_id": session.session_id, "amount": balance}
+
+
+@api_router.post("/cron/send-balance-reminders")
+async def cron_send_balance_reminders(request: Request):
+    secret = (request.headers.get("x-cron-secret") or "").strip()
+    expected = (os.environ.get("WEBHOOK_CRON_SECRET") or "").strip()
+    if not expected or secret != expected:
+        raise HTTPException(403, "Invalid cron secret")
+
+    now = datetime.now(timezone.utc)
+    window_start = now + timedelta(hours=47)   # fires between 47h and 49h out
+    window_end   = now + timedelta(hours=49)
+    sent, skipped = [], 0
+    base = os.environ.get("SITE_BASE_URL", "https://roxtaxi.com").rstrip("/")
+
+    # Filter in Python because `booking_date` is stored as ISO text, not a
+    # Mongo date — avoids a brittle regex-based $gte/$lt.
+    async for bk in db.bookings.find({
+        "balance_due": {"$gt": 0.0},
+        "balance_reminded_at": {"$exists": False},
+        "status": {"$nin": ["cancelled", "refunded"]},
+    }):
+        try:
+            d = datetime.fromisoformat(str(bk["booking_date"]).replace("Z", "+00:00"))
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=timezone.utc)
+        except Exception:  # noqa: BLE001
+            continue
+        if not (window_start <= d <= window_end):
+            continue
+
+        token = _make_balance_token(bk["id"])
+        pay_url = f"{base}/api/bookings/{bk['id']}/pay-balance?t={token}"
+        try:
+            from notifications import notify_balance_capture_reminder
+            prefs = await db.site_config.find_one({"_id": "main"}) or {}
+            report = notify_balance_capture_reminder(dict(bk), pay_url=pay_url, prefs=prefs)
+            await db.bookings.update_one(
+                {"id": bk["id"]},
+                {"$set": {"balance_reminded_at": now_iso(), "balance_reminder_report": report}},
+            )
+            sent.append(bk["id"])
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("balance reminder err: %s", e)
+            skipped += 1
+    return {"ok": True, "sent": sent, "skipped": skipped, "count": len(sent)}
 
 
 # ---- Live driver GPS tracking (in-memory latest-ping cache) -----------------

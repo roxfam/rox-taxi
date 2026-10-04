@@ -40,3 +40,10 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/send-checkout-nudges"
     method: POST
     enabled: true
+
+  - name: send-balance-reminders
+    description: "Hourly: finds group bookings paid-by-deposit with trip 47–49h out and no reminder sent yet; fires one email + SMS with a signed one-tap /pay-balance link. Idempotent via `balance_reminded_at`."
+    cron: "0 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/send-balance-reminders"
+    method: POST
+    enabled: true

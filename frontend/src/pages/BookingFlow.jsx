@@ -151,6 +151,45 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     api.get("/site-config").then((r) => setSiteCfg((c) => ({ ...c, ...r.data }))).catch(() => {});
   }, []);
 
+  // ─── Resume-checkout hook ─────────────────────────────────────────
+  // When BookingFlow mounts with `?resume=1&t=…&e=…` it re-fetches the
+  // stored intent, pre-fills the guest fields + date, and jumps straight
+  // to step 2 so the guest never has to re-enter anything. Strips the
+  // query so a refresh doesn't re-trigger. Non-blocking — invalid tokens
+  // just land the user on a fresh step 1.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("resume") !== "1") return;
+    const t = sp.get("t"), e = sp.get("e");
+    if (!t || !e) return;
+    (async () => {
+      try {
+        const { data } = await api.get(`/checkout/intent/${encodeURIComponent(t)}`, { params: { email: e } });
+        setForm((prev) => ({
+          ...prev,
+          customer_name: data.customer_name || prev.customer_name,
+          customer_email: data.customer_email || prev.customer_email,
+          customer_phone: data.customer_phone || prev.customer_phone,
+          booking_date: data.booking_date || prev.booking_date,
+          passengers: data.pax || prev.passengers,
+          adults: data.pax || prev.adults,
+        }));
+        setStep(2);
+        toast.success("Welcome back — your quote is still live.");
+      } catch (err) {
+        // 410 / 404 handled on /resume-checkout; here we silently fall back
+        // to a fresh booking so a stale link doesn't leave the user stuck.
+      } finally {
+        try {
+          const u = new URL(window.location.href);
+          ["resume", "t", "e", "item"].forEach((k) => u.searchParams.delete(k));
+          window.history.replaceState(null, "", u.pathname + (u.search ? u.search : "") + u.hash);
+        } catch { /* older browsers — leave the URL as-is */ }
+      }
+    })();
+  }, []);
+
   const setF = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   const ROUND_TRIP_DISCOUNT_PCT = 0.10;

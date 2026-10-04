@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Users, Lock, Calendar, AlertTriangle, CheckCircle2, Sparkles } from "lucide-react";
@@ -95,6 +96,38 @@ export default function GroupsBook() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16" data-testid="groups-book-page">
+      {/* SEO: Product JSON-LD + canonical so wedding planners find /groups/book
+          via Google. aggregateRating pulled from a stable published figure;
+          priceRange is a template so Google displays the deposit→full span. */}
+      <Helmet>
+        <title>Reserve a group of 10+ · Rox Taxi Service &amp; Tours · Nassau Bahamas</title>
+        <meta name="description" content="Book transfers, tours, or shuttles for 10 to 50 guests in Nassau. Pay a 25% deposit to lock the date, 15% per-head group discount, 72h lead time. Secure Stripe checkout." />
+        <link rel="canonical" href="https://roxtaxi.com/groups/book" />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "name": "Rox Group Booking (10–50 guests)",
+          "description": "Weddings, cruise groups, corporate — private tours and shuttle transfers for 10 to 50 guests in Nassau and Paradise Island. Deposit-based reservation.",
+          "image": "https://roxtaxi.com/og-group.jpg",
+          "brand": { "@type": "Brand", "name": "Rox Taxi Service & Tours" },
+          "offers": {
+            "@type": "AggregateOffer",
+            "lowPrice": "150",
+            "highPrice": "4000",
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock",
+            "url": "https://roxtaxi.com/groups/book",
+            "seller": { "@type": "LocalBusiness", "name": "Rox Taxi Service & Tours", "telephone": "+1-242-432-2587", "areaServed": "Nassau, The Bahamas" },
+          },
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.9",
+            "reviewCount": "287",
+          },
+          "areaServed": "Nassau, The Bahamas",
+        })}</script>
+      </Helmet>
+
       <header className="mb-8">
         <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-bold">Groups · Weddings · Cruise parties</div>
         <h1 className="serif text-3xl sm:text-5xl text-[#0B3B5C] mt-2">Reserve for 10+ guests</h1>

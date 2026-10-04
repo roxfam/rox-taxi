@@ -1258,6 +1258,80 @@ def notify_checkout_abandonment(intent: dict, *, resume_url: str) -> dict:
     return report
 
 
+def notify_balance_capture_reminder(booking: dict, *, pay_url: str, prefs: Optional[dict] = None) -> dict:
+    """48-h-before-trip reminder for the outstanding `balance_due` on a
+    group booking's deposit. Fires one email + one SMS; both link to the
+    HMAC-signed `/pay-balance` endpoint which spins up a Stripe Checkout
+    session for the exact balance amount."""
+    prefs = prefs or {}
+    report = {"email": {"sent": False, "error": None}, "sms": {"sent": False, "error": None}}
+    bid = booking["id"]
+    first = (booking.get("customer_name") or "there").split(" ")[0]
+    balance = float(booking.get("balance_due") or 0.0)
+    total = float(booking.get("total") or 0.0)
+    paid = round(total - balance, 2)
+    try:
+        from datetime import datetime as _dt_cls  # noqa: PLC0415
+        _dt = _dt_cls.fromisoformat(str(booking.get("booking_date", "")).replace("Z", "+00:00"))
+        pretty = _dt.strftime("%A, %b %-d · %-I:%M %p")
+    except Exception:  # noqa: BLE001
+        pretty = booking.get("booking_date", "")
+
+    if prefs.get("notify_sms_enabled", True) is not False and booking.get("customer_phone"):
+        try:
+            sms_body = (
+                f"Rox · {bid}: Your group trip is in 48h ({pretty}). "
+                f"Settle the ${balance:.2f} balance in one tap: {pay_url}"
+            )[:600]
+            report["sms"].update(send_sms(booking["customer_phone"], sms_body))
+        except Exception as e:  # noqa: BLE001
+            report["sms"]["error"] = str(e)
+
+    if prefs.get("notify_email_enabled", True) is not False and booking.get("customer_email"):
+        subject = f"Rox {bid}: ${balance:.2f} balance due · trip in 48 hours"
+        text = (
+            f"Hi {first},\n\nYour Rox group booking {bid} is coming up in 48 hours ({pretty}).\n"
+            f"Deposit paid: {_fmt_money(paid)}\nBalance due:  {_fmt_money(balance)}\n\n"
+            f"One-tap pay link (secure, 72h valid): {pay_url}\n\n"
+            f"Questions? WhatsApp +1 (242) 432-2587\n— Rox Taxi Service & Tours"
+        )
+        html = f"""
+        <!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="color-scheme" content="light dark"/>
+        <style>@media (prefers-color-scheme: dark) {{
+          .rox-canvas{{background:#0b0f16!important;}} .rox-outer{{background:#111827!important;}}
+          .rox-card{{background:#1F2937!important;border-color:#374151!important;}}
+          .rox-lb{{color:#94A3B8!important;}} .rox-vl{{color:#F9FAFB!important;}}
+        }}</style></head>
+        <body class="rox-canvas" style="margin:0;padding:0;background:#F3F4F6;">
+        <div class="rox-outer" style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;background:#FAF9F6;">
+          <div style="background:linear-gradient(135deg,#0B3B5C,#132a4a);padding:32px;color:#fff;">
+            <div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Balance due · trip in 48 h</div>
+            <h1 style="font-family:Georgia,serif;color:#fff;margin:10px 0 4px;font-size:26px;">{first}, let's close out {bid}.</h1>
+            <p style="color:rgba(255,255,255,.7);font-size:14px;margin:0;">Settle the remaining balance so your driver can lock the manifest.</p>
+          </div>
+          <div style="padding:22px 32px;">
+            <div class="rox-card" style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;">
+              <div class="rox-lb" style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Trip</div>
+              <div class="rox-vl" style="color:#0B3B5C;font-size:17px;margin-top:4px;font-weight:700;">{booking.get('item_name','Rox booking')}</div>
+              <div style="color:#64748B;font-size:13px;margin-top:4px;">{pretty}</div>
+              <hr style="border:none;border-top:1px solid #E2E8F0;margin:14px 0;">
+              <div style="display:flex;justify-content:space-between;color:#64748B;font-size:13px;"><span>Deposit paid</span><span>{_fmt_money(paid)}</span></div>
+              <div style="display:flex;justify-content:space-between;color:#E86A3C;font-size:18px;font-weight:800;margin-top:6px;"><span>Balance due</span><span>{_fmt_money(balance)}</span></div>
+            </div>
+          </div>
+          <div style="padding:0 32px 24px;">
+            <a href="{pay_url}" style="display:block;background:#E86A3C;color:#fff;text-decoration:none;text-align:center;font-weight:700;padding:14px 20px;border-radius:999px;font-size:14px;">Pay balance securely →</a>
+            <p class="rox-lb" style="color:#64748B;font-size:11px;margin:10px 0 0;text-align:center;">Powered by Stripe · One tap, no account needed. Questions? Reply here.</p>
+          </div>
+        </div></body></html>
+        """
+        try:
+            report["email"].update(send_email(booking["customer_email"], subject, html, text, category="payment"))
+        except Exception as e:  # noqa: BLE001
+            report["email"]["error"] = str(e)
+    return report
+
+
 def notify_new_admin_device(
     *, to_email: Optional[str], sub: str, device: str, ip: str,
     city: Optional[str], when_iso: str, revoke_url: str,
