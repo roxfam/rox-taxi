@@ -244,7 +244,21 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - **Weekend surcharge toggle** (`WEEKEND_SURCHARGE_USD` → `site_config.weekend_surcharge`): new `_weekend_surcharge_config()` reader + `GET/PUT /admin/weekend-surcharge` endpoints. Admin card has on/off toggle, USD amount input (0–500), and per-service-type pills (taxi/tour/excursion/rental). Changes land live for the next `GET /reschedule-quote` and `POST /guest-reschedule` call without a deploy.
 - **Regression tests**: all 30 existing tests still green after the refactor (`test_reschedule_quote.py`, `test_partial_refund_and_resend.py`, `test_admin_sessions_monitor.py`, `test_live_payment_smoke.py`, `test_admin_cookie_auth.py`, `test_kill_switch_and_rebook.py`).
 
-### Feb 2026 — Modern checkout + sandbox copy purge
+### Feb 2026 — Mobile checkout polish + real brand SVGs + branded confirmation email
+- **Mobile-first checkout step 2** (`BookingFlow.jsx`): added `sm:` breakpoints throughout.
+  - Trust strip tightened to `gap-2.5 px-3` on mobile, subtitle allowed to wrap.
+  - Headline shrinks to `text-lg` on `<sm` with the step chip pinned via `whitespace-nowrap`.
+  - Method cards get `pb-32 sm:pb-0` so they clear the fixed order-summary bar.
+  - **Fixed sticky order summary on mobile**: `fixed inset-x-3 bottom-3 sm:static` with `env(safe-area-inset-bottom)` padding so iOS home-indicator doesn't eat the CTA. On `≥sm` it flows inline under the method cards (desktop unchanged).
+  - CTA button copy auto-shortens on mobile ("Pay now" / "PayPal" / "Reserve") and the subtitle collapses to "VAT & fees included".
+- **Real brand SVGs** (`components/PaymentBrands.jsx`): replaced the ASCII `BrandBadge` with crisp inline-SVG tiles for Visa (indigo italic wordmark), Mastercard (red/orange interlocking circles), Amex (blue tile), Discover (black wordmark + orange dot), Apple Pay (apple glyph + Pay), Google Pay (full chromatic wordmark). Each tile is a 22-px white chip with a thin border — looks sharp at any DPI and reads cleanly in guest screenshots.
+- **Branded confirmation email** (`notify_booking_confirmed`): rebuilt to match the checkout palette.
+  - Navy hero `linear-gradient(135deg,#0B3B5C,#132a4a)` with gold "ROX TAXI SERVICE & TOURS" eyebrow + large serif headline "You're booked, {first_name}."
+  - Confirmation code chip in a gold-tinted panel.
+  - White trip-details card with the pickup date pre-formatted ("Monday, Oct 6 · 2:00 PM") and the orange serif total.
+  - Navy boarding-pass panel (QR + "Save to phone" gold pill) unchanged in function, re-themed in style.
+  - **New orange CTA band** ("Track your booking live →") in the same `#E86A3C` as the checkout "Pay securely" button — tying the booking → inbox thread together visually.
+  - Footer eyebrow + WhatsApp link in navy.
 - **Removed sandbox leak** in `BookingFlow.jsx` step 2: the hard-coded "Card 4242 4242 4242 4242 works in test mode" line that was giving guests the "sandbox" impression even on a LIVE backend is gone. PayPal sandbox warning is now gated on an explicit `paypalCfg.show_sandbox_note` flag so it never fires accidentally.
 - **Modern checkout screen**: step 2 redesigned top-to-bottom.
   - Emerald trust strip at the top ("Secure checkout — 256-bit SSL · Card details are tokenised by Stripe. We never see or store your card number.")

@@ -5,6 +5,7 @@ import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle, HandCoins, Ca
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { api, money, BACKEND_URL } from "../lib/api";
 import { DateTimePicker } from "../components/DateTimePicker";
+import { PaymentBrandRow } from "../components/PaymentBrands";
 import { trackLead, trackPurchase, trackInitiateCheckout } from "../lib/fbpixel";
 
 // Rental 2-day minimum — module-scoped so linters see it inside submit()
@@ -1099,9 +1100,10 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
           {step === 2 && (
             <>
               {/* Trust signal strip — one glance tells the guest their
-                  card details are encrypted and never touch our server. */}
+                  card details are encrypted and never touch our server.
+                  Mobile: subtitle wraps under the icon instead of truncating. */}
               <div
-                className="flex items-center gap-3 rounded-xl bg-gradient-to-r from-[#F0FDF4] to-[#ECFEFF] border border-emerald-200 px-4 py-2.5"
+                className="flex items-center gap-2.5 sm:gap-3 rounded-xl bg-gradient-to-r from-[#F0FDF4] to-[#ECFEFF] border border-emerald-200 px-3 sm:px-4 py-2.5"
                 data-testid="checkout-trust-strip"
               >
                 <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
@@ -1109,30 +1111,23 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-semibold text-[#064E3B]">Secure checkout — 256-bit SSL</div>
-                  <div className="text-[11px] text-[#047857]">Card details are tokenised by Stripe. We never see or store your card number.</div>
+                  <div className="text-[11px] text-[#047857] leading-snug">Card details are tokenised by Stripe. We never see or store your card number.</div>
                 </div>
               </div>
 
-              <div className="mt-5 flex items-baseline justify-between">
-                <h3 className="serif text-xl text-[#0B3B5C]">Choose how to pay</h3>
-                <span className="text-[10px] tracking-[0.22em] uppercase text-[#64748B] font-bold">Step 2 of 2</span>
+              <div className="mt-5 flex items-baseline justify-between gap-3">
+                <h3 className="serif text-lg sm:text-xl text-[#0B3B5C]">Choose how to pay</h3>
+                <span className="text-[10px] tracking-[0.2em] uppercase text-[#64748B] font-bold whitespace-nowrap">Step 2 of 2</span>
               </div>
 
-              <div className="grid gap-3 mt-3">
+              <div className="grid gap-3 mt-3 pb-32 sm:pb-0">
                 <PayCard
                   active={payMethod === "stripe"}
                   onClick={() => setPayMethod("stripe")}
                   icon={<CreditCard className="w-5 h-5" />}
                   title="Credit or Debit Card"
                   desc="Visa, Mastercard, Amex, Discover · Apple Pay & Google Pay at checkout"
-                  badges={<>
-                    <BrandBadge title="Visa">VISA</BrandBadge>
-                    <BrandBadge title="Mastercard">MC</BrandBadge>
-                    <BrandBadge title="American Express">AMEX</BrandBadge>
-                    <BrandBadge title="Discover">DISC</BrandBadge>
-                    <BrandBadge title="Apple Pay">PAY</BrandBadge>
-                    <BrandBadge title="Google Pay">GPAY</BrandBadge>
-                  </>}
+                  badges={<PaymentBrandRow />}
                   right={<span className="rounded-full bg-[#D4A94A]/15 text-[#8a6a1a] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">Recommended</span>}
                   testid="pay-method-stripe"
                 />
@@ -1164,38 +1159,61 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 />
               </div>
 
-              {/* Pinned order summary bar — total, line-item breakdown,
-                  and the primary CTA so the guest never has to scroll. */}
-              <div className="mt-6 rounded-2xl bg-gradient-to-br from-[#0B3B5C] to-[#132a4a] text-white p-5" data-testid="checkout-order-summary">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-[10px] tracking-[0.24em] uppercase text-[#D4A94A] font-bold">Order total</div>
-                    <div className="serif text-3xl mt-1" data-testid="checkout-grand-total">{money(total)}</div>
-                    <div className="text-[11px] text-white/60 mt-0.5">Includes 10% VAT & 5% processing · all fees final</div>
+              {/* Order summary bar.
+                    Mobile (<sm): sticks to the bottom of the viewport over the
+                    modal content with a safe-area inset, so the "Pay" button
+                    is always thumb-reachable without scrolling.
+                    Desktop:     flows inline under the method cards. */}
+              <div
+                className="
+                  mt-6 rounded-2xl bg-gradient-to-br from-[#0B3B5C] to-[#132a4a] text-white
+                  p-4 sm:p-5
+                  fixed sm:static inset-x-3 bottom-3 sm:inset-auto sm:bottom-auto
+                  shadow-[0_12px_30px_-10px_rgba(0,0,0,.5)] sm:shadow-none
+                  z-10
+                "
+                style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+                data-testid="checkout-order-summary"
+              >
+                <div className="flex items-center sm:items-start justify-between gap-3 sm:gap-4">
+                  <div className="min-w-0">
+                    <div className="text-[9px] sm:text-[10px] tracking-[0.22em] sm:tracking-[0.24em] uppercase text-[#D4A94A] font-bold">Order total</div>
+                    <div className="serif text-2xl sm:text-3xl mt-0.5 sm:mt-1 leading-none" data-testid="checkout-grand-total">{money(total)}</div>
+                    <div className="hidden sm:block text-[11px] text-white/60 mt-0.5">Includes 10% VAT & 5% processing · all fees final</div>
+                    <div className="sm:hidden text-[10px] text-white/60 mt-0.5">VAT & fees included</div>
                   </div>
                   <button
                     onClick={submit}
                     disabled={loading}
-                    className="btn-shine shrink-0 rounded-full bg-[#E86A3C] text-white px-6 py-3 text-sm font-bold hover:bg-[#d55a30] active:scale-95 disabled:opacity-60 inline-flex items-center gap-2"
+                    className="btn-shine shrink-0 rounded-full bg-[#E86A3C] text-white px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-bold hover:bg-[#d55a30] active:scale-95 disabled:opacity-60 inline-flex items-center gap-1.5 sm:gap-2 whitespace-nowrap"
                     data-testid="booking-submit-payment-btn"
                   >
                     {loading ? (
                       <>
                         <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                        Processing…
+                        <span className="hidden sm:inline">Processing…</span>
+                        <span className="sm:hidden">…</span>
                       </>
                     ) : (
                       <>
                         <Lock className="w-3.5 h-3.5" />
-                        {payMethod === "stripe" ? "Pay securely"
-                          : payMethod === "paypal_checkout" ? "Continue with PayPal"
-                          : payMethod === "paypal" ? "Reserve & pay via PayPal"
-                          : "Reserve & see Zelle details"}
+                        <span className="hidden sm:inline">
+                          {payMethod === "stripe" ? "Pay securely"
+                            : payMethod === "paypal_checkout" ? "Continue with PayPal"
+                            : payMethod === "paypal" ? "Reserve & pay via PayPal"
+                            : "Reserve & see Zelle details"}
+                        </span>
+                        <span className="sm:hidden">
+                          {payMethod === "stripe" ? "Pay now"
+                            : payMethod === "paypal_checkout" ? "PayPal"
+                            : payMethod === "paypal" ? "Reserve"
+                            : "Reserve"}
+                        </span>
                       </>
                     )}
                   </button>
                 </div>
-                <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-white/70">
+                <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-white/10 flex items-center justify-between text-[10px] sm:text-[11px] text-white/70">
                   <button
                     onClick={() => setStep(1)}
                     className="hover:text-white transition flex items-center gap-1"
@@ -1203,10 +1221,11 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   >
                     ← Edit details
                   </button>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3">
                     <span className="inline-flex items-center gap-1"><Lock className="w-3 h-3" /> SSL</span>
-                    <span>·</span>
-                    <span>Powered by Stripe</span>
+                    <span className="hidden sm:inline">·</span>
+                    <span className="hidden sm:inline">Powered by Stripe</span>
+                    <span className="sm:hidden">Stripe</span>
                   </div>
                 </div>
               </div>
@@ -1553,15 +1572,5 @@ function PayCard({ active, onClick, icon, title, desc, testid, badges = null, ri
   );
 }
 
-// Small compact brand badge used inside PayCard — pure CSS so it loads
-// with the bundle (no sprite / network cost).
-function BrandBadge({ children, title }) {
-  return (
-    <span
-      title={title}
-      className="inline-flex items-center justify-center h-5 min-w-[32px] px-1.5 rounded bg-[#F1F5F9] text-[#334155] text-[9px] font-black tracking-wider uppercase border border-[#E2E8F0]"
-    >
-      {children}
-    </span>
-  );
-}
+// (Legacy ASCII BrandBadge removed — see components/PaymentBrands.jsx
+// for the real SVG mini-logos used on the Stripe PayCard.)

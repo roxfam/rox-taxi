@@ -1276,31 +1276,94 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
         """
         if _paid else ""
     )
+    # ─── Branded confirmation HTML (matches /checkout look-and-feel) ──
+    # Navy header + orange CTA + gold "Rox" eyebrow — same palette as the
+    # modernised checkout screen so the guest sees one coherent brand
+    # thread from booking → inbox → pickup.
+    _formatted_date = booking.get('booking_date', '')
+    try:
+        from datetime import datetime as _dt_cls  # noqa: PLC0415
+        _dt = _dt_cls.fromisoformat(str(_formatted_date).replace('Z', '+00:00'))
+        _formatted_date = _dt.strftime('%A, %b %-d · %-I:%M %p')
+    except Exception:  # noqa: BLE001
+        pass
+
     html = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
-      <h1 style="font-family:Georgia,serif;color:#1A365D;margin:0 0 8px;">You're booked!</h1>
-      <p style="color:#64748B;">Thanks {booking['customer_name']} — here's your confirmation.</p>
-      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:24px;margin-top:24px;">
-        <div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#64748B;">Confirmation</div>
-        <div style="font-family:'JetBrains Mono',monospace;font-size:28px;color:#1A365D;margin-top:4px;">{booking['id']}</div>
-        <hr style="border:none;border-top:1px solid #E2E8F0;margin:20px 0;">
-        <div><strong style="color:#1A365D;">{booking['item_name']}</strong></div>
-        <div style="color:#64748B;font-size:14px;margin-top:4px;">Date: {booking['booking_date']}</div>
-        <div style="color:#64748B;font-size:14px;">Total: <span style="color:#FF7F50;font-weight:600;">{_fmt_money(booking.get('total',0))}</span></div>
-      </div>
-      {_invoice_html}
-
-      <!-- Boarding pass with QR — driver scans this at pickup -->
-      <div style="background:#0B3B5C;color:#fff;border-radius:16px;padding:24px;margin-top:20px;text-align:center;">
-        <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Rox boarding pass</div>
-        <div style="margin:14px auto;background:#fff;border-radius:12px;padding:10px;display:inline-block;">
-          <img src="{_qr_img_url}" width="180" height="180" alt="Pickup QR" style="display:block;" />
+    <div style="margin:0;padding:0;background:#F3F4F6;">
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;background:#FAF9F6;">
+        <!-- Navy hero: eyebrow + headline + confirmation code -->
+        <div style="background:linear-gradient(135deg,#0B3B5C 0%,#132a4a 100%);padding:36px 32px 44px;color:#fff;">
+          <div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:800;">
+            Rox Taxi Service &amp; Tours
+          </div>
+          <h1 style="font-family:Georgia,serif;color:#fff;margin:12px 0 6px;font-size:28px;line-height:1.1;">
+            You're booked, {booking.get('customer_name', 'friend').split(' ')[0]}.
+          </h1>
+          <p style="color:rgba(255,255,255,.7);font-size:14px;margin:0;">
+            Confirmation is final — here's everything you need for pickup.
+          </p>
+          <div style="margin-top:22px;padding:14px 18px;background:rgba(212,169,74,.12);border:1px solid rgba(212,169,74,.3);border-radius:12px;">
+            <div style="font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:700;">Booking code</div>
+            <div style="font-family:'JetBrains Mono',Menlo,monospace;font-size:24px;color:#fff;margin-top:4px;letter-spacing:.08em;">{booking['id']}</div>
+          </div>
         </div>
-        <p style="color:#F8F5EC;font-size:13px;margin:8px 0 4px;">Show this to your Rox driver at pickup — they scan &amp; you're on your way.</p>
-        <a href="{_pass_url}" style="display:inline-block;background:#D4A94A;color:#0B3B5C;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;font-size:13px;margin-top:12px;">Save to phone →</a>
-      </div>
 
-      <p style="color:#64748B;font-size:13px;margin-top:24px;">Track your booking anytime at <a style="color:#00B4D8;" href="{_base}/track?id={booking['id']}">roxtaxi.com/track</a>.</p>
+        <!-- Trip details card -->
+        <div style="padding:24px 32px;">
+          <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+              <div style="flex:1;">
+                <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Service</div>
+                <div style="color:#0B3B5C;font-size:17px;margin-top:4px;font-weight:700;">{booking.get('item_name', 'Rox booking')}</div>
+                <div style="color:#64748B;font-size:13px;margin-top:10px;">
+                  <span style="color:#94A3B8;">Pickup · </span>{_formatted_date}
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Total</div>
+                <div style="font-family:Georgia,serif;font-size:24px;color:#E86A3C;font-weight:700;margin-top:4px;">{_fmt_money(booking.get('total', 0))}</div>
+              </div>
+            </div>
+          </div>
+          {_invoice_html}
+        </div>
+
+        <!-- Boarding pass panel: navy w/ QR, gold "Save to phone" CTA -->
+        <div style="padding:0 32px 24px;">
+          <div style="background:#0B3B5C;color:#fff;border-radius:16px;padding:24px;text-align:center;">
+            <div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:800;">
+              Rox boarding pass
+            </div>
+            <div style="margin:16px auto 10px;background:#fff;border-radius:14px;padding:12px;display:inline-block;">
+              <img src="{_qr_img_url}" width="180" height="180" alt="Pickup QR" style="display:block;border-radius:4px;" />
+            </div>
+            <p style="color:#F8F5EC;font-size:13px;margin:4px 0 0;max-width:380px;margin-left:auto;margin-right:auto;line-height:1.4;">
+              Show this QR to your Rox driver at pickup — one scan and you're on your way.
+            </p>
+            <a href="{_pass_url}" style="display:inline-block;background:#D4A94A;color:#0B3B5C;text-decoration:none;font-weight:800;padding:12px 24px;border-radius:999px;font-size:13px;margin-top:16px;">
+              Save to phone →
+            </a>
+          </div>
+        </div>
+
+        <!-- Orange CTA band — primary action matches checkout -->
+        <div style="padding:0 32px 24px;">
+          <a href="{_base}/track?id={booking['id']}" style="display:block;background:#E86A3C;color:#fff;text-decoration:none;text-align:center;font-weight:700;padding:14px 20px;border-radius:999px;font-size:14px;">
+            Track your booking live →
+          </a>
+        </div>
+
+        <!-- Footer: brand line + support -->
+        <div style="padding:0 32px 36px;text-align:center;">
+          <div style="font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:#94A3B8;font-weight:700;">
+            Rox Taxi Service &amp; Tours
+          </div>
+          <p style="color:#64748B;font-size:12px;margin:8px 0 0;line-height:1.5;">
+            Nassau · Paradise Island · The Bahamas<br/>
+            Questions? WhatsApp <a style="color:#0B3B5C;font-weight:700;text-decoration:none;" href="https://wa.me/12424322587">+1 (242) 432-2587</a>
+          </p>
+        </div>
+      </div>
     </div>
     """
 
