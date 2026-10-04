@@ -97,6 +97,34 @@ async def create_checkout(req: CheckoutRequest, request: Request):
     return {"checkout_url": session.url, "session_id": session.session_id}
 
 
+async def _fire_paid_in_full(booking_id: str, *, deposit_paid: float, balance_paid: float) -> None:
+    """Fire the branded 'paid in full' receipt email+SMS exactly once per
+    booking. Idempotent via `paid_in_full_emailed_at` — safe to call from
+    both the balance-payment path and the full-pay upfront path."""
+    res = await _db.bookings.update_one(
+        {"id": booking_id, "paid_in_full_emailed_at": {"$exists": False}},
+        {"$set": {"paid_in_full_emailed_at": _now_iso()}},
+    )
+    if not res.modified_count:
+        return  # already fired for this booking
+    booking = await _db.bookings.find_one({"id": booking_id})
+    if not booking:
+        return
+    try:
+        from notifications import notify_paid_in_full  # noqa: PLC0415
+        prefs = await _db.site_config.find_one({"_id": "main"}) or {}
+        report = notify_paid_in_full(
+            _clean(dict(booking)),
+            deposit_paid=deposit_paid, balance_paid=balance_paid, prefs=prefs,
+        )
+        await _db.bookings.update_one(
+            {"id": booking_id},
+            {"$set": {"paid_in_full_notification": report}},
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.warning("paid-in-full notify err: %s", e)
+
+
 async def _mark_paid(session_id: str, booking_id: Optional[str]):
     await _db.payment_transactions.update_one(
         {"session_id": session_id, "payment_status": {"$ne": "paid"}},
@@ -113,36 +141,79 @@ async def _mark_paid(session_id: str, booking_id: Optional[str]):
     except Exception as e:  # noqa: BLE001
         logging.warning("rental extension apply err: %s", e)
 
-    if booking_id:
-        res = await _db.bookings.update_one(
-            {"id": booking_id, "payment_status": {"$ne": "paid"}},
-            {"$set": {"payment_status": "paid", "status": "confirmed", "updated_at": _now_iso()}},
+    if not booking_id:
+        return
+
+    # Resolve the originating transaction to detect balance-payment flow.
+    # `pay_mode=="balance"` means this charge was created by the
+    # `/pay-balance` endpoint for the outstanding `balance_due` on a
+    # deposit-first group booking — handle it SEPARATELY from a normal
+    # first-payment so we don't short-circuit on `payment_status==paid`.
+    tx = await _db.payment_transactions.find_one({"session_id": session_id}) or {}
+    pay_mode = (tx.get("pay_mode") or "").lower()
+    provider = tx.get("provider", "stripe")
+
+    if pay_mode == "balance":
+        # Close the deposit → balance → confirmation loop. Clear the
+        # outstanding balance and fire the paid-in-full receipt.
+        existing = await _db.bookings.find_one({"id": booking_id}) or {}
+        bal = round(float(existing.get("balance_due") or tx.get("amount") or 0.0), 2)
+        deposit = round(float(existing.get("deposit_amount") or (float(existing.get("total") or 0.0) - bal)), 2)
+        await _db.bookings.update_one(
+            {"id": booking_id},
+            {"$set": {
+                "balance_due": 0.0,
+                "balance_status": "paid",
+                "balance_paid_at": _now_iso(),
+                "payment_status": "paid",
+                "status": "confirmed",
+                "updated_at": _now_iso(),
+            }},
         )
-        if res.modified_count:
-            booking = await _db.bookings.find_one({"id": booking_id})
-            provider = (await _db.payment_transactions.find_one({"session_id": session_id}) or {}).get("provider", "stripe")
-            # Hook the referral conversion — no-op if the referee has no
-            # referred_by or already had a paid booking. Silent fail is safe.
-            try:
-                from server import _apply_referral_conversion_if_paid  # noqa: PLC0415
-                await _apply_referral_conversion_if_paid(booking_id)
-            except Exception as e:  # noqa: BLE001
-                logging.warning("referral conversion err: %s", e)
-            try:
-                prefs = await _db.site_config.find_one({"_id": "main"}) or {}
-                report = _notify(_clean(dict(booking)), prefs)
-                await _db.bookings.update_one(
-                    {"id": booking_id},
-                    {"$set": {"notification_status": report, "notified_at": _now_iso()}},
-                )
-            except Exception as e:  # noqa: BLE001
-                logging.warning("notify err: %s", e)
-            # Owner SMS: "payment received" alert (independent of customer notify)
-            try:
-                from notifications import notify_owner_payment_received
-                notify_owner_payment_received(_clean(dict(booking)), provider=provider)
-            except Exception as e:  # noqa: BLE001
-                logging.warning("owner payment alert err: %s", e)
+        try:
+            from notifications import notify_owner_payment_received  # noqa: PLC0415
+            notify_owner_payment_received(_clean(dict(existing)), provider=provider)
+        except Exception as e:  # noqa: BLE001
+            logging.warning("owner balance-paid alert err: %s", e)
+        await _fire_paid_in_full(booking_id, deposit_paid=deposit, balance_paid=bal)
+        return
+
+    res = await _db.bookings.update_one(
+        {"id": booking_id, "payment_status": {"$ne": "paid"}},
+        {"$set": {"payment_status": "paid", "status": "confirmed", "updated_at": _now_iso()}},
+    )
+    if res.modified_count:
+        booking = await _db.bookings.find_one({"id": booking_id})
+        # Hook the referral conversion — no-op if the referee has no
+        # referred_by or already had a paid booking. Silent fail is safe.
+        try:
+            from server import _apply_referral_conversion_if_paid  # noqa: PLC0415
+            await _apply_referral_conversion_if_paid(booking_id)
+        except Exception as e:  # noqa: BLE001
+            logging.warning("referral conversion err: %s", e)
+        try:
+            prefs = await _db.site_config.find_one({"_id": "main"}) or {}
+            report = _notify(_clean(dict(booking)), prefs)
+            await _db.bookings.update_one(
+                {"id": booking_id},
+                {"$set": {"notification_status": report, "notified_at": _now_iso()}},
+            )
+        except Exception as e:  # noqa: BLE001
+            logging.warning("notify err: %s", e)
+        # Owner SMS: "payment received" alert (independent of customer notify)
+        try:
+            from notifications import notify_owner_payment_received
+            notify_owner_payment_received(_clean(dict(booking)), provider=provider)
+        except Exception as e:  # noqa: BLE001
+            logging.warning("owner payment alert err: %s", e)
+        # Full-pay upfront: no balance_due pending → fire paid-in-full
+        # receipt once alongside the standard confirmation. For deposit
+        # flows (balance_due > 0), this is skipped and will only fire
+        # when the balance payment lands.
+        bal_remaining = round(float((booking or {}).get("balance_due") or 0.0), 2)
+        if bal_remaining < 0.01:
+            total_amt = round(float((booking or {}).get("total") or 0.0), 2)
+            await _fire_paid_in_full(booking_id, deposit_paid=0.0, balance_paid=total_amt)
 
 
 @router.get("/payments/status/{session_id}")

@@ -23,6 +23,13 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Paid-in-Full Receipt + Admin Balance-Due Panel
+- **Guest "Paid in Full" email** (`notifications.py::notify_paid_in_full`): branded navy hero + green "Paid in full ✓" badge, deposit vs balance breakdown, grand total, QR boarding pass, PDF invoice attached. Fires once per booking (idempotent via `paid_in_full_emailed_at`) when either (a) the balance Stripe webhook lands (closing deposit → balance → confirmation loop) or (b) a non-deposit booking pays in full upfront.
+- **`routes/payments.py::_mark_paid`** rewritten: now resolves the originating `payment_transactions` row and branches on `pay_mode`. When `pay_mode="balance"`, it clears `balance_due=0`, stamps `balance_status=paid`/`balance_paid_at`, fires owner SMS + the new paid-in-full receipt, and skips the standard "booking confirmed" notify (that email was already sent at deposit time). For the normal path, it keeps the confirmed notify and additionally fires the paid-in-full receipt only when no balance remains.
+- **Admin Balance-Due Panel** (`AdminBalanceDuePanel.jsx` + `GET /api/admin/balance-due` + `POST /api/admin/balance-due/{id}/resend-link`): dashboard card listing every booking with `balance_due>0` sorted by trip date, with countdown badges (red <2d, amber <7d, emerald ≥7d), outstanding amount, deposit-paid line, reminder status/count, and one-click "Resend balance link" button that fires SMS + Email through the same `notify_balance_capture_reminder` + HMAC pay URL the 48h cron uses. Auto-hides when empty.
+
+
+
 ### Feb 2026 — Admin auth hardening · localStorage → httpOnly cookie + CSRF
 - **Why**: Code-review flag P1. Admin JWT lived in `localStorage` and shipped on every request as `Authorization: Bearer`. Any XSS in the admin bundle could siphon the token.
 - **Backend** (`routes/auth.py`, `server.py`): `/auth/login` now **also** issues two cookies on success — `admin_session` (httpOnly, Secure, SameSite=Lax, 7 d) carrying the JWT and `admin_csrf` (readable by JS, Secure, same 7 d) carrying a 32-byte random token. New `/auth/admin-logout` clears both. `require_admin()` was rewritten to read the cookie first; on mutating methods (POST/PUT/PATCH/DELETE) it enforces the CSRF double-submit (`X-CSRF-Token` header must match the `admin_csrf` cookie via `hmac.compare_digest`). Legacy Bearer flow still works unchanged so no sessions break mid-deploy (CSRF skipped for Bearer since cross-origin JS can't forge Authorization).

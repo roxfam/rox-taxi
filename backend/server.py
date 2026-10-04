@@ -4026,6 +4026,91 @@ async def cron_send_balance_reminders(request: Request):
     return {"ok": True, "sent": sent, "skipped": skipped, "count": len(sent)}
 
 
+# ---------------- Admin Balance-Due Panel endpoints -----------------
+# Dashboard card listing every booking with `balance_due > 0`, their trip
+# countdown, reminder status, and a one-click "Resend balance link"
+# button for admin-initiated nudges (shares the same Stripe pay URL +
+# HMAC token the 48h cron uses).
+# ---------------------------------------------------------------------
+@api_router.get("/admin/balance-due")
+async def admin_balance_due_list(_admin: str = Depends(require_admin)):
+    """Return every booking with an outstanding balance, sorted by trip
+    date ascending so the most imminent surfaces at the top. Includes
+    countdown, deposit paid, reminder count/timestamp for the UI."""
+    now = datetime.now(timezone.utc)
+    rows = []
+    async for bk in db.bookings.find({
+        "balance_due": {"$gt": 0.0},
+        "status": {"$nin": ["cancelled", "refunded"]},
+    }):
+        try:
+            d = datetime.fromisoformat(str(bk.get("booking_date", "")).replace("Z", "+00:00"))
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=timezone.utc)
+            days_to_trip = int((d - now).total_seconds() // 86400)
+            trip_dt = d
+        except Exception:  # noqa: BLE001
+            days_to_trip = None
+            trip_dt = None
+        rows.append({
+            "id": bk.get("id"),
+            "customer_name": bk.get("customer_name"),
+            "customer_email": bk.get("customer_email"),
+            "customer_phone": bk.get("customer_phone"),
+            "item_name": bk.get("item_name"),
+            "booking_date": bk.get("booking_date"),
+            "balance_due": round(float(bk.get("balance_due") or 0.0), 2),
+            "deposit_amount": round(float(bk.get("deposit_amount") or 0.0), 2),
+            "total": round(float(bk.get("total") or 0.0), 2),
+            "days_to_trip": days_to_trip,
+            "balance_reminded_at": bk.get("balance_reminded_at"),
+            "reminder_count": int(bk.get("balance_reminder_count") or (1 if bk.get("balance_reminded_at") else 0)),
+            "status": bk.get("status"),
+            "_sort": trip_dt.timestamp() if trip_dt else float("inf"),
+        })
+    rows.sort(key=lambda r: r["_sort"])
+    for r in rows:
+        r.pop("_sort", None)
+    return {"bookings": rows, "count": len(rows)}
+
+
+@api_router.post("/admin/balance-due/{booking_id}/resend-link")
+async def admin_balance_due_resend(booking_id: str, _admin: str = Depends(require_admin)):
+    """Admin-initiated balance-link resend. Fans out SMS + Email through
+    the same `notify_balance_capture_reminder` helper the 48h cron uses
+    so the branding, deep-link, and HMAC token are identical."""
+    bk = await db.bookings.find_one({"id": booking_id.upper()})
+    if not bk:
+        raise HTTPException(404, "Booking not found")
+    balance = float(bk.get("balance_due") or 0.0)
+    if balance < 0.01:
+        raise HTTPException(409, "This booking has no balance remaining.")
+
+    token = _make_balance_token(bk["id"])
+    base = os.environ.get("SITE_BASE_URL", "https://roxtaxi.com").rstrip("/")
+    pay_url = f"{base}/api/bookings/{bk['id']}/pay-balance?t={token}"
+    try:
+        from notifications import notify_balance_capture_reminder
+        prefs = await db.site_config.find_one({"_id": "main"}) or {}
+        report = notify_balance_capture_reminder(clean(dict(bk)), pay_url=pay_url, prefs=prefs)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("admin balance resend err: %s", e)
+        raise HTTPException(502, f"Resend failed: {e}") from e
+
+    now = now_iso()
+    await db.bookings.update_one(
+        {"id": bk["id"]},
+        {
+            "$set": {"balance_reminded_at": now, "balance_last_resend_report": report},
+            "$inc": {"balance_reminder_count": 1},
+        },
+    )
+    return {"ok": True, "report": report, "pay_url": pay_url}
+
+
+
+
+
 # ---- Live driver GPS tracking (in-memory latest-ping cache) -----------------
 # Driver hits /api/drivers/location every ~5s from their phone. Customer's
 # Track page long-polls /api/bookings/{id}/driver-location to render an ETA.

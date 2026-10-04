@@ -20,6 +20,7 @@ import AdminSessionsCard from "./admin/AdminSessionsCard";
 import StripeLiveCheckCard from "./admin/StripeLiveCheckCard";
 import WeekendSurchargeCard from "./admin/WeekendSurchargeCard";
 import GroupPricingCard from "./admin/GroupPricingCard";
+import AdminBalanceDuePanel from "./admin/AdminBalanceDuePanel";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -295,6 +296,10 @@ export default function AdminDashboard() {
         {/* Group-booking pricing admin control (min pax, discount %,
             deposit %, lead hours) — surfaces on /groups/book immediately. */}
         <GroupPricingCard />
+
+        {/* Balance-due panel — every booking with outstanding balance,
+            countdown badge, and one-click admin resend (SMS + Email). */}
+        <AdminBalanceDuePanel />
 
         {/* Reviews Inbox — every un-replied 5★ Google review with an
             AI-drafted thank-you ready to fire. Auto-hides when the

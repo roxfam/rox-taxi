@@ -1258,6 +1258,152 @@ def notify_checkout_abandonment(intent: dict, *, resume_url: str) -> dict:
     return report
 
 
+def notify_paid_in_full(booking: dict, *, deposit_paid: float, balance_paid: float,
+                        prefs: Optional[dict] = None) -> dict:
+    """Final "paid in full" receipt — fires once the balance Stripe
+    webhook lands (closing the deposit → balance → confirmation loop)
+    OR after any upfront full-pay checkout. Branded navy hero + orange
+    CTA matching the booking-confirmed template so the guest sees one
+    coherent brand thread. Idempotency is enforced by the caller via
+    `paid_in_full_emailed_at` on the booking doc.
+    """
+    prefs = prefs or {}
+    email_enabled = prefs.get("notify_email_enabled", True) is not False
+    sms_enabled = prefs.get("notify_sms_enabled", True) is not False
+    report = {
+        "email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled},
+        "sms":   {"sent": False, "provider": "none", "error": None, "enabled": sms_enabled},
+    }
+    bid = booking["id"]
+    first = (booking.get("customer_name") or "there").split(" ")[0]
+    total = float(booking.get("total") or (deposit_paid + balance_paid))
+    try:
+        from datetime import datetime as _dt_cls  # noqa: PLC0415
+        _dt = _dt_cls.fromisoformat(str(booking.get("booking_date", "")).replace("Z", "+00:00"))
+        pretty = _dt.strftime("%A, %b %-d · %-I:%M %p")
+    except Exception:  # noqa: BLE001
+        pretty = booking.get("booking_date", "")
+
+    _base = "https://roxtaxi.com"
+    pass_url = f"{_base}/booking/{bid}/pass"
+    invoice_url = f"{_base}/api/bookings/{bid}/receipt.pdf"
+    qr_url = f"{_base}/api/bookings/{bid}/qr.png"
+    track_url = f"{_base}/track?id={bid}"
+
+    # Hide the "Deposit paid" row when there was no deposit flow (full-pay upfront)
+    deposit_row = (
+        f'<div style="display:flex;justify-content:space-between;color:#64748B;font-size:13px;margin-top:4px;">'
+        f'<span>Deposit paid</span><span style="color:#059669;font-weight:700;">{_fmt_money(deposit_paid)}</span></div>'
+        f'<div style="display:flex;justify-content:space-between;color:#64748B;font-size:13px;margin-top:6px;">'
+        f'<span>Balance paid</span><span style="color:#059669;font-weight:700;">{_fmt_money(balance_paid)}</span></div>'
+        if deposit_paid > 0 else ""
+    )
+
+    if sms_enabled and booking.get("customer_phone"):
+        sms_body = (
+            f"Rox · {bid}: You're all set — payment complete ({_fmt_money(total)}). "
+            f"See you on {pretty}. Invoice: {invoice_url}"
+        )[:600]
+        try:
+            report["sms"].update(send_sms(booking["customer_phone"], sms_body))
+        except Exception as e:  # noqa: BLE001
+            report["sms"]["error"] = str(e)
+    else:
+        report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+
+    if email_enabled and booking.get("customer_email"):
+        subject = f"You're all set! Payment complete for your Bahamas trip 🌴 — {bid}"
+        text = (
+            f"Hi {first},\n\nYour Rox booking {bid} is paid in full ({_fmt_money(total)}).\n"
+            + (f"Deposit paid: {_fmt_money(deposit_paid)}\nBalance paid: {_fmt_money(balance_paid)}\n" if deposit_paid > 0 else "")
+            + f"\nTrip: {booking.get('item_name','Rox booking')}\nWhen: {pretty}\n\n"
+            f"Invoice (PDF): {invoice_url}\nBoarding pass: {pass_url}\n\n"
+            f"Questions? WhatsApp +1 (242) 432-2587\n— Rox Taxi Service & Tours"
+        )
+        html = f"""
+        <!DOCTYPE html><html><head><meta charset="utf-8"/>
+        <meta name="color-scheme" content="light dark"/>
+        <style>@media (prefers-color-scheme: dark) {{
+          .rox-canvas{{background:#0b0f16!important;}} .rox-outer{{background:#111827!important;}}
+          .rox-card{{background:#1F2937!important;border-color:#374151!important;}}
+          .rox-lb{{color:#94A3B8!important;}} .rox-vl{{color:#F9FAFB!important;}}
+          .rox-foot{{color:#94A3B8!important;}}
+        }}</style></head>
+        <body class="rox-canvas" style="margin:0;padding:0;background:#F3F4F6;">
+        <div class="rox-outer" style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;background:#FAF9F6;">
+          <div style="background:linear-gradient(135deg,#0B3B5C,#132a4a);padding:36px 32px 44px;color:#fff;">
+            <div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Rox Taxi Service &amp; Tours</div>
+            <h1 style="font-family:Georgia,serif;color:#fff;margin:12px 0 6px;font-size:28px;line-height:1.1;">You're all set, {first}.</h1>
+            <p style="color:rgba(255,255,255,.75);font-size:14px;margin:0;">Payment complete — your Bahamas trip is locked in.</p>
+            <div style="margin-top:22px;padding:14px 18px;background:rgba(5,150,105,.14);border:1px solid rgba(5,150,105,.4);border-radius:12px;">
+              <div style="font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:#34D399;font-weight:800;">Paid in full ✓</div>
+              <div style="font-family:'JetBrains Mono',Menlo,monospace;font-size:22px;color:#fff;margin-top:4px;letter-spacing:.08em;">{bid}</div>
+            </div>
+          </div>
+          <div style="padding:24px 32px;">
+            <div class="rox-card" style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;">
+              <div class="rox-lb" style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Trip</div>
+              <div class="rox-vl" style="color:#0B3B5C;font-size:17px;margin-top:4px;font-weight:700;">{booking.get('item_name','Rox booking')}</div>
+              <div style="color:#64748B;font-size:13px;margin-top:4px;">Pickup · {pretty}</div>
+              <hr style="border:none;border-top:1px solid #E2E8F0;margin:14px 0;">
+              {deposit_row}
+              <div style="display:flex;justify-content:space-between;color:#0B3B5C;font-size:18px;font-weight:800;margin-top:10px;padding-top:10px;border-top:1px solid #E2E8F0;">
+                <span>Grand total</span><span style="color:#E86A3C;">{_fmt_money(total)}</span>
+              </div>
+            </div>
+            <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:20px;margin-top:16px;">
+              <div style="font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#059669;font-weight:700;">Receipt ready</div>
+              <div class="rox-vl" style="color:#0B3B5C;font-size:17px;margin-top:4px;font-weight:700;">Your paid invoice is attached</div>
+              <div class="rox-lb" style="color:#64748B;font-size:13px;margin-top:4px;">Full line-item breakdown with VAT, processing fee, and the paid-in-full stamp.</div>
+              <a href="{invoice_url}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px;font-size:13px;margin-top:12px;">Download invoice (PDF) →</a>
+            </div>
+          </div>
+          <div style="padding:0 32px 24px;">
+            <div style="background:#0B3B5C;color:#fff;border-radius:16px;padding:24px;text-align:center;">
+              <div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Rox boarding pass</div>
+              <div style="margin:16px auto 10px;background:#fff;border-radius:14px;padding:12px;display:inline-block;">
+                <img src="{qr_url}" width="180" height="180" alt="Pickup QR" style="display:block;border-radius:4px;"/>
+              </div>
+              <p style="color:#F8F5EC;font-size:13px;margin:4px 0 0;line-height:1.4;">Show this to your driver at pickup — one scan and you're on your way.</p>
+              <a href="{pass_url}" style="display:inline-block;background:#D4A94A;color:#0B3B5C;text-decoration:none;font-weight:800;padding:12px 24px;border-radius:999px;font-size:13px;margin-top:16px;">Save to phone →</a>
+            </div>
+          </div>
+          <div style="padding:0 32px 24px;">
+            <a href="{track_url}" style="display:block;background:#E86A3C;color:#fff;text-decoration:none;text-align:center;font-weight:700;padding:14px 20px;border-radius:999px;font-size:14px;">Track your booking live →</a>
+          </div>
+          <div style="padding:0 32px 36px;text-align:center;">
+            <div style="font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:#94A3B8;font-weight:700;">See you soon in The Bahamas</div>
+            <p class="rox-foot" style="color:#64748B;font-size:12px;margin:8px 0 0;line-height:1.5;">
+              Nassau · Paradise Island<br/>WhatsApp <a style="color:#0B3B5C;font-weight:700;text-decoration:none;" href="https://wa.me/12424322587">+1 (242) 432-2587</a>
+            </p>
+          </div>
+        </div></body></html>
+        """
+        # Attach the paid-invoice PDF for offline receipt-keeping
+        attachments = []
+        try:
+            from pdf_utils import build_receipt_pdf  # noqa: PLC0415
+            pdf_bytes = build_receipt_pdf(booking)
+            attachments.append({
+                "filename": f"Rox-Invoice-Paid-{bid}.pdf",
+                "content": pdf_bytes,
+                "mime_type": "application/pdf",
+            })
+        except Exception as ex:  # noqa: BLE001
+            logger.warning("paid-in-full invoice attachment err: %s", ex)
+        try:
+            report["email"].update(send_email(
+                booking["customer_email"], subject, html, text,
+                category="confirmation", attachments=attachments or None,
+            ))
+        except Exception as e:  # noqa: BLE001
+            report["email"]["error"] = str(e)
+    else:
+        report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
+    return report
+
+
+
 def notify_balance_capture_reminder(booking: dict, *, pay_url: str, prefs: Optional[dict] = None) -> dict:
     """48-h-before-trip reminder for the outstanding `balance_due` on a
     group booking's deposit. Fires one email + one SMS; both link to the
