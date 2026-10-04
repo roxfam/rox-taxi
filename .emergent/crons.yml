@@ -33,3 +33,10 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/flush-owner-sms-digest"
     method: POST
     enabled: true
+
+  - name: send-checkout-nudges
+    description: "Every 10 min: finds guests who entered checkout step 2 at least 30 min ago, didn't finish paying, and haven't been nudged yet. Fires a one-time branded email with a 24-hour pay link. Idempotent via `nudged` flag."
+    cron: "*/10 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/send-checkout-nudges"
+    method: POST
+    enabled: true

@@ -3577,6 +3577,349 @@ async def create_group_inquiry(req: GroupInquiryCreate):
     return clean(inquiry)
 
 
+# ---------------- Group Booking Checkout (10+ pax, deposit-based) ----
+# Parallel to the standard /bookings flow: for parties above the min_pax
+# threshold admins can collect a deposit (configurable %) instead of the
+# full price upfront, with a lead-time guard to protect ops.
+# ---------------------------------------------------------------------
+
+
+async def _group_pricing_cfg() -> dict:
+    """Reads live admin-managed group-booking rules from site_config.
+    Falls back to safe defaults when unconfigured."""
+    cfg = await db.site_config.find_one({"_id": "main"}) or {}
+    gp = cfg.get("group_pricing") or {}
+    return {
+        "min_pax": int(gp.get("min_pax", 10)),
+        "per_head_discount_pct": float(gp.get("per_head_discount_pct", 15.0)),
+        "deposit_pct": float(gp.get("deposit_pct", 25.0)),
+        "min_lead_hours": int(gp.get("min_lead_hours", 72)),
+    }
+
+
+@api_router.get("/public/group-pricing")
+async def public_group_pricing():
+    return await _group_pricing_cfg()
+
+
+class GroupQuoteRequest(BaseModel):
+    service_type: str = Field(..., pattern="^(taxi|tour|rental)$")
+    item_id: str = Field(..., min_length=1)
+    base_price: float = Field(..., gt=0, le=100000)
+    pax: int = Field(..., ge=2, le=500)
+    booking_date: Optional[str] = None  # ISO — enables lead-time + weekend-surcharge check
+
+
+@api_router.post("/group-bookings/quote")
+async def group_booking_quote(req: GroupQuoteRequest):
+    """Returns a transparent price breakdown for a group booking.
+
+    Formula:
+        gross       = base_price × pax
+        discount    = gross × per_head_discount_pct%        (only if pax ≥ min_pax)
+        subtotal    = gross − discount
+        + weekend surcharge if Sunday pickup (reads /admin/weekend-surcharge)
+        + 10% VAT + 5% processing (matches regular bookings)
+        deposit     = total × deposit_pct%
+        due_now     = deposit, due_later = total − deposit
+        lead_ok     = (booking_date − now) ≥ min_lead_hours
+    """
+    cfg = await _group_pricing_cfg()
+    qualifies = req.pax >= cfg["min_pax"]
+    gross = round(float(req.base_price) * req.pax, 2)
+    discount_pct = cfg["per_head_discount_pct"] if qualifies else 0.0
+    discount = round(gross * discount_pct / 100.0, 2)
+    subtotal_pre_surcharge = round(gross - discount, 2)
+
+    # Weekend surcharge honoured for taxi + tour (reuses the admin toggle).
+    ws = await _weekend_surcharge_config()
+    is_weekend = False
+    if req.booking_date:
+        try:
+            d = datetime.fromisoformat(req.booking_date.replace("Z", "+00:00"))
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=timezone.utc)
+            is_weekend = _is_weekend_pickup(d)
+        except Exception:  # noqa: BLE001
+            pass
+    surcharge = (ws["amount_usd"]
+                 if (ws["enabled"] and is_weekend
+                     and req.service_type.lower() in set(ws["service_types"]))
+                 else 0.0)
+
+    subtotal = round(subtotal_pre_surcharge + surcharge, 2)
+    vat = round(subtotal * 0.10, 2)
+    processing = round((subtotal + vat) * 0.05, 2)
+    total = round(subtotal + vat + processing, 2)
+    deposit = round(total * cfg["deposit_pct"] / 100.0, 2)
+    due_later = round(total - deposit, 2)
+
+    # Lead-time guard
+    lead_ok, lead_hours = True, None
+    if req.booking_date:
+        try:
+            d = datetime.fromisoformat(req.booking_date.replace("Z", "+00:00"))
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=timezone.utc)
+            lead_hours = (d - datetime.now(timezone.utc)).total_seconds() / 3600.0
+            lead_ok = lead_hours >= cfg["min_lead_hours"]
+        except Exception:  # noqa: BLE001
+            pass
+
+    return {
+        "qualifies": qualifies,
+        "min_pax": cfg["min_pax"],
+        "pax": req.pax,
+        "base_price": float(req.base_price),
+        "gross": gross,
+        "discount_pct": discount_pct,
+        "discount": discount,
+        "weekend_surcharge": surcharge,
+        "subtotal": subtotal,
+        "vat": vat,
+        "processing_fee": processing,
+        "total": total,
+        "deposit_pct": cfg["deposit_pct"],
+        "deposit": deposit,
+        "due_later": due_later,
+        "min_lead_hours": cfg["min_lead_hours"],
+        "lead_time_hours": round(lead_hours, 1) if lead_hours is not None else None,
+        "lead_time_ok": lead_ok,
+    }
+
+
+class GroupBookingCheckout(BaseModel):
+    service_type: str = Field(..., pattern="^(taxi|tour|rental)$")
+    item_id: str
+    item_name: str
+    base_price: float = Field(..., gt=0)
+    pax: int = Field(..., ge=2, le=500)
+    booking_date: str
+    customer_name: str = Field(..., min_length=1, max_length=120)
+    customer_email: EmailStr
+    customer_phone: str = Field(..., min_length=5, max_length=40)
+    pickup_location: Optional[str] = None
+    dropoff_location: Optional[str] = None
+    notes: Optional[str] = None
+    pay_full: bool = False  # True = charge full total now; False = charge deposit only
+
+
+@api_router.post("/group-bookings/checkout")
+async def group_booking_checkout(req: GroupBookingCheckout):
+    """Creates a group booking + returns a Stripe Checkout URL.
+
+    When `pay_full=False` (default), the guest only pays the deposit now;
+    the balance is captured as a second checkout once the trip date is
+    close (admin triggers it via the Payments panel).
+    """
+    quote = await group_booking_quote(GroupQuoteRequest(
+        service_type=req.service_type, item_id=req.item_id,
+        base_price=req.base_price, pax=req.pax,
+        booking_date=req.booking_date,
+    ))
+    if not quote["qualifies"]:
+        raise HTTPException(400, f"Group pricing starts at {quote['min_pax']} passengers")
+    if not quote["lead_time_ok"]:
+        raise HTTPException(
+            400,
+            f"Group bookings need at least {quote['min_lead_hours']}h lead time "
+            f"(this trip is {quote['lead_time_hours']}h away). "
+            f"Submit a /groups inquiry for rush requests.",
+        )
+
+    bid = "GRP-" + uuid.uuid4().hex[:7].upper()
+    now = now_iso()
+    amount_due = quote["deposit"] if not req.pay_full else quote["total"]
+    booking = {
+        "id": bid,
+        "service_type": req.service_type,
+        "item_id": req.item_id,
+        "item_name": req.item_name,
+        "customer_name": req.customer_name,
+        "customer_email": req.customer_email,
+        "customer_phone": req.customer_phone,
+        "booking_date": req.booking_date,
+        "pickup_location": req.pickup_location or "",
+        "dropoff_location": req.dropoff_location or "",
+        "notes": req.notes or "",
+        "pax": req.pax,
+        "passengers": req.pax,
+        "base_price": req.base_price,
+        "price": quote["total"],
+        "total": quote["total"],
+        "deposit": quote["deposit"],
+        "balance_due": quote["due_later"] if not req.pay_full else 0.0,
+        "payment_method": "stripe",
+        "payment_status": "pending",
+        "status": "pending_payment",
+        "is_group_booking": True,
+        "group_pay_mode": "full" if req.pay_full else "deposit",
+        "group_price_breakdown": quote,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.bookings.insert_one(booking)
+
+    # Build Stripe Checkout session for the deposit (or full) amount.
+    try:
+        from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+        api_key = (os.environ.get("STRIPE_API_KEY") or "sk_test_emergent").strip()
+        base_url = os.environ.get("SITE_BASE_URL", "https://roxtaxi.com").rstrip("/")
+        checkout = StripeCheckout(api_key=api_key, webhook_url=f"{base_url}/api/webhooks/stripe")
+        session = await checkout.create_checkout_session(CheckoutSessionRequest(
+            amount=float(amount_due),
+            currency="usd",
+            success_url=f"{base_url}/booking/{bid}/pass?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{base_url}/groups/checkout?cancelled=1",
+            metadata={
+                "booking_id": bid, "pay_mode": booking["group_pay_mode"],
+                "pax": str(req.pax),
+            },
+        ))
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("group stripe checkout err")
+        raise HTTPException(502, f"Payment session could not be created: {e}") from e
+
+    await db.payment_transactions.insert_one({
+        "session_id": session.session_id, "provider": "stripe",
+        "booking_id": bid, "amount": float(amount_due),
+        "status": "initiated", "payment_status": "pending",
+        "pay_mode": booking["group_pay_mode"], "created_at": now,
+    })
+    try:
+        from notifications import notify_owner_activity
+        notify_owner_activity("group_booking",
+            f"🚌 Group booking {bid}: {req.pax} pax · ${quote['total']:.2f} ({booking['group_pay_mode']}) · {req.customer_name}")
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {
+        "booking_id": bid, "session_id": session.session_id,
+        "checkout_url": session.url, "amount": float(amount_due),
+        "total": quote["total"], "deposit": quote["deposit"],
+        "pay_mode": booking["group_pay_mode"],
+    }
+
+
+# ---------------- Checkout Abandonment Nudge -------------------------
+# When a guest reaches step 2 of the booking modal but doesn't submit,
+# capture their quote. 30 minutes later, a cron sends ONE email with
+# a 24-hour-valid pay link to come back and finish.
+# ---------------------------------------------------------------------
+
+
+class CheckoutIntent(BaseModel):
+    service_type: str = Field(..., pattern="^(taxi|tour|rental|group)$")
+    item_id: str
+    item_name: str
+    customer_email: EmailStr
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    booking_date: Optional[str] = None
+    pax: Optional[int] = None
+    total: float = Field(..., ge=0)
+    quote: Dict[str, Any] = {}  # full quote breakdown echoed back on the resume page
+
+
+@api_router.post("/checkout/intent")
+async def record_checkout_intent(req: CheckoutIntent):
+    """Called by the booking modal the moment the guest enters step 2.
+    Idempotent on (email, item_id, booking_date) — a second entry for
+    the same trip overwrites the first so the cron picks the freshest
+    quote."""
+    key = {
+        "customer_email": req.customer_email.lower(),
+        "item_id": req.item_id,
+        "booking_date": req.booking_date or "",
+    }
+    now = now_iso()
+    token = _hashlib.sha256(
+        f"{req.customer_email}|{req.item_id}|{now}|{os.environ.get('BOOKING_LINK_SECRET','rox-fallback')}".encode()
+    ).hexdigest()[:24]
+    await db.checkout_intents.update_one(
+        key,
+        {"$set": {
+            **key, "customer_name": req.customer_name or "", "customer_phone": req.customer_phone or "",
+            "service_type": req.service_type, "item_name": req.item_name,
+            "total": float(req.total), "pax": req.pax, "quote": req.quote,
+            "token": token, "updated_at": now, "nudged": False,
+        }, "$setOnInsert": {"created_at": now}},
+        upsert=True,
+    )
+    return {"ok": True, "token": token}
+
+
+@api_router.post("/cron/send-checkout-nudges")
+async def cron_send_checkout_nudges(request: Request):
+    secret = (request.headers.get("x-cron-secret") or "").strip()
+    expected = (os.environ.get("WEBHOOK_CRON_SECRET") or "").strip()
+    if not expected or secret != expected:
+        raise HTTPException(403, "Invalid cron secret")
+
+    now = datetime.now(timezone.utc)
+    cutoff_old = now - timedelta(minutes=30)
+    cutoff_dead = now - timedelta(hours=24)  # don't nudge truly-cold intents
+    sent, skipped = [], 0
+    async for intent in db.checkout_intents.find({"nudged": {"$ne": True}}):
+        try:
+            created = datetime.fromisoformat(str(intent["created_at"]).replace("Z", "+00:00"))
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+        except Exception:  # noqa: BLE001
+            continue
+        if created > cutoff_old or created < cutoff_dead:
+            continue
+        # Did they already book this trip? If yes, suppress the nudge.
+        existing = await db.bookings.find_one({
+            "customer_email": intent["customer_email"],
+            "item_id": intent["item_id"],
+        })
+        if existing:
+            await db.checkout_intents.update_one(
+                {"_id": intent["_id"]}, {"$set": {"nudged": True, "nudge_result": "booked"}},
+            )
+            skipped += 1
+            continue
+
+        # Fire the branded nudge email.
+        try:
+            from notifications import notify_checkout_abandonment
+            site = os.environ.get("SITE_BASE_URL", "https://roxtaxi.com").rstrip("/")
+            resume_url = f"{site}/resume-checkout?t={intent['token']}&e={intent['customer_email']}"
+            report = notify_checkout_abandonment(intent, resume_url=resume_url)
+            await db.checkout_intents.update_one(
+                {"_id": intent["_id"]},
+                {"$set": {"nudged": True, "nudged_at": now_iso(), "nudge_report": report}},
+            )
+            sent.append(intent["customer_email"])
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("checkout nudge err: %s", e)
+    return {"ok": True, "sent": sent, "skipped": skipped, "count": len(sent)}
+
+
+@api_router.get("/checkout/intent/{token}")
+async def resume_checkout_by_token(token: str, email: str):
+    """Serves the stored quote so the `/resume-checkout` page can pre-fill
+    the modal exactly where the guest left off."""
+    doc = await db.checkout_intents.find_one({
+        "token": token, "customer_email": email.lower(),
+    })
+    if not doc:
+        raise HTTPException(404, "Resume link expired or not found")
+    # Check it's within the 24h grace window.
+    try:
+        created = datetime.fromisoformat(str(doc["created_at"]).replace("Z", "+00:00"))
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if (datetime.now(timezone.utc) - created) > timedelta(hours=24):
+            raise HTTPException(410, "This resume link has expired. Start a new booking.")
+    except HTTPException:
+        raise
+    except Exception:  # noqa: BLE001
+        pass
+    return clean(doc)
+
+
 # ---- Live driver GPS tracking (in-memory latest-ping cache) -----------------
 # Driver hits /api/drivers/location every ~5s from their phone. Customer's
 # Track page long-polls /api/bookings/{id}/driver-location to render an ETA.

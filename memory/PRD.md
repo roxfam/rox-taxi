@@ -244,7 +244,19 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - **Weekend surcharge toggle** (`WEEKEND_SURCHARGE_USD` → `site_config.weekend_surcharge`): new `_weekend_surcharge_config()` reader + `GET/PUT /admin/weekend-surcharge` endpoints. Admin card has on/off toggle, USD amount input (0–500), and per-service-type pills (taxi/tour/excursion/rental). Changes land live for the next `GET /reschedule-quote` and `POST /guest-reschedule` call without a deploy.
 - **Regression tests**: all 30 existing tests still green after the refactor (`test_reschedule_quote.py`, `test_partial_refund_and_resend.py`, `test_admin_sessions_monitor.py`, `test_live_payment_smoke.py`, `test_admin_cookie_auth.py`, `test_kill_switch_and_rebook.py`).
 
-### Feb 2026 — Mobile checkout polish + real brand SVGs + branded confirmation email
+### Feb 2026 — Group booking checkout · Dark-mode email · Abandonment nudge cron
+- **Group Booking Checkout** (`server.py`):
+  - `GET /api/public/group-pricing` returns live `site_config.group_pricing` ({min_pax: 10, per_head_discount_pct: 15, deposit_pct: 25, min_lead_hours: 72} by default).
+  - `POST /api/group-bookings/quote` returns a transparent breakdown — gross, per-head discount, weekend-surcharge honouring the admin toggle, 10% VAT, 5% processing, total, deposit, due_later, and a `lead_time_ok` guard.
+  - `POST /api/group-bookings/checkout` creates a `GRP-xxxxx` booking (with `is_group_booking: true`, `group_pay_mode`, `balance_due`), opens a Stripe Checkout session for the deposit (or full), and pings the owner activity SMS.
+- **Dark Mode Email** (`notify_booking_confirmed`):
+  - Added `<meta color-scheme="light dark">` + `prefers-color-scheme: dark` block.
+  - Beige canvas → `#0b0f16`, white card → `#1F2937`, muted text → `#CBD5E1 / #94A3B8`. Navy hero + gold accents + orange CTA kept as-is for contrast.
+  - Applied via `rox-*` CSS class hooks so Gmail/Apple Mail dark mode render legibly.
+- **Checkout Abandonment Nudge**:
+  - `POST /api/checkout/intent` captures the quote on step-2 entry (idempotent on `email+item_id+booking_date`). Fire-and-forget from `BookingFlow.jsx` so it never blocks the UI.
+  - `POST /api/cron/send-checkout-nudges` (new cron, every 10 min via `.emergent/crons.yml`): finds intents > 30 min old, < 24 h old, not already nudged, with no matching booking yet. Fires `notify_checkout_abandonment` — a branded navy-hero email with the frozen total and a 24-h-valid `/resume-checkout?t=…` link.
+  - `GET /api/checkout/intent/{token}?email=…` serves the stored quote so the resume page can rehydrate the modal exactly where the guest left off. Returns 410 past the 24-h window.
 - **Mobile-first checkout step 2** (`BookingFlow.jsx`): added `sm:` breakpoints throughout.
   - Trust strip tightened to `gap-2.5 px-3` on mobile, subtitle allowed to wrap.
   - Headline shrinks to `text-lg` on `<sm` with the step chip pinned via `whitespace-nowrap`.

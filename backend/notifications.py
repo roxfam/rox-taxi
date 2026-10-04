@@ -1168,6 +1168,96 @@ def notify_reschedule_confirmation(
     return report
 
 
+def notify_checkout_abandonment(intent: dict, *, resume_url: str) -> dict:
+    """Fire a ONE-time branded nudge email 30 min after a guest hit step 2
+    of the booking modal but didn't finish paying. The `resume_url` opens
+    `/resume-checkout` on the site which rehydrates the booking modal
+    with their exact quote; valid for 24 hours.
+
+    Palette matches the modernised checkout screen (navy hero, orange CTA,
+    gold eyebrow) so the thread feels continuous — "you were here, come
+    back to the exact page you left."
+    """
+    report = {"sent": False, "provider": "none", "error": None, "kind": "checkout_abandonment"}
+    email = (intent.get("customer_email") or "").strip()
+    if not email:
+        report["error"] = "No email on intent"
+        return report
+    first = ((intent.get("customer_name") or "there").split(" ") or ["there"])[0]
+    item = intent.get("item_name") or "your Rox booking"
+    total = float(intent.get("total") or 0.0)
+    pax_line = (f"{intent.get('pax')} guest{'s' if (intent.get('pax') or 0) != 1 else ''}"
+                if intent.get("pax") else "")
+    pre_date = intent.get("booking_date") or ""
+    try:
+        from datetime import datetime as _dt_cls  # noqa: PLC0415
+        _dt = _dt_cls.fromisoformat(str(pre_date).replace("Z", "+00:00"))
+        pre_date = _dt.strftime("%A, %b %-d · %-I:%M %p")
+    except Exception:  # noqa: BLE001
+        pass
+
+    subject = f"Finish your Rox booking — {_fmt_money(total)} held for 24 hrs"
+    text = (
+        f"Hi {first},\n\n"
+        f"You started a Rox booking for {item} and stepped away before paying.\n"
+        f"Your quote of {_fmt_money(total)} is locked in for 24 hours.\n\n"
+        f"Finish here: {resume_url}\n\n"
+        f"— Rox Taxi Service & Tours · WhatsApp +1 (242) 432-2587"
+    )
+    html = f"""
+    <!DOCTYPE html>
+    <html><head><meta charset="utf-8"/><meta name="color-scheme" content="light dark"/>
+    <style>
+      @media (prefers-color-scheme: dark) {{
+        .rox-canvas {{ background:#0b0f16 !important; }}
+        .rox-outer  {{ background:#111827 !important; }}
+        .rox-card   {{ background:#1F2937 !important; border-color:#374151 !important; }}
+        .rox-sub    {{ color:#CBD5E1 !important; }}
+        .rox-lb     {{ color:#94A3B8 !important; }}
+        .rox-vl     {{ color:#F9FAFB !important; }}
+      }}
+    </style></head>
+    <body class="rox-canvas" style="margin:0;padding:0;background:#F3F4F6;">
+      <div class="rox-outer" style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;background:#FAF9F6;">
+        <div style="background:linear-gradient(135deg,#0B3B5C,#132a4a);padding:32px;color:#fff;">
+          <div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:800;">
+            Your quote is still live
+          </div>
+          <h1 style="font-family:Georgia,serif;color:#fff;margin:10px 0 4px;font-size:26px;line-height:1.15;">
+            {first}, you're one tap from booked.
+          </h1>
+          <p class="rox-sub" style="color:rgba(255,255,255,.7);font-size:14px;margin:0;">
+            We held your price for the next 24 hours. Come back and we'll take it from there.
+          </p>
+        </div>
+        <div style="padding:22px 32px;">
+          <div class="rox-card" style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;">
+            <div class="rox-lb" style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Your trip</div>
+            <div class="rox-vl" style="color:#0B3B5C;font-size:17px;margin-top:4px;font-weight:700;">{item}</div>
+            {f'<div style="color:#64748B;font-size:13px;margin-top:6px;">{pre_date}{" · " + pax_line if pax_line else ""}</div>' if pre_date or pax_line else ''}
+            <hr style="border:none;border-top:1px solid #E2E8F0;margin:16px 0;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;">
+              <span class="rox-lb" style="color:#64748B;font-size:13px;">Total (VAT & fees in)</span>
+              <span style="font-family:Georgia,serif;font-size:26px;color:#E86A3C;font-weight:800;">{_fmt_money(total)}</span>
+            </div>
+          </div>
+        </div>
+        <div style="padding:0 32px 24px;">
+          <a href="{resume_url}" style="display:block;background:#E86A3C;color:#fff;text-decoration:none;text-align:center;font-weight:700;padding:14px 20px;border-radius:999px;font-size:14px;">
+            Finish booking →
+          </a>
+          <p class="rox-lb" style="color:#64748B;font-size:11px;margin:10px 0 0;text-align:center;">
+            Link expires in 24 hours. Need a change? Reply here or WhatsApp +1 (242) 432-2587.
+          </p>
+        </div>
+      </div>
+    </body></html>
+    """
+    result = send_email(email, subject, html, text, category="marketing")
+    report.update(result)
+    return report
+
+
 def notify_new_admin_device(
     *, to_email: Optional[str], sub: str, device: str, ip: str,
     city: Optional[str], when_iso: str, revoke_url: str,
@@ -1235,6 +1325,10 @@ def notify_new_admin_device(
 def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dict:
     """Send email + SMS on confirmed booking.
 
+    Email HTML includes a `prefers-color-scheme: dark` block so Gmail
+    for mobile, Apple Mail, and Outlook with dark mode render the
+    navy hero + card as legible against a dark surround.
+
     Args:
         booking: booking dict.
         prefs: optional site config prefs {notify_email_enabled: bool, notify_sms_enabled: bool}.
@@ -1289,8 +1383,40 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
         pass
 
     html = f"""
-    <div style="margin:0;padding:0;background:#F3F4F6;">
-      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;background:#FAF9F6;">
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="color-scheme" content="light dark" />
+      <meta name="supported-color-schemes" content="light dark" />
+      <style>
+        /* ─── Dark-mode overrides ─────────────────────────────────
+           Gmail/Apple Mail/Outlook that honour prefers-color-scheme
+           swap the beige canvas + white card for near-black equivalents
+           and lift text to high-contrast on-dark values. The navy hero
+           and the gold accents are kept intact because they already
+           contrast correctly on both themes. ────────────────────── */
+        @media (prefers-color-scheme: dark) {{
+          .rox-canvas    {{ background:#0b0f16 !important; }}
+          .rox-outer     {{ background:#111827 !important; }}
+          .rox-card      {{ background:#1F2937 !important; border-color:#374151 !important; }}
+          .rox-h1-sub    {{ color:#CBD5E1 !important; }}
+          .rox-detail-lb {{ color:#94A3B8 !important; }}
+          .rox-detail-vl {{ color:#F9FAFB !important; }}
+          .rox-foot      {{ color:#94A3B8 !important; }}
+          .rox-foot-link {{ color:#D4A94A !important; }}
+          .rox-pre-date  {{ color:#64748B !important; }}
+          .rox-total-lb  {{ color:#94A3B8 !important; }}
+          .rox-track-cta {{ background:#E86A3C !important; }}
+          .rox-boarding-sub {{ color:#F8F5EC !important; }}
+          .rox-invoice-card {{ background:#1F2937 !important; border-color:#374151 !important; }}
+          .rox-invoice-title {{ color:#F9FAFB !important; }}
+          .rox-invoice-sub   {{ color:#94A3B8 !important; }}
+        }}
+      </style>
+    </head>
+    <body class="rox-canvas" style="margin:0;padding:0;background:#F3F4F6;">
+      <div class="rox-outer" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;background:#FAF9F6;">
         <!-- Navy hero: eyebrow + headline + confirmation code -->
         <div style="background:linear-gradient(135deg,#0B3B5C 0%,#132a4a 100%);padding:36px 32px 44px;color:#fff;">
           <div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:800;">
@@ -1299,7 +1425,7 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
           <h1 style="font-family:Georgia,serif;color:#fff;margin:12px 0 6px;font-size:28px;line-height:1.1;">
             You're booked, {booking.get('customer_name', 'friend').split(' ')[0]}.
           </h1>
-          <p style="color:rgba(255,255,255,.7);font-size:14px;margin:0;">
+          <p class="rox-h1-sub" style="color:rgba(255,255,255,.7);font-size:14px;margin:0;">
             Confirmation is final — here's everything you need for pickup.
           </p>
           <div style="margin-top:22px;padding:14px 18px;background:rgba(212,169,74,.12);border:1px solid rgba(212,169,74,.3);border-radius:12px;">
@@ -1310,17 +1436,17 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
 
         <!-- Trip details card -->
         <div style="padding:24px 32px;">
-          <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;">
+          <div class="rox-card" style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
               <div style="flex:1;">
-                <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Service</div>
-                <div style="color:#0B3B5C;font-size:17px;margin-top:4px;font-weight:700;">{booking.get('item_name', 'Rox booking')}</div>
+                <div class="rox-detail-lb" style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Service</div>
+                <div class="rox-detail-vl" style="color:#0B3B5C;font-size:17px;margin-top:4px;font-weight:700;">{booking.get('item_name', 'Rox booking')}</div>
                 <div style="color:#64748B;font-size:13px;margin-top:10px;">
-                  <span style="color:#94A3B8;">Pickup · </span>{_formatted_date}
+                  <span class="rox-pre-date" style="color:#94A3B8;">Pickup · </span>{_formatted_date}
                 </div>
               </div>
               <div style="text-align:right;">
-                <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Total</div>
+                <div class="rox-total-lb" style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Total</div>
                 <div style="font-family:Georgia,serif;font-size:24px;color:#E86A3C;font-weight:700;margin-top:4px;">{_fmt_money(booking.get('total', 0))}</div>
               </div>
             </div>
@@ -1337,7 +1463,7 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
             <div style="margin:16px auto 10px;background:#fff;border-radius:14px;padding:12px;display:inline-block;">
               <img src="{_qr_img_url}" width="180" height="180" alt="Pickup QR" style="display:block;border-radius:4px;" />
             </div>
-            <p style="color:#F8F5EC;font-size:13px;margin:4px 0 0;max-width:380px;margin-left:auto;margin-right:auto;line-height:1.4;">
+            <p class="rox-boarding-sub" style="color:#F8F5EC;font-size:13px;margin:4px 0 0;max-width:380px;margin-left:auto;margin-right:auto;line-height:1.4;">
               Show this QR to your Rox driver at pickup — one scan and you're on your way.
             </p>
             <a href="{_pass_url}" style="display:inline-block;background:#D4A94A;color:#0B3B5C;text-decoration:none;font-weight:800;padding:12px 24px;border-radius:999px;font-size:13px;margin-top:16px;">
@@ -1348,7 +1474,7 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
 
         <!-- Orange CTA band — primary action matches checkout -->
         <div style="padding:0 32px 24px;">
-          <a href="{_base}/track?id={booking['id']}" style="display:block;background:#E86A3C;color:#fff;text-decoration:none;text-align:center;font-weight:700;padding:14px 20px;border-radius:999px;font-size:14px;">
+          <a href="{_base}/track?id={booking['id']}" class="rox-track-cta" style="display:block;background:#E86A3C;color:#fff;text-decoration:none;text-align:center;font-weight:700;padding:14px 20px;border-radius:999px;font-size:14px;">
             Track your booking live →
           </a>
         </div>
@@ -1358,13 +1484,14 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
           <div style="font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:#94A3B8;font-weight:700;">
             Rox Taxi Service &amp; Tours
           </div>
-          <p style="color:#64748B;font-size:12px;margin:8px 0 0;line-height:1.5;">
+          <p class="rox-foot" style="color:#64748B;font-size:12px;margin:8px 0 0;line-height:1.5;">
             Nassau · Paradise Island · The Bahamas<br/>
-            Questions? WhatsApp <a style="color:#0B3B5C;font-weight:700;text-decoration:none;" href="https://wa.me/12424322587">+1 (242) 432-2587</a>
+            Questions? WhatsApp <a class="rox-foot-link" style="color:#0B3B5C;font-weight:700;text-decoration:none;" href="https://wa.me/12424322587">+1 (242) 432-2587</a>
           </p>
         </div>
       </div>
-    </div>
+    </body>
+    </html>
     """
 
     if email_enabled and booking.get("customer_email"):

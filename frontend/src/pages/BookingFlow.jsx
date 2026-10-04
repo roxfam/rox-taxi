@@ -1087,7 +1087,26 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   )}
                 </div>
                 <button
-                  onClick={() => setStep(2)}
+                  onClick={() => {
+                    setStep(2);
+                    // Checkout abandonment capture — fire-and-forget POST to
+                    // the backend so the nudge cron has a quote to resurrect
+                    // if the guest closes the tab before submitting.
+                    try {
+                      api.post("/checkout/intent", {
+                        service_type: serviceType,
+                        item_id: item?.id || item?.item_id || "",
+                        item_name: item?.name || item?.item_name || "Rox booking",
+                        customer_email: form.customer_email,
+                        customer_name: form.customer_name,
+                        customer_phone: form.customer_phone,
+                        booking_date: form.booking_date || null,
+                        pax: Number(form.passengers || form.adults || 0) || null,
+                        total: Number(total || 0),
+                        quote: { total, item, serviceType, form },
+                      }).catch(() => {});
+                    } catch (_) { /* non-blocking */ }
+                  }}
                   className="btn-shine rounded-full bg-[#0B3B5C] text-white px-6 py-3 text-sm font-semibold hover:bg-[#132a4a] active:scale-95"
                   data-testid="booking-continue-payment-btn"
                 >
