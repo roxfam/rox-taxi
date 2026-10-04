@@ -19,6 +19,7 @@ import BookingDetailModal from "./admin/BookingDetailModal";
 import AdminSessionsCard from "./admin/AdminSessionsCard";
 import StripeLiveCheckCard from "./admin/StripeLiveCheckCard";
 import WeekendSurchargeCard from "./admin/WeekendSurchargeCard";
+import GroupPricingCard from "./admin/GroupPricingCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -290,6 +291,10 @@ export default function AdminDashboard() {
         {/* Sunday-pickup weekend surcharge admin control — flows live to
             the next reschedule-quote without a backend restart. */}
         <WeekendSurchargeCard />
+
+        {/* Group-booking pricing admin control (min pax, discount %,
+            deposit %, lead hours) — surfaces on /groups/book immediately. */}
+        <GroupPricingCard />
 
         {/* Reviews Inbox — every un-replied 5★ Google review with an
             AI-drafted thank-you ready to fire. Auto-hides when the

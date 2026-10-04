@@ -4013,6 +4013,38 @@ class WeekendSurchargeRequest(BaseModel):
     service_types: Optional[List[str]] = None
 
 
+class GroupPricingRequest(BaseModel):
+    min_pax: Optional[int] = Field(None, ge=2, le=100)
+    per_head_discount_pct: Optional[float] = Field(None, ge=0.0, le=50.0)
+    deposit_pct: Optional[float] = Field(None, ge=10.0, le=100.0)
+    min_lead_hours: Optional[int] = Field(None, ge=1, le=720)
+
+
+@router.put("/admin/group-pricing")
+async def set_group_pricing(
+    req: GroupPricingRequest,
+    _: str = Depends(_require_admin_placeholder),
+):
+    """Admin control for `site_config.group_pricing`. Flows live to the
+    public `/groups/book` quote preview and `/group-bookings/quote`
+    without a backend restart."""
+    patch: Dict[str, Any] = {}
+    if req.min_pax is not None:
+        patch["group_pricing.min_pax"] = int(req.min_pax)
+    if req.per_head_discount_pct is not None:
+        patch["group_pricing.per_head_discount_pct"] = round(float(req.per_head_discount_pct), 2)
+    if req.deposit_pct is not None:
+        patch["group_pricing.deposit_pct"] = round(float(req.deposit_pct), 2)
+    if req.min_lead_hours is not None:
+        patch["group_pricing.min_lead_hours"] = int(req.min_lead_hours)
+    if not patch:
+        raise HTTPException(400, "Nothing to update")
+    patch["updated_at"] = _now_iso()
+    await _db.site_config.update_one({"_id": "main"}, {"$set": patch}, upsert=True)
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    return cfg.get("group_pricing") or {}
+
+
 @router.put("/admin/weekend-surcharge")
 async def set_weekend_surcharge(
     req: WeekendSurchargeRequest,

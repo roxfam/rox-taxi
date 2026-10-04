@@ -22,6 +22,8 @@ const DriverScan = lazy(() => import("./pages/DriverScan"));
 const Contact = lazy(() => import("./pages/Contact"));
 const About = lazy(() => import("./pages/About"));
 const Groups = lazy(() => import("./pages/Groups"));
+const GroupsBook = lazy(() => import("./pages/GroupsBook"));
+const ResumeCheckout = lazy(() => import("./pages/ResumeCheckout"));
 const WeddingBuilder = lazy(() => import("./pages/WeddingBuilder"));
 const Gallery = lazy(() => import("./pages/Gallery"));
 const Wall = lazy(() => import("./pages/Wall"));
@@ -105,6 +107,8 @@ function AppRouter() {
       <Route path="/contact" element={<CustomerShell><Contact /></CustomerShell>} />
       <Route path="/about" element={<CustomerShell><About /></CustomerShell>} />
       <Route path="/groups" element={<CustomerShell><Groups /></CustomerShell>} />
+      <Route path="/groups/book" element={<CustomerShell><GroupsBook /></CustomerShell>} />
+      <Route path="/resume-checkout" element={<CustomerShell><ResumeCheckout /></CustomerShell>} />
       <Route path="/wedding-builder" element={<CustomerShell><WeddingBuilder /></CustomerShell>} />
       <Route path="/gallery" element={<CustomerShell><Gallery /></CustomerShell>} />
       <Route path="/wall" element={<CustomerShell><Wall /></CustomerShell>} />
