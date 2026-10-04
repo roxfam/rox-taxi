@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { api, money, BACKEND_URL } from "../../lib/api";
 import AdminChatPanel from "./AdminChatPanel";
+import SecondaryContactsPanel from "./SecondaryContactsPanel";
 
 /**
  * BookingDetailModal — click any admin booking row to open this. Shows:
@@ -208,7 +209,10 @@ export default function BookingDetailModal({ booking, onClose, onChanged, onOpen
               bookings since one-off taxis don't need a thread. The admin
               can always open it from the HMAC guest link if needed. */}
           {(booking.service_type === "group" || booking.service_type === "wedding" || (booking.passengers || 0) >= 10 || booking.balance_due > 0) && (
-            <AdminChatPanel bookingId={bid} />
+            <>
+              <AdminChatPanel bookingId={bid} />
+              <SecondaryContactsPanel booking={booking} onChanged={onChanged} />
+            </>
           )}
 
           {/* Status timeline */}

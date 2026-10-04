@@ -30,6 +30,7 @@ from routes import admin as admin_module
 from routes import catalog as catalog_module
 from routes import chat as chat_module
 from routes import group_chat as group_chat_module
+from routes import secondary_contacts as secondary_contacts_module
 from routes import gbp as gbp_module
 from routes import gallery as gallery_module
 from routes import licenses as licenses_module
@@ -6317,6 +6318,24 @@ api_router.include_router(cron_module.router)
 # HMAC-signed `?t=` token that mirrors the balance-pay pattern.
 group_chat_module.configure(db=db, now_iso=now_iso, clean=clean, require_admin=require_admin)
 api_router.include_router(group_chat_module.router)
+
+# Wire up secondary-contacts (CC list) router. Lead planner invites
+# a maid-of-honor / hotel concierge; after their one-tap opt-in they
+# receive the same balance + paid-in-full emails.
+secondary_contacts_module.configure(db=db, now_iso=now_iso, clean=clean, require_admin=require_admin)
+api_router.include_router(secondary_contacts_module.router)
+
+
+@api_router.get("/stripe/public-key")
+async def stripe_public_key():
+    """Public-safe Stripe publishable key for Stripe.js on the client.
+    Only `pk_test_*` / `pk_live_*` keys are returned — never the secret.
+    The frontend uses this to confirm 3-D Secure PaymentIntents without
+    a server round-trip."""
+    pk = (os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
+    if not pk.startswith("pk_"):
+        return {"publishable_key": "", "configured": False}
+    return {"publishable_key": pk, "configured": True}
 
 app.include_router(api_router)
 

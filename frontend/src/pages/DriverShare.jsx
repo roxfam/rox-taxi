@@ -5,6 +5,7 @@ import { api, BACKEND_URL } from "../lib/api";
 import {
   MapPin, Play, Pause, Signal, AlertTriangle, Check, BellRing,
   Navigation2, Flag, Ban, User, Phone, MessageCircle, Camera, X, Zap, HelpCircle,
+  Clock3, MapPinned, AlertCircle,
 } from "lucide-react";
 import DriverChatPanel from "./DriverChatPanel";
 
@@ -347,10 +348,15 @@ export default function DriverShare() {
         </div>
       )}
 
-      {/* Photo handoff proof — camera capture on mobile, receipts for no-show
-          disputes and rental delivery-condition claims. */}
+      {/* Driver chat (read-only) — opens 60 min before pickup */}
       {booking && !isClosed && (
         <DriverChatPanel />
+      )}
+
+      {/* Driver quick-reply · one-tap SMS + chat ack ("5 min out", "At pickup",
+          "Running late"). Zero typing on the driver's phone. */}
+      {booking && !isClosed && (
+        <QuickReplyRow bookingId={booking.id} />
       )}
 
       {/* Photo handoff proof — camera capture on mobile, receipts for no-show
@@ -514,3 +520,51 @@ export default function DriverShare() {
     </div>
   );
 }
+
+/**
+ * QuickReplyRow — 3 canned one-tap acknowledgements the driver fires
+ * without typing. Each one SMSes the planner AND inserts a mirror
+ * message into the chat thread so dispatch sees what was acked.
+ */
+function QuickReplyRow({ bookingId }) {
+  const [busy, setBusy] = useState("");
+  const TEMPLATES = [
+    { kind: "en_route_5", label: "5 min out", Icon: Clock3, tint: "#D4A94A" },
+    { kind: "arrived_ack", label: "At pickup", Icon: MapPinned, tint: "#059669" },
+    { kind: "running_late", label: "Running late", Icon: AlertCircle, tint: "#E86A3C" },
+  ];
+  const fire = async (kind) => {
+    setBusy(kind);
+    try {
+      const r = await api.post(`/driver/${bookingId}/quick-reply?kind=${kind}`);
+      const sms = r.data?.sms?.sent;
+      toast.success(`${r.data?.label} · ${sms ? "SMS sent to planner" : "logged (no SMS)"}`);
+    } catch (e) {
+      toast.error("Could not send quick reply");
+    } finally { setBusy(""); }
+  };
+  return (
+    <div className="w-full max-w-md mt-3 rounded-3xl bg-white/5 border border-white/10 p-5 backdrop-blur" data-testid="driver-quick-reply">
+      <div className="text-[10px] tracking-[0.32em] uppercase text-white/60 font-black mb-3">Quick reply · zero typing</div>
+      <div className="grid grid-cols-3 gap-2">
+        {TEMPLATES.map((t) => (
+          <button
+            key={t.kind}
+            onClick={() => fire(t.kind)}
+            disabled={!!busy}
+            style={{ borderColor: `${t.tint}66`, color: t.tint }}
+            className="rounded-2xl bg-white/5 border py-3 text-xs font-bold flex flex-col items-center gap-1 active:scale-95 disabled:opacity-50 hover:bg-white/10"
+            data-testid={`driver-quick-reply-${t.kind}`}
+          >
+            <t.Icon className="w-5 h-5" />
+            {busy === t.kind ? "…" : t.label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 text-[10px] text-white/40 text-center leading-relaxed">
+        Fires an SMS to the planner and logs it to dispatch's chat.
+      </div>
+    </div>
+  );
+}
+

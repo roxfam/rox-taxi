@@ -72,6 +72,16 @@ async def _list_messages(booking_id: str) -> List[Dict[str, Any]]:
     return [_clean(d) for d in docs]
 
 
+async def _mark_read(booking_id: str, by: str) -> str:
+    """Stamp the latest-read timestamp on the booking so the other side
+    can render a 'Seen ✓' badge next to messages older than that stamp.
+    `by` is either 'dispatch' or 'guest'. Returns the new ISO stamp."""
+    now = _now_iso()
+    field = "last_read_dispatch_at" if by == "dispatch" else "last_read_guest_at"
+    await _db.bookings.update_one({"id": booking_id}, {"$set": {field: now}})
+    return now
+
+
 # ── Admin side ──────────────────────────────────────────────────────
 async def _admin_dep(request: Request):
     """Late-binding admin dep that forwards cookies + CSRF through to
@@ -90,11 +100,18 @@ async def admin_chat_list(booking_id: str, _: str = Depends(_admin_dep)):
     if not booking:
         raise HTTPException(404, "Booking not found")
     messages = await _list_messages(booking_id.upper())
+    # Mark anything the guest sent before now as read by dispatch — the
+    # guest's `last_read_guest_at` is included so the admin UI can paint
+    # 'Seen ✓' badges on dispatch messages the planner has viewed.
+    await _mark_read(booking_id.upper(), "dispatch")
+    fresh = await _db.bookings.find_one({"id": booking_id.upper()}) or {}
     return {
         "booking_id": booking_id.upper(),
         "guest_name": booking.get("customer_name"),
         "messages": messages,
         "guest_link": f"https://roxtaxi.com/booking/{booking_id.upper()}/chat?t={make_chat_token(booking_id.upper())}",
+        "last_read_guest_at": fresh.get("last_read_guest_at"),
+        "last_read_dispatch_at": fresh.get("last_read_dispatch_at"),
     }
 
 
@@ -147,11 +164,15 @@ async def guest_chat_list(booking_id: str, t: str = Query(...)):
     if not booking:
         raise HTTPException(404, "Booking not found")
     messages = await _list_messages(booking_id.upper())
+    await _mark_read(booking_id.upper(), "guest")
+    fresh = await _db.bookings.find_one({"id": booking_id.upper()}) or {}
     return {
         "booking_id": booking_id.upper(),
         "item_name": booking.get("item_name"),
         "booking_date": booking.get("booking_date"),
         "messages": messages,
+        "last_read_guest_at": fresh.get("last_read_guest_at"),
+        "last_read_dispatch_at": fresh.get("last_read_dispatch_at"),
     }
 
 
@@ -248,23 +269,48 @@ async def driver_chat_view(booking_id: str):
     if not booking:
         raise HTTPException(404, "Booking not found")
     status = (booking.get("status") or "").lower()
-    in_progress = status in {"driver_assigned", "en_route", "arrived"}
-    try:
-        d = datetime.fromisoformat(str(booking.get("booking_date", "")).replace("Z", "+00:00"))
-        if d.tzinfo is None:
-            d = d.replace(tzinfo=timezone.utc)
-        delta = d - datetime.now(timezone.utc)
-        within_window = delta <= timedelta(hours=1) and delta >= timedelta(hours=-6)
-    except Exception:  # noqa: BLE001
-        within_window = False
-    if not (in_progress or within_window):
-        return {"booking_id": booking_id.upper(), "visible": False,
-                "reason": "Driver chat opens 60 min before pickup.", "messages": []}
-    messages = await _list_messages(booking_id.upper())
-    return {
+
+
+# ─── Driver quick-reply canned templates ──────────────────────────────
+# Fires a short SMS to the planner AND inserts an entry into the chat
+# thread so the dispatch desk sees the same acknowledgement without the
+# driver having to type anything on their phone.
+_QUICK_REPLY_TEMPLATES = {
+    "en_route_5": ("5 min out", "Rox Taxi: Your driver is 5 minutes away. See you soon! 🚕"),
+    "arrived_ack": ("At pickup", "Rox Taxi: Your driver has arrived at the pickup location."),
+    "running_late": ("Running late", "Rox Taxi: Your driver is running a few minutes late. We'll keep you posted."),
+}
+
+
+@router.post("/driver/{booking_id}/quick-reply")
+async def driver_quick_reply(booking_id: str, kind: str = Query(...)):
+    tpl = _QUICK_REPLY_TEMPLATES.get(kind)
+    if not tpl:
+        raise HTTPException(400, "Unknown quick-reply template.")
+    booking = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    label, sms_body = tpl
+
+    sms_report = {"sent": False, "error": None}
+    if booking.get("customer_phone"):
+        try:
+            from notifications import send_sms  # noqa: PLC0415
+            sms_report = send_sms(booking["customer_phone"], sms_body)
+        except Exception as e:  # noqa: BLE001
+            sms_report = {"sent": False, "error": str(e)}
+
+    # Mirror into the chat thread so admin + planner see what the driver
+    # just acknowledged. Author is 'driver' so the UI can colour it
+    # differently from dispatch posts.
+    doc = {
+        "id": uuid.uuid4().hex[:12],
         "booking_id": booking_id.upper(),
-        "visible": True,
-        "customer_name": booking.get("customer_name"),
-        "item_name": booking.get("item_name"),
-        "messages": messages,
+        "author": "driver",
+        "author_name": "Driver (quick reply)",
+        "body": f"📣 {label} · {sms_body}",
+        "image_url": None,
+        "created_at": _now_iso(),
     }
+    await _db.group_chat_messages.insert_one(doc)
+    return {"ok": True, "label": label, "sms": sms_report, "message": _clean(doc)}

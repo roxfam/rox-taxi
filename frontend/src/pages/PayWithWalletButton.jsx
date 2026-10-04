@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CreditCard, Zap } from "lucide-react";
 import { API, money } from "../lib/api";
+import ThreeDSecureModal from "./ThreeDSecureModal";
 
 /**
  * PayWithWalletButton — one-tap off-session Stripe charge against a
@@ -14,6 +15,7 @@ export default function PayWithWalletButton({ booking, onPaid }) {
   const [methods, setMethods] = useState([]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [threeDSecret, setThreeDSecret] = useState("");
 
   useEffect(() => {
     fetch(`${API}/my/wallet`, { credentials: "include" })
@@ -43,8 +45,10 @@ export default function PayWithWalletButton({ booking, onPaid }) {
       if (d.status === "paid") {
         toast.success(`Paid ${money(d.amount)} with ${d.card?.brand?.toUpperCase() || "card"} •••• ${d.card?.last4}`);
         onPaid?.();
-      } else if (d.status === "requires_action") {
-        toast.info("Your bank wants a 3-D Secure confirmation. We'll re-send a card link to your email.");
+      } else if (d.status === "requires_action" && d.client_secret) {
+        // Keep the dropdown closed and open the 3-D Secure modal so the
+        // guest can confirm with their bank right here.
+        setThreeDSecret(d.client_secret);
       } else {
         toast.info(`Payment ${d.status}. We'll notify you when it clears.`);
       }
@@ -83,6 +87,13 @@ export default function PayWithWalletButton({ booking, onPaid }) {
             </button>
           ))}
         </div>
+      )}
+      {threeDSecret && (
+        <ThreeDSecureModal
+          clientSecret={threeDSecret}
+          onDone={() => { setThreeDSecret(""); onPaid?.(); }}
+          onClose={() => setThreeDSecret("")}
+        />
       )}
     </div>
   );

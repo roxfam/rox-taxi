@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { MessageSquare, Send, RotateCw, ExternalLink, Copy, Paperclip, X } from "lucide-react";
+import { MessageSquare, Send, RotateCw, ExternalLink, Copy, Paperclip, X, Check, CheckCheck } from "lucide-react";
 import { api, BACKEND_URL } from "../../lib/api";
 
 /**
@@ -29,7 +29,8 @@ export default function AdminChatPanel({ bookingId }) {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [guestLink, setGuestLink] = useState("");
-  const [pendingImage, setPendingImage] = useState(null); // { url, name }
+  const [guestReadAt, setGuestReadAt] = useState(null);
+  const [pendingImage, setPendingImage] = useState(null);
   const [uploading, setUploading] = useState(false);
   const scrollRef = useRef(null);
   const fileRef = useRef(null);
@@ -40,6 +41,7 @@ export default function AdminChatPanel({ bookingId }) {
       const r = await api.get(`/admin/chat/${bookingId}`);
       setMessages(r.data?.messages || []);
       setGuestLink(r.data?.guest_link || "");
+      setGuestReadAt(r.data?.last_read_guest_at || null);
     } catch (e) {
       // Silent — probably a 404 for a non-group booking; parent still renders.
     } finally {
@@ -139,6 +141,7 @@ export default function AdminChatPanel({ bookingId }) {
           <div className="text-center text-[#94A3B8] text-xs py-8">No messages yet · say hi to kick things off.</div>
         ) : messages.map((m) => {
           const mine = m.author === "dispatch";
+          const seen = mine && guestReadAt && new Date(m.created_at).getTime() <= new Date(guestReadAt).getTime();
           return (
             <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`} data-testid={`admin-chat-msg-${m.id}`}>
               <div className={`max-w-[75%] rounded-2xl px-3.5 py-2 ${mine ? "bg-[#0B3B5C] text-white" : "bg-white border border-[#E2E8F0] text-[#0B3B5C]"}`}>
@@ -155,6 +158,15 @@ export default function AdminChatPanel({ bookingId }) {
                       data-testid={`admin-chat-img-${m.id}`}
                     />
                   </a>
+                )}
+                {mine && (
+                  <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80" data-testid={`admin-chat-receipt-${m.id}`}>
+                    {seen ? (
+                      <><CheckCheck className="w-3 h-3 text-[#34D399]" /><span className="text-[#D4A94A] font-bold">Seen</span></>
+                    ) : (
+                      <><Check className="w-3 h-3" /><span>Sent</span></>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

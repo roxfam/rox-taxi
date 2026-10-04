@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { MessageSquare, Send, RotateCw, ArrowLeft, Paperclip, X } from "lucide-react";
+import { MessageSquare, Send, RotateCw, ArrowLeft, Paperclip, X, Check, CheckCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { API, BACKEND_URL } from "../lib/api";
 
@@ -31,6 +31,7 @@ export default function GuestChat() {
   const token = params.get("t") || "";
   const [messages, setMessages] = useState([]);
   const [meta, setMeta] = useState(null);
+  const [dispatchReadAt, setDispatchReadAt] = useState(null);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -52,6 +53,7 @@ export default function GuestChat() {
       const d = await r.json();
       setMessages(d.messages || []);
       setMeta({ item_name: d.item_name, booking_date: d.booking_date });
+      setDispatchReadAt(d.last_read_dispatch_at || null);
     } catch (e) {
       setError("Could not reach the server. Try again in a moment.");
     } finally { setLoading(false); }
@@ -166,6 +168,7 @@ export default function GuestChat() {
             </div>
           ) : messages.map((m) => {
             const mine = m.author === "guest";
+            const seen = mine && dispatchReadAt && new Date(m.created_at).getTime() <= new Date(dispatchReadAt).getTime();
             return (
               <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`} data-testid={`guest-chat-msg-${m.id}`}>
                 <div className={`max-w-[80%] rounded-2xl px-4 py-2 ${mine ? "bg-[#E86A3C] text-white" : "bg-white border border-[#E2E8F0] text-[#0B3B5C]"}`}>
@@ -177,6 +180,15 @@ export default function GuestChat() {
                     <a href={`${BACKEND_URL}${m.image_url}`} target="_blank" rel="noreferrer">
                       <img src={`${BACKEND_URL}${m.image_url}`} alt="" className="mt-2 rounded-lg max-h-56 object-cover border border-black/10" data-testid={`guest-chat-img-${m.id}`} />
                     </a>
+                  )}
+                  {mine && (
+                    <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80" data-testid={`guest-chat-receipt-${m.id}`}>
+                      {seen ? (
+                        <><CheckCheck className="w-3 h-3" /><span className="font-bold">Seen by dispatch</span></>
+                      ) : (
+                        <><Check className="w-3 h-3" /><span>Sent</span></>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
