@@ -5,6 +5,9 @@ Endpoints:
     GET  /referrals/summary                     — referral code, unlocks, credit balance
     POST /my/bookings/{id}/extend/quote         — extension pricing preview
     POST /my/bookings/{id}/extend/checkout      — Stripe checkout for the extension
+    GET  /my/wallet                             — saved Stripe PaymentMethods
+    POST /my/wallet/setup-session               — new Stripe setup Checkout (save a card)
+    DELETE /my/wallet/{pm_id}                   — detach a saved card
 
 Wired up by server.py via `configure()` + `include_router()`. `get_current_user`
 stays in server.py (shared across many routes) and is passed here as a
@@ -13,6 +16,7 @@ late-binding wrapper (matches routes/auth.py + routes/licenses.py pattern).
 import uuid
 from typing import Any, Callable, Dict, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -153,3 +157,152 @@ async def rental_extend_checkout(
     })
     return {"checkout_url": session.url, "session_id": session.session_id,
             "extension_id": ext_id, "quote": quote}
+
+
+
+# ─────────────────────── Trip Wallet (saved Stripe cards) ─────────────
+# Authenticated customers save a Stripe PaymentMethod via SetupIntent
+# Checkout; we store `payment_method_id` + display metadata on the user
+# doc (`stripe_customer_id`, `payment_methods: [...]`). No raw card data
+# ever hits our servers — Stripe hosts the collection UI.
+STRIPE_API = "https://api.stripe.com/v1"
+
+
+class WalletSetupSession(BaseModel):
+    origin_url: str
+
+
+async def _stripe_post(path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    key = _secrets_store.get_secret("STRIPE_API_KEY", "")
+    if not key or key.strip().lower() in ("sk_test_emergent", ""):
+        raise HTTPException(503, "Trip wallet needs a real Stripe key. Admin: claim your Stripe sandbox or use live keys.")
+    async with httpx.AsyncClient(timeout=20.0) as c:
+        r = await c.post(f"{STRIPE_API}{path}", auth=(key, ""), data=data)
+    if r.status_code >= 400:
+        raise HTTPException(502, f"Stripe error ({r.status_code}): {r.text[:300]}")
+    return r.json()
+
+
+async def _stripe_get(path: str) -> Dict[str, Any]:
+    key = _secrets_store.get_secret("STRIPE_API_KEY", "")
+    if not key or key.strip().lower() in ("sk_test_emergent", ""):
+        raise HTTPException(503, "Trip wallet needs a real Stripe key.")
+    async with httpx.AsyncClient(timeout=20.0) as c:
+        r = await c.get(f"{STRIPE_API}{path}", auth=(key, ""))
+    if r.status_code >= 400:
+        raise HTTPException(502, f"Stripe error ({r.status_code}): {r.text[:300]}")
+    return r.json()
+
+
+async def _ensure_customer(user: Dict[str, Any]) -> str:
+    """Lazily create a Stripe Customer keyed on user_id so repeat
+    bookings all share the same customer record (and therefore the
+    same vaulted PaymentMethods)."""
+    cid = (user or {}).get("stripe_customer_id")
+    if cid:
+        return cid
+    payload = {
+        "email": user.get("email") or "",
+        "name": user.get("name") or "",
+        "metadata[user_id]": user.get("user_id") or "",
+    }
+    created = await _stripe_post("/customers", payload)
+    cid = created["id"]
+    await _db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"stripe_customer_id": cid, "stripe_customer_at": _now_iso()}},
+    )
+    return cid
+
+
+@router.get("/my/wallet")
+async def wallet_list(user: dict = _current_user()):
+    """Return the user's saved cards (brand/last4/exp only)."""
+    doc = await _db.users.find_one({"user_id": user["user_id"]}) or {}
+    pms = doc.get("payment_methods") or []
+    # Hide anything stale / non-card
+    out = [
+        {k: pm.get(k) for k in ("id", "brand", "last4", "exp_month", "exp_year", "added_at")}
+        for pm in pms if pm.get("id")
+    ]
+    return {"payment_methods": out, "stripe_customer_id": doc.get("stripe_customer_id")}
+
+
+@router.post("/my/wallet/setup-session")
+async def wallet_setup_session(req: WalletSetupSession, user: dict = _current_user()):
+    """Open a Stripe-hosted SetupIntent Checkout so the guest can save a
+    card without raw PAN ever touching our servers. On success we poll
+    Stripe for the attached PaymentMethod and persist it on the user."""
+    user_doc = await _db.users.find_one({"user_id": user["user_id"]}) or user
+    customer_id = await _ensure_customer(user_doc)
+    origin = req.origin_url.rstrip("/")
+    sess = await _stripe_post("/checkout/sessions", {
+        "mode": "setup",
+        "payment_method_types[]": "card",
+        "customer": customer_id,
+        "success_url": f"{origin}/my-bookings?wallet=added&session_id={{CHECKOUT_SESSION_ID}}",
+        "cancel_url": f"{origin}/my-bookings?wallet=cancelled",
+        "metadata[purpose]": "trip_wallet",
+        "metadata[user_id]": user["user_id"],
+    })
+    # Record the pending setup — the webhook can also reconcile later
+    await _db.wallet_setup_sessions.insert_one({
+        "session_id": sess["id"], "user_id": user["user_id"],
+        "customer_id": customer_id, "status": sess.get("status"),
+        "created_at": _now_iso(),
+    })
+    return {"checkout_url": sess["url"], "session_id": sess["id"]}
+
+
+@router.post("/my/wallet/reconcile/{session_id}")
+async def wallet_reconcile(session_id: str, user: dict = _current_user()):
+    """Called by the frontend after returning from Stripe setup checkout.
+    Pulls the SetupIntent, extracts the PaymentMethod, and persists it
+    on the user doc so the "Saved cards" list reflects the new card."""
+    sess = await _stripe_get(f"/checkout/sessions/{session_id}")
+    if (sess.get("metadata") or {}).get("user_id") != user["user_id"]:
+        raise HTTPException(403, "This setup session is not yours.")
+    si_id = sess.get("setup_intent")
+    if not si_id:
+        raise HTTPException(409, "Setup not complete yet. Try again in a moment.")
+    si = await _stripe_get(f"/setup_intents/{si_id}")
+    pm_id = si.get("payment_method")
+    if not pm_id:
+        raise HTTPException(409, "No card attached to this setup.")
+    pm = await _stripe_get(f"/payment_methods/{pm_id}")
+    card = pm.get("card") or {}
+    row = {
+        "id": pm_id,
+        "brand": card.get("brand"),
+        "last4": card.get("last4"),
+        "exp_month": card.get("exp_month"),
+        "exp_year": card.get("exp_year"),
+        "added_at": _now_iso(),
+    }
+    # Use $addToSet-style upsert via pull-then-push so we never duplicate
+    await _db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$pull": {"payment_methods": {"id": pm_id}}},
+    )
+    await _db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$push": {"payment_methods": row}},
+    )
+    return {"ok": True, "payment_method": row}
+
+
+@router.delete("/my/wallet/{pm_id}")
+async def wallet_delete(pm_id: str, user: dict = _current_user()):
+    """Detach the PaymentMethod from the Stripe Customer and remove the
+    row from the user doc. Idempotent — missing rows are a no-op."""
+    try:
+        await _stripe_post(f"/payment_methods/{pm_id}/detach", {})
+    except HTTPException as e:
+        # 404 means already detached — safe to proceed with local wipe.
+        if "404" not in str(e.detail or ""):
+            raise
+    await _db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$pull": {"payment_methods": {"id": pm_id}}},
+    )
+    return {"ok": True}

@@ -6,6 +6,7 @@ import {
   CheckCircle2, Receipt,
 } from "lucide-react";
 import { api, money, BACKEND_URL } from "../../lib/api";
+import AdminChatPanel from "./AdminChatPanel";
 
 /**
  * BookingDetailModal — click any admin booking row to open this. Shows:
@@ -202,6 +203,13 @@ export default function BookingDetailModal({ booking, onClose, onChanged, onOpen
               </Row>
             )}
           </InfoCard>
+
+          {/* Private planner chat — only surfaced for group / large-pax
+              bookings since one-off taxis don't need a thread. The admin
+              can always open it from the HMAC guest link if needed. */}
+          {(booking.service_type === "group" || booking.service_type === "wedding" || (booking.passengers || 0) >= 10 || booking.balance_due > 0) && (
+            <AdminChatPanel bookingId={bid} />
+          )}
 
           {/* Status timeline */}
           <InfoCard title="Status history" icon={History}>

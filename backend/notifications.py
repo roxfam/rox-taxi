@@ -1258,6 +1258,49 @@ def notify_checkout_abandonment(intent: dict, *, resume_url: str) -> dict:
     return report
 
 
+def _build_booking_ics(booking: dict) -> bytes:
+    """Build a minimal RFC-5545 .ics for a booking's pickup event.
+    Used as an email attachment on the paid-in-full receipt so guests
+    can one-tap add the trip to Apple/Google/Outlook calendars."""
+    try:
+        from datetime import datetime as _dt_cls, timezone as _tz, timedelta as _td
+    except Exception:  # noqa: BLE001
+        return b""
+    bid = booking.get("id", "ROX")
+    item = str(booking.get("item_name", "Rox Taxi pickup")).replace(",", r"\,").replace(";", r"\;")
+    pickup = str(booking.get("pickup_location") or "Nassau, Bahamas").replace(",", r"\,").replace(";", r"\;")
+    try:
+        d = _dt_cls.fromisoformat(str(booking.get("booking_date", "")).replace("Z", "+00:00"))
+    except Exception:  # noqa: BLE001
+        d = _dt_cls.now(_tz.utc)
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=_tz.utc)
+    start = d.astimezone(_tz.utc).strftime("%Y%m%dT%H%M%SZ")
+    end = (d.astimezone(_tz.utc) + _td(hours=1)).strftime("%Y%m%dT%H%M%SZ")
+    stamp = _dt_cls.now(_tz.utc).strftime("%Y%m%dT%H%M%SZ")
+    body = (
+        f"Confirmation {bid}. Driver dispatch +1 (242) 432-2587. "
+        f"Track: https://roxtaxi.com/track?id={bid}"
+    ).replace(",", r"\,").replace(";", r"\;")
+    lines = [
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Rox Taxi//Paid-in-full//EN",
+        "METHOD:PUBLISH", "CALSCALE:GREGORIAN", "X-APPLE-CALENDAR-COLOR:#D4A94A",
+        "X-WR-CALNAME:Rox Taxi Bookings",
+        "BEGIN:VEVENT",
+        f"UID:booking-{bid}-paid@roxtaxi.com",
+        f"DTSTAMP:{stamp}", f"DTSTART:{start}", f"DTEND:{end}",
+        f"SUMMARY:Rox Taxi · {item}",
+        f"LOCATION:{pickup}", f"DESCRIPTION:{body}",
+        "STATUS:CONFIRMED",
+        "BEGIN:VALARM", "ACTION:DISPLAY",
+        f"DESCRIPTION:Rox Taxi pickup for {bid} in 1 hour",
+        "TRIGGER:-PT1H", "END:VALARM",
+        "END:VEVENT", "END:VCALENDAR",
+    ]
+    return ("\r\n".join(lines) + "\r\n").encode("utf-8")
+
+
+
 def notify_paid_in_full(booking: dict, *, deposit_paid: float, balance_paid: float,
                         prefs: Optional[dict] = None) -> dict:
     """Final "paid in full" receipt — fires once the balance Stripe
@@ -1289,6 +1332,23 @@ def notify_paid_in_full(booking: dict, *, deposit_paid: float, balance_paid: flo
     invoice_url = f"{_base}/api/bookings/{bid}/receipt.pdf"
     qr_url = f"{_base}/api/bookings/{bid}/qr.png"
     track_url = f"{_base}/track?id={bid}"
+    ics_url = f"{_base}/api/bookings/{bid}/calendar.ics"
+
+    # ── One-tap "Add to Calendar" deep-links ───────────────────────────
+    # Google Calendar + Outlook/Office use the same /render?action=TEMPLATE
+    # URL schema; Apple Calendar auto-handles the .ics attachment.
+    try:
+        from datetime import datetime as _dt_cls, timedelta as _td  # noqa: PLC0415
+        from urllib.parse import quote as _q  # noqa: PLC0415
+        _d = _dt_cls.fromisoformat(str(booking.get("booking_date", "")).replace("Z", "+00:00"))
+        _start = _d.strftime("%Y%m%dT%H%M%SZ")
+        _end = (_d + _td(hours=1)).strftime("%Y%m%dT%H%M%SZ")
+        _title = _q(f"Rox Taxi · {booking.get('item_name','Pickup')}")
+        _loc = _q(booking.get("pickup_location") or "Nassau, Bahamas")
+        _desc = _q(f"Confirmation {bid}. Driver dispatch +1 (242) 432-2587. Track: {track_url}")
+        gcal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={_title}&dates={_start}/{_end}&location={_loc}&details={_desc}"
+    except Exception:  # noqa: BLE001
+        gcal_url = ics_url
 
     # Hide the "Deposit paid" row when there was no deposit flow (full-pay upfront)
     deposit_row = (
@@ -1370,6 +1430,16 @@ def notify_paid_in_full(booking: dict, *, deposit_paid: float, balance_paid: flo
           </div>
           <div style="padding:0 32px 24px;">
             <a href="{track_url}" style="display:block;background:#E86A3C;color:#fff;text-decoration:none;text-align:center;font-weight:700;padding:14px 20px;border-radius:999px;font-size:14px;">Track your booking live →</a>
+            <!-- One-tap "Add to calendar" buttons · Google deep-link +
+                 ICS fallback (Apple Mail opens .ics natively). -->
+            <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+              <a href="{gcal_url}" style="flex:1;min-width:140px;display:block;background:#fff;color:#0B3B5C;text-decoration:none;text-align:center;font-weight:700;padding:12px 16px;border:1px solid #E2E8F0;border-radius:999px;font-size:12px;">
+                📅 Add to Google Calendar
+              </a>
+              <a href="{ics_url}" style="flex:1;min-width:140px;display:block;background:#fff;color:#0B3B5C;text-decoration:none;text-align:center;font-weight:700;padding:12px 16px;border:1px solid #E2E8F0;border-radius:999px;font-size:12px;">
+                🍎 Add to Apple Calendar
+              </a>
+            </div>
           </div>
           <div style="padding:0 32px 36px;text-align:center;">
             <div style="font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:#94A3B8;font-weight:700;">See you soon in The Bahamas</div>
@@ -1391,6 +1461,20 @@ def notify_paid_in_full(booking: dict, *, deposit_paid: float, balance_paid: flo
             })
         except Exception as ex:  # noqa: BLE001
             logger.warning("paid-in-full invoice attachment err: %s", ex)
+        # Attach the .ics so Apple Mail / Outlook auto-detect and offer
+        # "Add to Calendar" without a round-trip to the webserver. Even
+        # if the HTML CTA buttons strip in the client, this ensures the
+        # calendar sync still works from the raw email.
+        try:
+            ics_bytes = _build_booking_ics(booking)
+            if ics_bytes:
+                attachments.append({
+                    "filename": f"Rox-{bid}.ics",
+                    "content": ics_bytes,
+                    "mime_type": "text/calendar; charset=utf-8; method=PUBLISH",
+                })
+        except Exception as ex:  # noqa: BLE001
+            logger.warning("paid-in-full .ics attachment err: %s", ex)
         try:
             report["email"].update(send_email(
                 booking["customer_email"], subject, html, text,

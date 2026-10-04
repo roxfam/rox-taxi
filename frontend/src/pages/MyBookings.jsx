@@ -6,6 +6,7 @@ import { Ticket, MapPin, ArrowRight, LogOut, XCircle, Download, CreditCard, Cloc
 import { toast } from "sonner";
 import ExtendRentalModal from "./ExtendRentalModal";
 import WalletCard from "./WalletCard";
+import TripWalletCard from "./TripWalletCard";
 
 export default function MyBookings() {
   const { user, loading, logout } = useAuth();
@@ -106,6 +107,18 @@ export default function MyBookings() {
       window.history.replaceState({}, "", "/my-bookings");
     } else if (q.get("extend_cancelled")) {
       toast("Extension cancelled — no charge made.");
+      window.history.replaceState({}, "", "/my-bookings");
+    } else if (q.get("wallet") === "added" && q.get("session_id")) {
+      // Reconcile the Stripe setup session so the new card appears
+      // instantly without waiting for a webhook round-trip.
+      fetch(`${API}/my/wallet/reconcile/${q.get("session_id")}`, {
+        method: "POST", credentials: "include",
+      }).then((r) => r.ok ? r.json() : null)
+        .then((d) => { if (d?.ok) toast.success(`${d.payment_method?.brand?.toUpperCase() || "Card"} •••• ${d.payment_method?.last4} saved to your wallet`); })
+        .catch(() => {});
+      window.history.replaceState({}, "", "/my-bookings");
+    } else if (q.get("wallet") === "cancelled") {
+      toast("Wallet setup cancelled — no card saved.");
       window.history.replaceState({}, "", "/my-bookings");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -336,6 +349,9 @@ export default function MyBookings() {
       </div>
 
       <h2 className="serif text-3xl text-[#0B3B5C] mt-12">Your bookings</h2>
+
+      {/* ── Trip wallet · saved Stripe cards for one-tap re-booking ── */}
+      <TripWalletCard />
 
       {/* ── License Wallet ─────────────────────────────────── */}
       {wallet && (

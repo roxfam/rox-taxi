@@ -29,6 +29,7 @@ from routes import payments as payments_module
 from routes import admin as admin_module
 from routes import catalog as catalog_module
 from routes import chat as chat_module
+from routes import group_chat as group_chat_module
 from routes import gbp as gbp_module
 from routes import gallery as gallery_module
 from routes import licenses as licenses_module
@@ -6310,6 +6311,12 @@ cron_module.configure(db=db, now_iso=now_iso)
 gbp_module.configure(db=db, now_iso=now_iso, require_admin=require_admin)
 api_router.include_router(gbp_module.router)
 api_router.include_router(cron_module.router)
+
+# Wire up the private group-chat router (admin ↔ planner thread per
+# booking). Admin uses require_admin cookies; guest side uses an
+# HMAC-signed `?t=` token that mirrors the balance-pay pattern.
+group_chat_module.configure(db=db, now_iso=now_iso, clean=clean, require_admin=require_admin)
+api_router.include_router(group_chat_module.router)
 
 app.include_router(api_router)
 

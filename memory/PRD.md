@@ -23,6 +23,13 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Calendar Sync + Group Chat Thread + Trip Wallet
+- **Balance Calendar Sync** (`notifications.py::_build_booking_ics`): paid-in-full email now attaches a signed RFC-5545 `.ics` with a 1-hour VALARM reminder, plus side-by-side "📅 Google Calendar" + "🍎 Apple Calendar" buttons that drop the pickup time straight into the guest's calendar app. Google uses the deep-link `/calendar/render?action=TEMPLATE` schema; Apple opens the `.ics` natively.
+- **Group Chat Thread** (`routes/group_chat.py` + `AdminChatPanel.jsx` + `GuestChat.jsx`): private thread per booking with 10 s polling. Admin side renders inside `BookingDetailModal` for group / wedding / 10+ pax / balance-due bookings (auto-gated). Guest side at `/booking/:id/chat?t=TOKEN` uses an HMAC token (same pattern as `/pay-balance`) so planners don't need a login. Owner SMS fires when planner posts; planner email fires when admin posts. New `group_chat_messages` collection, invalid tokens return 403.
+- **Trip Wallet** (`routes/customer.py` wallet endpoints + `TripWalletCard.jsx`): authenticated customers save Stripe PaymentMethods via SetupIntent Checkout — raw PAN never touches our servers. Backend creates/reuses a Stripe Customer keyed on `user_id`, stores `{id, brand, last4, exp}` on the user doc, and detaches PaymentMethods on removal. Return handler in `MyBookings` auto-reconciles the setup session on `?wallet=added&session_id=...` so the new card shows without a webhook round-trip.
+
+
+
 ### Feb 2026 — Paid-in-Full Receipt + Admin Balance-Due Panel
 - **Guest "Paid in Full" email** (`notifications.py::notify_paid_in_full`): branded navy hero + green "Paid in full ✓" badge, deposit vs balance breakdown, grand total, QR boarding pass, PDF invoice attached. Fires once per booking (idempotent via `paid_in_full_emailed_at`) when either (a) the balance Stripe webhook lands (closing deposit → balance → confirmation loop) or (b) a non-deposit booking pays in full upfront.
 - **`routes/payments.py::_mark_paid`** rewritten: now resolves the originating `payment_transactions` row and branches on `pay_mode`. When `pay_mode="balance"`, it clears `balance_due=0`, stamps `balance_status=paid`/`balance_paid_at`, fires owner SMS + the new paid-in-full receipt, and skips the standard "booking confirmed" notify (that email was already sent at deposit time). For the normal path, it keeps the confirmed notify and additionally fires the paid-in-full receipt only when no balance remains.
