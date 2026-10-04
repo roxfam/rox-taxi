@@ -4030,6 +4030,48 @@ async def cron_send_balance_reminders(request: Request):
     return {"ok": True, "sent": sent, "skipped": skipped, "count": len(sent)}
 
 
+# ─── Wedding timeline admin editor ────────────────────────────────────
+# Lets dispatch override the auto-generated 3-row itinerary that ships
+# in the paid-in-full email. Saved rows live on the booking as a
+# `timeline` array; DELETE drops back to the auto-generator.
+class TimelineRow(BaseModel):
+    label: str = Field(..., min_length=1, max_length=60)
+    time: str = Field(..., max_length=10)         # "HH:MM" or "12:30 PM"
+    location: Optional[str] = Field(None, max_length=80)
+    emoji: Optional[str] = Field(None, max_length=4)
+
+
+class TimelinePayload(BaseModel):
+    timeline: list[TimelineRow]
+
+
+@api_router.put("/admin/bookings/{booking_id}/timeline")
+async def admin_save_timeline(
+    booking_id: str, payload: TimelinePayload, _admin: str = Depends(require_admin),
+):
+    if not payload.timeline or len(payload.timeline) > 10:
+        raise HTTPException(400, "Timeline must have between 1 and 10 rows.")
+    rows = [r.dict() for r in payload.timeline]
+    r = await db.bookings.update_one(
+        {"id": booking_id.upper()},
+        {"$set": {"timeline": rows, "timeline_updated_at": now_iso()}},
+    )
+    if not r.matched_count:
+        raise HTTPException(404, "Booking not found")
+    return {"ok": True, "timeline": rows}
+
+
+@api_router.delete("/admin/bookings/{booking_id}/timeline")
+async def admin_reset_timeline(booking_id: str, _admin: str = Depends(require_admin)):
+    """Clear the admin override so the paid-in-full email falls back to
+    the auto-generated timeline on the next fire."""
+    await db.bookings.update_one(
+        {"id": booking_id.upper()},
+        {"$unset": {"timeline": "", "timeline_updated_at": ""}},
+    )
+    return {"ok": True}
+
+
 # ---------------- Admin Balance-Due Panel endpoints -----------------
 # Dashboard card listing every booking with `balance_due > 0`, their trip
 # countdown, reminder status, and a one-click "Resend balance link"
@@ -6328,7 +6370,6 @@ api_router.include_router(group_chat_module.router)
 # receive the same balance + paid-in-full emails.
 secondary_contacts_module.configure(db=db, now_iso=now_iso, clean=clean, require_admin=require_admin)
 api_router.include_router(secondary_contacts_module.router)
-
 
 @api_router.get("/stripe/public-key")
 async def stripe_public_key():

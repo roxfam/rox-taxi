@@ -8,6 +8,7 @@ import {
 import { api, money, BACKEND_URL } from "../../lib/api";
 import AdminChatPanel from "./AdminChatPanel";
 import SecondaryContactsPanel from "./SecondaryContactsPanel";
+import TimelineEditor from "./TimelineEditor";
 
 /**
  * BookingDetailModal — click any admin booking row to open this. Shows:
@@ -212,6 +213,7 @@ export default function BookingDetailModal({ booking, onClose, onChanged, onOpen
             <>
               <AdminChatPanel bookingId={bid} />
               <SecondaryContactsPanel booking={booking} onChanged={onChanged} />
+              <TimelineEditor booking={booking} onChanged={onChanged} />
             </>
           )}
 

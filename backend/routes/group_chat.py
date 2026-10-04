@@ -106,6 +106,48 @@ async def _admin_dep(request: Request):
     )
 
 
+# ─── Admin chat search (across every booking) ─────────────────────────
+# Find references like "Baha Mar back entrance" without scrolling through
+# months of history. Case-insensitive regex match on `body`, newest first,
+# capped at 50 results so the dashboard stays snappy. Declared BEFORE the
+# `/admin/chat/{booking_id}` route so the literal path isn't shadowed by
+# the parameterized one.
+@router.get("/admin/chat/search")
+async def admin_chat_search(q: str = Query(..., min_length=2, max_length=120),
+                            _: str = Depends(_admin_dep)):
+    import re  # noqa: PLC0415
+    pattern = re.compile(re.escape(q), re.IGNORECASE)
+    cursor = _db.group_chat_messages.find(
+        {"body": {"$regex": pattern}}
+    ).sort("created_at", -1).limit(50)
+    rows = []
+    seen_bookings = {}
+    async for m in cursor:
+        bid = m.get("booking_id")
+        if bid not in seen_bookings:
+            bk = await _db.bookings.find_one(
+                {"id": bid}, {"customer_name": 1, "item_name": 1, "booking_date": 1}
+            ) or {}
+            seen_bookings[bid] = {
+                "customer_name": bk.get("customer_name"),
+                "item_name": bk.get("item_name"),
+                "booking_date": bk.get("booking_date"),
+            }
+        meta = seen_bookings[bid]
+        rows.append({
+            "message_id": m.get("id"),
+            "booking_id": bid,
+            "customer_name": meta.get("customer_name"),
+            "item_name": meta.get("item_name"),
+            "booking_date": meta.get("booking_date"),
+            "author": m.get("author"),
+            "author_name": m.get("author_name"),
+            "body": m.get("body"),
+            "created_at": m.get("created_at"),
+        })
+    return {"query": q, "count": len(rows), "results": rows}
+
+
 @router.get("/admin/chat/{booking_id}")
 async def admin_chat_list(booking_id: str, _: str = Depends(_admin_dep)):
     booking = await _db.bookings.find_one({"id": booking_id.upper()})
@@ -296,6 +338,29 @@ async def driver_chat_view(booking_id: str):
     if not booking:
         raise HTTPException(404, "Booking not found")
     status = (booking.get("status") or "").lower()
+    in_progress = status in {"driver_assigned", "en_route", "arrived"}
+    try:
+        d = datetime.fromisoformat(str(booking.get("booking_date", "")).replace("Z", "+00:00"))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        delta = d - datetime.now(timezone.utc)
+        within_window = delta <= timedelta(hours=1) and delta >= timedelta(hours=-6)
+    except Exception:  # noqa: BLE001
+        within_window = False
+    if not (in_progress or within_window):
+        return {"booking_id": booking_id.upper(), "visible": False,
+                "reason": "Driver chat opens 60 min before pickup.", "messages": []}
+    messages = await _list_messages(booking_id.upper())
+    return {
+        "booking_id": booking_id.upper(),
+        "visible": True,
+        "customer_name": booking.get("customer_name"),
+        "item_name": booking.get("item_name"),
+        "messages": messages,
+        # Mirror the "Dispatch is typing" heartbeat so the driver sees
+        # the thread come alive seconds before dispatch's message lands.
+        "typing_dispatch_at": booking.get("typing_dispatch_at"),
+    }
 
 
 # ─── Driver quick-reply canned templates ──────────────────────────────

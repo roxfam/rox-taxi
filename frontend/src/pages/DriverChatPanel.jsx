@@ -9,7 +9,8 @@ import { API } from "../lib/api";
  * Shows the dispatch ↔ planner thread 60 min before pickup so the driver
  * can walk up with full context (e.g. "please take the Baha Mar back
  * entrance"). No posting — drivers message dispatch via SMS/WhatsApp.
- * Polls every 20 s since drivers tend to pin this screen.
+ * Polls every 10 s so the typing indicator feels live; drivers tend to
+ * pin this screen.
  */
 function timeAgo(iso) {
   if (!iso) return "";
@@ -40,7 +41,9 @@ export default function DriverChatPanel() {
 
   useEffect(() => {
     load();
-    const h = setInterval(load, 20000);
+    // Faster polling than the admin panel so dispatch's typing dot and
+    // "incoming message" land on the driver's screen in near-real-time.
+    const h = setInterval(load, 10000);
     return () => clearInterval(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking_id]);
@@ -60,6 +63,8 @@ export default function DriverChatPanel() {
   }
 
   const messages = data.messages || [];
+  const dispatchTyping = data.typing_dispatch_at &&
+    (Date.now() - new Date(data.typing_dispatch_at).getTime()) < 5000;
   return (
     <div className="w-full max-w-md mt-3 rounded-3xl bg-white/5 border border-white/10 p-5 backdrop-blur" data-testid="driver-chat-panel">
       <header className="flex items-center justify-between gap-2 mb-3">
@@ -71,7 +76,7 @@ export default function DriverChatPanel() {
           <RotateCw className={`w-3.5 h-3.5 text-white/50 ${loading ? "animate-spin" : ""}`} />
         </button>
       </header>
-      {messages.length === 0 ? (
+      {messages.length === 0 && !dispatchTyping ? (
         <div className="text-xs text-white/50 py-3 text-center">No messages between dispatch and the planner yet.</div>
       ) : (
         <div className="max-h-[260px] overflow-y-auto space-y-2.5" data-testid="driver-chat-messages">
@@ -91,6 +96,14 @@ export default function DriverChatPanel() {
               )}
             </div>
           ))}
+          {dispatchTyping && (
+            <div className="rounded-xl bg-white/5 border border-[#D4A94A]/30 px-3 py-2 inline-flex items-center gap-1.5" data-testid="driver-chat-typing">
+              <span className="w-1.5 h-1.5 bg-[#D4A94A] rounded-full animate-pulse" />
+              <span className="w-1.5 h-1.5 bg-[#D4A94A] rounded-full animate-pulse" style={{ animationDelay: "0.2s" }} />
+              <span className="w-1.5 h-1.5 bg-[#D4A94A] rounded-full animate-pulse" style={{ animationDelay: "0.4s" }} />
+              <span className="text-[10px] text-white/70 font-semibold ml-1">Dispatch is typing…</span>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -21,6 +21,7 @@ import StripeLiveCheckCard from "./admin/StripeLiveCheckCard";
 import WeekendSurchargeCard from "./admin/WeekendSurchargeCard";
 import GroupPricingCard from "./admin/GroupPricingCard";
 import AdminBalanceDuePanel from "./admin/AdminBalanceDuePanel";
+import AdminChatSearchCard from "./admin/AdminChatSearchCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -300,6 +301,10 @@ export default function AdminDashboard() {
         {/* Balance-due panel — every booking with outstanding balance,
             countdown badge, and one-click admin resend (SMS + Email). */}
         <AdminBalanceDuePanel />
+
+        {/* Chat search — grep across every group thread's message body
+            to jump to a specific "Baha Mar back entrance" moment. */}
+        <AdminChatSearchCard onOpenBooking={(bid) => { window.location.hash = `#booking-${bid}`; }} />
 
         {/* Reviews Inbox — every un-replied 5★ Google review with an
             AI-drafted thank-you ready to fire. Auto-hides when the

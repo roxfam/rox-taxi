@@ -1368,43 +1368,25 @@ def notify_paid_in_full(booking: dict, *, deposit_paid: float, balance_paid: flo
     # ─── Wedding-day timeline (group / 10+ pax / round-trip only) ────
     # Auto-stitches a pickup → event → return itinerary from the
     # booking's `booking_date` + `return_time` / `return_date` so the
-    # paid-in-full email reads like a mini concierge brief.
+    # paid-in-full email reads like a mini concierge brief. If the
+    # admin has saved a custom timeline via the BookingDetailModal
+    # editor, we honor that override verbatim.
     timeline_html = ""
     try:
         from datetime import datetime as _dt_cls, timedelta as _td  # noqa: PLC0415
         pax = int(booking.get("passengers") or 0)
         service = (booking.get("service_type") or "").lower()
         is_group = service in {"group", "wedding"} or pax >= 10
-        _pickup = _dt_cls.fromisoformat(str(booking.get("booking_date", "")).replace("Z", "+00:00"))
-        if is_group and booking.get("round_trip") and booking.get("return_time"):
-            rt = str(booking["return_time"]).strip()
-            if "T" in rt:
-                _return = _dt_cls.fromisoformat(rt.replace("Z", "+00:00"))
-            else:
-                hh, mm = rt.split(":", 1)[0], (rt.split(":", 1)[1] if ":" in rt else "00")
-                rd = str(booking.get("return_date") or "").strip()
-                if rd:
-                    y, mo, d = rd.split("-")
-                    _return = _pickup.replace(year=int(y), month=int(mo), day=int(d),
-                                              hour=int(hh), minute=int(mm.split(':', 1)[0]))
-                else:
-                    _return = _pickup.replace(hour=int(hh), minute=int(mm.split(':', 1)[0]))
-            # Rough midpoint = ceremony/event hour (half-way between
-            # pickup drop-off and return pickup). Good enough as a
-            # mental anchor; dispatch can edit before sending.
-            mid = _pickup + (_return - _pickup) / 2
-            rows = [
-                ("Driver arrives", _pickup, booking.get("pickup_location") or "Pickup location", "🚕"),
-                ("Event / ceremony", mid, booking.get("dropoff_location") or "Venue", "💍"),
-                ("Return pickup", _return, booking.get("dropoff_location") or "Venue", "🏁"),
-            ]
-            fmt = lambda d: d.strftime("%-I:%M %p")  # noqa: E731
+
+        # Admin-override path
+        custom = booking.get("timeline")
+        if is_group and isinstance(custom, list) and custom:
             cells = "".join(
-                f'<tr><td style="padding:10px 8px 10px 0;font-family:Georgia,serif;color:#D4A94A;font-size:18px;width:36px;">{emoji}</td>'
-                f'<td style="padding:10px 0;color:#0B3B5C;font-weight:700;font-size:14px;">{label}<br/>'
-                f'<span style="color:#64748B;font-weight:400;font-size:12px;">{loc}</span></td>'
-                f'<td style="padding:10px 0;text-align:right;color:#0B3B5C;font-family:\'JetBrains Mono\',Menlo,monospace;font-size:13px;">{fmt(when)}</td></tr>'
-                for label, when, loc, emoji in rows
+                f'<tr><td style="padding:10px 8px 10px 0;font-family:Georgia,serif;color:#D4A94A;font-size:18px;width:36px;">{(row.get("emoji") or "🕒")}</td>'
+                f'<td style="padding:10px 0;color:#0B3B5C;font-weight:700;font-size:14px;">{(row.get("label") or "").strip() or "Event"}<br/>'
+                f'<span style="color:#64748B;font-weight:400;font-size:12px;">{(row.get("location") or "").strip()}</span></td>'
+                f'<td style="padding:10px 0;text-align:right;color:#0B3B5C;font-family:\'JetBrains Mono\',Menlo,monospace;font-size:13px;">{(row.get("time") or "").strip()}</td></tr>'
+                for row in custom
             )
             timeline_html = (
                 '<div style="padding:0 32px 24px;">'
@@ -1413,9 +1395,48 @@ def notify_paid_in_full(booking: dict, *, deposit_paid: float, balance_paid: flo
                 '<table role="presentation" style="width:100%;margin-top:10px;border-collapse:collapse;">'
                 f'{cells}'
                 '</table>'
-                '<div style="color:#94A3B8;font-size:11px;margin-top:8px;">Dispatch can tweak these times — reply to this email if anything shifts.</div>'
+                '<div style="color:#94A3B8;font-size:11px;margin-top:8px;">Prepared by Rox dispatch · reply to this email if anything shifts.</div>'
                 '</div></div>'
             )
+        else:
+            _pickup = _dt_cls.fromisoformat(str(booking.get("booking_date", "")).replace("Z", "+00:00"))
+            if is_group and booking.get("round_trip") and booking.get("return_time"):
+                rt = str(booking["return_time"]).strip()
+                if "T" in rt:
+                    _return = _dt_cls.fromisoformat(rt.replace("Z", "+00:00"))
+                else:
+                    hh, mm = rt.split(":", 1)[0], (rt.split(":", 1)[1] if ":" in rt else "00")
+                    rd = str(booking.get("return_date") or "").strip()
+                    if rd:
+                        y, mo, d = rd.split("-")
+                        _return = _pickup.replace(year=int(y), month=int(mo), day=int(d),
+                                                  hour=int(hh), minute=int(mm.split(':', 1)[0]))
+                    else:
+                        _return = _pickup.replace(hour=int(hh), minute=int(mm.split(':', 1)[0]))
+                mid = _pickup + (_return - _pickup) / 2
+                rows = [
+                    ("Driver arrives", _pickup, booking.get("pickup_location") or "Pickup location", "🚕"),
+                    ("Event / ceremony", mid, booking.get("dropoff_location") or "Venue", "💍"),
+                    ("Return pickup", _return, booking.get("dropoff_location") or "Venue", "🏁"),
+                ]
+                fmt = lambda d: d.strftime("%-I:%M %p")  # noqa: E731
+                cells = "".join(
+                    f'<tr><td style="padding:10px 8px 10px 0;font-family:Georgia,serif;color:#D4A94A;font-size:18px;width:36px;">{emoji}</td>'
+                    f'<td style="padding:10px 0;color:#0B3B5C;font-weight:700;font-size:14px;">{label}<br/>'
+                    f'<span style="color:#64748B;font-weight:400;font-size:12px;">{loc}</span></td>'
+                    f'<td style="padding:10px 0;text-align:right;color:#0B3B5C;font-family:\'JetBrains Mono\',Menlo,monospace;font-size:13px;">{fmt(when)}</td></tr>'
+                    for label, when, loc, emoji in rows
+                )
+                timeline_html = (
+                    '<div style="padding:0 32px 24px;">'
+                    '<div class="rox-card" style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;">'
+                    '<div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Your wedding-day timeline</div>'
+                    '<table role="presentation" style="width:100%;margin-top:10px;border-collapse:collapse;">'
+                    f'{cells}'
+                    '</table>'
+                    '<div style="color:#94A3B8;font-size:11px;margin-top:8px;">Dispatch can tweak these times — reply to this email if anything shifts.</div>'
+                    '</div></div>'
+                )
     except Exception:  # noqa: BLE001
         timeline_html = ""
 

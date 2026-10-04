@@ -23,6 +23,13 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Chat Search + Driver Typing Signal + Timeline Editor
+- **Chat Message Search** (`routes/group_chat.py::admin_chat_search` + `AdminChatSearchCard.jsx`): `GET /admin/chat/search?q=` runs a case-insensitive regex across `group_chat_messages.body` across every booking, returning up to 50 newest-first results enriched with customer name + item name. Literal route declared before `/admin/chat/{booking_id}` so it isn't shadowed. Dashboard card renders highlighted matches; clicking a result jumps to the booking.
+- **Dispatch Typing Signal in Driver Panel** (`routes/group_chat.py::driver_chat_view` + `DriverChatPanel.jsx`): driver chat response now carries `typing_dispatch_at`; panel polls every 10 s (was 20 s) and renders the same 3-dot pulsing bubble when the stamp is < 5 s old. Driver sees the thread come alive seconds before dispatch's message lands.
+- **Wedding Timeline Editor** (`PUT /admin/bookings/{id}/timeline` + `DELETE` + `TimelineEditor.jsx`): admin can override the auto-generated 3-row itinerary that ships in the paid-in-full email. Saved `timeline: [{label, time, location, emoji}]` rows wins over the auto-generator; DELETE drops the override. Editor shows the auto preview when nothing's saved so dispatch can see what the guest WILL get before tweaking.
+
+
+
 ### Feb 2026 — Typing Indicator + Wedding Timeline + CC Fan-Out
 - **Chat Typing Indicator** (`routes/group_chat.py::_mark_typing` + both chat UIs): `POST /admin/chat/{id}/typing` and `POST /chat/{id}/typing?t=TOKEN` stamp `typing_dispatch_at` / `typing_guest_at` on the booking. GETs echo both stamps back; UIs check if stamp < 5 s old and render a 3-dot pulsing "Planner is typing…" / "Dispatch is typing…" bubble. Client throttles pings to one per 3 s via a ref timer — no DDOS on Mongo.
 - **Wedding Day Timeline** (`notifications.py::notify_paid_in_full`): group / 10+ pax round-trip bookings now get an auto-stitched 3-row itinerary (Driver arrives → Event/ceremony → Return pickup) in the paid-in-full email. Mid-point between pickup and return is the ceremony anchor; dispatch can edit before sending. Emoji + navy/orange styling matches the rest of the receipt.
