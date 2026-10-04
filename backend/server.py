@@ -4015,8 +4015,10 @@ async def cron_send_balance_reminders(request: Request):
         pay_url = f"{base}/api/bookings/{bk['id']}/pay-balance?t={token}"
         try:
             from notifications import notify_balance_capture_reminder
+            from routes.secondary_contacts import get_consented_cc_emails
             prefs = await db.site_config.find_one({"_id": "main"}) or {}
-            report = notify_balance_capture_reminder(dict(bk), pay_url=pay_url, prefs=prefs)
+            cc_emails = await get_consented_cc_emails(bk["id"])
+            report = notify_balance_capture_reminder(dict(bk), pay_url=pay_url, prefs=prefs, cc_emails=cc_emails)
             await db.bookings.update_one(
                 {"id": bk["id"]},
                 {"$set": {"balance_reminded_at": now_iso(), "balance_reminder_report": report}},
@@ -4093,8 +4095,10 @@ async def admin_balance_due_resend(booking_id: str, _admin: str = Depends(requir
     pay_url = f"{base}/api/bookings/{bk['id']}/pay-balance?t={token}"
     try:
         from notifications import notify_balance_capture_reminder
+        from routes.secondary_contacts import get_consented_cc_emails
         prefs = await db.site_config.find_one({"_id": "main"}) or {}
-        report = notify_balance_capture_reminder(clean(dict(bk)), pay_url=pay_url, prefs=prefs)
+        cc_emails = await get_consented_cc_emails(bk["id"])
+        report = notify_balance_capture_reminder(clean(dict(bk)), pay_url=pay_url, prefs=prefs, cc_emails=cc_emails)
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("admin balance resend err: %s", e)
         raise HTTPException(502, f"Resend failed: {e}") from e

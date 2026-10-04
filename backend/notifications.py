@@ -1302,13 +1302,19 @@ def _build_booking_ics(booking: dict) -> bytes:
 
 
 def notify_paid_in_full(booking: dict, *, deposit_paid: float, balance_paid: float,
-                        prefs: Optional[dict] = None) -> dict:
+                        prefs: Optional[dict] = None,
+                        cc_emails: Optional[list] = None) -> dict:
     """Final "paid in full" receipt — fires once the balance Stripe
     webhook lands (closing the deposit → balance → confirmation loop)
     OR after any upfront full-pay checkout. Branded navy hero + orange
     CTA matching the booking-confirmed template so the guest sees one
     coherent brand thread. Idempotency is enforced by the caller via
     `paid_in_full_emailed_at` on the booking doc.
+
+    `cc_emails` is an optional list of consented secondary-contact
+    addresses — each gets the same HTML (minus attachments to keep
+    inbox weight down) so a maid-of-honor / hotel concierge stays in
+    the loop without being on the guest's primary email thread.
     """
     prefs = prefs or {}
     email_enabled = prefs.get("notify_email_enabled", True) is not False
@@ -1358,6 +1364,60 @@ def notify_paid_in_full(booking: dict, *, deposit_paid: float, balance_paid: flo
         f'<span>Balance paid</span><span style="color:#059669;font-weight:700;">{_fmt_money(balance_paid)}</span></div>'
         if deposit_paid > 0 else ""
     )
+
+    # ─── Wedding-day timeline (group / 10+ pax / round-trip only) ────
+    # Auto-stitches a pickup → event → return itinerary from the
+    # booking's `booking_date` + `return_time` / `return_date` so the
+    # paid-in-full email reads like a mini concierge brief.
+    timeline_html = ""
+    try:
+        from datetime import datetime as _dt_cls, timedelta as _td  # noqa: PLC0415
+        pax = int(booking.get("passengers") or 0)
+        service = (booking.get("service_type") or "").lower()
+        is_group = service in {"group", "wedding"} or pax >= 10
+        _pickup = _dt_cls.fromisoformat(str(booking.get("booking_date", "")).replace("Z", "+00:00"))
+        if is_group and booking.get("round_trip") and booking.get("return_time"):
+            rt = str(booking["return_time"]).strip()
+            if "T" in rt:
+                _return = _dt_cls.fromisoformat(rt.replace("Z", "+00:00"))
+            else:
+                hh, mm = rt.split(":", 1)[0], (rt.split(":", 1)[1] if ":" in rt else "00")
+                rd = str(booking.get("return_date") or "").strip()
+                if rd:
+                    y, mo, d = rd.split("-")
+                    _return = _pickup.replace(year=int(y), month=int(mo), day=int(d),
+                                              hour=int(hh), minute=int(mm.split(':', 1)[0]))
+                else:
+                    _return = _pickup.replace(hour=int(hh), minute=int(mm.split(':', 1)[0]))
+            # Rough midpoint = ceremony/event hour (half-way between
+            # pickup drop-off and return pickup). Good enough as a
+            # mental anchor; dispatch can edit before sending.
+            mid = _pickup + (_return - _pickup) / 2
+            rows = [
+                ("Driver arrives", _pickup, booking.get("pickup_location") or "Pickup location", "🚕"),
+                ("Event / ceremony", mid, booking.get("dropoff_location") or "Venue", "💍"),
+                ("Return pickup", _return, booking.get("dropoff_location") or "Venue", "🏁"),
+            ]
+            fmt = lambda d: d.strftime("%-I:%M %p")  # noqa: E731
+            cells = "".join(
+                f'<tr><td style="padding:10px 8px 10px 0;font-family:Georgia,serif;color:#D4A94A;font-size:18px;width:36px;">{emoji}</td>'
+                f'<td style="padding:10px 0;color:#0B3B5C;font-weight:700;font-size:14px;">{label}<br/>'
+                f'<span style="color:#64748B;font-weight:400;font-size:12px;">{loc}</span></td>'
+                f'<td style="padding:10px 0;text-align:right;color:#0B3B5C;font-family:\'JetBrains Mono\',Menlo,monospace;font-size:13px;">{fmt(when)}</td></tr>'
+                for label, when, loc, emoji in rows
+            )
+            timeline_html = (
+                '<div style="padding:0 32px 24px;">'
+                '<div class="rox-card" style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;">'
+                '<div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Your wedding-day timeline</div>'
+                '<table role="presentation" style="width:100%;margin-top:10px;border-collapse:collapse;">'
+                f'{cells}'
+                '</table>'
+                '<div style="color:#94A3B8;font-size:11px;margin-top:8px;">Dispatch can tweak these times — reply to this email if anything shifts.</div>'
+                '</div></div>'
+            )
+    except Exception:  # noqa: BLE001
+        timeline_html = ""
 
     if sms_enabled and booking.get("customer_phone"):
         sms_body = (
@@ -1418,6 +1478,7 @@ def notify_paid_in_full(booking: dict, *, deposit_paid: float, balance_paid: flo
               <a href="{invoice_url}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px;font-size:13px;margin-top:12px;">Download invoice (PDF) →</a>
             </div>
           </div>
+          {timeline_html}
           <div style="padding:0 32px 24px;">
             <div style="background:#0B3B5C;color:#fff;border-radius:16px;padding:24px;text-align:center;">
               <div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Rox boarding pass</div>
@@ -1482,13 +1543,27 @@ def notify_paid_in_full(booking: dict, *, deposit_paid: float, balance_paid: flo
             ))
         except Exception as e:  # noqa: BLE001
             report["email"]["error"] = str(e)
+        # Fan out to consented secondary contacts WITHOUT heavy
+        # attachments — invoice PDF is private to the paying guest; the
+        # CC just needs the trip summary + booking id for coordination.
+        cc_report = []
+        for cc in (cc_emails or []):
+            try:
+                r = send_email(cc, f"[CC] {subject}", html, text, category="confirmation")
+                cc_report.append({"email": cc, "sent": r.get("sent"), "error": r.get("error")})
+            except Exception as e:  # noqa: BLE001
+                cc_report.append({"email": cc, "sent": False, "error": str(e)})
+        if cc_report:
+            report["cc"] = cc_report
     else:
         report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
     return report
 
 
 
-def notify_balance_capture_reminder(booking: dict, *, pay_url: str, prefs: Optional[dict] = None) -> dict:
+def notify_balance_capture_reminder(booking: dict, *, pay_url: str,
+                                     prefs: Optional[dict] = None,
+                                     cc_emails: Optional[list] = None) -> dict:
     """48-h-before-trip reminder for the outstanding `balance_due` on a
     group booking's deposit. Fires one email + one SMS; both link to the
     HMAC-signed `/pay-balance` endpoint which spins up a Stripe Checkout
@@ -1559,6 +1634,17 @@ def notify_balance_capture_reminder(booking: dict, *, pay_url: str, prefs: Optio
             report["email"].update(send_email(booking["customer_email"], subject, html, text, category="payment"))
         except Exception as e:  # noqa: BLE001
             report["email"]["error"] = str(e)
+        # Fan out to consented secondary contacts so the whole wedding
+        # circle sees the balance-due nudge, not just the lead planner.
+        cc_report = []
+        for cc in (cc_emails or []):
+            try:
+                r = send_email(cc, f"[CC] {subject}", html, text, category="payment")
+                cc_report.append({"email": cc, "sent": r.get("sent"), "error": r.get("error")})
+            except Exception as e:  # noqa: BLE001
+                cc_report.append({"email": cc, "sent": False, "error": str(e)})
+        if cc_report:
+            report["cc"] = cc_report
     return report
 
 

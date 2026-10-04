@@ -82,6 +82,18 @@ async def _mark_read(booking_id: str, by: str) -> str:
     return now
 
 
+async def _mark_typing(booking_id: str, by: str) -> str:
+    """Stamp a short-lived 'currently typing' heartbeat on the booking.
+    `by` is either 'dispatch' or 'guest'. Clients ping this every ~3 s
+    while the user is composing. The GET endpoints echo the stamp back
+    so the other side can render a typing indicator for anything < 5 s
+    old. No separate TTL cleanup needed — the UI gates on the delta."""
+    now = _now_iso()
+    field = "typing_dispatch_at" if by == "dispatch" else "typing_guest_at"
+    await _db.bookings.update_one({"id": booking_id}, {"$set": {field: now}})
+    return now
+
+
 # ── Admin side ──────────────────────────────────────────────────────
 async def _admin_dep(request: Request):
     """Late-binding admin dep that forwards cookies + CSRF through to
@@ -112,7 +124,14 @@ async def admin_chat_list(booking_id: str, _: str = Depends(_admin_dep)):
         "guest_link": f"https://roxtaxi.com/booking/{booking_id.upper()}/chat?t={make_chat_token(booking_id.upper())}",
         "last_read_guest_at": fresh.get("last_read_guest_at"),
         "last_read_dispatch_at": fresh.get("last_read_dispatch_at"),
+        "typing_guest_at": fresh.get("typing_guest_at"),
     }
+
+
+@router.post("/admin/chat/{booking_id}/typing")
+async def admin_chat_typing(booking_id: str, _: str = Depends(_admin_dep)):
+    await _mark_typing(booking_id.upper(), "dispatch")
+    return {"ok": True}
 
 
 @router.post("/admin/chat/{booking_id}")
@@ -173,7 +192,15 @@ async def guest_chat_list(booking_id: str, t: str = Query(...)):
         "messages": messages,
         "last_read_guest_at": fresh.get("last_read_guest_at"),
         "last_read_dispatch_at": fresh.get("last_read_dispatch_at"),
+        "typing_dispatch_at": fresh.get("typing_dispatch_at"),
     }
+
+
+@router.post("/chat/{booking_id}/typing")
+async def guest_chat_typing(booking_id: str, t: str = Query(...)):
+    _check_token(booking_id.upper(), t)
+    await _mark_typing(booking_id.upper(), "guest")
+    return {"ok": True}
 
 
 @router.post("/chat/{booking_id}")

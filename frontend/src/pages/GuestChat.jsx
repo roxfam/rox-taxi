@@ -29,9 +29,15 @@ export default function GuestChat() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const token = params.get("t") || "";
+  const typingTimerRef = useRef(0);
+  const dispatchIsTyping = () => {
+    const [t, _setT] = [dispatchTypingAt, null];
+    return t && (Date.now() - new Date(t).getTime()) < 5000;
+  };
   const [messages, setMessages] = useState([]);
   const [meta, setMeta] = useState(null);
   const [dispatchReadAt, setDispatchReadAt] = useState(null);
+  const [dispatchTypingAt, setDispatchTypingAt] = useState(null);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -54,6 +60,7 @@ export default function GuestChat() {
       setMessages(d.messages || []);
       setMeta({ item_name: d.item_name, booking_date: d.booking_date });
       setDispatchReadAt(d.last_read_dispatch_at || null);
+      setDispatchTypingAt(d.typing_dispatch_at || null);
     } catch (e) {
       setError("Could not reach the server. Try again in a moment.");
     } finally { setLoading(false); }
@@ -194,6 +201,16 @@ export default function GuestChat() {
               </div>
             );
           })}
+          {dispatchTypingAt && (Date.now() - new Date(dispatchTypingAt).getTime()) < 5000 && (
+            <div className="flex justify-start" data-testid="guest-chat-typing-indicator">
+              <div className="bg-white border border-[#E2E8F0] rounded-2xl px-4 py-2 inline-flex items-center gap-1.5 text-[#64748B]">
+                <span className="w-1.5 h-1.5 bg-[#D4A94A] rounded-full animate-pulse" />
+                <span className="w-1.5 h-1.5 bg-[#D4A94A] rounded-full animate-pulse" style={{ animationDelay: "0.2s" }} />
+                <span className="w-1.5 h-1.5 bg-[#D4A94A] rounded-full animate-pulse" style={{ animationDelay: "0.4s" }} />
+                <span className="text-[11px] font-semibold ml-1">Dispatch is typing…</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-[#E2E8F0] bg-white">

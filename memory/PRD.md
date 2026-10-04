@@ -23,6 +23,13 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Typing Indicator + Wedding Timeline + CC Fan-Out
+- **Chat Typing Indicator** (`routes/group_chat.py::_mark_typing` + both chat UIs): `POST /admin/chat/{id}/typing` and `POST /chat/{id}/typing?t=TOKEN` stamp `typing_dispatch_at` / `typing_guest_at` on the booking. GETs echo both stamps back; UIs check if stamp < 5 s old and render a 3-dot pulsing "Planner is typing…" / "Dispatch is typing…" bubble. Client throttles pings to one per 3 s via a ref timer — no DDOS on Mongo.
+- **Wedding Day Timeline** (`notifications.py::notify_paid_in_full`): group / 10+ pax round-trip bookings now get an auto-stitched 3-row itinerary (Driver arrives → Event/ceremony → Return pickup) in the paid-in-full email. Mid-point between pickup and return is the ceremony anchor; dispatch can edit before sending. Emoji + navy/orange styling matches the rest of the receipt.
+- **CC Fan-Out** (notifications + `_fire_paid_in_full` + balance-reminder cron + admin resend): `notify_paid_in_full` and `notify_balance_capture_reminder` now accept `cc_emails=` and fan out branded copies (prefixed `[CC]`) to every consented secondary contact. Invoice PDF stays private to the paying guest — CC emails get just the HTML/text brief. `get_consented_cc_emails(booking_id)` is called from `_fire_paid_in_full`, the balance-reminder cron, and the admin resend endpoint — all three paths now loop in the planner's trusted circle automatically.
+
+
+
 ### Feb 2026 — 3DS Modal + Chat Read Receipts + CC List + Driver Quick-Reply
 - **3-D Secure Pay Modal** (`ThreeDSecureModal.jsx` + `GET /api/stripe/public-key`): installed `@stripe/stripe-js` + `@stripe/react-stripe-js`. When Pay-with-Saved-Card returns `requires_action` the modal uses `stripe.confirmCardPayment(client_secret)` to run the 3-DS challenge in-app; on success it refreshes the bookings list. Backend only hands out `pk_test_*` / `pk_live_*` from `STRIPE_PUBLISHABLE_KEY` env — never the secret.
 - **Chat Read Receipts** (`routes/group_chat.py::_mark_read` + badges in both chat UIs): admin GET stamps `last_read_dispatch_at`; guest GET stamps `last_read_guest_at`. Response payload carries both timestamps so each UI paints a "Sent" vs "Seen" badge on its own messages based on whether the other side has read anything newer. No per-message writes — single-doc update, cheap polling.

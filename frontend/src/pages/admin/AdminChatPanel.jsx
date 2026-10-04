@@ -30,10 +30,15 @@ export default function AdminChatPanel({ bookingId }) {
   const [loading, setLoading] = useState(false);
   const [guestLink, setGuestLink] = useState("");
   const [guestReadAt, setGuestReadAt] = useState(null);
+  const [guestTypingAt, setGuestTypingAt] = useState(null);
   const [pendingImage, setPendingImage] = useState(null);
   const [uploading, setUploading] = useState(false);
   const scrollRef = useRef(null);
   const fileRef = useRef(null);
+  const typingTimerRef = useRef(0);
+
+  const guestIsTyping = guestTypingAt &&
+    (Date.now() - new Date(guestTypingAt).getTime()) < 5000;
 
   const load = async () => {
     setLoading(true);
@@ -42,6 +47,7 @@ export default function AdminChatPanel({ bookingId }) {
       setMessages(r.data?.messages || []);
       setGuestLink(r.data?.guest_link || "");
       setGuestReadAt(r.data?.last_read_guest_at || null);
+      setGuestTypingAt(r.data?.typing_guest_at || null);
     } catch (e) {
       // Silent — probably a 404 for a non-group booking; parent still renders.
     } finally {
@@ -142,8 +148,7 @@ export default function AdminChatPanel({ bookingId }) {
         ) : messages.map((m) => {
           const mine = m.author === "dispatch";
           const seen = mine && guestReadAt && new Date(m.created_at).getTime() <= new Date(guestReadAt).getTime();
-          return (
-            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`} data-testid={`admin-chat-msg-${m.id}`}>
+          return (            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`} data-testid={`admin-chat-msg-${m.id}`}>
               <div className={`max-w-[75%] rounded-2xl px-3.5 py-2 ${mine ? "bg-[#0B3B5C] text-white" : "bg-white border border-[#E2E8F0] text-[#0B3B5C]"}`}>
                 <div className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${mine ? "text-[#D4A94A]" : "text-[#64748B]"}`}>
                   {m.author_name} · {timeAgo(m.created_at)}
@@ -172,6 +177,16 @@ export default function AdminChatPanel({ bookingId }) {
             </div>
           );
         })}
+        {guestIsTyping && (
+          <div className="flex justify-start" data-testid="admin-chat-typing-indicator">
+            <div className="bg-white border border-[#E2E8F0] rounded-2xl px-3.5 py-2 inline-flex items-center gap-1.5 text-[#64748B]">
+              <span className="w-1.5 h-1.5 bg-[#D4A94A] rounded-full animate-pulse" />
+              <span className="w-1.5 h-1.5 bg-[#D4A94A] rounded-full animate-pulse" style={{ animationDelay: "0.2s" }} />
+              <span className="w-1.5 h-1.5 bg-[#D4A94A] rounded-full animate-pulse" style={{ animationDelay: "0.4s" }} />
+              <span className="text-[11px] font-semibold ml-1">Planner is typing…</span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="p-3 border-t border-[#E2E8F0] bg-white">

@@ -112,10 +112,13 @@ async def _fire_paid_in_full(booking_id: str, *, deposit_paid: float, balance_pa
         return
     try:
         from notifications import notify_paid_in_full  # noqa: PLC0415
+        from routes.secondary_contacts import get_consented_cc_emails  # noqa: PLC0415
         prefs = await _db.site_config.find_one({"_id": "main"}) or {}
+        cc_emails = await get_consented_cc_emails(booking_id)
         report = notify_paid_in_full(
             _clean(dict(booking)),
             deposit_paid=deposit_paid, balance_paid=balance_paid, prefs=prefs,
+            cc_emails=cc_emails,
         )
         await _db.bookings.update_one(
             {"id": booking_id},
@@ -177,7 +180,6 @@ async def _mark_paid(session_id: str, booking_id: Optional[str]):
             logging.warning("owner balance-paid alert err: %s", e)
         await _fire_paid_in_full(booking_id, deposit_paid=deposit, balance_paid=bal)
         return
-
     res = await _db.bookings.update_one(
         {"id": booking_id, "payment_status": {"$ne": "paid"}},
         {"$set": {"payment_status": "paid", "status": "confirmed", "updated_at": _now_iso()}},
