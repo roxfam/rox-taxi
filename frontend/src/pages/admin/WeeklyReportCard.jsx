@@ -35,7 +35,8 @@ export default function WeeklyReportCard() {
     }
   };
 
-  useEffect(() => { load(days); /* eslint-disable-next-line */ }, [days]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(days); }, [days]);
 
   const sendNow = async () => {
     setSending(true);

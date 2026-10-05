@@ -85,6 +85,7 @@ export default function Taxi() {
         setParams(params, { replace: true });
       }
     }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const bookDestination = (dest) => {

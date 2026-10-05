@@ -53,6 +53,7 @@ export default function Pay() {
       } catch { /* ignore */ }
     }, 10000);
     return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking?.id]);
 
   // ── Empty / lookup state ─────────────────────────────────────────────

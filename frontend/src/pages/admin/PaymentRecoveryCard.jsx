@@ -38,6 +38,7 @@ export default function PaymentRecoveryCard() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(scope); }, [scope]);
 
   const sendNudges = async () => {

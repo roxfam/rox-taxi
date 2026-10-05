@@ -25,7 +25,8 @@ export default function PriceHistoryModal({ kind, item, onClose, onSaved }) {
       setCurrent(data.current_price);
     } catch { toast.error("Failed to load history"); setHistory([]); }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [item.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [item.id]);
 
   const patchPrice = async (val, reasonText) => {
     setSaving(true);

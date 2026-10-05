@@ -34,7 +34,8 @@ export default function LicensesPanel() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [tab]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [tab]);
 
   const approve = async (b) => {
     setBusyId(b.id);

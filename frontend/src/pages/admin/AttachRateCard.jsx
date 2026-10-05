@@ -27,7 +27,8 @@ export default function AttachRateCard() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [days]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [days]);
 
   const rows = useMemo(() => {
     if (!data?.rows) return [];

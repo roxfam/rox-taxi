@@ -59,7 +59,8 @@ export default function VisitorsPanel() {
     }
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [sort, order, windowHrs, skip]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [sort, order, windowHrs, skip]);
 
   function toggleSort(k) {
     if (k === sort) setOrder(order === "asc" ? "desc" : "asc");

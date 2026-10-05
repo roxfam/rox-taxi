@@ -64,7 +64,8 @@ export default function DriverShare() {
     }
   };
 
-  useEffect(() => { loadBooking(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [booking_id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadBooking(); }, [booking_id]);
 
   const start = () => {
     if (!("geolocation" in navigator)) {
