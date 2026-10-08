@@ -23,6 +23,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Toes in the Turquoise · Rename + Home Feature + Share
+- **Rename** (`CableBeachDay.jsx` + `Home.jsx`): the Cable Beach package is now branded "**Toes in the Turquoise**" everywhere guest-facing. H1 is "Toes in the Turquoise" with "A day at Cable Beach / Goodman's Bay, Nassau" as italic subtitle so Google still indexes the geo-keywords. Hero overlay says "Toes in the *Turquoise*." in oversized serif. JSON-LD `TouristTrip.name` + `Product.name` renamed; `alternateName` keeps the old phrasing. `<title>` leads with the brand name.
+- **Home feature section** (`Home.jsx` `home-cable-beach-day`): new signature-tier card sits right after Dolphin Swim, using the Cable Beach hero as a full-bleed background, a "What's included" glass card on the right (chair + umbrella, kayaks, round-trip taxi, cruise option, lunch/drinks), two CTAs (`home-cable-beach-book` → `/tours/cable-beach-day`, `home-cable-beach-details`). Matches the Dolphin Swim visual grammar for consistency.
 ### Feb 2026 — Cable Beach Hero + Hotel Fare Auto-Fill + SEO
 - **Hero image** (`/frontend/public/images/cable-beach-hero.jpg`): replaces the previous watermarked iStock placeholder with a license-clean Pexels aerial of Cable Beach / Baha Mar (chairs, kayaks/watersports, pier, turquoise). Right ~12% / top ~4% cropped for a tighter composition. Attribution kept in `cable-beach-hero.credits.md`.
 - **3D-tilt HeroCard** (`CableBeachDay.jsx`): new mouse-tracked `perspective + rotateX/Y` card with inner-image counter-translate so the aerial feels like a tilt-to-look-around card. Respects `prefers-reduced-motion` and skips the effect on touch (`hover: none`).

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin } from "lucide-react";
+import { Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin, Share2 } from "lucide-react";
 import { API, money } from "../lib/api";
 import Seo from "../components/Seo";
 
@@ -76,7 +76,8 @@ export default function CableBeachDay() {
       {
         "@type": "TouristTrip",
         "@id": `${PAGE_CANONICAL}#trip`,
-        "name": "A Day at Cable Beach (Goodman's Bay), Nassau",
+        "name": "Toes in the Turquoise — Cable Beach (Goodman's Bay) Day, Nassau",
+        "alternateName": ["A Day at Cable Beach Nassau", "Cable Beach Day Package", "Goodman's Bay Beach Day"],
         "description": "Half-day beach package at Cable Beach / Goodman's Bay in Nassau, Bahamas. Includes a reserved chair + umbrella per guest, optional round-trip transfer from the Nassau cruise port or any Nassau / Paradise Island hotel, extra beach seats, and local lunch and drink add-ons. Round-trip hotel fares are quoted from the published Rox taxi zone tariff.",
         "touristType": ["Beach", "Family", "Cruise excursion", "Group"],
         "itinerary": {
@@ -109,7 +110,7 @@ export default function CableBeachDay() {
       {
         "@type": "Product",
         "@id": `${PAGE_CANONICAL}#product`,
-        "name": "Day at Cable Beach — Nassau Beach Day Package",
+        "name": "Toes in the Turquoise — Cable Beach Day, Nassau",
         "description": "Beach day at Cable Beach (Goodman's Bay), Nassau. Reserved chair and umbrella per guest, optional cruise-port or hotel round-trip transfer, extra beach seats, lunch and drink add-ons. All fares include 10% VAT and 5% processing fee at checkout.",
         "image": [`${SITE_URL}${HERO_IMAGE}`],
         "brand": { "@type": "Brand", "name": "Rox Taxi & Tours Bahamas" },
@@ -128,7 +129,7 @@ export default function CableBeachDay() {
         "itemListElement": [
           { "@type": "ListItem", "position": 1, "name": "Home", "item": SITE_URL },
           { "@type": "ListItem", "position": 2, "name": "Tours", "item": `${SITE_URL}/tours` },
-          { "@type": "ListItem", "position": 3, "name": "Day at Cable Beach", "item": PAGE_CANONICAL }
+          { "@type": "ListItem", "position": 3, "name": "Toes in the Turquoise · Cable Beach", "item": PAGE_CANONICAL }
         ]
       }
     ]
@@ -162,10 +163,10 @@ export default function CableBeachDay() {
   return (
     <div className="max-w-6xl mx-auto px-6 py-10" data-testid="cable-beach-day">
       <Seo
-        title="A Day at Cable Beach, Nassau · Chair, Umbrella & Transfer | Rox"
-        description="Day at Cable Beach / Goodman's Bay, Nassau — reserved chair + umbrella per guest, round-trip taxi from your hotel or the cruise port, lunch and drink add-ons. Transparent pricing, instant booking."
+        title="Toes in the Turquoise · A Day at Cable Beach, Nassau | Rox"
+        description="Toes in the Turquoise — the Rox day at Cable Beach / Goodman's Bay, Nassau. Reserved chair + umbrella per guest, round-trip taxi from your hotel or the cruise port, lunch and drink add-ons. Transparent pricing, instant booking."
         canonical={PAGE_CANONICAL}
-        keywords="day at cable beach nassau, cable beach day package, goodman's bay beach day, nassau beach day, cruise port to cable beach"
+        keywords="toes in the turquoise, day at cable beach nassau, cable beach day package, goodman's bay beach day, nassau beach day, cruise port to cable beach"
         ogImage={`${SITE_URL}${HERO_IMAGE}`}
         jsonLd={jsonLd}
       />
@@ -173,9 +174,12 @@ export default function CableBeachDay() {
       <HeroCard />
 
       <header className="mb-8">
-        <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">Rox Day Package</div>
-        <h1 className="serif text-4xl sm:text-5xl text-[#0B3B5C] mt-2">A day at Cable Beach</h1>
-        <p className="text-[#64748B] mt-2 max-w-2xl">Also known as Goodman's Bay — a soft-sand, calm-water stretch 10 minutes from downtown Nassau. Includes a reserved chair + umbrella per guest. Optional round-trip transfer, extra seats, lunch and drinks.</p>
+        <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">Rox Beach Day · Signature</div>
+        <h1 className="serif text-4xl sm:text-5xl text-[#0B3B5C] mt-2">
+          Toes in the Turquoise
+          <span className="block text-xl sm:text-2xl text-[#64748B] font-normal italic mt-1">A day at Cable Beach / Goodman's Bay, Nassau</span>
+        </h1>
+        <p className="text-[#64748B] mt-3 max-w-2xl">Soft sand, calm shelf water, kayaks and watersports right there on the beach — 10 minutes from downtown Nassau. Every booking includes a reserved chair + umbrella per guest. Add a round-trip transfer, extra seats, lunch and drinks.</p>
       </header>
 
       <div className="grid lg:grid-cols-[1fr_380px] gap-8">
@@ -289,6 +293,7 @@ export default function CableBeachDay() {
             className="mt-5 w-full inline-flex items-center justify-center rounded-full bg-[#E86A3C] text-white font-black uppercase tracking-wider py-3 text-sm hover:bg-[#d55a30] active:scale-95 disabled:opacity-50">
             {quoting ? "Updating…" : "Continue to checkout"}
           </button>
+          <ShareBeachDayButton quote={quote} pax={pax} transferKind={transferKind} hotelName={selectedHotel?.name} />
           <p className="text-[11px] text-[#94A3B8] mt-3 text-center">Secure checkout · Stripe or PayPal</p>
         </aside>
       </div>
@@ -347,11 +352,11 @@ function HeroCard() {
         <div className="inline-flex items-center gap-2 rounded-full bg-[#D4A94A] text-[#0B192C] text-[10px] font-black uppercase tracking-[0.3em] px-3 py-1">
           <Umbrella className="w-3 h-3" /> Cable Beach · Goodman's Bay
         </div>
-        <div className="serif text-3xl sm:text-5xl font-bold leading-[1.05] mt-3 drop-shadow">
-          A full day on <em className="italic text-[#F7E6C6]">the softest sand</em> in Nassau.
+        <div className="serif text-4xl sm:text-6xl font-bold leading-[1.02] mt-3 drop-shadow-lg">
+          Toes in the <em className="italic text-[#F7E6C6]">Turquoise.</em>
         </div>
-        <div className="text-sm sm:text-base text-white/85 mt-2 max-w-xl">
-          Reserved chairs, umbrella shade, kayaks and watersports on-site, round-trip taxi from your hotel. Priced upfront — no haggling.
+        <div className="text-sm sm:text-base text-white/90 mt-2 max-w-xl">
+          Reserved chair, umbrella shade, kayaks and watersports on-site, round-trip taxi from your hotel. Priced upfront — no haggling.
         </div>
       </div>
     </div>
@@ -405,6 +410,53 @@ function MenuTile({ it, active, onClick, testId }) {
         <span className={`text-sm font-bold ${active ? "text-[#E86A3C]" : "text-[#0B3B5C]"}`}>{it.name}</span>
         <span className="text-sm font-mono text-[#0B3B5C]">${it.price}</span>
       </div>
+    </button>
+  );
+}
+
+/**
+ * ShareBeachDayButton — one-tap share of the live total.
+ * Uses the native share sheet on mobile (navigator.share) so the guest sees
+ * WhatsApp + iMessage + Instagram as native options; falls back to a direct
+ * wa.me deeplink on desktop. Message pre-fills pax, total, and the booking
+ * URL so a group member can book straight from the shared card.
+ */
+function ShareBeachDayButton({ quote, pax, transferKind, hotelName }) {
+  if (!quote) return null;
+  const paxLabel = pax === 1 ? "1 guest" : `${pax} guests`;
+  const transferLabel =
+    transferKind === "cruise_roundtrip" ? " + round-trip cruise port ride"
+    : transferKind === "cruise_oneway" ? " + one-way cruise port ride"
+    : transferKind === "hotel" ? ` + round-trip ride (${(hotelName || "").split("·")[0].trim() || "hotel"})`
+    : "";
+  const shareText = `🌴 Toes in the Turquoise · Cable Beach, Nassau\nJust priced our beach day for ${paxLabel} — ${money(quote.total)} all-in (chair + umbrella${transferLabel}).\nBook your spot: ${PAGE_CANONICAL}`;
+
+  const onShare = async () => {
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    if (nav?.share) {
+      try {
+        await nav.share({
+          title: "Toes in the Turquoise · Cable Beach Nassau",
+          text: shareText,
+          url: PAGE_CANONICAL,
+        });
+        return;
+      } catch (e) {
+        if (e?.name === "AbortError") return; // user dismissed
+      }
+    }
+    const wa = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+    window.open(wa, "_blank", "noopener,noreferrer");
+    toast.success("WhatsApp opened · share your beach day");
+  };
+
+  return (
+    <button
+      onClick={onShare}
+      data-testid="cable-beach-share"
+      className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-full border-2 border-[#25D366] text-[#128C7E] font-bold py-2.5 text-sm hover:bg-[#25D366] hover:text-white active:scale-95 transition"
+    >
+      <Share2 className="w-4 h-4" /> Share this beach day
     </button>
   );
 }
