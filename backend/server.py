@@ -3690,6 +3690,138 @@ async def group_booking_quote(req: GroupQuoteRequest):
     }
 
 
+# ─────────────────── Cable Beach Day Package ──────────────────────────
+# Branded "Day at Cable Beach / Goodman's Bay" package with configurable
+# transfer, beach gear, lunch and drink add-ons. All pricing lives in
+# site_config.cable_beach_pkg so admins can tweak without a redeploy.
+CABLE_BEACH_DEFAULTS = {
+    "base_price": 40.0,              # Covers 1 chair + umbrella per guest
+    "extra_seat_price": 15.0,        # Additional chairs beyond 1-per-guest
+    "cruise_oneway_price": 10.0,     # Transfer FROM cruise port (per person)
+    "cruise_roundtrip_price": 20.0,  # Round-trip cruise port (per person)
+    "lunch_items": [],               # [{id, name, price}] — admin populated
+    "drink_items": [],               # [{id, name, price}] — admin populated
+    "active": True,
+}
+
+
+async def _cable_beach_cfg() -> dict:
+    cfg = await db.site_config.find_one({"_id": "main"}) or {}
+    pkg = cfg.get("cable_beach_pkg") or {}
+    merged = {**CABLE_BEACH_DEFAULTS, **pkg}
+    merged["lunch_items"] = pkg.get("lunch_items") or []
+    merged["drink_items"] = pkg.get("drink_items") or []
+    return merged
+
+
+@api_router.get("/public/cable-beach-package")
+async def public_cable_beach_pkg():
+    """Public-safe read: config + pricing for the Cable Beach day."""
+    return await _cable_beach_cfg()
+
+
+class CableBeachPkgUpdate(BaseModel):
+    base_price: Optional[float] = Field(None, ge=0, le=1000)
+    extra_seat_price: Optional[float] = Field(None, ge=0, le=200)
+    cruise_oneway_price: Optional[float] = Field(None, ge=0, le=200)
+    cruise_roundtrip_price: Optional[float] = Field(None, ge=0, le=400)
+    lunch_items: Optional[list] = None
+    drink_items: Optional[list] = None
+    active: Optional[bool] = None
+
+
+@api_router.put("/admin/cable-beach-package")
+async def admin_update_cable_beach_pkg(
+    patch: CableBeachPkgUpdate, _admin: str = Depends(require_admin),
+):
+    body = {k: v for k, v in patch.dict().items() if v is not None}
+    if not body:
+        raise HTTPException(400, "No fields provided.")
+    # Light validation on menu items — must be [{id,name,price}]
+    for key in ("lunch_items", "drink_items"):
+        if key in body:
+            cleaned = []
+            for row in body[key][:20]:
+                try:
+                    cleaned.append({
+                        "id": str(row.get("id") or uuid.uuid4().hex[:6]),
+                        "name": str(row.get("name", "")).strip()[:80],
+                        "price": round(float(row.get("price") or 0), 2),
+                    })
+                except Exception:  # noqa: BLE001
+                    continue
+            body[key] = [r for r in cleaned if r["name"] and r["price"] >= 0]
+    await db.site_config.update_one(
+        {"_id": "main"},
+        {"$set": {f"cable_beach_pkg.{k}": v for k, v in body.items()}},
+        upsert=True,
+    )
+    return await _cable_beach_cfg()
+
+
+class CableBeachQuoteRequest(BaseModel):
+    pax: int = Field(..., ge=1, le=50)
+    transfer_kind: str = Field("none", pattern="^(none|cruise_oneway|cruise_roundtrip|hotel)$")
+    hotel_fare: Optional[float] = Field(None, ge=0, le=500)   # When transfer_kind="hotel"
+    extra_seats: int = Field(0, ge=0, le=50)
+    lunch_item_ids: list[str] = Field(default_factory=list)
+    drink_item_ids: list[str] = Field(default_factory=list)
+
+
+@api_router.post("/cable-beach/quote")
+async def cable_beach_quote(req: CableBeachQuoteRequest):
+    """Transparent quote breakdown for the Cable Beach day package."""
+    cfg = await _cable_beach_cfg()
+    if not cfg.get("active", True):
+        raise HTTPException(503, "Cable Beach package is not currently available.")
+
+    base = round(cfg["base_price"] * req.pax, 2)
+    extra = round(cfg["extra_seat_price"] * req.extra_seats, 2)
+    transfer = 0.0
+    if req.transfer_kind == "cruise_oneway":
+        transfer = round(cfg["cruise_oneway_price"] * req.pax, 2)
+    elif req.transfer_kind == "cruise_roundtrip":
+        transfer = round(cfg["cruise_roundtrip_price"] * req.pax, 2)
+    elif req.transfer_kind == "hotel" and req.hotel_fare is not None:
+        transfer = round(float(req.hotel_fare), 2)
+
+    menu_by_id = {it["id"]: it for it in cfg["lunch_items"] + cfg["drink_items"]}
+    menu_lines = []
+    menu_total = 0.0
+    for mid in list(req.lunch_item_ids) + list(req.drink_item_ids):
+        it = menu_by_id.get(mid)
+        if not it:
+            continue
+        price = round(float(it.get("price") or 0.0), 2)
+        menu_total += price
+        menu_lines.append({"id": mid, "name": it.get("name"), "price": price})
+    menu_total = round(menu_total, 2)
+
+    subtotal = round(base + extra + transfer + menu_total, 2)
+    vat = round(subtotal * 0.10, 2)
+    processing = round((subtotal + vat) * 0.05, 2)
+    total = round(subtotal + vat + processing, 2)
+
+    return {
+        "pax": req.pax,
+        "base": base,
+        "base_price": cfg["base_price"],
+        "extra_seats": req.extra_seats,
+        "extra_seats_total": extra,
+        "extra_seat_price": cfg["extra_seat_price"],
+        "transfer_kind": req.transfer_kind,
+        "transfer_total": transfer,
+        "menu_lines": menu_lines,
+        "menu_total": menu_total,
+        "subtotal": subtotal,
+        "vat": vat,
+        "processing_fee": processing,
+        "total": total,
+    }
+
+
+
+
 class GroupBookingCheckout(BaseModel):
     service_type: str = Field(..., pattern="^(taxi|tour|rental)$")
     item_id: str

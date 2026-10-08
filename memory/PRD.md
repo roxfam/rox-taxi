@@ -23,6 +23,13 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Cable Beach Day Package
+- **Backend** (`server.py`): new `site_config.cable_beach_pkg` with `base_price` ($40), `extra_seat_price` ($15), `cruise_oneway_price` ($10), `cruise_roundtrip_price` ($20), `lunch_items[]`, `drink_items[]`, and `active` toggle. Endpoints: `GET /public/cable-beach-package`, `PUT /admin/cable-beach-package`, `POST /cable-beach/quote` returning base + extras + transfer + menu + 10% VAT + 5% processing breakdown.
+- **Public page** `/tours/cable-beach-day` (`CableBeachDay.jsx`): guest picks pax, extra seats, transfer kind (none / cruise one-way / cruise round-trip / hotel-fare input), lunch and drink items. Live quote updates on every change via `/cable-beach/quote`. Sticky summary with per-line breakdown + "Continue to checkout" that stashes the cart in sessionStorage.
+- **Admin card** `CableBeachPackageCard.jsx` mounted on the dashboard: edit base/extra/cruise prices (blur-to-save), toggle active/paused, add/remove/rename lunch and drink menu items (with Save button per menu).
+
+
+
 ### Feb 2026 — Chat Search + Driver Typing Signal + Timeline Editor
 - **Chat Message Search** (`routes/group_chat.py::admin_chat_search` + `AdminChatSearchCard.jsx`): `GET /admin/chat/search?q=` runs a case-insensitive regex across `group_chat_messages.body` across every booking, returning up to 50 newest-first results enriched with customer name + item name. Literal route declared before `/admin/chat/{booking_id}` so it isn't shadowed. Dashboard card renders highlighted matches; clicking a result jumps to the booking.
 - **Dispatch Typing Signal in Driver Panel** (`routes/group_chat.py::driver_chat_view` + `DriverChatPanel.jsx`): driver chat response now carries `typing_dispatch_at`; panel polls every 10 s (was 20 s) and renders the same 3-dot pulsing bubble when the stamp is < 5 s old. Driver sees the thread come alive seconds before dispatch's message lands.

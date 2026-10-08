@@ -58,6 +58,7 @@ const TipTopUp = lazy(() => import("./pages/TipTopUp"));
 const TipLookup = lazy(() => import("./pages/TipLookup"));
 const MyBookingLookup = lazy(() => import("./pages/MyBookingLookup"));
 const GuestChat = lazy(() => import("./pages/GuestChat"));
+const CableBeachDay = lazy(() => import("./pages/CableBeachDay"));
 import { AuthProvider } from "./lib/auth";
 
 import { useVisitorBeacon } from "./hooks/useVisitorBeacon";
@@ -126,6 +127,7 @@ function AppRouter() {
       <Route path="/tours/atlantis" element={<CustomerShell><Atlantis /></CustomerShell>} />
       <Route path="/tours/blue-lagoon" element={<CustomerShell><BlueLagoon /></CustomerShell>} />
       <Route path="/tours/baha-mar" element={<CustomerShell><BahaMar /></CustomerShell>} />
+      <Route path="/tours/cable-beach-day" element={<CustomerShell><CableBeachDay /></CustomerShell>} />
       <Route path="/cities/:slug" element={<CustomerShell><ComingSoon /></CustomerShell>} />
       <Route path="/pay" element={<CustomerShell><Pay /></CustomerShell>} />
       <Route path="/pay/:bookingId" element={<CustomerShell><Pay /></CustomerShell>} />
