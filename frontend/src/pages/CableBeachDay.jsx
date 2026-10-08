@@ -30,6 +30,7 @@ export default function CableBeachDay() {
   const [drinkIds, setDrinkIds] = useState(new Set());
   const [comboId, setComboId] = useState(null);                 // Chef's-choice bundle
   const [dietFilters, setDietFilters] = useState(new Set());    // GF / pescatarian / DF filters
+  const [allergies, setAllergies] = useState(new Set());        // Confirmed allergies for dispatch
   const [quote, setQuote] = useState(null);
   const [quoting, setQuoting] = useState(false);
   const [shareToken, setShareToken] = useState(null);     // Inbound ?r=<token>
@@ -186,6 +187,7 @@ export default function CableBeachDay() {
       lunch_item_ids: Array.from(lunchIds),
       drink_item_ids: Array.from(drinkIds),
       combo_id: comboId,
+      allergies: Array.from(allergies),
       special_requests: guest.special_requests || null,
       share_token: shareToken || null,
     };
@@ -322,32 +324,36 @@ export default function CableBeachDay() {
             {/* Dietary filter chips */}
             {(() => {
               const DIET = [
-                { id: "gluten_free",   label: "Gluten-free",   short: "GF" },
-                { id: "pescatarian",   label: "Pescatarian",   short: "P" },
-                { id: "dairy_free",    label: "Dairy-free",    short: "DF" },
-                { id: "peanut_free",   label: "Peanut-free",   short: "PF" },
-                { id: "shellfish_free",label: "Shellfish-free",short: "SF" },
+                { id: "gluten_free",    label: "Gluten-free",    glyph: "🌾❌" },
+                { id: "pescatarian",    label: "Pescatarian",    glyph: "🐟" },
+                { id: "dairy_free",     label: "Dairy-free",     glyph: "🥛❌" },
+                { id: "peanut_free",    label: "Peanut-free",    glyph: "🥜❌" },
+                { id: "shellfish_free", label: "Shellfish-free", glyph: "🦐❌" },
               ];
               return (
-                <div className="flex flex-wrap items-center gap-1.5 mb-3" data-testid="cable-diet-filters">
-                  <span className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider mr-1">Filter:</span>
-                  {DIET.map((d) => {
-                    const active = dietFilters.has(d.id);
-                    return (
-                      <button key={d.id} type="button"
-                        onClick={() => setDietFilters((prev) => {
-                          const n = new Set(prev); n.has(d.id) ? n.delete(d.id) : n.add(d.id); return n;
-                        })}
-                        data-testid={`cable-diet-${d.id}`}
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${active ? "bg-[#0B3B5C] text-white" : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"}`}>
-                        {d.label}
-                      </button>
-                    );
-                  })}
-                  {dietFilters.size > 0 && (
-                    <button onClick={() => setDietFilters(new Set())} className="text-[11px] text-[#64748B] underline hover:text-[#0B3B5C]"
-                      data-testid="cable-diet-clear">Clear</button>
-                  )}
+                <div className="mb-3" data-testid="cable-diet-filters">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider mr-1">Filter:</span>
+                    {DIET.map((d) => {
+                      const active = dietFilters.has(d.id);
+                      return (
+                        <button key={d.id} type="button"
+                          onClick={() => setDietFilters((prev) => {
+                            const n = new Set(prev); n.has(d.id) ? n.delete(d.id) : n.add(d.id); return n;
+                          })}
+                          data-testid={`cable-diet-${d.id}`}
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${active ? "bg-[#0B3B5C] text-white" : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"}`}>
+                          <span className="text-[12px] leading-none">{d.glyph}</span>
+                          <span>{d.label}</span>
+                        </button>
+                      );
+                    })}
+                    {dietFilters.size > 0 && (
+                      <button onClick={() => setDietFilters(new Set())} className="text-[11px] text-[#64748B] underline hover:text-[#0B3B5C]"
+                        data-testid="cable-diet-clear">Clear</button>
+                    )}
+                  </div>
+                  <AllergyPrompt dietFilters={dietFilters} allergies={allergies} setAllergies={setAllergies} />
                 </div>
               );
             })()}
@@ -557,8 +563,15 @@ function TransferTile({ active, onClick, title, sub, Icon = Ship, testId }) {
 }
 
 function MenuTile({ it, active, onClick, testId }) {
-  const TAG_SHORT = { gluten_free: "GF", pescatarian: "P", dairy_free: "DF", peanut_free: "PF", shellfish_free: "SF" };
-  const TAG_COLOR = { gluten_free: "#059669", pescatarian: "#0369A1", dairy_free: "#B45309", peanut_free: "#7C3AED", shellfish_free: "#DB2777" };
+  // Emoji-first allergen badges — strikethrough semantic is implied by the ❌.
+  // Scans 2–3× faster than letter codes on mobile.
+  const TAG_META = {
+    gluten_free:    { glyph: "🌾❌", label: "Gluten-free",    bg: "#D1FAE5", fg: "#047857" },
+    pescatarian:    { glyph: "🐟",   label: "Pescatarian",    bg: "#DBEAFE", fg: "#1D4ED8" },
+    dairy_free:     { glyph: "🥛❌", label: "Dairy-free",     bg: "#FEF3C7", fg: "#92400E" },
+    peanut_free:    { glyph: "🥜❌", label: "Peanut-free",    bg: "#EDE9FE", fg: "#5B21B6" },
+    shellfish_free: { glyph: "🦐❌", label: "Shellfish-free", bg: "#FCE7F3", fg: "#9D174D" },
+  };
   const tags = Array.isArray(it.tags) ? it.tags : [];
   return (
     <button onClick={onClick} data-testid={testId}
@@ -569,13 +582,17 @@ function MenuTile({ it, active, onClick, testId }) {
       </div>
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1.5">
-          {tags.map((t) => (
-            <span key={t} className="text-[9px] font-bold rounded-full px-1.5 py-0.5"
-              title={t.replace("_", " ")}
-              style={{ color: TAG_COLOR[t] || "#64748B", background: `${TAG_COLOR[t] || "#64748B"}18` }}>
-              {TAG_SHORT[t] || t}
-            </span>
-          ))}
+          {tags.map((t) => {
+            const m = TAG_META[t];
+            if (!m) return null;
+            return (
+              <span key={t} className="text-[11px] rounded-full px-1.5 py-0.5 leading-none inline-flex items-center"
+                title={m.label}
+                style={{ color: m.fg, background: m.bg }}>
+                {m.glyph}
+              </span>
+            );
+          })}
         </div>
       )}
     </button>
@@ -794,6 +811,45 @@ function Line({ label, children }) {
     <div className="flex items-center justify-between gap-2 text-sm">
       <span className="text-[#64748B]">{label}</span>
       <span className="text-[#0B3B5C] font-mono">{children}</span>
+    </div>
+  );
+}
+
+/**
+ * AllergyPrompt — surfaces a small banner when the guest ticks a "free"
+ * filter that maps to a common allergen (shellfish/peanut). Lets them flag
+ * a *real* allergy so dispatch sees it on the booking before service.
+ * Pure filter-only usage doesn't require this confirmation — it's opt-in.
+ */
+function AllergyPrompt({ dietFilters, allergies, setAllergies }) {
+  const prompts = [
+    { filter: "shellfish_free", allergen: "shellfish", glyph: "🦐", label: "shellfish" },
+    { filter: "peanut_free",    allergen: "peanut",    glyph: "🥜", label: "peanut" },
+  ].filter((p) => dietFilters.has(p.filter));
+  if (prompts.length === 0) return null;
+  const toggle = (a) => setAllergies((prev) => {
+    const n = new Set(prev); n.has(a) ? n.delete(a) : n.add(a); return n;
+  });
+  return (
+    <div className="mt-2 space-y-1.5">
+      {prompts.map((p) => {
+        const flagged = allergies.has(p.allergen);
+        return (
+          <div key={p.allergen}
+            className={`flex items-start sm:items-center justify-between gap-3 rounded-lg border px-3 py-2 ${flagged ? "border-[#B91C1C] bg-[#FEF2F2]" : "border-amber-300 bg-amber-50"}`}
+            data-testid={`cable-allergy-prompt-${p.allergen}`}>
+            <div className="text-xs text-[#0B3B5C] leading-snug">
+              <span className="text-base mr-1">{p.glyph}</span>
+              <b>Any {p.label} allergy in your party?</b> If so, flag it so dispatch and the kitchen know before you arrive.
+            </div>
+            <button type="button" onClick={() => toggle(p.allergen)}
+              data-testid={`cable-allergy-${p.allergen}-toggle`}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition ${flagged ? "bg-[#B91C1C] text-white" : "border border-[#B91C1C] text-[#B91C1C] hover:bg-[#B91C1C] hover:text-white"}`}>
+              {flagged ? "Allergy flagged ✓" : `Yes, ${p.label} allergy`}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

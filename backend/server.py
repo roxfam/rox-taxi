@@ -4028,6 +4028,7 @@ class CableBeachBookRequest(BaseModel):
     lunch_item_ids: list[str] = Field(default_factory=list)
     drink_item_ids: list[str] = Field(default_factory=list)
     combo_id: Optional[str] = Field(None, max_length=40)
+    allergies: list[str] = Field(default_factory=list)        # ["shellfish","peanut",...]
     special_requests: Optional[str] = Field(None, max_length=500)
     share_token: Optional[str] = Field(None, max_length=40)  # Credit the sharer
 
@@ -4083,6 +4084,11 @@ async def cable_beach_book(req: CableBeachBookRequest):
 
     import secrets, string
     booking_id = "CB-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+    # Prepend any confirmed allergies to special_requests so dispatch sees it first.
+    allergy_prefix = ""
+    if req.allergies:
+        allergy_prefix = "⚠️ ALLERGIES: " + ", ".join(a.strip().title() for a in req.allergies if a.strip()) + ". "
+    merged_requests = (allergy_prefix + (req.special_requests or "")).strip() or None
     booking_doc = {
         "id": booking_id,
         "service_type": "tour",
@@ -4103,7 +4109,8 @@ async def cable_beach_book(req: CableBeachBookRequest):
         "total_price": quote["total"],
         "payment_status": "pending",
         "status": "pending",
-        "special_requests": req.special_requests,
+        "special_requests": merged_requests,
+        "allergies": req.allergies or [],
         "created_at": now_iso(),
         # Cable Beach specifics (admin-visible on BookingDetailModal via extras)
         "cable_beach": {
