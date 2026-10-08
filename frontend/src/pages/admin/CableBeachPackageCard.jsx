@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Umbrella, Plus, Trash2, Save, Power } from "lucide-react";
+import { Umbrella, Plus, Trash2, Save, Power, Share2, TrendingUp } from "lucide-react";
 import { api } from "../../lib/api";
 
 /**
@@ -151,6 +151,69 @@ export default function CableBeachPackageCard() {
           </div>
         </div>
       ))}
+      <ShareStatsPanel />
     </section>
+  );
+}
+
+/**
+ * ShareStatsPanel — Cable Beach "Share this beach day" conversion board.
+ * Each row = one sharer email; shows clicks, bookings, conversion %, and
+ * total $10 credits already paid out to them.
+ */
+function ShareStatsPanel() {
+  const [stats, setStats] = useState(null);
+  useEffect(() => {
+    api.get("/admin/share-stats/cable-beach")
+      .then((r) => setStats(r.data))
+      .catch(() => setStats({ rows: [], totals: { clicks: 0, bookings: 0, credits_awarded_total: 0 } }));
+  }, []);
+  if (!stats) return null;
+  const { rows, totals } = stats;
+  return (
+    <div className="mt-8 pt-6 border-t border-[#E2E8F0]" data-testid="cable-beach-share-stats">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Share2 className="w-4 h-4 text-[#25D366]" />
+          <div className="text-xs font-bold uppercase tracking-wider text-[#0B3B5C]">Share-link conversions</div>
+        </div>
+        <div className="flex items-center gap-4 text-[11px] text-[#64748B]">
+          <span><b className="text-[#0B3B5C]">{totals.clicks}</b> clicks</span>
+          <span><b className="text-[#0B3B5C]">{totals.bookings}</b> bookings</span>
+          <span className="text-[#128C7E] font-bold">${totals.credits_awarded_total.toFixed(2)} paid</span>
+          {totals.clicks > 0 && (
+            <span className="inline-flex items-center gap-1 text-[#128C7E]"><TrendingUp className="w-3 h-3" />{((totals.bookings / totals.clicks) * 100).toFixed(1)}%</span>
+          )}
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <div className="text-xs text-[#94A3B8] italic py-2">No shares yet · guests who tap "Share this beach day" will show up here.</div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-[#E2E8F0]">
+          <table className="w-full text-xs">
+            <thead className="bg-[#F8FAFC] text-[#64748B]">
+              <tr>
+                <th className="text-left px-3 py-2 font-bold uppercase tracking-wider">Sharer</th>
+                <th className="text-right px-3 py-2 font-bold uppercase tracking-wider">Clicks</th>
+                <th className="text-right px-3 py-2 font-bold uppercase tracking-wider">Bookings</th>
+                <th className="text-right px-3 py-2 font-bold uppercase tracking-wider">Conv %</th>
+                <th className="text-right px-3 py-2 font-bold uppercase tracking-wider">$ paid</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.token} className="border-t border-[#E2E8F0]">
+                  <td className="px-3 py-2 text-[#0B3B5C]">{r.sharer_email}</td>
+                  <td className="px-3 py-2 text-right mono">{r.clicks}</td>
+                  <td className="px-3 py-2 text-right mono">{r.bookings}</td>
+                  <td className="px-3 py-2 text-right mono text-[#128C7E]">{r.conversion_rate.toFixed(1)}%</td>
+                  <td className="px-3 py-2 text-right mono font-bold">${r.credits_awarded_total.toFixed(0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }

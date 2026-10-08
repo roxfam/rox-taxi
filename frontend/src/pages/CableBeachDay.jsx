@@ -30,10 +30,30 @@ export default function CableBeachDay() {
   const [drinkIds, setDrinkIds] = useState(new Set());
   const [quote, setQuote] = useState(null);
   const [quoting, setQuoting] = useState(false);
+  const [shareToken, setShareToken] = useState(null);     // Inbound ?r=<token>
+  const [guestModalOpen, setGuestModalOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   useEffect(() => {
     fetch(`${API}/public/cable-beach-package`).then((r) => r.json()).then(setCfg).catch(() => {});
     fetch(`${API}/cable-beach/hotels`).then((r) => r.json()).then((d) => setHotels(d.hotels || [])).catch(() => {});
+
+    // Capture inbound ?r=<token> (shared beach-day link) and tally the click.
+    try {
+      const url = new URL(window.location.href);
+      const t = url.searchParams.get("r");
+      if (t) {
+        sessionStorage.setItem("cable_beach_share_token", t);
+        setShareToken(t);
+        fetch(`${API}/share/cable-beach/click`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: t }),
+        }).catch(() => {});
+      } else {
+        const saved = sessionStorage.getItem("cable_beach_share_token");
+        if (saved) setShareToken(saved);
+      }
+    } catch { /* noop */ }
   }, []);
 
   const quoteBody = useMemo(() => ({
@@ -147,17 +167,35 @@ export default function CableBeachDay() {
       toast.error("Pick your hotel so we can confirm your transfer fare.");
       return;
     }
+    setGuestModalOpen(true);
+  };
+
+  const submitBooking = async (guest) => {
     const payload = {
-      pax, extra_seats: extraSeats, transfer_kind: transferKind,
+      customer_name: guest.name,
+      customer_email: guest.email,
+      customer_phone: guest.phone,
+      booking_date: guest.booking_date,
+      pax, extra_seats: extraSeats,
+      transfer_kind: transferKind,
       hotel_id: transferKind === "hotel" ? hotelId : null,
-      hotel_name: selectedHotel?.name || null,
-      lunch_ids: Array.from(lunchIds), drink_ids: Array.from(drinkIds),
-      total: quote?.total,
+      lunch_item_ids: Array.from(lunchIds),
+      drink_item_ids: Array.from(drinkIds),
+      special_requests: guest.special_requests || null,
+      share_token: shareToken || null,
     };
-    sessionStorage.setItem("cable_beach_cart", JSON.stringify(payload));
-    toast.success(`Package saved · ${money(quote?.total || 0)}. Continuing to checkout…`);
-    // Routes into the generic BookingFlow with the saved cart in sessionStorage
-    window.location.href = `/pay/cable-beach-day`;
+    const res = await fetch(`${API}/cable-beach/book`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.detail || "Could not create booking. Please try again.");
+      return;
+    }
+    const data = await res.json();
+    toast.success(`Booked · ${money(data.total)}. Finishing checkout…`);
+    window.location.href = data.pay_url;
   };
 
   return (
@@ -225,15 +263,18 @@ export default function CableBeachDay() {
                   </select>
                 </div>
                 {selectedHotel ? (
-                  <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-[#FFF4EC] border border-[#E86A3C]/30 px-3 py-2" data-testid="cable-hotel-fare-readout">
-                    <div className="text-xs text-[#64748B]">
-                      Round-trip taxi fare for <b className="text-[#0B3B5C]">{selectedHotel.name.split("·")[0].trim()}</b>
-                      <span className="block text-[10px] text-[#94A3B8] mt-0.5">${selectedHotel.oneway_fare} each way · zone tariff · flat per taxi</span>
+                  <>
+                    <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-[#FFF4EC] border border-[#E86A3C]/30 px-3 py-2" data-testid="cable-hotel-fare-readout">
+                      <div className="text-xs text-[#64748B]">
+                        Round-trip taxi fare for <b className="text-[#0B3B5C]">{selectedHotel.name.split("·")[0].trim()}</b>
+                        <span className="block text-[10px] text-[#94A3B8] mt-0.5">${selectedHotel.oneway_fare} each way · zone tariff · flat per taxi</span>
+                      </div>
+                      <div className="serif text-xl text-[#E86A3C] font-black whitespace-nowrap" data-testid="cable-hotel-fare-amount">
+                        ${selectedHotel.roundtrip_fare}
+                      </div>
                     </div>
-                    <div className="serif text-xl text-[#E86A3C] font-black whitespace-nowrap" data-testid="cable-hotel-fare-amount">
-                      ${selectedHotel.roundtrip_fare}
-                    </div>
-                  </div>
+                    <HotelPickupMap hotel={selectedHotel} />
+                  </>
                 ) : (
                   <p className="text-[11px] text-[#64748B] mt-1">We auto-fill the round-trip fare from the Rox zone tariff — no haggling, no surprises.</p>
                 )}
@@ -293,10 +334,30 @@ export default function CableBeachDay() {
             className="mt-5 w-full inline-flex items-center justify-center rounded-full bg-[#E86A3C] text-white font-black uppercase tracking-wider py-3 text-sm hover:bg-[#d55a30] active:scale-95 disabled:opacity-50">
             {quoting ? "Updating…" : "Continue to checkout"}
           </button>
-          <ShareBeachDayButton quote={quote} pax={pax} transferKind={transferKind} hotelName={selectedHotel?.name} />
+          <ShareBeachDayButton quote={quote} pax={pax} transferKind={transferKind} hotelName={selectedHotel?.name} onOpen={() => setShareModalOpen(true)} />
+          {shareToken && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-[#F0F9FF] border border-[#0EA5E9]/30 px-3 py-2 text-[11px] text-[#0369A1]" data-testid="cable-beach-shared-banner">
+              <Share2 className="w-3.5 h-3.5 shrink-0" />
+              <span>You followed a friend's share link — book this beach day and they'll earn a $10 Rox credit.</span>
+            </div>
+          )}
           <p className="text-[11px] text-[#94A3B8] mt-3 text-center">Secure checkout · Stripe or PayPal</p>
         </aside>
       </div>
+
+      {guestModalOpen && (
+        <GuestDetailsModal
+          onClose={() => setGuestModalOpen(false)}
+          onSubmit={submitBooking}
+          totalLabel={quote ? money(quote.total) : ""}
+        />
+      )}
+      {shareModalOpen && (
+        <ShareLinkModal
+          onClose={() => setShareModalOpen(false)}
+          quote={quote} pax={pax} transferKind={transferKind} hotelName={selectedHotel?.name}
+        />
+      )}
     </div>
   );
 }
@@ -415,49 +476,209 @@ function MenuTile({ it, active, onClick, testId }) {
 }
 
 /**
- * ShareBeachDayButton — one-tap share of the live total.
- * Uses the native share sheet on mobile (navigator.share) so the guest sees
- * WhatsApp + iMessage + Instagram as native options; falls back to a direct
- * wa.me deeplink on desktop. Message pre-fills pax, total, and the booking
- * URL so a group member can book straight from the shared card.
+ * ShareBeachDayButton — opens the ShareLinkModal (which lets the sharer
+ * attach their email so a $10 Rox credit lands on their wallet once the
+ * recipient books). Falls back to native share if the modal isn't needed.
  */
-function ShareBeachDayButton({ quote, pax, transferKind, hotelName }) {
+function ShareBeachDayButton({ quote, onOpen }) {
   if (!quote) return null;
+  return (
+    <button
+      onClick={onOpen}
+      data-testid="cable-beach-share"
+      className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-full border-2 border-[#25D366] text-[#128C7E] font-bold py-2.5 text-sm hover:bg-[#25D366] hover:text-white active:scale-95 transition"
+    >
+      <Share2 className="w-4 h-4" /> Share this beach day · earn $10 credit
+    </button>
+  );
+}
+
+/**
+ * HotelPickupMap — tiny OpenStreetMap iframe centred on the chosen hotel's
+ * zone centroid. No API key, no tracking, loads instantly. We draw a small
+ * pickup pin at the exact centroid so the guest can eyeball it before
+ * booking.
+ */
+function HotelPickupMap({ hotel }) {
+  if (!hotel?.lat || !hotel?.lng) return null;
+  const d = 0.015; // bbox radius in degrees (~1.5 km)
+  const bbox = [hotel.lng - d, hotel.lat - d, hotel.lng + d, hotel.lat + d].join(",");
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${hotel.lat},${hotel.lng}`;
+  const osmLink = `https://www.openstreetmap.org/?mlat=${hotel.lat}&mlon=${hotel.lng}#map=15/${hotel.lat}/${hotel.lng}`;
+  return (
+    <div className="mt-2 rounded-lg overflow-hidden border border-[#E2E8F0]" data-testid="cable-hotel-map">
+      <iframe
+        title={`Pickup area · ${hotel.name}`}
+        src={src}
+        className="w-full h-40 border-0"
+        loading="lazy"
+      />
+      <div className="flex items-center justify-between gap-2 bg-[#F8FAFC] px-2.5 py-1.5">
+        <span className="text-[10px] text-[#64748B]">Pickup zone · tap the pin to confirm</span>
+        <a href={osmLink} target="_blank" rel="noopener noreferrer"
+          className="text-[10px] font-bold text-[#D4A94A] hover:underline">Open in map →</a>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * GuestDetailsModal — collects name/email/phone/date before the server
+ * creates a real booking. Keeps the booking flow lean (one modal instead
+ * of a full new page). On submit it hands the data back to CableBeachDay
+ * which POSTs `/cable-beach/book` and redirects to `/pay/{booking_id}`.
+ */
+function GuestDetailsModal({ onClose, onSubmit, totalLabel }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [bookingDate, setBookingDate] = useState("");
+  const [requests, setRequests] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!name || !email || !phone || !bookingDate) {
+      toast.error("Please fill name, email, phone and date.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await onSubmit({
+        name, email, phone,
+        booking_date: new Date(bookingDate).toISOString(),
+        special_requests: requests || null,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-[#0B192C]/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} data-testid="cable-guest-modal">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">Final step</div>
+            <h3 className="serif text-2xl text-[#0B3B5C]">Who's coming to the beach?</h3>
+            {totalLabel && <div className="text-xs text-[#64748B] mt-1">Total · <b className="text-[#0B3B5C]">{totalLabel}</b></div>}
+          </div>
+          <button onClick={onClose} className="text-[#64748B] hover:text-[#0B3B5C]" data-testid="cable-guest-close">✕</button>
+        </div>
+        <form onSubmit={submit} className="space-y-3">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name"
+            className="w-full px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]"
+            data-testid="cable-guest-name" />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email"
+            className="w-full px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]"
+            data-testid="cable-guest-email" />
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone (with country code)" type="tel"
+            className="w-full px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]"
+            data-testid="cable-guest-phone" />
+          <input value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} type="datetime-local"
+            min={new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 16)}
+            className="w-full px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]"
+            data-testid="cable-guest-date" />
+          <textarea value={requests} onChange={(e) => setRequests(e.target.value)} placeholder="Allergies, flight #, cabana preference (optional)"
+            rows={2} maxLength={500}
+            className="w-full px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]"
+            data-testid="cable-guest-requests" />
+          <button type="submit" disabled={busy}
+            className="w-full rounded-full bg-[#E86A3C] text-white font-black uppercase tracking-wider py-3 text-sm hover:bg-[#d55a30] active:scale-95 disabled:opacity-50"
+            data-testid="cable-guest-submit">
+            {busy ? "Reserving…" : `Reserve & pay · ${totalLabel}`}
+          </button>
+          <p className="text-[11px] text-[#94A3B8] text-center">You'll pay on the next screen with Stripe or PayPal.</p>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ShareLinkModal — asks the sharer for their email (first time only; cached
+ * in localStorage), mints a durable share token via `/share/cable-beach/create`,
+ * then hands the URL off to the native share sheet or a wa.me deeplink.
+ */
+function ShareLinkModal({ onClose, quote, pax, transferKind, hotelName }) {
+  const [email, setEmail] = useState(() => {
+    try { return localStorage.getItem("cable_sharer_email") || ""; } catch { return ""; }
+  });
+  const [busy, setBusy] = useState(false);
+
   const paxLabel = pax === 1 ? "1 guest" : `${pax} guests`;
   const transferLabel =
     transferKind === "cruise_roundtrip" ? " + round-trip cruise port ride"
     : transferKind === "cruise_oneway" ? " + one-way cruise port ride"
     : transferKind === "hotel" ? ` + round-trip ride (${(hotelName || "").split("·")[0].trim() || "hotel"})`
     : "";
-  const shareText = `🌴 Toes in the Turquoise · Cable Beach, Nassau\nJust priced our beach day for ${paxLabel} — ${money(quote.total)} all-in (chair + umbrella${transferLabel}).\nBook your spot: ${PAGE_CANONICAL}`;
 
-  const onShare = async () => {
-    const nav = typeof navigator !== "undefined" ? navigator : null;
-    if (nav?.share) {
-      try {
-        await nav.share({
-          title: "Toes in the Turquoise · Cable Beach Nassau",
-          text: shareText,
-          url: PAGE_CANONICAL,
+  const buildText = (url) =>
+    `🌴 Toes in the Turquoise · Cable Beach, Nassau\nJust priced our beach day for ${paxLabel} — ${money(quote?.total || 0)} all-in (chair + umbrella${transferLabel}).\nBook your spot: ${url}`;
+
+  const share = async (opts) => {
+    setBusy(true);
+    let shareUrl = PAGE_CANONICAL;
+    try {
+      if (opts.useEmail) {
+        try { localStorage.setItem("cable_sharer_email", email); } catch { /* noop */ }
+        const r = await fetch(`${API}/share/cable-beach/create`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sharer_email: email }),
         });
-        return;
-      } catch (e) {
-        if (e?.name === "AbortError") return; // user dismissed
+        if (r.ok) {
+          const d = await r.json();
+          shareUrl = `${SITE_URL}${d.share_url}`;
+        }
       }
+      const text = buildText(shareUrl);
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      if (nav?.share) {
+        try {
+          await nav.share({ title: "Toes in the Turquoise · Cable Beach Nassau", text, url: shareUrl });
+          toast.success(opts.useEmail ? "Shared · $10 credit tracked" : "Shared · no credit (anonymous)");
+          onClose();
+          return;
+        } catch (e) {
+          if (e?.name === "AbortError") { setBusy(false); return; }
+        }
+      }
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+      toast.success(opts.useEmail ? "WhatsApp opened · $10 credit tracked" : "WhatsApp opened");
+      onClose();
+    } finally {
+      setBusy(false);
     }
-    const wa = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-    window.open(wa, "_blank", "noopener,noreferrer");
-    toast.success("WhatsApp opened · share your beach day");
   };
 
   return (
-    <button
-      onClick={onShare}
-      data-testid="cable-beach-share"
-      className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-full border-2 border-[#25D366] text-[#128C7E] font-bold py-2.5 text-sm hover:bg-[#25D366] hover:text-white active:scale-95 transition"
-    >
-      <Share2 className="w-4 h-4" /> Share this beach day
-    </button>
+    <div className="fixed inset-0 z-50 bg-[#0B192C]/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} data-testid="cable-share-modal">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <div className="text-[10px] tracking-[0.3em] uppercase text-[#128C7E] font-black">Share · Earn $10</div>
+            <h3 className="serif text-2xl text-[#0B3B5C]">Send this beach day to a friend</h3>
+          </div>
+          <button onClick={onClose} className="text-[#64748B] hover:text-[#0B3B5C]" data-testid="cable-share-close">✕</button>
+        </div>
+        <p className="text-sm text-[#64748B] mb-4">
+          Drop your email so we can track your referral — when a friend books Toes in the Turquoise through your link, you'll get a <b className="text-[#128C7E]">$10 Rox credit</b> on your next trip.
+        </p>
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your email" type="email"
+          className="w-full px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#128C7E] mb-3"
+          data-testid="cable-share-email" />
+        <button onClick={() => share({ useEmail: true })} disabled={busy || !email}
+          className="w-full rounded-full bg-[#25D366] text-white font-black uppercase tracking-wider py-3 text-sm hover:bg-[#1DA851] active:scale-95 disabled:opacity-50"
+          data-testid="cable-share-submit">
+          {busy ? "Preparing…" : "Share & earn $10"}
+        </button>
+        <button onClick={() => share({ useEmail: false })} disabled={busy}
+          className="mt-2 w-full rounded-full border border-[#E2E8F0] text-[#64748B] font-semibold py-2 text-xs hover:border-[#D4A94A] hover:text-[#0B3B5C]"
+          data-testid="cable-share-anon">
+          Share without earning credit
+        </button>
+      </div>
+    </div>
   );
 }
 

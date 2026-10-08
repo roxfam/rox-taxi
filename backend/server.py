@@ -659,13 +659,31 @@ async def _apply_referral_conversion_if_paid(booking_id: str) -> Optional[dict]:
                 )
 
     # ── (1) Referral conversion — only once per referee
+    _try_share_credit = globals().get("_credit_share_referrer_if_cable_beach")
     if booking.get("referral_applied"):
+        # Even if the formal referral chain is done, we still want to try
+        # the Cable Beach share-link credit path (a totally parallel system).
+        if _try_share_credit:
+            try:
+                await _try_share_credit(booking_id)
+            except Exception as e:  # noqa: BLE001
+                logging.getLogger(__name__).warning("share credit (early return): %s", e)
         return None
     email = (booking.get("customer_email") or "").lower()
     if not email:
+        if _try_share_credit:
+            try:
+                await _try_share_credit(booking_id)
+            except Exception as e:  # noqa: BLE001
+                logging.getLogger(__name__).warning("share credit (no-email): %s", e)
         return None
     referee = await db.users.find_one({"email": email})
     if not referee or not referee.get("referred_by"):
+        if _try_share_credit:
+            try:
+                await _try_share_credit(booking_id)
+            except Exception as e:  # noqa: BLE001
+                logging.getLogger(__name__).warning("share credit (no-referrer): %s", e)
         return None
     # First paid booking only.
     prior_paid = await db.bookings.count_documents({
@@ -716,6 +734,14 @@ async def _apply_referral_conversion_if_paid(booking_id: str) -> Optional[dict]:
         )
     except Exception:  # noqa: BLE001
         pass
+    # Cable Beach share-link credit — runs on every paid booking in case
+    # the referrer flow above didn't fire (anonymous guest, no referral code).
+    _try_share_credit = globals().get("_credit_share_referrer_if_cable_beach")
+    if _try_share_credit:
+        try:
+            await _try_share_credit(booking_id)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("share credit error: %s", e)
     return {"referrer_id": referrer_id, "conv_count": conv_count, "credit_awarded": credit_awarded}
 
 
@@ -3699,8 +3725,24 @@ CABLE_BEACH_DEFAULTS = {
     "extra_seat_price": 15.0,        # Additional chairs beyond 1-per-guest
     "cruise_oneway_price": 10.0,     # Transfer FROM cruise port (per person)
     "cruise_roundtrip_price": 20.0,  # Round-trip cruise port (per person)
-    "lunch_items": [],               # [{id, name, price}] — admin populated
-    "drink_items": [],               # [{id, name, price}] — admin populated
+    # Starter menus — admin can rename / reprice / remove via the dashboard.
+    "lunch_items": [
+        {"id": "conch_salad",   "name": "Fresh conch salad",         "price": 18.0},
+        {"id": "cracked_conch", "name": "Cracked conch + fries",     "price": 22.0},
+        {"id": "grilled_mahi",  "name": "Grilled mahi-mahi plate",   "price": 26.0},
+        {"id": "jerk_chicken",  "name": "Jerk chicken + rice & peas","price": 20.0},
+        {"id": "veggie_wrap",   "name": "Veggie wrap + plantain",    "price": 16.0},
+        {"id": "kids_plate",    "name": "Kids plate (nuggets + fries)", "price": 12.0},
+    ],
+    "drink_items": [
+        {"id": "bahama_mama",   "name": "Bahama Mama",     "price": 12.0},
+        {"id": "sky_juice",     "name": "Sky Juice",       "price": 10.0},
+        {"id": "goombay_smash", "name": "Goombay Smash",   "price": 12.0},
+        {"id": "kalik",         "name": "Kalik beer",      "price": 7.0},
+        {"id": "sands",         "name": "Sands beer",      "price": 7.0},
+        {"id": "water",         "name": "Bottled water",   "price": 3.0},
+        {"id": "soda",          "name": "Soda / fruit punch","price": 4.0},
+    ],
     "active": True,
 }
 
@@ -3710,17 +3752,19 @@ CABLE_BEACH_DEFAULTS = {
 # fare — they pick their hotel and we auto-fill a round-trip quote (one-way
 # × 2) sourced from the same tariff dispatch uses. Flat fare per taxi, not
 # per passenger. Admin can override via `site_config.cable_beach_pkg.hotel_fares`.
+# `lat`/`lng` are approximate zone centroids used for the pickup-confirmation
+# map embed on the booking page.
 NASSAU_HOTEL_TARIFFS = [
-    {"id": "cable_beach",   "name": "Baha Mar · SLS · Grand Hyatt · Rosewood (Cable Beach)",   "oneway_fare": 10.0},
-    {"id": "melia",         "name": "Meliã Nassau Beach · Breezes · Sandals Royal Bahamian",   "oneway_fare": 10.0},
-    {"id": "cable_beach_other","name": "Any other Cable Beach hotel / villa",                   "oneway_fare": 10.0},
-    {"id": "downtown",      "name": "Downtown Nassau (British Colonial · Graycliff · Towne)",   "oneway_fare": 20.0},
-    {"id": "paradise",      "name": "Paradise Island · Atlantis · The Cove · The Reef · Ocean Club", "oneway_fare": 30.0},
-    {"id": "comfort_pi",    "name": "Comfort Suites · Riu Palace · Warwick Paradise Island",     "oneway_fare": 30.0},
-    {"id": "west_bay",      "name": "Compass Point · West Bay Street hotels",                    "oneway_fare": 25.0},
-    {"id": "lyford",        "name": "Lyford Cay / Old Fort Bay",                                 "oneway_fare": 40.0},
-    {"id": "montague",      "name": "Montague Beach · Eastern Road",                             "oneway_fare": 25.0},
-    {"id": "south_ocean",   "name": "South Ocean · Albany · Adelaide",                           "oneway_fare": 50.0},
+    {"id": "cable_beach",   "name": "Baha Mar · SLS · Grand Hyatt · Rosewood (Cable Beach)",   "oneway_fare": 10.0, "lat": 25.0797, "lng": -77.4125},
+    {"id": "melia",         "name": "Meliã Nassau Beach · Breezes · Sandals Royal Bahamian",   "oneway_fare": 10.0, "lat": 25.0820, "lng": -77.4047},
+    {"id": "cable_beach_other","name": "Any other Cable Beach hotel / villa",                   "oneway_fare": 10.0, "lat": 25.0810, "lng": -77.4080},
+    {"id": "downtown",      "name": "Downtown Nassau (British Colonial · Graycliff · Towne)",   "oneway_fare": 20.0, "lat": 25.0774, "lng": -77.3390},
+    {"id": "paradise",      "name": "Paradise Island · Atlantis · The Cove · The Reef · Ocean Club", "oneway_fare": 30.0, "lat": 25.0837, "lng": -77.3238},
+    {"id": "comfort_pi",    "name": "Comfort Suites · Riu Palace · Warwick Paradise Island",     "oneway_fare": 30.0, "lat": 25.0828, "lng": -77.3194},
+    {"id": "west_bay",      "name": "Compass Point · West Bay Street hotels",                    "oneway_fare": 25.0, "lat": 25.0832, "lng": -77.4349},
+    {"id": "lyford",        "name": "Lyford Cay / Old Fort Bay",                                 "oneway_fare": 40.0, "lat": 25.0469, "lng": -77.5285},
+    {"id": "montague",      "name": "Montague Beach · Eastern Road",                             "oneway_fare": 25.0, "lat": 25.0768, "lng": -77.3017},
+    {"id": "south_ocean",   "name": "South Ocean · Albany · Adelaide",                           "oneway_fare": 50.0, "lat": 24.9800, "lng": -77.5500},
 ]
 
 
@@ -3729,7 +3773,8 @@ def _hotel_tariffs() -> list[dict]:
     return [
         {"id": h["id"], "name": h["name"],
          "oneway_fare": round(float(h["oneway_fare"]), 2),
-         "roundtrip_fare": round(float(h["oneway_fare"]) * 2, 2)}
+         "roundtrip_fare": round(float(h["oneway_fare"]) * 2, 2),
+         "lat": h["lat"], "lng": h["lng"]}
         for h in NASSAU_HOTEL_TARIFFS
     ]
 
@@ -3738,8 +3783,10 @@ async def _cable_beach_cfg() -> dict:
     cfg = await db.site_config.find_one({"_id": "main"}) or {}
     pkg = cfg.get("cable_beach_pkg") or {}
     merged = {**CABLE_BEACH_DEFAULTS, **pkg}
-    merged["lunch_items"] = pkg.get("lunch_items") or []
-    merged["drink_items"] = pkg.get("drink_items") or []
+    # Fall back to defaults when the admin hasn't saved any menu items —
+    # empty lists in storage should still show the starter menu, not blank.
+    merged["lunch_items"] = pkg.get("lunch_items") or CABLE_BEACH_DEFAULTS["lunch_items"]
+    merged["drink_items"] = pkg.get("drink_items") or CABLE_BEACH_DEFAULTS["drink_items"]
     merged["hotel_fares"] = _hotel_tariffs()
     return merged
 
@@ -3863,6 +3910,206 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
         "processing_fee": processing,
         "total": total,
     }
+
+
+# ─── Cable Beach · Share tokens + Book + Credit hook ───────────────────────
+# Each sharer gets one durable token per email (idempotent). The share URL
+# `/tours/cable-beach-day?r=<token>` is clicked by friends; we count every
+# click and tag the resulting booking so a $10 wallet credit lands on the
+# sharer's `users.credit_balance` once the recipient's booking goes paid.
+SHARE_CREDIT_USD = 10.0
+
+
+class CableBeachShareCreate(BaseModel):
+    sharer_email: EmailStr
+
+
+class CableBeachShareClick(BaseModel):
+    token: str = Field(..., min_length=4, max_length=40)
+
+
+class CableBeachBookRequest(BaseModel):
+    customer_name: str = Field(..., min_length=1, max_length=120)
+    customer_email: EmailStr
+    customer_phone: str = Field(..., min_length=5, max_length=40)
+    booking_date: str = Field(..., min_length=10, max_length=40)  # ISO datetime
+    pax: int = Field(..., ge=1, le=50)
+    transfer_kind: str = Field("none", pattern="^(none|cruise_oneway|cruise_roundtrip|hotel)$")
+    hotel_id: Optional[str] = Field(None, max_length=40)
+    extra_seats: int = Field(0, ge=0, le=50)
+    lunch_item_ids: list[str] = Field(default_factory=list)
+    drink_item_ids: list[str] = Field(default_factory=list)
+    special_requests: Optional[str] = Field(None, max_length=500)
+    share_token: Optional[str] = Field(None, max_length=40)  # Credit the sharer
+
+
+@api_router.post("/share/cable-beach/create")
+async def share_cable_beach_create(req: CableBeachShareCreate):
+    """Create (or reuse) a share token for a given email. Idempotent."""
+    import secrets
+    email = req.sharer_email.lower()
+    existing = await db.share_tokens.find_one({"sharer_email": email, "package": "cable_beach_day"})
+    if existing:
+        return {"token": existing["token"],
+                "share_url": f"/tours/cable-beach-day?r={existing['token']}"}
+    token = secrets.token_urlsafe(8)
+    await db.share_tokens.insert_one({
+        "token": token,
+        "sharer_email": email,
+        "package": "cable_beach_day",
+        "created_at": now_iso(),
+        "clicks": 0,
+        "bookings": 0,
+        "credits_awarded_total": 0.0,
+    })
+    return {"token": token, "share_url": f"/tours/cable-beach-day?r={token}"}
+
+
+@api_router.post("/share/cable-beach/click")
+async def share_cable_beach_click(req: CableBeachShareClick):
+    """Increment click counter on a share token. Fire-and-forget beacon."""
+    await db.share_tokens.update_one({"token": req.token}, {"$inc": {"clicks": 1}})
+    return {"ok": True}
+
+
+@api_router.post("/cable-beach/book")
+async def cable_beach_book(req: CableBeachBookRequest):
+    """Create a real booking record for the Cable Beach day package and
+    return the pay URL. The checkout page (`/pay/{id}`) picks up the
+    booking just like any taxi/tour booking.
+    """
+    cfg = await _cable_beach_cfg()
+    if not cfg.get("active", True):
+        raise HTTPException(503, "Cable Beach package is not currently available.")
+
+    # Re-quote server-side so the client can't tamper with totals.
+    quote_req = CableBeachQuoteRequest(
+        pax=req.pax, transfer_kind=req.transfer_kind, hotel_id=req.hotel_id,
+        extra_seats=req.extra_seats,
+        lunch_item_ids=req.lunch_item_ids, drink_item_ids=req.drink_item_ids,
+    )
+    quote = await cable_beach_quote(quote_req)
+    hotel_match = next((h for h in _hotel_tariffs() if h["id"] == req.hotel_id), None) if req.hotel_id else None
+
+    import secrets, string
+    booking_id = "CB-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+    booking_doc = {
+        "id": booking_id,
+        "service_type": "tour",
+        "item_id": "cable-beach-day",
+        "item_name": "Toes in the Turquoise · Cable Beach Day",
+        "customer_name": req.customer_name,
+        "customer_email": req.customer_email.lower(),
+        "customer_phone": req.customer_phone,
+        "booking_date": req.booking_date,
+        "pax": req.pax,
+        "pickup_location": hotel_match["name"] if hotel_match else (
+            "Nassau Cruise Port" if req.transfer_kind.startswith("cruise") else "Self-drive / meet at beach"
+        ),
+        "dropoff_location": "Cable Beach / Goodman's Bay",
+        "price_subtotal": quote["subtotal"],
+        "vat": quote["vat"],
+        "processing_fee": quote["processing_fee"],
+        "total_price": quote["total"],
+        "payment_status": "pending",
+        "status": "pending",
+        "special_requests": req.special_requests,
+        "created_at": now_iso(),
+        # Cable Beach specifics (admin-visible on BookingDetailModal via extras)
+        "cable_beach": {
+            "transfer_kind": req.transfer_kind,
+            "hotel_id": req.hotel_id,
+            "hotel_name": hotel_match["name"] if hotel_match else None,
+            "extra_seats": req.extra_seats,
+            "menu_lines": quote["menu_lines"],
+        },
+        "cable_beach_share_token": req.share_token,
+    }
+    await db.bookings.insert_one(booking_doc)
+    return {"booking_id": booking_id, "total": quote["total"], "pay_url": f"/pay/{booking_id}"}
+
+
+async def _credit_share_referrer_if_cable_beach(booking_id: str) -> None:
+    """Called from `_apply_referral_conversion_if_paid`. If the booking
+    came in via a Cable Beach share link, drop $10 onto the sharer's
+    `users.credit_balance` (or create a stub user doc keyed by email).
+    Idempotent — writes `share_credit_awarded` on the booking.
+    """
+    booking = await db.bookings.find_one({"id": booking_id})
+    if not booking:
+        return
+    if booking.get("share_credit_awarded"):
+        return
+    token = booking.get("cable_beach_share_token")
+    if not token:
+        return
+    rec = await db.share_tokens.find_one({"token": token})
+    if not rec:
+        return
+    sharer_email = rec.get("sharer_email")
+    if not sharer_email:
+        return
+    # Don't credit self-referrals.
+    if (booking.get("customer_email") or "").lower() == sharer_email.lower():
+        await db.bookings.update_one(
+            {"id": booking_id},
+            {"$set": {"share_credit_awarded": True, "share_credit_amount": 0.0,
+                      "share_credit_note": "self-referral"}},
+        )
+        return
+    # Upsert credit onto the sharer's user record so it's available on next
+    # sign-in / booking. If no user doc exists yet we still write it so the
+    # credit sticks when they sign up with this email.
+    await db.users.update_one(
+        {"email": sharer_email},
+        {"$inc": {"credit_balance": SHARE_CREDIT_USD},
+         "$setOnInsert": {"email": sharer_email, "created_at": now_iso(),
+                          "referral_code": _new_referral_code(),
+                          "name": sharer_email.split("@")[0]}},
+        upsert=True,
+    )
+    await db.share_tokens.update_one(
+        {"token": token},
+        {"$inc": {"bookings": 1, "credits_awarded_total": SHARE_CREDIT_USD}},
+    )
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"share_credit_awarded": True,
+                  "share_credit_amount": SHARE_CREDIT_USD,
+                  "share_credit_to_email": sharer_email}},
+    )
+    # Owner activity ping — share-link conversion.
+    try:
+        from notifications import notify_owner_activity
+        notify_owner_activity(
+            "share_conversion",
+            f"🌴 Cable Beach share converted · {sharer_email} earned ${SHARE_CREDIT_USD:.0f} credit · booking {booking_id}",
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+@api_router.get("/admin/share-stats/cable-beach")
+async def admin_share_stats(_admin=Depends(require_admin)):
+    """Admin dashboard view of share-link performance for Cable Beach."""
+    tokens = await db.share_tokens.find({"package": "cable_beach_day"}).to_list(500)
+    rows = []
+    total_clicks = total_bookings = total_credits = 0
+    for t in tokens:
+        clicks = int(t.get("clicks") or 0)
+        bookings = int(t.get("bookings") or 0)
+        credits = float(t.get("credits_awarded_total") or 0.0)
+        rows.append({
+            "token": t["token"], "sharer_email": t.get("sharer_email"),
+            "clicks": clicks, "bookings": bookings,
+            "credits_awarded_total": credits,
+            "conversion_rate": round((bookings / clicks * 100), 1) if clicks else 0.0,
+            "created_at": t.get("created_at"),
+        })
+        total_clicks += clicks; total_bookings += bookings; total_credits += credits
+    rows.sort(key=lambda r: (r["bookings"], r["clicks"]), reverse=True)
+    return {"rows": rows, "totals": {"clicks": total_clicks, "bookings": total_bookings,
+                                     "credits_awarded_total": total_credits}}
 
 
 
