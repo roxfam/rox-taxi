@@ -322,9 +322,11 @@ export default function CableBeachDay() {
             {/* Dietary filter chips */}
             {(() => {
               const DIET = [
-                { id: "gluten_free", label: "Gluten-free", short: "GF" },
-                { id: "pescatarian", label: "Pescatarian", short: "P" },
-                { id: "dairy_free",  label: "Dairy-free",  short: "DF" },
+                { id: "gluten_free",   label: "Gluten-free",   short: "GF" },
+                { id: "pescatarian",   label: "Pescatarian",   short: "P" },
+                { id: "dairy_free",    label: "Dairy-free",    short: "DF" },
+                { id: "peanut_free",   label: "Peanut-free",   short: "PF" },
+                { id: "shellfish_free",label: "Shellfish-free",short: "SF" },
               ];
               return (
                 <div className="flex flex-wrap items-center gap-1.5 mb-3" data-testid="cable-diet-filters">
@@ -555,8 +557,8 @@ function TransferTile({ active, onClick, title, sub, Icon = Ship, testId }) {
 }
 
 function MenuTile({ it, active, onClick, testId }) {
-  const TAG_SHORT = { gluten_free: "GF", pescatarian: "P", dairy_free: "DF" };
-  const TAG_COLOR = { gluten_free: "#059669", pescatarian: "#0369A1", dairy_free: "#B45309" };
+  const TAG_SHORT = { gluten_free: "GF", pescatarian: "P", dairy_free: "DF", peanut_free: "PF", shellfish_free: "SF" };
+  const TAG_COLOR = { gluten_free: "#059669", pescatarian: "#0369A1", dairy_free: "#B45309", peanut_free: "#7C3AED", shellfish_free: "#DB2777" };
   const tags = Array.isArray(it.tags) ? it.tags : [];
   return (
     <button onClick={onClick} data-testid={testId}

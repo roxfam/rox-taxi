@@ -24,6 +24,7 @@ export default function CableBeachPackageCard() {
         cruise_roundtrip_price: Number(data.cruise_roundtrip_price || 20),
         lunch_items: data.lunch_items || [],
         drink_items: data.drink_items || [],
+        combos: data.combos || [],
         active: data.active !== false,
       });
     } catch (e) {
@@ -153,8 +154,116 @@ export default function CableBeachPackageCard() {
           </div>
         </div>
       ))}
+
+      {/* Admin combo builder — bundles 2+ items at a flat discount. */}
+      <ComboBuilder cfg={cfg} save={save} saving={saving} setCfg={setCfg} />
+
       <ShareStatsPanel />
     </section>
+  );
+}
+
+/**
+ * ComboBuilder — admin UI for `site_config.cable_beach_pkg.combos`.
+ * Each row = { id, name, subtitle, items[], discount }. Items reference
+ * `lunch_items` + `drink_items` ids so the public page can resolve names.
+ */
+function ComboBuilder({ cfg, save, saving, setCfg }) {
+  const [combos, setCombos] = useState(cfg.combos || []);
+  useEffect(() => { setCombos(cfg.combos || []); }, [cfg.combos]);
+
+  const allItems = [
+    ...(cfg.lunch_items || []).map((x) => ({ ...x, _group: "food" })),
+    ...(cfg.drink_items || []).map((x) => ({ ...x, _group: "drink" })),
+  ];
+  const toggleItem = (ci, itemId) => setCombos((prev) => prev.map((c, i) => {
+    if (i !== ci) return c;
+    const items = new Set(c.items || []);
+    items.has(itemId) ? items.delete(itemId) : items.add(itemId);
+    return { ...c, items: Array.from(items) };
+  }));
+  const updateField = (ci, patch) =>
+    setCombos((prev) => prev.map((c, i) => i === ci ? { ...c, ...patch } : c));
+  const addCombo = () => setCombos((prev) => [...prev, {
+    id: "", name: "", subtitle: "", items: [], discount: 5,
+  }]);
+  const removeCombo = (ci) => setCombos((prev) => prev.filter((_, i) => i !== ci));
+  const saveCombos = async () => {
+    // Validate: every combo needs name + 2+ items + non-negative discount.
+    const bad = combos.find((c) => !c.name || (c.items || []).length < 2 || c.discount < 0);
+    if (bad) { toast.error("Each combo needs a name, at least 2 items, and a discount ≥ 0."); return; }
+    await save({ combos });
+    setCfg((c) => ({ ...c, combos }));
+  };
+
+  return (
+    <div className="mt-8 pt-6 border-t border-[#E2E8F0]" data-testid="cable-beach-combo-builder">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs font-bold uppercase tracking-wider text-[#0B3B5C]">
+          Chef's-choice combos
+          <span className="ml-2 text-[10px] text-[#94A3B8]">{combos.length} combo{combos.length === 1 ? "" : "s"}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={addCombo}
+            className="inline-flex items-center gap-1 text-xs text-[#0B3B5C] border border-[#E2E8F0] bg-white rounded-full px-2.5 py-1 hover:border-[#D4A94A]"
+            data-testid="cable-combo-add">
+            <Plus className="w-3 h-3" /> Add combo
+          </button>
+          <button onClick={saveCombos} disabled={saving}
+            className="inline-flex items-center gap-1 text-xs text-white bg-[#0B3B5C] rounded-full px-2.5 py-1 hover:bg-[#0a2a44] disabled:opacity-50"
+            data-testid="cable-combo-save">
+            <Save className="w-3 h-3" /> Save combos
+          </button>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {combos.length === 0 ? (
+          <div className="text-xs text-[#94A3B8] italic py-2">No combos yet · click Add combo to bundle 2+ items at a discount.</div>
+        ) : combos.map((combo, i) => (
+          <div key={i} className="rounded-xl border border-[#E2E8F0] bg-[#FBF7EF] p-3" data-testid={`cable-combo-row-${i}`}>
+            <div className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 items-start">
+              <input value={combo.name} placeholder="Combo name (e.g. Chef's Choice)"
+                onChange={(e) => updateField(i, { name: e.target.value })}
+                className="text-sm bg-white border border-[#E2E8F0] rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#D4A94A]" />
+              <input value={combo.subtitle || ""} placeholder="Short subtitle (optional)"
+                onChange={(e) => updateField(i, { subtitle: e.target.value })}
+                className="text-sm bg-white border border-[#E2E8F0] rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#D4A94A]" />
+              <div className="relative">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-[#64748B]">$</span>
+                <input type="number" min="0" step="1" value={combo.discount}
+                  onChange={(e) => updateField(i, { discount: Number(e.target.value) })}
+                  className="w-full pl-6 pr-2 py-1.5 text-sm mono bg-white border border-[#E2E8F0] rounded-lg focus:outline-none focus:border-[#D4A94A]"
+                  title="Bundle discount" />
+              </div>
+              <button onClick={() => removeCombo(i)}
+                className="w-9 h-9 rounded-lg border border-[#FECACA] bg-white text-[#B91C1C] hover:bg-[#FEF2F2] flex items-center justify-center"
+                data-testid={`cable-combo-remove-${i}`}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="mt-2">
+              <div className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider mb-1">Items in this combo · pick 2+</div>
+              <div className="flex flex-wrap gap-1">
+                {allItems.map((it) => {
+                  const active = (combo.items || []).includes(it.id);
+                  return (
+                    <button key={it.id} type="button"
+                      onClick={() => toggleItem(i, it.id)}
+                      className={`rounded-full px-2 py-1 text-[10px] font-bold transition ${
+                        active ? "bg-[#E86A3C] text-white"
+                               : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"
+                      }`}>
+                      {it.name} <span className="opacity-70">·${it.price}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-[10px] text-[#94A3B8] mt-1">{(combo.items || []).length} item{(combo.items || []).length === 1 ? "" : "s"} selected</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

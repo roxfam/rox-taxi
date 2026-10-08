@@ -743,6 +743,14 @@ async def _apply_referral_conversion_if_paid(booking_id: str) -> Optional[dict]:
             await _try_share_credit(booking_id)
         except Exception as e:  # noqa: BLE001
             logging.getLogger(__name__).warning("share credit error: %s", e)
+    # Chef's-combo congrats email — adds a sharp branded nudge the moment a
+    # combo-equipped booking goes paid. Fire-and-forget: never blocks payment.
+    _try_combo_badge = globals().get("_send_combo_badge_email_if_cable_beach")
+    if _try_combo_badge:
+        try:
+            await _try_combo_badge(booking_id)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("combo badge email err: %s", e)
     return {"referrer_id": referrer_id, "conv_count": conv_count, "credit_awarded": credit_awarded}
 
 
@@ -3745,22 +3753,22 @@ CABLE_BEACH_DEFAULTS = {
     # Dinners include rice & two sides; appetizers listed per piece-count.
     # `tags` are informational dietary flags (gluten_free, pescatarian, dairy_free).
     "lunch_items": [
-        {"id": "conch_fritters_5",  "name": "Bahamian Conch Fritters · 5 pc",  "price": 10.0, "tags": ["pescatarian", "dairy_free"]},
-        {"id": "conch_fritters_8",  "name": "Bahamian Conch Fritters · 8 pc",  "price": 15.0, "tags": ["pescatarian", "dairy_free"]},
-        {"id": "conch_fritters_12", "name": "Bahamian Conch Fritters · 12 pc", "price": 18.0, "tags": ["pescatarian", "dairy_free"]},
-        {"id": "jerk_chicken",   "name": "Jerk Chicken Dinner",   "price": 30.0, "tags": ["gluten_free", "dairy_free"]},
-        {"id": "jerk_pork",      "name": "Jerk Pork Dinner",      "price": 30.0, "tags": ["gluten_free", "dairy_free"]},
-        {"id": "jerk_ribs",      "name": "Jerk Ribs Dinner",      "price": 30.0, "tags": ["gluten_free", "dairy_free"]},
-        {"id": "jerk_salmon",    "name": "Jerk Salmon Dinner",    "price": 35.0, "tags": ["gluten_free", "dairy_free", "pescatarian"]},
-        {"id": "jerk_shrimp",    "name": "Jerk Shrimp Dinner",    "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian"]},
-        {"id": "jerk_conch",     "name": "Jerk Conch Dinner",     "price": 35.0, "tags": ["dairy_free", "pescatarian"]},
-        {"id": "jerk_lobster",   "name": "Jerk Lobster Dinner",   "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian"]},
-        {"id": "bbq_chicken",    "name": "BBQ Chicken Dinner",    "price": 25.0, "tags": ["dairy_free"]},
-        {"id": "bbq_pork",       "name": "BBQ Pork Dinner",       "price": 30.0, "tags": ["dairy_free"]},
-        {"id": "bbq_ribs",       "name": "BBQ Ribs Dinner",       "price": 30.0, "tags": ["dairy_free"]},
-        {"id": "baked_pork_chop","name": "Baked Pork Chop Dinner","price": 40.0, "tags": ["gluten_free", "dairy_free"]},
-        {"id": "snapper_dinner", "name": "Snapper Dinner",        "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian"]},
-        {"id": "soamoo_dinner",  "name": "Soamoo Dinner",         "price": 35.0, "tags": ["dairy_free"]},
+        {"id": "conch_fritters_5",  "name": "Bahamian Conch Fritters · 5 pc",  "price": 10.0, "tags": ["pescatarian", "dairy_free", "peanut_free"]},
+        {"id": "conch_fritters_8",  "name": "Bahamian Conch Fritters · 8 pc",  "price": 15.0, "tags": ["pescatarian", "dairy_free", "peanut_free"]},
+        {"id": "conch_fritters_12", "name": "Bahamian Conch Fritters · 12 pc", "price": 18.0, "tags": ["pescatarian", "dairy_free", "peanut_free"]},
+        {"id": "jerk_chicken",   "name": "Jerk Chicken Dinner",   "price": 30.0, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "jerk_pork",      "name": "Jerk Pork Dinner",      "price": 30.0, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "jerk_ribs",      "name": "Jerk Ribs Dinner",      "price": 30.0, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "jerk_salmon",    "name": "Jerk Salmon Dinner",    "price": 35.0, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free", "shellfish_free"]},
+        {"id": "jerk_shrimp",    "name": "Jerk Shrimp Dinner",    "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free"]},
+        {"id": "jerk_conch",     "name": "Jerk Conch Dinner",     "price": 35.0, "tags": ["dairy_free", "pescatarian", "peanut_free"]},
+        {"id": "jerk_lobster",   "name": "Jerk Lobster Dinner",   "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free"]},
+        {"id": "bbq_chicken",    "name": "BBQ Chicken Dinner",    "price": 25.0, "tags": ["dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "bbq_pork",       "name": "BBQ Pork Dinner",       "price": 30.0, "tags": ["dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "bbq_ribs",       "name": "BBQ Ribs Dinner",       "price": 30.0, "tags": ["dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "baked_pork_chop","name": "Baked Pork Chop Dinner","price": 40.0, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "snapper_dinner", "name": "Snapper Dinner",        "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free", "shellfish_free"]},
+        {"id": "soamoo_dinner",  "name": "Soamoo Dinner",         "price": 35.0, "tags": ["dairy_free", "peanut_free"]},
     ],
     # Chef's-choice combos — frontend highlights these above the menu;
     # backend validates and applies the bundle discount only when all
@@ -3847,10 +3855,11 @@ async def public_cable_beach_pkg():
 class CableBeachPkgUpdate(BaseModel):
     base_price: Optional[float] = Field(None, ge=0, le=1000)
     extra_seat_price: Optional[float] = Field(None, ge=0, le=200)
-    cruise_oneway_price: Optional[float] = Field(None, ge=0, le=200)
+    cruise_oneway_price: Optional[float] = Field(None, ge=0, le=400)
     cruise_roundtrip_price: Optional[float] = Field(None, ge=0, le=400)
     lunch_items: Optional[list] = None
     drink_items: Optional[list] = None
+    combos: Optional[list] = None
     active: Optional[bool] = None
 
 
@@ -3861,20 +3870,38 @@ async def admin_update_cable_beach_pkg(
     body = {k: v for k, v in patch.dict().items() if v is not None}
     if not body:
         raise HTTPException(400, "No fields provided.")
-    # Light validation on menu items — must be [{id,name,price}]
+    # Light validation on menu items — must be [{id,name,price,tags?}].
+    # `tags` (allergen flags) are preserved on save.
     for key in ("lunch_items", "drink_items"):
         if key in body:
             cleaned = []
-            for row in body[key][:20]:
+            for row in body[key][:40]:
                 try:
                     cleaned.append({
                         "id": str(row.get("id") or uuid.uuid4().hex[:6]),
                         "name": str(row.get("name", "")).strip()[:80],
                         "price": round(float(row.get("price") or 0), 2),
+                        "tags": [str(t) for t in (row.get("tags") or []) if t][:8],
                     })
                 except Exception:  # noqa: BLE001
                     continue
             body[key] = [r for r in cleaned if r["name"] and r["price"] >= 0]
+    # Admin combo builder — each combo = {id, name, subtitle?, items[], discount}.
+    if "combos" in body:
+        cleaned_combos = []
+        for row in body["combos"][:12]:
+            try:
+                cleaned_combos.append({
+                    "id": str(row.get("id") or uuid.uuid4().hex[:6]),
+                    "name": str(row.get("name", "")).strip()[:60],
+                    "subtitle": str(row.get("subtitle", "")).strip()[:120],
+                    "items": [str(x) for x in (row.get("items") or []) if x][:12],
+                    "discount": round(float(row.get("discount") or 0), 2),
+                })
+            except Exception:  # noqa: BLE001
+                continue
+        body["combos"] = [c for c in cleaned_combos
+                          if c["name"] and len(c["items"]) >= 2 and c["discount"] >= 0]
     await db.site_config.update_one(
         {"_id": "main"},
         {"$set": {f"cable_beach_pkg.{k}": v for k, v in body.items()}},
@@ -4085,6 +4112,8 @@ async def cable_beach_book(req: CableBeachBookRequest):
             "hotel_name": hotel_match["name"] if hotel_match else None,
             "extra_seats": req.extra_seats,
             "menu_lines": quote["menu_lines"],
+            "combo_applied": quote.get("combo_applied"),
+            "combo_discount": quote.get("combo_discount") or 0.0,
         },
         "cable_beach_share_token": req.share_token,
     }
