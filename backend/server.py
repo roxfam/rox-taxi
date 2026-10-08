@@ -3705,13 +3705,49 @@ CABLE_BEACH_DEFAULTS = {
 }
 
 
+# ─── Nassau hotel tariff lookup (round-trip) for Cable Beach Day ──────────
+# Values mirror the published Rox zone tariff. The guest no longer types a
+# fare — they pick their hotel and we auto-fill a round-trip quote (one-way
+# × 2) sourced from the same tariff dispatch uses. Flat fare per taxi, not
+# per passenger. Admin can override via `site_config.cable_beach_pkg.hotel_fares`.
+NASSAU_HOTEL_TARIFFS = [
+    {"id": "cable_beach",   "name": "Baha Mar · SLS · Grand Hyatt · Rosewood (Cable Beach)",   "oneway_fare": 10.0},
+    {"id": "melia",         "name": "Meliã Nassau Beach · Breezes · Sandals Royal Bahamian",   "oneway_fare": 10.0},
+    {"id": "cable_beach_other","name": "Any other Cable Beach hotel / villa",                   "oneway_fare": 10.0},
+    {"id": "downtown",      "name": "Downtown Nassau (British Colonial · Graycliff · Towne)",   "oneway_fare": 20.0},
+    {"id": "paradise",      "name": "Paradise Island · Atlantis · The Cove · The Reef · Ocean Club", "oneway_fare": 30.0},
+    {"id": "comfort_pi",    "name": "Comfort Suites · Riu Palace · Warwick Paradise Island",     "oneway_fare": 30.0},
+    {"id": "west_bay",      "name": "Compass Point · West Bay Street hotels",                    "oneway_fare": 25.0},
+    {"id": "lyford",        "name": "Lyford Cay / Old Fort Bay",                                 "oneway_fare": 40.0},
+    {"id": "montague",      "name": "Montague Beach · Eastern Road",                             "oneway_fare": 25.0},
+    {"id": "south_ocean",   "name": "South Ocean · Albany · Adelaide",                           "oneway_fare": 50.0},
+]
+
+
+def _hotel_tariffs() -> list[dict]:
+    """Flat round-trip fare per taxi, derived from the zone tariff."""
+    return [
+        {"id": h["id"], "name": h["name"],
+         "oneway_fare": round(float(h["oneway_fare"]), 2),
+         "roundtrip_fare": round(float(h["oneway_fare"]) * 2, 2)}
+        for h in NASSAU_HOTEL_TARIFFS
+    ]
+
+
 async def _cable_beach_cfg() -> dict:
     cfg = await db.site_config.find_one({"_id": "main"}) or {}
     pkg = cfg.get("cable_beach_pkg") or {}
     merged = {**CABLE_BEACH_DEFAULTS, **pkg}
     merged["lunch_items"] = pkg.get("lunch_items") or []
     merged["drink_items"] = pkg.get("drink_items") or []
+    merged["hotel_fares"] = _hotel_tariffs()
     return merged
+
+
+@api_router.get("/cable-beach/hotels")
+async def cable_beach_hotels():
+    """Hotel directory with auto-filled round-trip fares for the Cable Beach day."""
+    return {"hotels": _hotel_tariffs()}
 
 
 @api_router.get("/public/cable-beach-package")
@@ -3762,7 +3798,8 @@ async def admin_update_cable_beach_pkg(
 class CableBeachQuoteRequest(BaseModel):
     pax: int = Field(..., ge=1, le=50)
     transfer_kind: str = Field("none", pattern="^(none|cruise_oneway|cruise_roundtrip|hotel)$")
-    hotel_fare: Optional[float] = Field(None, ge=0, le=500)   # When transfer_kind="hotel"
+    hotel_id: Optional[str] = Field(None, max_length=40)      # Zone-based auto-fill (preferred)
+    hotel_fare: Optional[float] = Field(None, ge=0, le=500)   # Legacy manual fare (fallback)
     extra_seats: int = Field(0, ge=0, le=50)
     lunch_item_ids: list[str] = Field(default_factory=list)
     drink_item_ids: list[str] = Field(default_factory=list)
@@ -3782,8 +3819,16 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
         transfer = round(cfg["cruise_oneway_price"] * req.pax, 2)
     elif req.transfer_kind == "cruise_roundtrip":
         transfer = round(cfg["cruise_roundtrip_price"] * req.pax, 2)
-    elif req.transfer_kind == "hotel" and req.hotel_fare is not None:
-        transfer = round(float(req.hotel_fare), 2)
+    elif req.transfer_kind == "hotel":
+        # Prefer zone-tariff lookup (auto-filled, read-only); fall back to a
+        # manual fare only if no hotel_id was provided (legacy clients).
+        if req.hotel_id:
+            match = next((h for h in _hotel_tariffs() if h["id"] == req.hotel_id), None)
+            if not match:
+                raise HTTPException(400, "Unknown hotel. Refresh the page and try again.")
+            transfer = match["roundtrip_fare"]
+        elif req.hotel_fare is not None:
+            transfer = round(float(req.hotel_fare), 2)
 
     menu_by_id = {it["id"]: it for it in cfg["lunch_items"] + cfg["drink_items"]}
     menu_lines = []
