@@ -23,6 +23,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Dietary Tags + Chef's Choice Combo
+- **Dietary tags** on every food item in `CABLE_BEACH_DEFAULTS["lunch_items"]` + live DB: each item carries a `tags` array (`gluten_free`, `pescatarian`, `dairy_free`). Fritters are `pescatarian + dairy_free`; jerk/baked plates skew `gluten_free + dairy_free`; BBQ (soy-sauce base) kept conservative at `dairy_free` only; seafood dinners add `pescatarian`.
+- **Public filter chips** (`CableBeachDay.jsx`): GF / Pescatarian / Dairy-free toggleable chips above the food grid; tiles filter in-place (require ALL selected tags), with a graceful empty-state message. Each `MenuTile` now shows tiny coloured badges (GF emerald / P sky-blue / DF amber) under the price.
+- **Chef's Choice combo** (`CABLE_BEACH_DEFAULTS["combos"]` + `/cable-beach/quote?combo_id=…`): one-tap bundle card above the food menu auto-selects 8-pc Fritters + Jerk Chicken + Bahama Mama and knocks $5 off. Backend validates that every required item is present before applying — tampered combo_id with wrong items yields no discount (verified: `combo_applied: null`). Live summary line shows "Chef's combo · −$5". Click again to clear.
+- End-to-end verified: quote with correct combo = $152.46 (base + 3 menu items − $5 + VAT + fee); wrong items with same combo_id correctly refuses the discount; GF filter hides BBQ Chicken and shows Jerk Chicken as expected.
+
 ### Feb 2026 — Toes in the Turquoise · Conch Fritters Appetizer
 - **Bahamian Conch Fritters** added to the Cable Beach food menu as an optional appetizer in 3 sizes: 5 pc $10, 8 pc $15, 12 pc $18. Written both to `CABLE_BEACH_DEFAULTS["lunch_items"]` (fresh installs) and upserted into live `site_config.cable_beach_pkg.lunch_items`. Section headers updated to "Food menu (optional) — dinners include rice & 2 sides" (public) and "Food menu (fritters + dinners w/ rice & 2 sides)" (admin) to cleanly cover the mixed appetizer + dinner lineup. Live quote verified: 2 pax + 8-pc fritters + Jerk Lobster = $113.85.
 

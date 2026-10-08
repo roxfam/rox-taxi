@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin, Share2, Gift, Search, ChevronDown } from "lucide-react";
+import { Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin, Share2, Gift, Search, ChevronDown, ChefHat } from "lucide-react";
 import { API, money } from "../lib/api";
 import Seo from "../components/Seo";
 
@@ -28,6 +28,8 @@ export default function CableBeachDay() {
   const [hotelId, setHotelId] = useState("");
   const [lunchIds, setLunchIds] = useState(new Set());
   const [drinkIds, setDrinkIds] = useState(new Set());
+  const [comboId, setComboId] = useState(null);                 // Chef's-choice bundle
+  const [dietFilters, setDietFilters] = useState(new Set());    // GF / pescatarian / DF filters
   const [quote, setQuote] = useState(null);
   const [quoting, setQuoting] = useState(false);
   const [shareToken, setShareToken] = useState(null);     // Inbound ?r=<token>
@@ -62,7 +64,8 @@ export default function CableBeachDay() {
     hotel_id: transferKind === "hotel" ? (hotelId || null) : null,
     lunch_item_ids: Array.from(lunchIds),
     drink_item_ids: Array.from(drinkIds),
-  }), [pax, extraSeats, transferKind, hotelId, lunchIds, drinkIds]);
+    combo_id: comboId,
+  }), [pax, extraSeats, transferKind, hotelId, lunchIds, drinkIds, comboId]);
 
   useEffect(() => {
     if (!cfg?.active) return;
@@ -182,6 +185,7 @@ export default function CableBeachDay() {
       hotel_id: transferKind === "hotel" ? hotelId : null,
       lunch_item_ids: Array.from(lunchIds),
       drink_item_ids: Array.from(drinkIds),
+      combo_id: comboId,
       special_requests: guest.special_requests || null,
       share_token: shareToken || null,
     };
@@ -269,13 +273,96 @@ export default function CableBeachDay() {
           </Section>
 
           <Section icon={Utensils} title="Food menu (optional) — dinners include rice & 2 sides">
+            {/* Chef's-choice combo card — one-tap selects the bundle items + applies the discount. */}
+            {(cfg.combos || []).map((combo) => {
+              const required = new Set(combo.items || []);
+              const allSelected = Array.from(required).every((id) => lunchIds.has(id) || drinkIds.has(id));
+              const active = comboId === combo.id && allSelected;
+              const applyCombo = () => {
+                const nextLunch = new Set(lunchIds);
+                const nextDrink = new Set(drinkIds);
+                const lunchIdsAll = new Set((cfg.lunch_items || []).map((x) => x.id));
+                combo.items.forEach((id) => {
+                  if (lunchIdsAll.has(id)) nextLunch.add(id);
+                  else nextDrink.add(id);
+                });
+                setLunchIds(nextLunch); setDrinkIds(nextDrink); setComboId(combo.id);
+                toast.success(`${combo.name} applied · save $${combo.discount}`);
+              };
+              const clearCombo = () => { setComboId(null); toast.success("Combo removed"); };
+              const comboItems = combo.items.map((id) =>
+                (cfg.lunch_items || []).find((x) => x.id === id)
+                || (cfg.drink_items || []).find((x) => x.id === id)
+              ).filter(Boolean);
+              return (
+                <button key={combo.id} type="button" onClick={active ? clearCombo : applyCombo}
+                  data-testid={`cable-combo-${combo.id}`}
+                  className={`w-full text-left rounded-xl border-2 p-3 mb-3 transition ${active ? "border-[#D4A94A] bg-gradient-to-br from-[#FFF4EC] to-[#FBF7EF]" : "border-dashed border-[#D4A94A]/50 bg-white hover:border-[#D4A94A]"}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <ChefHat className={`w-4 h-4 ${active ? "text-[#D4A94A]" : "text-[#64748B]"}`} />
+                        <span className="text-[10px] tracking-[0.28em] uppercase font-black text-[#D4A94A]">Chef's pick</span>
+                        {active && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 rounded-full px-2 py-0.5">Applied</span>}
+                      </div>
+                      <div className="serif text-xl text-[#0B3B5C] mt-1">{combo.name}</div>
+                      <div className="text-[11px] text-[#64748B] mt-0.5">{combo.subtitle}</div>
+                      <div className="text-[11px] text-[#0B3B5C] mt-1 font-medium">
+                        {comboItems.map((it) => it.name).join(" + ")}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Save</div>
+                      <div className="serif text-2xl text-[#E86A3C] font-black">${combo.discount}</div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+            {/* Dietary filter chips */}
+            {(() => {
+              const DIET = [
+                { id: "gluten_free", label: "Gluten-free", short: "GF" },
+                { id: "pescatarian", label: "Pescatarian", short: "P" },
+                { id: "dairy_free",  label: "Dairy-free",  short: "DF" },
+              ];
+              return (
+                <div className="flex flex-wrap items-center gap-1.5 mb-3" data-testid="cable-diet-filters">
+                  <span className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider mr-1">Filter:</span>
+                  {DIET.map((d) => {
+                    const active = dietFilters.has(d.id);
+                    return (
+                      <button key={d.id} type="button"
+                        onClick={() => setDietFilters((prev) => {
+                          const n = new Set(prev); n.has(d.id) ? n.delete(d.id) : n.add(d.id); return n;
+                        })}
+                        data-testid={`cable-diet-${d.id}`}
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${active ? "bg-[#0B3B5C] text-white" : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"}`}>
+                        {d.label}
+                      </button>
+                    );
+                  })}
+                  {dietFilters.size > 0 && (
+                    <button onClick={() => setDietFilters(new Set())} className="text-[11px] text-[#64748B] underline hover:text-[#0B3B5C]"
+                      data-testid="cable-diet-clear">Clear</button>
+                  )}
+                </div>
+              );
+            })()}
             {cfg.lunch_items.length === 0 ? (
               <p className="text-xs text-[#64748B]">Menu will be published shortly. Call dispatch to add dinner after booking.</p>
             ) : (
               <div className="grid sm:grid-cols-2 gap-2">
-                {cfg.lunch_items.map((it) => (
-                  <MenuTile key={it.id} it={it} active={lunchIds.has(it.id)} onClick={() => toggleItem(setLunchIds, it.id)} testId={`cable-lunch-${it.id}`} />
-                ))}
+                {cfg.lunch_items
+                  .filter((it) => dietFilters.size === 0 || Array.from(dietFilters).every((f) => (it.tags || []).includes(f)))
+                  .map((it) => (
+                    <MenuTile key={it.id} it={it} active={lunchIds.has(it.id)}
+                      onClick={() => toggleItem(setLunchIds, it.id)}
+                      testId={`cable-lunch-${it.id}`} />
+                  ))}
+                {cfg.lunch_items.filter((it) => dietFilters.size === 0 || Array.from(dietFilters).every((f) => (it.tags || []).includes(f))).length === 0 && (
+                  <div className="col-span-full text-xs text-[#64748B] italic py-3 text-center">No dinners match these filters — try fewer tags.</div>
+                )}
               </div>
             )}
           </Section>
@@ -308,6 +395,11 @@ export default function CableBeachDay() {
                   <div className="pt-1 text-[11px] font-bold uppercase tracking-wider text-[#0B3B5C]">Menu</div>
                   {quote.menu_lines.map((m) => <Line key={m.id} label={m.name}>{money(m.price)}</Line>)}
                 </>
+              )}
+              {quote.combo_applied && (
+                <Line label={`Chef's combo · ${quote.combo_applied.name}`}>
+                  <span className="text-emerald-700">− {money(quote.combo_discount)}</span>
+                </Line>
               )}
               <div className="h-px bg-[#E2E8F0] my-2" />
               <Line label="Subtotal">{money(quote.subtotal)}</Line>
@@ -463,6 +555,9 @@ function TransferTile({ active, onClick, title, sub, Icon = Ship, testId }) {
 }
 
 function MenuTile({ it, active, onClick, testId }) {
+  const TAG_SHORT = { gluten_free: "GF", pescatarian: "P", dairy_free: "DF" };
+  const TAG_COLOR = { gluten_free: "#059669", pescatarian: "#0369A1", dairy_free: "#B45309" };
+  const tags = Array.isArray(it.tags) ? it.tags : [];
   return (
     <button onClick={onClick} data-testid={testId}
       className={`text-left rounded-xl border p-3 transition ${active ? "border-[#E86A3C] bg-[#FFF4EC]" : "border-[#E2E8F0] bg-white hover:border-[#D4A94A]"}`}>
@@ -470,6 +565,17 @@ function MenuTile({ it, active, onClick, testId }) {
         <span className={`text-sm font-bold ${active ? "text-[#E86A3C]" : "text-[#0B3B5C]"}`}>{it.name}</span>
         <span className="text-sm font-mono text-[#0B3B5C]">${it.price}</span>
       </div>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {tags.map((t) => (
+            <span key={t} className="text-[9px] font-bold rounded-full px-1.5 py-0.5"
+              title={t.replace("_", " ")}
+              style={{ color: TAG_COLOR[t] || "#64748B", background: `${TAG_COLOR[t] || "#64748B"}18` }}>
+              {TAG_SHORT[t] || t}
+            </span>
+          ))}
+        </div>
+      )}
     </button>
   );
 }

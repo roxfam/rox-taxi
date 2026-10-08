@@ -3743,23 +3743,36 @@ CABLE_BEACH_DEFAULTS = {
     "cruise_roundtrip_price": 20.0,  # Round-trip cruise port (per person)
     # Starter menus — admin can rename / reprice / remove via the dashboard.
     # Dinners include rice & two sides; appetizers listed per piece-count.
+    # `tags` are informational dietary flags (gluten_free, pescatarian, dairy_free).
     "lunch_items": [
-        {"id": "conch_fritters_5",  "name": "Bahamian Conch Fritters · 5 pc",  "price": 10.0},
-        {"id": "conch_fritters_8",  "name": "Bahamian Conch Fritters · 8 pc",  "price": 15.0},
-        {"id": "conch_fritters_12", "name": "Bahamian Conch Fritters · 12 pc", "price": 18.0},
-        {"id": "jerk_chicken",   "name": "Jerk Chicken Dinner",   "price": 30.0},
-        {"id": "jerk_pork",      "name": "Jerk Pork Dinner",      "price": 30.0},
-        {"id": "jerk_ribs",      "name": "Jerk Ribs Dinner",      "price": 30.0},
-        {"id": "jerk_salmon",    "name": "Jerk Salmon Dinner",    "price": 35.0},
-        {"id": "jerk_shrimp",    "name": "Jerk Shrimp Dinner",    "price": 40.0},
-        {"id": "jerk_conch",     "name": "Jerk Conch Dinner",     "price": 35.0},
-        {"id": "jerk_lobster",   "name": "Jerk Lobster Dinner",   "price": 40.0},
-        {"id": "bbq_chicken",    "name": "BBQ Chicken Dinner",    "price": 25.0},
-        {"id": "bbq_pork",       "name": "BBQ Pork Dinner",       "price": 30.0},
-        {"id": "bbq_ribs",       "name": "BBQ Ribs Dinner",       "price": 30.0},
-        {"id": "baked_pork_chop","name": "Baked Pork Chop Dinner","price": 40.0},
-        {"id": "snapper_dinner", "name": "Snapper Dinner",        "price": 40.0},
-        {"id": "soamoo_dinner",  "name": "Soamoo Dinner",         "price": 35.0},
+        {"id": "conch_fritters_5",  "name": "Bahamian Conch Fritters · 5 pc",  "price": 10.0, "tags": ["pescatarian", "dairy_free"]},
+        {"id": "conch_fritters_8",  "name": "Bahamian Conch Fritters · 8 pc",  "price": 15.0, "tags": ["pescatarian", "dairy_free"]},
+        {"id": "conch_fritters_12", "name": "Bahamian Conch Fritters · 12 pc", "price": 18.0, "tags": ["pescatarian", "dairy_free"]},
+        {"id": "jerk_chicken",   "name": "Jerk Chicken Dinner",   "price": 30.0, "tags": ["gluten_free", "dairy_free"]},
+        {"id": "jerk_pork",      "name": "Jerk Pork Dinner",      "price": 30.0, "tags": ["gluten_free", "dairy_free"]},
+        {"id": "jerk_ribs",      "name": "Jerk Ribs Dinner",      "price": 30.0, "tags": ["gluten_free", "dairy_free"]},
+        {"id": "jerk_salmon",    "name": "Jerk Salmon Dinner",    "price": 35.0, "tags": ["gluten_free", "dairy_free", "pescatarian"]},
+        {"id": "jerk_shrimp",    "name": "Jerk Shrimp Dinner",    "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian"]},
+        {"id": "jerk_conch",     "name": "Jerk Conch Dinner",     "price": 35.0, "tags": ["dairy_free", "pescatarian"]},
+        {"id": "jerk_lobster",   "name": "Jerk Lobster Dinner",   "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian"]},
+        {"id": "bbq_chicken",    "name": "BBQ Chicken Dinner",    "price": 25.0, "tags": ["dairy_free"]},
+        {"id": "bbq_pork",       "name": "BBQ Pork Dinner",       "price": 30.0, "tags": ["dairy_free"]},
+        {"id": "bbq_ribs",       "name": "BBQ Ribs Dinner",       "price": 30.0, "tags": ["dairy_free"]},
+        {"id": "baked_pork_chop","name": "Baked Pork Chop Dinner","price": 40.0, "tags": ["gluten_free", "dairy_free"]},
+        {"id": "snapper_dinner", "name": "Snapper Dinner",        "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian"]},
+        {"id": "soamoo_dinner",  "name": "Soamoo Dinner",         "price": 35.0, "tags": ["dairy_free"]},
+    ],
+    # Chef's-choice combos — frontend highlights these above the menu;
+    # backend validates and applies the bundle discount only when all
+    # `items` ids are present in the booking.
+    "combos": [
+        {
+            "id": "chefs_choice",
+            "name": "Chef's Choice combo",
+            "subtitle": "Our most popular beach-day pairing",
+            "items": ["conch_fritters_8", "jerk_chicken", "bahama_mama"],
+            "discount": 5.0,
+        },
     ],
     "drink_items": [
         {"id": "bahama_mama",   "name": "Bahama Mama",     "price": 12.0},
@@ -3814,6 +3827,7 @@ async def _cable_beach_cfg() -> dict:
     # empty lists in storage should still show the starter menu, not blank.
     merged["lunch_items"] = pkg.get("lunch_items") or CABLE_BEACH_DEFAULTS["lunch_items"]
     merged["drink_items"] = pkg.get("drink_items") or CABLE_BEACH_DEFAULTS["drink_items"]
+    merged["combos"] = pkg.get("combos") or CABLE_BEACH_DEFAULTS["combos"]
     merged["hotel_fares"] = _hotel_tariffs()
     return merged
 
@@ -3877,6 +3891,7 @@ class CableBeachQuoteRequest(BaseModel):
     extra_seats: int = Field(0, ge=0, le=50)
     lunch_item_ids: list[str] = Field(default_factory=list)
     drink_item_ids: list[str] = Field(default_factory=list)
+    combo_id: Optional[str] = Field(None, max_length=40)      # Chef's-choice bundle discount
 
 
 @api_router.post("/cable-beach/quote")
@@ -3917,6 +3932,23 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
     menu_total = round(menu_total, 2)
 
     subtotal = round(base + extra + transfer + menu_total, 2)
+
+    # Chef's-choice combo — subtract bundle discount only if the booking
+    # actually contains every item the combo requires. Protects against
+    # a tampered combo_id with mismatched menu selections.
+    combo_discount = 0.0
+    combo_applied = None
+    if req.combo_id:
+        selected_ids = set(list(req.lunch_item_ids) + list(req.drink_item_ids))
+        for combo in cfg.get("combos") or []:
+            if combo.get("id") == req.combo_id:
+                if set(combo.get("items") or []).issubset(selected_ids):
+                    combo_discount = round(float(combo.get("discount") or 0.0), 2)
+                    combo_applied = {"id": combo["id"], "name": combo.get("name"),
+                                     "discount": combo_discount}
+                break
+    subtotal = round(max(0.0, subtotal - combo_discount), 2)
+
     vat = round(subtotal * 0.10, 2)
     processing = round((subtotal + vat) * 0.05, 2)
     total = round(subtotal + vat + processing, 2)
@@ -3932,6 +3964,8 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
         "transfer_total": transfer,
         "menu_lines": menu_lines,
         "menu_total": menu_total,
+        "combo_applied": combo_applied,
+        "combo_discount": combo_discount,
         "subtotal": subtotal,
         "vat": vat,
         "processing_fee": processing,
@@ -3966,6 +4000,7 @@ class CableBeachBookRequest(BaseModel):
     extra_seats: int = Field(0, ge=0, le=50)
     lunch_item_ids: list[str] = Field(default_factory=list)
     drink_item_ids: list[str] = Field(default_factory=list)
+    combo_id: Optional[str] = Field(None, max_length=40)
     special_requests: Optional[str] = Field(None, max_length=500)
     share_token: Optional[str] = Field(None, max_length=40)  # Credit the sharer
 
@@ -4014,6 +4049,7 @@ async def cable_beach_book(req: CableBeachBookRequest):
         pax=req.pax, transfer_kind=req.transfer_kind, hotel_id=req.hotel_id,
         extra_seats=req.extra_seats,
         lunch_item_ids=req.lunch_item_ids, drink_item_ids=req.drink_item_ids,
+        combo_id=req.combo_id,
     )
     quote = await cable_beach_quote(quote_req)
     hotel_match = next((h for h in _hotel_tariffs() if h["id"] == req.hotel_id), None) if req.hotel_id else None
