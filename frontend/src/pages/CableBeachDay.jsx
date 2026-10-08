@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin, Share2 } from "lucide-react";
+import { Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin, Share2, Gift, Search, ChevronDown } from "lucide-react";
 import { API, money } from "../lib/api";
 import Seo from "../components/Seo";
 
@@ -33,6 +33,7 @@ export default function CableBeachDay() {
   const [shareToken, setShareToken] = useState(null);     // Inbound ?r=<token>
   const [guestModalOpen, setGuestModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [giftModalOpen, setGiftModalOpen] = useState(false);
 
   useEffect(() => {
     fetch(`${API}/public/cable-beach-package`).then((r) => r.json()).then(setCfg).catch(() => {});
@@ -246,22 +247,7 @@ export default function CableBeachDay() {
             {transferKind === "hotel" && (
               <div className="mt-3">
                 <label className="block text-xs font-bold text-[#0B3B5C] mb-1">Where are you staying?</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B] pointer-events-none" />
-                  <select
-                    value={hotelId}
-                    onChange={(e) => setHotelId(e.target.value)}
-                    data-testid="cable-hotel-select"
-                    className="w-full appearance-none pl-9 pr-9 py-2.5 border border-[#E2E8F0] rounded-lg bg-white text-sm text-[#0B3B5C] font-semibold focus:outline-none focus:border-[#D4A94A] focus:ring-2 focus:ring-[#D4A94A]/20"
-                  >
-                    <option value="">Pick your hotel or area…</option>
-                    {hotels.map((h) => (
-                      <option key={h.id} value={h.id}>
-                        {h.name} · ${h.roundtrip_fare} round-trip
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <HotelAutocomplete hotels={hotels} value={hotelId} onChange={setHotelId} />
                 {selectedHotel ? (
                   <>
                     <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-[#FFF4EC] border border-[#E86A3C]/30 px-3 py-2" data-testid="cable-hotel-fare-readout">
@@ -335,6 +321,13 @@ export default function CableBeachDay() {
             {quoting ? "Updating…" : "Continue to checkout"}
           </button>
           <ShareBeachDayButton quote={quote} pax={pax} transferKind={transferKind} hotelName={selectedHotel?.name} onOpen={() => setShareModalOpen(true)} />
+          <button
+            onClick={() => setGiftModalOpen(true)}
+            data-testid="cable-beach-gift"
+            className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-full border-2 border-[#D4A94A] text-[#D4A94A] font-bold py-2.5 text-sm hover:bg-[#D4A94A] hover:text-white active:scale-95 transition"
+          >
+            <Gift className="w-4 h-4" /> Gift this beach day
+          </button>
           {shareToken && (
             <div className="mt-3 flex items-center gap-2 rounded-lg bg-[#F0F9FF] border border-[#0EA5E9]/30 px-3 py-2 text-[11px] text-[#0369A1]" data-testid="cable-beach-shared-banner">
               <Share2 className="w-3.5 h-3.5 shrink-0" />
@@ -356,6 +349,12 @@ export default function CableBeachDay() {
         <ShareLinkModal
           onClose={() => setShareModalOpen(false)}
           quote={quote} pax={pax} transferKind={transferKind} hotelName={selectedHotel?.name}
+        />
+      )}
+      {giftModalOpen && (
+        <GiftBeachDayModal
+          onClose={() => setGiftModalOpen(false)}
+          suggestedAmount={quote ? Math.round(quote.total) : 160}
         />
       )}
     </div>
@@ -687,6 +686,215 @@ function Line({ label, children }) {
     <div className="flex items-center justify-between gap-2 text-sm">
       <span className="text-[#64748B]">{label}</span>
       <span className="text-[#0B3B5C] font-mono">{children}</span>
+    </div>
+  );
+}
+
+/**
+ * HotelAutocomplete — typeahead replacement for the native select so cruise
+ * guests can type "Atlantis" / "Baha Mar" instead of scrolling. Fuzzy-matches
+ * on hotel name (words + sub-brands separated by `·`). Keyboard: ↑↓ Enter Esc.
+ * Keeps `data-testid="cable-hotel-select"` so existing selectors still work.
+ */
+function HotelAutocomplete({ hotels, value, onChange }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const wrapRef = useRef(null);
+
+  // Keep the input text in sync with the selected hotel label.
+  useEffect(() => {
+    const sel = hotels.find((h) => h.id === value);
+    if (sel && !open) setQuery(sel.name);
+    if (!value && !open) setQuery("");
+  }, [value, hotels, open]);
+
+  // Click-outside closes the dropdown without clobbering a valid selection.
+  useEffect(() => {
+    const onDoc = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const filtered = !q
+    ? hotels
+    : hotels.filter((h) => h.name.toLowerCase().includes(q));
+
+  const pick = (h) => {
+    onChange(h.id);
+    setQuery(h.name);
+    setOpen(false);
+  };
+
+  const onKey = (e) => {
+    if (!open) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setHighlight((i) => Math.min(filtered.length - 1, i + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHighlight((i) => Math.max(0, i - 1)); }
+    else if (e.key === "Enter") { e.preventDefault(); if (filtered[highlight]) pick(filtered[highlight]); }
+    else if (e.key === "Escape") { setOpen(false); }
+  };
+
+  return (
+    <div ref={wrapRef} className="relative" data-testid="cable-hotel-autocomplete">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B] pointer-events-none" />
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); setHighlight(0); if (!e.target.value) onChange(""); }}
+        onFocus={() => { setOpen(true); setHighlight(0); }}
+        onKeyDown={onKey}
+        placeholder="Type your hotel — Atlantis, Baha Mar, Riu…"
+        data-testid="cable-hotel-select"
+        className="w-full pl-9 pr-9 py-2.5 border border-[#E2E8F0] rounded-lg bg-white text-sm text-[#0B3B5C] font-semibold focus:outline-none focus:border-[#D4A94A] focus:ring-2 focus:ring-[#D4A94A]/20"
+      />
+      <ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B] pointer-events-none transition ${open ? "rotate-180" : ""}`} />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg border border-[#E2E8F0] bg-white shadow-[0_18px_40px_rgba(11,25,44,0.12)] max-h-72 overflow-auto">
+          {filtered.map((h, i) => (
+            <button
+              key={h.id}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); pick(h); }}
+              onMouseEnter={() => setHighlight(i)}
+              data-testid={`cable-hotel-option-${h.id}`}
+              className={`w-full text-left px-3 py-2.5 text-sm flex items-center justify-between gap-3 transition ${
+                i === highlight ? "bg-[#FFF4EC] text-[#E86A3C]" : "text-[#0B3B5C] hover:bg-[#F8FAFC]"
+              }`}
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <MapPin className="w-3.5 h-3.5 shrink-0 opacity-60" />
+                <span className="truncate">{h.name}</span>
+              </span>
+              <span className="text-xs font-mono shrink-0">${h.roundtrip_fare} r/t</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && filtered.length === 0 && (
+        <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg border border-[#E2E8F0] bg-white p-3 text-xs text-[#64748B]">
+          No match for "<b>{query}</b>" — try "Cable Beach" or "Paradise Island".
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * GiftBeachDayModal — reuses the existing `/api/gift-cards/purchase` flow
+ * with a Cable-Beach-themed amount preset. Recipient gets a branded PDF
+ * voucher by email (handled by the Stripe webhook on payment). Buyer is
+ * redirected to Stripe Checkout and lands back on `/gift-cards/success`.
+ */
+function GiftBeachDayModal({ onClose, suggestedAmount }) {
+  const presets = [80, 160, 240, 320];
+  const [amount, setAmount] = useState(suggestedAmount && presets.includes(Math.round(suggestedAmount / 10) * 10) ? Math.round(suggestedAmount / 10) * 10 : 160);
+  const [custom, setCustom] = useState("");
+  const [form, setForm] = useState({
+    buyer_name: "", buyer_email: "",
+    recipient_name: "", recipient_email: "",
+    message: "",
+  });
+  const [busy, setBusy] = useState(false);
+
+  const finalAmount = custom ? Number(custom) : amount;
+  const giftedPax = Math.max(1, Math.round(finalAmount / 40));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!finalAmount || finalAmount < 25 || finalAmount > 1000) {
+      toast.error("Pick an amount between $25 and $1,000"); return;
+    }
+    if (!form.buyer_name || !form.buyer_email || !form.recipient_email) {
+      toast.error("Fill your name/email and the recipient's email"); return;
+    }
+    setBusy(true);
+    try {
+      const prefixedMessage =
+        `🌴 Toes in the Turquoise — your Cable Beach day on me.` +
+        (form.message ? `\n\n${form.message}` : "");
+      const res = await fetch(`${API}/gift-cards/purchase`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: finalAmount, buyer_name: form.buyer_name, buyer_email: form.buyer_email,
+          recipient_email: form.recipient_email, recipient_name: form.recipient_name,
+          message: prefixedMessage, origin_url: window.location.origin,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.detail || "Gift purchase failed"); setBusy(false); return;
+      }
+      const data = await res.json();
+      window.location.href = data.checkout_url;
+    } catch {
+      toast.error("Gift purchase failed"); setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-[#0B192C]/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()} data-testid="cable-gift-modal">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">Gift a beach day</div>
+            <h3 className="serif text-2xl text-[#0B3B5C]">Send Toes in the Turquoise</h3>
+            <div className="text-xs text-[#64748B] mt-1">Branded voucher · instant email delivery · never expires</div>
+          </div>
+          <button onClick={onClose} className="text-[#64748B] hover:text-[#0B3B5C]" data-testid="cable-gift-close">✕</button>
+        </div>
+
+        <form onSubmit={submit} className="space-y-3">
+          <div>
+            <div className="text-[10px] tracking-[0.28em] uppercase font-black text-[#64748B] mb-2">Amount</div>
+            <div className="flex flex-wrap gap-2">
+              {presets.map((a) => (
+                <button key={a} type="button" onClick={() => { setAmount(a); setCustom(""); }}
+                  data-testid={`cable-gift-amount-${a}`}
+                  className={`rounded-full px-4 py-2 text-sm font-black transition ${amount === a && !custom ? "bg-[#0B3B5C] text-white" : "border border-[#E2E8F0] text-[#0B3B5C] hover:border-[#D4A94A]"}`}>
+                  ${a}
+                </button>
+              ))}
+              <input type="number" min="25" max="1000" value={custom}
+                onChange={(e) => setCustom(e.target.value)} placeholder="Custom"
+                data-testid="cable-gift-amount-custom"
+                className="w-24 px-3 py-2 text-sm border border-[#E2E8F0] rounded-full focus:outline-none focus:border-[#D4A94A]" />
+            </div>
+            <div className="text-[11px] text-[#64748B] mt-1.5">Covers ≈ {giftedPax} guest{giftedPax === 1 ? "" : "s"} of the base beach day</div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <input value={form.buyer_name} onChange={(e) => setForm({ ...form, buyer_name: e.target.value })}
+              placeholder="Your name"
+              className="px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]"
+              data-testid="cable-gift-buyer-name" />
+            <input value={form.buyer_email} onChange={(e) => setForm({ ...form, buyer_email: e.target.value })}
+              placeholder="Your email" type="email"
+              className="px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]"
+              data-testid="cable-gift-buyer-email" />
+            <input value={form.recipient_name} onChange={(e) => setForm({ ...form, recipient_name: e.target.value })}
+              placeholder="Recipient name (optional)"
+              className="px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]"
+              data-testid="cable-gift-recipient-name" />
+            <input value={form.recipient_email} onChange={(e) => setForm({ ...form, recipient_email: e.target.value })}
+              placeholder="Recipient email" type="email"
+              className="px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]"
+              data-testid="cable-gift-recipient-email" />
+          </div>
+
+          <textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })}
+            placeholder="A personal note for the voucher (optional)…" rows={2} maxLength={400}
+            className="w-full px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]"
+            data-testid="cable-gift-message" />
+
+          <button type="submit" disabled={busy}
+            className="w-full rounded-full bg-[#D4A94A] text-[#0B192C] font-black uppercase tracking-wider py-3 text-sm hover:bg-[#c99b3d] active:scale-95 disabled:opacity-50"
+            data-testid="cable-gift-submit">
+            {busy ? "Preparing checkout…" : `Gift ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(finalAmount)}`}
+          </button>
+          <p className="text-[11px] text-[#94A3B8] text-center">Paid on the next screen with Stripe. Recipient gets a branded PDF voucher by email instantly on payment.</p>
+        </form>
+      </div>
     </div>
   );
 }

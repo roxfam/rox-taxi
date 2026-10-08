@@ -4088,6 +4088,52 @@ async def _credit_share_referrer_if_cable_beach(booking_id: str) -> None:
     except Exception:  # noqa: BLE001
         pass
 
+    # Sharer email — nudge them back with the credit balance.
+    try:
+        from notifications import send_email
+        user = await db.users.find_one({"email": sharer_email}) or {}
+        new_balance = float(user.get("credit_balance") or SHARE_CREDIT_USD)
+        display_name = (user.get("name") or sharer_email.split("@")[0]).split("@")[0]
+        html = f"""
+        <!doctype html><html><body style="margin:0;background:#FBF7EF;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#0B3B5C">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#FBF7EF;padding:32px 16px">
+            <tr><td align="center">
+              <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 20px 50px rgba(11,25,44,0.08)">
+                <tr><td style="background:linear-gradient(135deg,#128C7E,#25D366);padding:32px;color:#fff">
+                  <div style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;font-weight:900;opacity:0.9">Rox share · reward unlocked</div>
+                  <div style="font-family:Georgia,serif;font-size:36px;font-weight:700;margin-top:6px;line-height:1.1">You just earned<br/><em style="font-style:italic;color:#F7E6C6">$10 off your next trip.</em></div>
+                </td></tr>
+                <tr><td style="padding:28px 32px 8px">
+                  <p style="font-size:15px;line-height:1.55;margin:0 0 12px">Hey {display_name},</p>
+                  <p style="font-size:15px;line-height:1.55;margin:0 0 16px">A friend you shared <b>Toes in the Turquoise</b> with just booked their Cable Beach day. Nice work — we've dropped <b style="color:#128C7E">${SHARE_CREDIT_USD:.0f}</b> onto your Rox wallet.</p>
+                  <table role="presentation" cellspacing="0" cellpadding="0" style="margin:12px 0 20px;background:#F0FDF4;border:1px solid #86EFAC;border-radius:12px;padding:14px 18px;width:100%">
+                    <tr>
+                      <td><div style="font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:0.2em;font-weight:700">Wallet balance</div>
+                      <div style="font-family:Georgia,serif;font-size:30px;color:#128C7E;font-weight:700;margin-top:2px">${new_balance:.2f}</div></td>
+                    </tr>
+                  </table>
+                  <p style="font-size:14px;line-height:1.55;color:#64748B;margin:0 0 24px">Credits auto-apply on your next Rox booking (taxi, tour, or rental). No code needed — just book like usual.</p>
+                  <a href="https://roxtaxi.com/tours/cable-beach-day" style="display:inline-block;background:#E86A3C;color:#fff;text-decoration:none;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;font-size:13px;padding:14px 28px;border-radius:999px">Book your next day →</a>
+                </td></tr>
+                <tr><td style="padding:20px 32px 32px;color:#94A3B8;font-size:11px;line-height:1.55">
+                  Share more Cable Beach days to earn more Rox credit — every friend who books gets you another $10. 🌴<br/>
+                  You received this because you shared a trip from <a href="https://roxtaxi.com/tours/cable-beach-day" style="color:#D4A94A">roxtaxi.com</a>.
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+        </body></html>
+        """
+        send_email(
+            to_email=sharer_email,
+            subject=f"🌴 Your ${SHARE_CREDIT_USD:.0f} Rox credit is here — a friend just booked",
+            html=html,
+            text=f"You just earned ${SHARE_CREDIT_USD:.0f} on Rox! Your wallet balance is now ${new_balance:.2f}. Spend it on your next taxi, tour, or rental at https://roxtaxi.com",
+            category="confirmation",
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("share credit email err: %s", e)
+
 
 @api_router.get("/admin/share-stats/cable-beach")
 async def admin_share_stats(_admin=Depends(require_admin)):
