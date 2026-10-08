@@ -33,6 +33,10 @@ const DEPOSIT_META = {
 
 export default function AdminDashboard() {
   const nav = useNavigate();
+  // Short-circuit the entire render when we're not authed. Prevents child
+  // cards from mounting + firing their own API calls (and the resulting
+  // "Failed to load…" toast storm) before the useEffect redirect kicks in.
+  const authed = isAdminAuthed();
   const [stats, setStats] = useState({ total: 0, paid: 0, pending: 0, active: 0, revenue: 0, deposits_held: 0, deposits_held_amount: 0 });
   const [bookings, setBookings] = useState([]);
   const [filter, setFilter] = useState("all");
@@ -52,10 +56,11 @@ export default function AdminDashboard() {
   // Refetch only the blackout-reason card when the year picker changes —
   // avoids a full dashboard reload when an admin scrubs through years.
   useEffect(() => {
+    if (!authed) return;
     api.get(`/admin/analytics/blackout-reasons?year=${reasonYear}`)
       .then((r) => setReasonStats(r.data))
       .catch(() => {});
-  }, [reasonYear]);
+  }, [reasonYear, authed]);
 
   const load = async () => {
     setLoading(true);
@@ -87,7 +92,7 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    if (!isAdminAuthed()) { nav("/admin/login"); return; }
+    if (!authed) { nav("/admin/login"); return; }
     load();
     const t = setInterval(load, 30000);
     return () => clearInterval(t);
@@ -174,6 +179,8 @@ export default function AdminDashboard() {
     if (filter === "deposits") return bookings.filter((b) => (b.deposit_amount || 0) > 0);
     return bookings.filter((b) => b.status === filter);
   }, [bookings, filter]);
+
+  if (!authed) return null;
 
   return (
     <div className="min-h-screen bg-[#F1F5F9]" data-testid="admin-dashboard">
