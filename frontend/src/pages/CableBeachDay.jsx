@@ -268,9 +268,9 @@ export default function CableBeachDay() {
             )}
           </Section>
 
-          <Section icon={Utensils} title="Lunch (optional)">
+          <Section icon={Utensils} title="Food menu (optional) — dinners include rice & 2 sides">
             {cfg.lunch_items.length === 0 ? (
-              <p className="text-xs text-[#64748B]">Menu will be published shortly. Call dispatch to add lunch after booking.</p>
+              <p className="text-xs text-[#64748B]">Menu will be published shortly. Call dispatch to add dinner after booking.</p>
             ) : (
               <div className="grid sm:grid-cols-2 gap-2">
                 {cfg.lunch_items.map((it) => (

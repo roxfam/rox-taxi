@@ -3742,13 +3742,24 @@ CABLE_BEACH_DEFAULTS = {
     "cruise_oneway_price": 10.0,     # Transfer FROM cruise port (per person)
     "cruise_roundtrip_price": 20.0,  # Round-trip cruise port (per person)
     # Starter menus — admin can rename / reprice / remove via the dashboard.
+    # Dinners include rice & two sides; appetizers listed per piece-count.
     "lunch_items": [
-        {"id": "conch_salad",   "name": "Fresh conch salad",         "price": 18.0},
-        {"id": "cracked_conch", "name": "Cracked conch + fries",     "price": 22.0},
-        {"id": "grilled_mahi",  "name": "Grilled mahi-mahi plate",   "price": 26.0},
-        {"id": "jerk_chicken",  "name": "Jerk chicken + rice & peas","price": 20.0},
-        {"id": "veggie_wrap",   "name": "Veggie wrap + plantain",    "price": 16.0},
-        {"id": "kids_plate",    "name": "Kids plate (nuggets + fries)", "price": 12.0},
+        {"id": "conch_fritters_5",  "name": "Bahamian Conch Fritters · 5 pc",  "price": 10.0},
+        {"id": "conch_fritters_8",  "name": "Bahamian Conch Fritters · 8 pc",  "price": 15.0},
+        {"id": "conch_fritters_12", "name": "Bahamian Conch Fritters · 12 pc", "price": 18.0},
+        {"id": "jerk_chicken",   "name": "Jerk Chicken Dinner",   "price": 30.0},
+        {"id": "jerk_pork",      "name": "Jerk Pork Dinner",      "price": 30.0},
+        {"id": "jerk_ribs",      "name": "Jerk Ribs Dinner",      "price": 30.0},
+        {"id": "jerk_salmon",    "name": "Jerk Salmon Dinner",    "price": 35.0},
+        {"id": "jerk_shrimp",    "name": "Jerk Shrimp Dinner",    "price": 40.0},
+        {"id": "jerk_conch",     "name": "Jerk Conch Dinner",     "price": 35.0},
+        {"id": "jerk_lobster",   "name": "Jerk Lobster Dinner",   "price": 40.0},
+        {"id": "bbq_chicken",    "name": "BBQ Chicken Dinner",    "price": 25.0},
+        {"id": "bbq_pork",       "name": "BBQ Pork Dinner",       "price": 30.0},
+        {"id": "bbq_ribs",       "name": "BBQ Ribs Dinner",       "price": 30.0},
+        {"id": "baked_pork_chop","name": "Baked Pork Chop Dinner","price": 40.0},
+        {"id": "snapper_dinner", "name": "Snapper Dinner",        "price": 40.0},
+        {"id": "soamoo_dinner",  "name": "Soamoo Dinner",         "price": 35.0},
     ],
     "drink_items": [
         {"id": "bahama_mama",   "name": "Bahama Mama",     "price": 12.0},

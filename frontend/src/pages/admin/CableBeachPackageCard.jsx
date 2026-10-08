@@ -52,6 +52,8 @@ export default function CableBeachPackageCard() {
     { k: "cruise_roundtrip_price", label: "Cruise port · round-trip", unit: "$", hint: "Per person" },
   ];
 
+  const KEY_LABELS = { lunch_items: "Food menu (fritters + dinners w/ rice & 2 sides)", drink_items: "Drinks menu" };
+
   const updateItem = (key, idx, patch) => setCfg((c) => ({
     ...c, [key]: c[key].map((row, i) => i === idx ? { ...row, ...patch } : row),
   }));
@@ -111,7 +113,7 @@ export default function CableBeachPackageCard() {
         <div key={key} className="mt-6">
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs font-bold uppercase tracking-wider text-[#0B3B5C]">
-              {key === "lunch_items" ? "Lunch menu" : "Drink menu"}
+              {KEY_LABELS[key] || (key === "lunch_items" ? "Lunch menu" : "Drink menu")}
               <span className="ml-2 text-[10px] text-[#94A3B8]">{cfg[key].length} item{cfg[key].length === 1 ? "" : "s"}</span>
             </div>
             <div className="flex items-center gap-2">
