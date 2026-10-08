@@ -385,6 +385,7 @@ class GiftCardPurchaseRequest(BaseModel):
     recipient_name: Optional[str] = Field(None, max_length=100)
     message: Optional[str] = Field(None, max_length=400)
     origin_url: str
+    scheduled_send_at: Optional[str] = Field(None, max_length=40)  # ISO datetime — defer delivery (birthday / anniversary)
 
 
 class GiftCardRedeemRequest(BaseModel):
@@ -1784,6 +1785,19 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
 
     code = _new_gift_code()
     ts = now_iso()
+    # Normalise scheduled_send_at so later cron comparison is cheap. Any ISO
+    # datetime (`2026-04-15T09:00` or `…Z` or with offset) is accepted; we
+    # store it as UTC ISO. "Send now" leaves this field null.
+    scheduled_at_iso = None
+    if req.scheduled_send_at:
+        try:
+            raw = req.scheduled_send_at.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            scheduled_at_iso = dt.astimezone(timezone.utc).isoformat()
+        except Exception:  # noqa: BLE001
+            scheduled_at_iso = None
     doc = {
         "code": code,
         "amount": round(float(req.amount), 2),
@@ -1794,6 +1808,8 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
         "recipient_email": req.recipient_email.lower(),
         "message": req.message or "",
         "status": "pending",   # → 'active' after Stripe webhook
+        "scheduled_send_at": scheduled_at_iso,
+        "delivered_at": None,
         "created_at": ts,
     }
     await db.gift_cards.insert_one(doc)
@@ -4135,6 +4151,214 @@ async def _credit_share_referrer_if_cable_beach(booking_id: str) -> None:
         logging.getLogger(__name__).warning("share credit email err: %s", e)
 
 
+# ─── Cable Beach · Live marine conditions ─────────────────────────────────
+# A 15-minute cached read-through to Open-Meteo (no API key). The classified
+# label gets a tiny badge next to each hotel in the autocomplete so a cruise
+# guest can tell at a glance if today is "glass calm" or "surf's up".
+_CB_WEATHER_CACHE: dict = {"ts": 0.0, "data": None}
+
+
+def _classify_marine(wave_m: float, wind_kmh: float) -> dict:
+    """Classify sea conditions → one of 4 labels, each with an emoji + hex."""
+    if wave_m is None:
+        wave_m = 0.0
+    if wind_kmh is None:
+        wind_kmh = 0.0
+    if wave_m < 0.3 and wind_kmh < 12:
+        return {"label": "Glass calm", "emoji": "🪞", "hex": "#0EA5E9", "tier": "calm"}
+    if wave_m < 0.7 and wind_kmh < 20:
+        return {"label": "Light chop", "emoji": "🌊", "hex": "#06B6D4", "tier": "mild"}
+    if wave_m < 1.2 and wind_kmh < 30:
+        return {"label": "Breezy & fun", "emoji": "🏄‍♂️", "hex": "#F59E0B", "tier": "lively"}
+    return {"label": "Surf's up", "emoji": "🏄", "hex": "#EF4444", "tier": "big"}
+
+
+@api_router.get("/cable-beach/weather")
+async def cable_beach_weather():
+    """Open-Meteo marine + weather for Cable Beach (Nassau). Cached 15 min."""
+    import time
+    now = time.time()
+    if _CB_WEATHER_CACHE.get("data") and (now - _CB_WEATHER_CACHE["ts"]) < 900:
+        return _CB_WEATHER_CACHE["data"]
+
+    lat, lon = 25.0797, -77.4125  # Cable Beach centroid
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            marine_r = await client.get(
+                "https://marine-api.open-meteo.com/v1/marine",
+                params={"latitude": lat, "longitude": lon, "current": "wave_height,sea_surface_temperature"},
+            )
+            weather_r = await client.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={"latitude": lat, "longitude": lon, "current": "wind_speed_10m,temperature_2m", "wind_speed_unit": "kmh"},
+            )
+        marine = marine_r.json().get("current") or {}
+        weather = weather_r.json().get("current") or {}
+        wave = float(marine.get("wave_height") or 0.0)
+        water = marine.get("sea_surface_temperature")
+        wind = float(weather.get("wind_speed_10m") or 0.0)
+        air = weather.get("temperature_2m")
+        cls = _classify_marine(wave, wind)
+        data = {
+            **cls,
+            "wave_m": round(wave, 2),
+            "wind_kmh": round(wind, 1),
+            "water_c": round(float(water), 1) if water is not None else None,
+            "air_c": round(float(air), 1) if air is not None else None,
+            "fetched_at": now_iso(),
+        }
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("marine fetch err: %s", e)
+        data = {**_classify_marine(0.4, 10.0), "wave_m": None, "wind_kmh": None,
+                "water_c": None, "air_c": None, "fetched_at": now_iso(), "stale": True}
+    _CB_WEATHER_CACHE.update({"ts": now, "data": data})
+    return data
+
+
+# ─── Gift card activation + branded voucher email ─────────────────────────
+# When Stripe confirms a gift purchase we activate the card and either send
+# the voucher immediately or defer until the buyer-chosen `scheduled_send_at`
+# (birthday / anniversary / holiday). A piggyback drain on `send-checkout-nudges`
+# flushes due-but-pending deliveries so we stay under the 5-cron platform cap.
+async def _send_gift_voucher_email(gc: dict) -> dict:
+    """Fire the branded voucher email + PDF to the recipient."""
+    try:
+        from notifications import send_email
+        from pdf_utils import build_gift_voucher_pdf
+        pdf_bytes = build_gift_voucher_pdf(gc)
+        recipient_label = gc.get("recipient_name") or (gc.get("recipient_email") or "").split("@")[0]
+        buyer_label = gc.get("buyer_name") or "a friend"
+        msg_block = (
+            f'<div style="margin:16px 0;padding:14px 18px;background:#FFF4EC;border-left:4px solid #E86A3C;border-radius:8px">'
+            f'<div style="font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:0.2em;font-weight:700;margin-bottom:4px">A note from {buyer_label}</div>'
+            f'<div style="font-size:14px;color:#0B3B5C;font-style:italic">{(gc.get("message") or "").replace(chr(10), "<br/>")}</div>'
+            f'</div>'
+        ) if gc.get("message") else ""
+        html = f"""
+        <!doctype html><html><body style="margin:0;background:#FBF7EF;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#0B3B5C">
+          <table width="100%" cellspacing="0" cellpadding="0" style="padding:32px 16px"><tr><td align="center">
+            <table width="560" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 20px 50px rgba(11,25,44,0.08)">
+              <tr><td style="background:linear-gradient(135deg,#0B3B5C,#128C7E);padding:34px;color:#fff">
+                <div style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;font-weight:900;opacity:0.9">Toes in the Turquoise · Cable Beach, Nassau</div>
+                <div style="font-family:Georgia,serif;font-size:36px;font-weight:700;margin-top:8px;line-height:1.1">You've been <em style="font-style:italic;color:#F7E6C6">gifted</em> a Rox beach day.</div>
+              </td></tr>
+              <tr><td style="padding:28px 32px 8px">
+                <p style="font-size:15px;line-height:1.55;margin:0 0 10px">Hey {recipient_label},</p>
+                <p style="font-size:15px;line-height:1.55;margin:0 0 10px"><b>{buyer_label}</b> just sent you a Cable Beach day on them.</p>
+                {msg_block}
+                <table cellspacing="0" cellpadding="0" style="margin:18px 0;background:#0B3B5C;border-radius:14px;padding:22px;width:100%;color:#fff">
+                  <tr><td align="center">
+                    <div style="font-size:11px;color:#D4A94A;text-transform:uppercase;letter-spacing:0.25em;font-weight:900">Your gift</div>
+                    <div style="font-family:Georgia,serif;font-size:46px;color:#E86A3C;font-weight:700;margin:2px 0 10px">${float(gc.get("amount") or 0):.0f}</div>
+                    <div style="font-size:11px;color:#D4A94A;letter-spacing:0.2em;text-transform:uppercase;font-weight:800">Code</div>
+                    <div style="font-family:Menlo,monospace;font-size:22px;letter-spacing:0.2em;color:#fff;font-weight:700;margin-top:4px">{gc.get("code","")}</div>
+                  </td></tr>
+                </table>
+                <a href="https://roxtaxi.com/tours/cable-beach-day" style="display:inline-block;background:#D4A94A;color:#0B192C;text-decoration:none;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;font-size:13px;padding:14px 28px;border-radius:999px">Pick your beach day →</a>
+                <p style="font-size:13px;color:#64748B;line-height:1.55;margin:20px 0 0">The branded PDF voucher is attached — screenshot, print, or forward it; the code is all you need. Never expires. Redeemable on any Rox taxi, tour, or rental.</p>
+              </td></tr>
+              <tr><td style="padding:20px 32px 32px;color:#94A3B8;font-size:11px;line-height:1.55">Rox Taxi Service &amp; Tours · Nassau · hello@roxtaxi.com</td></tr>
+            </table>
+          </td></tr></table>
+        </body></html>
+        """
+        return send_email(
+            to_email=gc.get("recipient_email"),
+            subject=f"🌴 You've been gifted a Rox beach day — ${float(gc.get('amount') or 0):.0f} on {buyer_label}",
+            html=html,
+            text=f"You've been gifted ${float(gc.get('amount') or 0):.0f} on Rox from {buyer_label}. Code: {gc.get('code','')}",
+            category="confirmation",
+            attachments=[{
+                "filename": f"rox-gift-{gc.get('code','voucher')}.pdf",
+                "content": pdf_bytes,
+                "mime_type": "application/pdf",
+            }],
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("gift voucher email err: %s", e)
+        return {"sent": False, "error": str(e)}
+
+
+async def _activate_gift_if_paid(session_id: str) -> Optional[str]:
+    """Called from Stripe webhook. Upgrades the matching gift card to active
+    and either sends the voucher now or defers to the scheduled date."""
+    gc = await db.gift_cards.find_one({"stripe_session_id": session_id})
+    if not gc:
+        return None
+    if gc.get("status") == "active" and gc.get("delivered_at"):
+        return gc.get("code")
+    await db.gift_cards.update_one(
+        {"code": gc["code"]},
+        {"$set": {"status": "active", "activated_at": now_iso()}},
+    )
+    scheduled = gc.get("scheduled_send_at")
+    now = datetime.now(timezone.utc)
+    due_now = True
+    if scheduled:
+        try:
+            dt = datetime.fromisoformat(str(scheduled).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            due_now = dt <= now
+        except Exception:  # noqa: BLE001
+            due_now = True
+    if due_now:
+        fresh = await db.gift_cards.find_one({"code": gc["code"]})
+        rep = await _send_gift_voucher_email(fresh or gc)
+        await db.gift_cards.update_one(
+            {"code": gc["code"]},
+            {"$set": {"delivered_at": now_iso(), "delivery_report": rep}},
+        )
+        return gc["code"]
+    # Deferred — buyer gets an acknowledgment.
+    try:
+        from notifications import send_email
+        send_email(
+            to_email=gc.get("buyer_email"),
+            subject="🌴 Your Rox gift is queued for delivery",
+            html=(
+                f"<p>Hi {gc.get('buyer_name','')},</p>"
+                f"<p>Your <b>${float(gc.get('amount') or 0):.0f}</b> Rox gift for <b>{gc.get('recipient_email')}</b> is paid and queued. "
+                f"It will deliver on <b>{str(scheduled)[:16].replace('T',' ')} UTC</b>. We'll email you a copy the moment it fires.</p>"
+                f"<p>Code: <code style='font-family:monospace;background:#F8FAFC;padding:4px 8px;border-radius:6px'>{gc.get('code','')}</code></p>"
+            ),
+            text=f"Your Rox gift is scheduled to deliver on {scheduled}. Code: {gc.get('code','')}",
+            category="confirmation",
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("gift buyer ack err: %s", e)
+    return gc["code"]
+
+
+async def _drain_scheduled_gifts() -> dict:
+    """Flush active gift cards whose `scheduled_send_at` is now ≤ now and
+    which haven't been emailed yet. Called from `send-checkout-nudges` cron."""
+    now = datetime.now(timezone.utc)
+    sent = []
+    cursor = db.gift_cards.find({
+        "status": "active",
+        "delivered_at": None,
+        "scheduled_send_at": {"$ne": None},
+    })
+    async for gc in cursor:
+        try:
+            dt = datetime.fromisoformat(str(gc["scheduled_send_at"]).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            if dt > now:
+                continue
+            rep = await _send_gift_voucher_email(gc)
+            await db.gift_cards.update_one(
+                {"code": gc["code"]},
+                {"$set": {"delivered_at": now_iso(), "delivery_report": rep}},
+            )
+            sent.append(gc["code"])
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("drain gift %s err: %s", gc.get("code"), e)
+    return {"delivered": sent, "count": len(sent)}
+
+
 @api_router.get("/admin/share-stats/cable-beach")
 async def admin_share_stats(_admin=Depends(require_admin)):
     """Admin dashboard view of share-link performance for Cable Beach."""
@@ -4366,7 +4590,7 @@ async def cron_send_checkout_nudges(request: Request):
             sent.append(intent["customer_email"])
         except Exception as e:  # noqa: BLE001
             logging.getLogger(__name__).warning("checkout nudge err: %s", e)
-    return {"ok": True, "sent": sent, "skipped": skipped, "count": len(sent)}
+    return {"ok": True, "sent": sent, "skipped": skipped, "count": len(sent), "scheduled_gifts": await _drain_scheduled_gifts()}
 
 
 @api_router.get("/checkout/intent/{token}")

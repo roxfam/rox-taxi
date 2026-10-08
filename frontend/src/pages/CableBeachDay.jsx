@@ -700,7 +700,15 @@ function HotelAutocomplete({ hotels, value, onChange }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  const [weather, setWeather] = useState(null);
   const wrapRef = useRef(null);
+
+  // Fetch Cable Beach marine conditions once — same for every hotel row since
+  // the whole island shares the same shelf. Fire-and-forget; empty-state hides
+  // the badge if the API call fails.
+  useEffect(() => {
+    fetch(`${API}/cable-beach/weather`).then((r) => r.ok ? r.json() : null).then(setWeather).catch(() => {});
+  }, []);
 
   // Keep the input text in sync with the selected hotel label.
   useEffect(() => {
@@ -749,6 +757,16 @@ function HotelAutocomplete({ hotels, value, onChange }) {
         className="w-full pl-9 pr-9 py-2.5 border border-[#E2E8F0] rounded-lg bg-white text-sm text-[#0B3B5C] font-semibold focus:outline-none focus:border-[#D4A94A] focus:ring-2 focus:ring-[#D4A94A]/20"
       />
       <ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B] pointer-events-none transition ${open ? "rotate-180" : ""}`} />
+      {weather && (
+        <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#64748B]" data-testid="cable-hotel-weather">
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-bold" style={{ background: `${weather.hex}22`, color: weather.hex }}>
+            <span>{weather.emoji}</span><span>{weather.label}</span>
+          </span>
+          {weather.wave_m != null && <span>wave {weather.wave_m}m</span>}
+          {weather.wind_kmh != null && <span>· wind {Math.round(weather.wind_kmh)} km/h</span>}
+          {weather.water_c != null && <span>· water {Math.round(weather.water_c)}°C</span>}
+        </div>
+      )}
       {open && filtered.length > 0 && (
         <div className="absolute z-20 left-0 right-0 mt-1 rounded-lg border border-[#E2E8F0] bg-white shadow-[0_18px_40px_rgba(11,25,44,0.12)] max-h-72 overflow-auto">
           {filtered.map((h, i) => (
@@ -765,6 +783,9 @@ function HotelAutocomplete({ hotels, value, onChange }) {
               <span className="flex items-center gap-2 min-w-0">
                 <MapPin className="w-3.5 h-3.5 shrink-0 opacity-60" />
                 <span className="truncate">{h.name}</span>
+                {weather && (
+                  <span className="shrink-0 text-[10px]" style={{ color: weather.hex }} title={weather.label}>{weather.emoji}</span>
+                )}
               </span>
               <span className="text-xs font-mono shrink-0">${h.roundtrip_fare} r/t</span>
             </button>
@@ -795,7 +816,17 @@ function GiftBeachDayModal({ onClose, suggestedAmount }) {
     recipient_name: "", recipient_email: "",
     message: "",
   });
+  const [deliverMode, setDeliverMode] = useState("now"); // "now" | "scheduled"
+  const [deliverAt, setDeliverAt] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Three pre-written notes — one-tap fills the message textarea so a buyer
+  // who isn't a writer still ships a thoughtful gift in 30 seconds.
+  const SUGGESTED_NOTES = [
+    { id: "birthday",   label: "🎂 Birthday",   text: "Happy Birthday — toes in the turquoise ☀️ enjoy every minute of this one." },
+    { id: "honeymoon",  label: "🥂 Honeymoon",  text: "Congrats on the honeymoon 🥂 soak up the Bahamas, you two deserve it." },
+    { id: "reset",      label: "🌴 Just because",text: "You deserve a reset 🌴 go get some sand on your feet — on me." },
+  ];
 
   const finalAmount = custom ? Number(custom) : amount;
   const giftedPax = Math.max(1, Math.round(finalAmount / 40));
@@ -808,17 +839,23 @@ function GiftBeachDayModal({ onClose, suggestedAmount }) {
     if (!form.buyer_name || !form.buyer_email || !form.recipient_email) {
       toast.error("Fill your name/email and the recipient's email"); return;
     }
+    if (deliverMode === "scheduled" && !deliverAt) {
+      toast.error("Pick a delivery date — or switch to Send now"); return;
+    }
     setBusy(true);
     try {
       const prefixedMessage =
         `🌴 Toes in the Turquoise — your Cable Beach day on me.` +
         (form.message ? `\n\n${form.message}` : "");
+      const scheduledIso = deliverMode === "scheduled" && deliverAt
+        ? new Date(deliverAt).toISOString() : null;
       const res = await fetch(`${API}/gift-cards/purchase`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: finalAmount, buyer_name: form.buyer_name, buyer_email: form.buyer_email,
           recipient_email: form.recipient_email, recipient_name: form.recipient_name,
           message: prefixedMessage, origin_url: window.location.origin,
+          scheduled_send_at: scheduledIso,
         }),
       });
       if (!res.ok) {
@@ -886,6 +923,40 @@ function GiftBeachDayModal({ onClose, suggestedAmount }) {
             placeholder="A personal note for the voucher (optional)…" rows={2} maxLength={400}
             className="w-full px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]"
             data-testid="cable-gift-message" />
+          <div className="flex flex-wrap gap-1.5">
+            {SUGGESTED_NOTES.map((n) => (
+              <button key={n.id} type="button"
+                onClick={() => setForm((f) => ({ ...f, message: n.text }))}
+                data-testid={`cable-gift-note-${n.id}`}
+                className="rounded-full border border-[#E2E8F0] bg-[#FBF7EF] px-3 py-1.5 text-[11px] font-bold text-[#0B3B5C] hover:border-[#D4A94A] hover:bg-[#FFF4EC] active:scale-95 transition">
+                {n.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="pt-1">
+            <div className="text-[10px] tracking-[0.28em] uppercase font-black text-[#64748B] mb-2">When to deliver</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setDeliverMode("now")}
+                data-testid="cable-gift-deliver-now"
+                className={`rounded-xl border p-3 text-left text-sm transition ${deliverMode === "now" ? "border-[#E86A3C] bg-[#FFF4EC]" : "border-[#E2E8F0] hover:border-[#D4A94A]"}`}>
+                <div className={`font-bold ${deliverMode === "now" ? "text-[#E86A3C]" : "text-[#0B3B5C]"}`}>Send now</div>
+                <div className="text-[11px] text-[#64748B] mt-0.5">Recipient gets it the moment payment lands</div>
+              </button>
+              <button type="button" onClick={() => setDeliverMode("scheduled")}
+                data-testid="cable-gift-deliver-scheduled"
+                className={`rounded-xl border p-3 text-left text-sm transition ${deliverMode === "scheduled" ? "border-[#E86A3C] bg-[#FFF4EC]" : "border-[#E2E8F0] hover:border-[#D4A94A]"}`}>
+                <div className={`font-bold ${deliverMode === "scheduled" ? "text-[#E86A3C]" : "text-[#0B3B5C]"}`}>Schedule date</div>
+                <div className="text-[11px] text-[#64748B] mt-0.5">Birthday morning, anniversary, holiday…</div>
+              </button>
+            </div>
+            {deliverMode === "scheduled" && (
+              <input type="datetime-local" value={deliverAt} onChange={(e) => setDeliverAt(e.target.value)}
+                min={new Date().toISOString().slice(0, 16)}
+                data-testid="cable-gift-deliver-at"
+                className="mt-2 w-full px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#D4A94A]" />
+            )}
+          </div>
 
           <button type="submit" disabled={busy}
             className="w-full rounded-full bg-[#D4A94A] text-[#0B192C] font-black uppercase tracking-wider py-3 text-sm hover:bg-[#c99b3d] active:scale-95 disabled:opacity-50"

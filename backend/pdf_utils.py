@@ -360,3 +360,62 @@ def build_receipt_pdf(booking: dict) -> bytes:
 
     doc_pdf.build(story)
     return buf.getvalue()
+
+
+
+def build_gift_voucher_pdf(gc: dict) -> bytes:
+    """Render a branded Toes-in-the-Turquoise gift voucher PDF.
+
+    `gc` must include: code, amount, buyer_name, recipient_name,
+    recipient_email, message (optional), created_at.
+    """
+    buf = BytesIO()
+    doc_pdf = SimpleDocTemplate(buf, pagesize=letter, leftMargin=0.6 * inch, rightMargin=0.6 * inch, topMargin=0.6 * inch, bottomMargin=0.6 * inch)
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("vt", parent=styles["Title"], fontName="Times-Italic", fontSize=40, textColor=NAVY, leading=42, spaceAfter=6)
+    sub = ParagraphStyle("vs", parent=styles["Normal"], fontName="Helvetica", fontSize=10, textColor=GREY, spaceAfter=4)
+    kicker = ParagraphStyle("vk", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=9, textColor=GOLD, spaceAfter=4)
+    amt = ParagraphStyle("va", parent=styles["Normal"], fontName="Times-Italic", fontSize=56, textColor=CORAL, leading=58, alignment=1, spaceBefore=16, spaceAfter=4)
+    code_p = ParagraphStyle("vc", parent=styles["Normal"], fontName="Courier-Bold", fontSize=18, textColor=NAVY, alignment=1, spaceAfter=18)
+    body = ParagraphStyle("vb", parent=styles["Normal"], fontName="Helvetica", fontSize=11, textColor=INK, leading=16, spaceAfter=10)
+    small = ParagraphStyle("vsm", parent=styles["Normal"], fontName="Helvetica", fontSize=8, textColor=GREY, leading=11)
+
+    story = []
+    logo = _load_logo()
+    if logo:
+        story.append(logo)
+        story.append(Spacer(1, 6))
+    story.append(Paragraph("TOES IN THE TURQUOISE · CABLE BEACH, NASSAU", kicker))
+    story.append(Paragraph("You've been <i>gifted</i><br/>a Rox beach day.", title))
+    story.append(Paragraph(f"For {gc.get('recipient_name') or 'you'} · from {gc.get('buyer_name','a friend')}", sub))
+    story.append(Spacer(1, 10))
+
+    # Amount panel
+    story.append(Paragraph(f"${float(gc.get('amount') or 0):.0f}", amt))
+    story.append(Paragraph(f"Code · {gc.get('code','')}", code_p))
+
+    if gc.get("message"):
+        story.append(Paragraph("A note for you", kicker))
+        story.append(Paragraph(gc["message"].replace("\n", "<br/>"), body))
+        story.append(Spacer(1, 6))
+
+    story.append(Paragraph("How to use it", kicker))
+    story.append(Paragraph(
+        "1. Pick your Cable Beach day at <b>roxtaxi.com/tours/cable-beach-day</b>, or any Rox taxi, tour or rental.<br/>"
+        "2. On checkout, paste the code above into the gift-card field.<br/>"
+        "3. Your balance covers your total up to the voucher amount; any remainder is paid with Stripe or PayPal.",
+        body,
+    ))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("Fine print", kicker))
+    story.append(Paragraph(
+        "Never expires. Transferable only via Rox dispatch — contact hello@roxtaxi.com if you want to re-assign it. Not redeemable for cash. Balance carries across multiple bookings until exhausted.",
+        small,
+    ))
+    story.append(Spacer(1, 20))
+    story.append(Paragraph(
+        "Rox Taxi Service &amp; Tours · Nassau, New Providence · The Bahamas · hello@roxtaxi.com",
+        small,
+    ))
+    doc_pdf.build(story)
+    return buf.getvalue()

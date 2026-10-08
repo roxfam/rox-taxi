@@ -258,6 +258,13 @@ async def stripe_webhook(request: Request):
     if result.payment_status == "paid":
         booking_id = (result.metadata or {}).get("booking_id")
         await _mark_paid(result.session_id, booking_id)
+        # Gift-card activation on the legacy webhook path too.
+        if ((result.metadata or {}).get("type") == "gift_card"):
+            try:
+                from server import _activate_gift_if_paid  # noqa: PLC0415
+                await _activate_gift_if_paid(result.session_id)
+            except Exception as e:  # noqa: BLE001
+                logging.warning("gift activation (legacy) err: %s", e)
     return {"status": "ok"}
 
 
@@ -289,6 +296,14 @@ async def _process_stripe_event(event: dict) -> None:
             booking_id = metadata.get("booking_id")
             if payment_status == "paid":
                 await _mark_paid(session_id, booking_id)
+                # Gift-card provisioning — activates the card + sends the
+                # branded voucher PDF to the recipient (or schedules it).
+                if (metadata.get("type") == "gift_card") and metadata.get("gift_code"):
+                    try:
+                        from server import _activate_gift_if_paid  # noqa: PLC0415
+                        await _activate_gift_if_paid(session_id)
+                    except Exception as e:  # noqa: BLE001
+                        logging.warning("gift activation err: %s", e)
         elif etype == "payment_intent.succeeded":
             # Covers direct PaymentIntents (no Checkout — card-on-file charges).
             pi_id = data.get("id")
