@@ -23,6 +23,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Cable Beach Hero + Hotel Fare Auto-Fill + SEO
+- **Hero image** (`/frontend/public/images/cable-beach-hero.jpg`): replaces the previous watermarked iStock placeholder with a license-clean Pexels aerial of Cable Beach / Baha Mar (chairs, kayaks/watersports, pier, turquoise). Right ~12% / top ~4% cropped for a tighter composition. Attribution kept in `cable-beach-hero.credits.md`.
+- **3D-tilt HeroCard** (`CableBeachDay.jsx`): new mouse-tracked `perspective + rotateX/Y` card with inner-image counter-translate so the aerial feels like a tilt-to-look-around card. Respects `prefers-reduced-motion` and skips the effect on touch (`hover: none`).
+- **Hotel fare auto-fill** (backend `NASSAU_HOTEL_TARIFFS` + `GET /cable-beach/hotels` + extended `/cable-beach/quote`): guest no longer types a fare; picks their hotel from a dropdown and we auto-fill the round-trip (one-way × 2) from the published zone tariff. Flat per taxi. 10 zones ship (Cable Beach / Meliã / Downtown / Paradise / Comfort PI / West Bay / Lyford / Montague / South Ocean). Unknown `hotel_id` → 400 so stale clients fail fast. Legacy `hotel_fare` kept as a soft fallback.
+- **Package SEO** (`CableBeachDay.jsx` Seo props): richer `<title>` ("A Day at Cable Beach, Nassau · Chair, Umbrella & Transfer | Rox"), long-form `description`, `keywords`, canonical `/tours/cable-beach-day`, OG image = the new hero, and a 3-graph JSON-LD block (`TouristTrip` + `Product` with `Offer`/`priceSpecification` + `BreadcrumbList`). Price is pulled live from `cfg.base_price` so Google rich results stay in sync when the owner edits the base.
+
 ### Feb 2026 — Cable Beach Day Package
 - **Backend** (`server.py`): new `site_config.cable_beach_pkg` with `base_price` ($40), `extra_seat_price` ($15), `cruise_oneway_price` ($10), `cruise_roundtrip_price` ($20), `lunch_items[]`, `drink_items[]`, and `active` toggle. Endpoints: `GET /public/cable-beach-package`, `PUT /admin/cable-beach-package`, `POST /cable-beach/quote` returning base + extras + transfer + menu + 10% VAT + 5% processing breakdown.
 - **Public page** `/tours/cable-beach-day` (`CableBeachDay.jsx`): guest picks pax, extra seats, transfer kind (none / cruise one-way / cruise round-trip / hotel-fare input), lunch and drink items. Live quote updates on every change via `/cable-beach/quote`. Sticky summary with per-line breakdown + "Continue to checkout" that stashes the cart in sessionStorage.
