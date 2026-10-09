@@ -24,7 +24,20 @@ export default function CableBeachCarouselCard() {
   const [draft, setDraft] = useState({ src: "", src_mobile: "", alt: "" });
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [addMode, setAddMode] = useState("upload"); // upload | library | url
+  const [library, setLibrary] = useState([]);
+  const [libraryLoaded, setLibraryLoaded] = useState(false);
   const fileInputRef = useRef(null);
+
+  const loadLibrary = useCallback(async () => {
+    try {
+      const { data } = await api.get("/admin/images");
+      setLibrary(Array.isArray(data) ? data : []);
+      setLibraryLoaded(true);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not load image library");
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -134,6 +147,23 @@ export default function CableBeachCarouselCard() {
     setDragOver(false);
     const f = e.dataTransfer?.files?.[0];
     if (f) uploadFile(f);
+  };
+
+  // Pick an existing image from the uploaded_images catalog as a slide.
+  // Mobile crop is best-effort: if the row has one, we use it; otherwise
+  // the public page falls back to the desktop URL (phones still work,
+  // just download more bytes).
+  const pickFromLibrary = (row) => {
+    const src = row?.url || row?.src;
+    if (!src) return;
+    const next = [...slides, {
+      src,
+      src_mobile: row?.mobile_url || null,
+      alt: (row?.original_filename || row?.name || "Cable Beach photo").replace(/\.[^.]+$/, "").replace(/[-_]/g, " "),
+      active: true,
+    }];
+    save(next);
+    toast.success("Added from library");
   };
 
   return (
@@ -257,55 +287,122 @@ export default function CableBeachCarouselCard() {
 
           {slides.length < 8 && (
             <div className="border-t border-[#F1F5F9] pt-3 space-y-3">
-              {/* Drag-drop / click upload — primary path. Falls back to the
-                  URL form below for admins who want to point at an existing
-                  file on the server. */}
-              <div>
-                <div className="text-[10px] font-black tracking-widest uppercase text-[#64748B] mb-2">
-                  Drop or pick a photo
-                </div>
-                <div
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={onDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`cursor-pointer rounded-xl border-2 border-dashed p-4 text-center transition ${
-                    dragOver
-                      ? "border-[#D4A94A] bg-[#FBF7EF]"
-                      : "border-[#E2E8F0] bg-[#F8FAFC] hover:border-[#D4A94A]/60 hover:bg-[#FBF7EF]"
-                  }`}
-                  data-testid="carousel-upload-zone"
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
-                    className="hidden"
-                    onChange={(e) => uploadFile(e.target.files?.[0])}
-                    data-testid="carousel-upload-input"
-                  />
-                  {uploading ? (
-                    <div className="flex items-center justify-center gap-2 text-sm text-[#64748B]">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Uploading + generating mobile crop…
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center gap-2 text-sm text-[#64748B]">
-                      <Upload className="w-4 h-4 text-[#D4A94A]" />
-                      <span>
-                        <b className="text-[#0B3B5C]">Drag a photo here</b> or click to browse ·
-                        <span className="text-[11px]"> PNG · JPG · WebP · GIF · ≤10MB</span>
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <p className="text-[11px] text-[#94A3B8] mt-1.5">
-                  We auto-generate a 4:5 WebP crop for mobile so phones don't pull the full desktop image.
-                </p>
+              {/* Tabbed add-slide area — three ways to add a photo:
+                  Upload (drag-drop), Library (reuse any site-uploaded
+                  image), or URL (manual path). */}
+              <div className="flex items-center gap-1 border-b border-[#F1F5F9]">
+                {[
+                  { k: "upload",  label: "Upload new" },
+                  { k: "library", label: "Pick from library" },
+                  { k: "url",     label: "Paste URL" },
+                ].map((t) => (
+                  <button
+                    key={t.k}
+                    type="button"
+                    onClick={() => {
+                      setAddMode(t.k);
+                      if (t.k === "library" && !libraryLoaded) loadLibrary();
+                    }}
+                    className={`relative px-3 py-2 text-[11px] font-black uppercase tracking-[0.18em] transition ${
+                      addMode === t.k ? "text-[#0B3B5C]" : "text-[#94A3B8] hover:text-[#0B3B5C]"
+                    }`}
+                    data-testid={`carousel-tab-${t.k}`}
+                  >
+                    {t.label}
+                    {addMode === t.k && (
+                      <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-gradient-to-r from-[#D4A94A] via-[#F0C36F] to-[#D4A94A]" />
+                    )}
+                  </button>
+                ))}
               </div>
 
-              <details className="text-xs">
-                <summary className="cursor-pointer text-[#64748B] hover:text-[#0B3B5C]">Or paste a URL manually</summary>
-                <div className="grid gap-1.5 mt-2">
+              {addMode === "upload" && (
+                <div>
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={onDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`cursor-pointer rounded-xl border-2 border-dashed p-5 text-center transition ${
+                      dragOver
+                        ? "border-[#D4A94A] bg-[#FBF7EF]"
+                        : "border-[#E2E8F0] bg-[#F8FAFC] hover:border-[#D4A94A]/60 hover:bg-[#FBF7EF]"
+                    }`}
+                    data-testid="carousel-upload-zone"
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => uploadFile(e.target.files?.[0])}
+                      data-testid="carousel-upload-input"
+                    />
+                    {uploading ? (
+                      <div className="flex items-center justify-center gap-2 text-sm text-[#64748B]">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Uploading + generating mobile crop…
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 text-sm text-[#64748B]">
+                        <Upload className="w-4 h-4 text-[#D4A94A]" />
+                        <span>
+                          <b className="text-[#0B3B5C]">Drag a photo here</b> or click to browse ·
+                          <span className="text-[11px]"> PNG · JPG · WebP · GIF · ≤10MB</span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[#94A3B8] mt-1.5">
+                    We auto-generate a 4:5 WebP crop for mobile so phones don't pull the full desktop image.
+                  </p>
+                </div>
+              )}
+
+              {addMode === "library" && (
+                <div data-testid="carousel-library-tab">
+                  {!libraryLoaded ? (
+                    <div className="text-sm text-[#64748B] flex items-center gap-2 py-4">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading library…
+                    </div>
+                  ) : library.length === 0 ? (
+                    <div className="text-sm text-[#64748B] italic py-4 text-center">
+                      No images in the library yet. Upload one above or via Manage → Images.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-[11px] text-[#64748B] mb-2">
+                        {library.length} image{library.length === 1 ? "" : "s"} available · click to add as a slide.
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-72 overflow-y-auto pr-1">
+                        {library.map((row) => (
+                          <button
+                            key={row.name || row.url}
+                            type="button"
+                            onClick={() => pickFromLibrary(row)}
+                            disabled={saving}
+                            title={row.original_filename || row.name}
+                            className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-[#E2E8F0] bg-[#F1F5F9] hover:border-[#D4A94A] hover:shadow-[0_6px_16px_rgba(212,169,74,0.18)] transition-all disabled:opacity-50"
+                            data-testid={`library-pick-${row.name || "x"}`}
+                          >
+                            <img
+                              src={row.url}
+                              alt=""
+                              className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => { e.currentTarget.style.display = "none"; }}
+                            />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 pt-6 text-[9px] text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Plus className="w-3 h-3 inline" /> Add
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {addMode === "url" && (
+                <div className="grid gap-1.5">
                   <input
                     value={draft.src}
                     onChange={(e) => setDraft((d) => ({ ...d, src: e.target.value }))}
@@ -338,7 +435,7 @@ export default function CableBeachCarouselCard() {
                     </button>
                   </div>
                 </div>
-              </details>
+              )}
             </div>
           )}
         </>

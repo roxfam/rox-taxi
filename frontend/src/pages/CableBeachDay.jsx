@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin, Share2, Gift, Search, ChevronDown, ChefHat, Waves } from "lucide-react";
+import { Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin, Share2, Gift, Search, ChevronDown, ChefHat, Waves, WheatOff, Fish, MilkOff, NutOff, Shell } from "lucide-react";
 import { API, money } from "../lib/api";
 import Seo from "../components/Seo";
 
@@ -561,48 +561,70 @@ function WaterSportsSection({ cfg, waterSportQty, setWaterSportQty, parasailSpec
 
   return (
     <section className="relative py-7 scroll-mt-24" data-testid="cable-water-sports">
-      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#E2E8F0] to-transparent mb-6" />
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#D4A94A]/40 to-transparent mb-6" />
       <div className="flex items-end justify-between gap-3 mb-6">
         <div>
           <div className="text-[10px] tracking-[0.32em] uppercase text-[#D4A94A] font-black">On the water</div>
-          <h2 className="serif text-2xl text-[#0B3B5C] mt-1 leading-tight">Water sports</h2>
-          <p className="text-[11px] text-[#64748B] mt-1">Optional add-ons — booked with your beach day, paid in one checkout.</p>
+          <h2 className="serif text-3xl text-[#0B3B5C] mt-1 leading-tight">Water sports</h2>
+          <p className="text-[12px] text-[#64748B] mt-1">Optional add-ons — booked with your beach day, paid in one checkout.</p>
         </div>
-        <Waves className="w-5 h-5 text-[#94A3B8]" />
+        <Waves className="w-6 h-6 text-[#D4A94A]/60" />
       </div>
 
-      <ul className="divide-y divide-[#E2E8F0] border-y border-[#E2E8F0]">
+      {/* Editorial card list — each sport gets its own panel with a gold
+          side-rail on hover/active, bolder serif title, and a chunkier
+          stepper that reads as a premium control. */}
+      <ul className="grid gap-3">
         {sports.map((w) => {
           const qty = Number(waterSportQty[w.id] || 0);
           const unitLabel = w.unit === "per_person" ? "per person" : "per ride";
+          const active = qty > 0;
           return (
-            <li key={w.id} className="flex items-center justify-between gap-4 py-4" data-testid={`cable-ws-${w.id}`}>
-              <div className="min-w-0">
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="serif text-base text-[#0B3B5C]">{w.name}</span>
-                  {w.duration && (
-                    <span className="text-[10px] tracking-[0.2em] uppercase font-black text-[#94A3B8]">{w.duration}</span>
-                  )}
+            <li
+              key={w.id}
+              className={`group relative overflow-hidden rounded-2xl border bg-white transition-all duration-300 ${
+                active
+                  ? "border-[#D4A94A] shadow-[0_12px_40px_rgba(212,169,74,0.18)]"
+                  : "border-[#E2E8F0] hover:border-[#D4A94A]/60 hover:shadow-[0_8px_24px_rgba(11,59,92,0.06)]"
+              }`}
+              data-testid={`cable-ws-${w.id}`}
+            >
+              {/* Gold left rail — becomes solid when the sport is picked, hairline otherwise. */}
+              <span className={`absolute left-0 top-0 bottom-0 w-[4px] transition-colors ${active ? "bg-gradient-to-b from-[#D4A94A] via-[#F0C36F] to-[#D4A94A]" : "bg-transparent group-hover:bg-[#D4A94A]/40"}`} />
+              <div className="flex items-center justify-between gap-4 p-4 pl-5">
+                <div className="min-w-0">
+                  <div className="flex items-baseline gap-2.5 flex-wrap">
+                    <span className="serif text-xl sm:text-2xl font-black text-[#0B3B5C] leading-tight tracking-tight">
+                      {w.name}
+                    </span>
+                    {w.duration && (
+                      <span className="text-[10px] tracking-[0.24em] uppercase font-black text-[#D4A94A] bg-[#FBF7EF] px-2 py-0.5 rounded-full border border-[#D4A94A]/30">
+                        {w.duration}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[12px] mt-1.5 flex items-center gap-2">
+                    <span className="font-black text-base text-[#D4A94A]">${w.price}</span>
+                    <span className="text-[#CBD5E1]">·</span>
+                    <span className="text-[#64748B] uppercase tracking-[0.14em] font-semibold text-[10px]">{unitLabel}</span>
+                  </div>
                 </div>
-                <div className="text-[11px] text-[#64748B] mt-0.5 flex items-center gap-2">
-                  <span className="font-mono text-[#0B3B5C]">${w.price}</span>
-                  <span>·</span>
-                  <span>{unitLabel}</span>
+                <div className={`shrink-0 flex items-center gap-1 rounded-full p-1 border transition-all ${
+                  active ? "border-[#D4A94A] bg-[#FBF7EF]" : "border-[#E2E8F0] bg-white"
+                }`}>
+                  <button onClick={() => setQty(w.id, -1)} disabled={qty === 0}
+                    data-testid={`cable-ws-${w.id}-minus`}
+                    className="w-9 h-9 rounded-full text-[#0B3B5C] flex items-center justify-center hover:bg-[#0B3B5C] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#0B3B5C] transition-all">
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className={`serif text-2xl font-black w-9 text-center tabular-nums ${qty > 0 ? "text-[#0B3B5C]" : "text-[#CBD5E1]"}`}
+                    data-testid={`cable-ws-${w.id}-qty`}>{qty}</span>
+                  <button onClick={() => setQty(w.id, +1)}
+                    data-testid={`cable-ws-${w.id}-plus`}
+                    className="w-9 h-9 rounded-full bg-[#0B3B5C] text-white flex items-center justify-center hover:bg-[#D4A94A] active:scale-95 transition-all shadow-sm">
+                    <Plus className="w-4 h-4" />
+                  </button>
                 </div>
-              </div>
-              <div className="shrink-0 flex items-center gap-2">
-                <button onClick={() => setQty(w.id, -1)} disabled={qty === 0}
-                  data-testid={`cable-ws-${w.id}-minus`}
-                  className="w-8 h-8 rounded-full border border-[#E2E8F0] text-[#0B3B5C] flex items-center justify-center hover:border-[#0B3B5C]/40 disabled:opacity-30 disabled:cursor-not-allowed">
-                  <Minus className="w-3.5 h-3.5" />
-                </button>
-                <span className={`serif text-xl w-8 text-center ${qty > 0 ? "text-[#0B3B5C]" : "text-[#CBD5E1]"}`}
-                  data-testid={`cable-ws-${w.id}-qty`}>{qty}</span>
-                <button onClick={() => setQty(w.id, +1)}
-                  data-testid={`cable-ws-${w.id}-plus`}
-                  className="w-8 h-8 rounded-full border border-[#0B3B5C] text-[#0B3B5C] flex items-center justify-center hover:bg-[#0B3B5C] hover:text-white transition">
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
               </div>
             </li>
           );
@@ -610,25 +632,30 @@ function WaterSportsSection({ cfg, waterSportQty, setWaterSportQty, parasailSpec
       </ul>
 
       {parasailQty > 0 && (
-        <div className="mt-5 rounded-xl border border-[#D4A94A]/40 bg-[#FBFBFB] p-4" data-testid="cable-parasail-spectator">
+        <div className="mt-5 relative overflow-hidden rounded-2xl border border-[#D4A94A]/40 bg-gradient-to-br from-[#FBF7EF] via-white to-[#FBF7EF] p-5" data-testid="cable-parasail-spectator">
+          <span className="absolute left-0 top-0 bottom-0 w-[4px] bg-gradient-to-b from-[#D4A94A] via-[#F0C36F] to-[#D4A94A]" />
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <div className="text-[9px] tracking-[0.32em] uppercase font-black text-[#D4A94A]">Add-on</div>
-              <div className="serif text-base text-[#0B3B5C] mt-0.5">Parasail spectator seat</div>
-              <div className="text-[11px] text-[#64748B] mt-0.5">Non-flying companion rides in the boat · ${spectatorPrice} per seat</div>
+              <div className="text-[10px] tracking-[0.32em] uppercase font-black text-[#D4A94A]">Add-on</div>
+              <div className="serif text-xl sm:text-2xl font-black text-[#0B3B5C] mt-0.5">Parasail spectator seat</div>
+              <div className="text-[12px] text-[#64748B] mt-1">
+                Non-flying companion rides in the boat ·
+                <span className="font-black text-[#D4A94A] ml-1">${spectatorPrice}</span>
+                <span className="ml-1">per seat</span>
+              </div>
             </div>
-            <div className="shrink-0 flex items-center gap-2">
+            <div className="shrink-0 flex items-center gap-1 rounded-full p-1 border border-[#D4A94A] bg-white">
               <button onClick={() => setParasailSpectators((p) => Math.max(0, p - 1))} disabled={parasailSpectators === 0}
                 data-testid="cable-spectator-minus"
-                className="w-8 h-8 rounded-full border border-[#E2E8F0] text-[#0B3B5C] flex items-center justify-center hover:border-[#0B3B5C]/40 disabled:opacity-30">
-                <Minus className="w-3.5 h-3.5" />
+                className="w-9 h-9 rounded-full text-[#0B3B5C] flex items-center justify-center hover:bg-[#0B3B5C] hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#0B3B5C] transition-all">
+                <Minus className="w-4 h-4" />
               </button>
-              <span className={`serif text-xl w-8 text-center ${parasailSpectators > 0 ? "text-[#0B3B5C]" : "text-[#CBD5E1]"}`}
+              <span className={`serif text-2xl font-black w-9 text-center tabular-nums ${parasailSpectators > 0 ? "text-[#0B3B5C]" : "text-[#CBD5E1]"}`}
                 data-testid="cable-spectator-qty">{parasailSpectators}</span>
               <button onClick={() => setParasailSpectators((p) => Math.min(20, p + 1))}
                 data-testid="cable-spectator-plus"
-                className="w-8 h-8 rounded-full border border-[#0B3B5C] text-[#0B3B5C] flex items-center justify-center hover:bg-[#0B3B5C] hover:text-white transition">
-                <Plus className="w-3.5 h-3.5" />
+                className="w-9 h-9 rounded-full bg-[#0B3B5C] text-white flex items-center justify-center hover:bg-[#D4A94A] active:scale-95 transition-all shadow-sm">
+                <Plus className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -645,29 +672,48 @@ function MenuTile({ it, active, onClick, testId }) {
   // palette. No emoji badges on the tile itself (filter row already shows
   // the full taxonomy); this keeps each dish card clean and scannable.
   const TAG_META = {
-    gluten_free:    { code: "GF", label: "Gluten-free" },
-    pescatarian:    { code: "PE", label: "Pescatarian" },
-    dairy_free:     { code: "DF", label: "Dairy-free" },
-    peanut_free:    { code: "NF", label: "Peanut-free" },
-    shellfish_free: { code: "SF", label: "Shellfish-free" },
+    gluten_free:    { code: "GF", label: "Gluten-free",    Icon: WheatOff },
+    pescatarian:    { code: "PE", label: "Pescatarian",    Icon: Fish },
+    dairy_free:     { code: "DF", label: "Dairy-free",     Icon: MilkOff },
+    peanut_free:    { code: "NF", label: "Peanut-free",    Icon: NutOff },
+    shellfish_free: { code: "SF", label: "Shellfish-free", Icon: Shell },
   };
   const tags = Array.isArray(it.tags) ? it.tags : [];
   return (
     <button onClick={onClick} data-testid={testId}
-      className={`group text-left rounded-xl border p-3.5 transition-all ${active ? "border-[#0B3B5C] bg-white shadow-[0_8px_30px_rgba(11,59,92,0.08)]" : "border-[#E2E8F0] bg-white hover:border-[#0B3B5C]/40"}`}>
+      className={`group relative overflow-hidden text-left rounded-xl border p-4 transition-all duration-300 ${
+        active
+          ? "border-[#D4A94A] bg-gradient-to-br from-white via-[#FBF7EF]/50 to-white shadow-[0_12px_40px_rgba(212,169,74,0.18)]"
+          : "border-[#E2E8F0] bg-white hover:border-[#D4A94A]/50 hover:shadow-[0_6px_20px_rgba(11,59,92,0.06)] hover:-translate-y-0.5"
+      }`}>
+      {/* Gold accent rail — becomes a shimmering gradient on the active tile. */}
+      <span className={`absolute left-0 top-0 bottom-0 w-[3px] transition-colors ${
+        active ? "bg-gradient-to-b from-[#D4A94A] via-[#F0C36F] to-[#D4A94A]" : "bg-transparent group-hover:bg-[#D4A94A]/40"
+      }`} />
       <div className="flex items-start justify-between gap-3">
-        <span className={`text-sm font-semibold leading-tight ${active ? "text-[#0B3B5C]" : "text-[#0B3B5C]"}`}>{it.name}</span>
-        <span className={`text-sm font-mono shrink-0 ${active ? "text-[#D4A94A]" : "text-[#64748B]"}`}>${it.price}</span>
+        <span className={`serif text-base sm:text-lg font-bold leading-tight tracking-tight ${active ? "text-[#0B3B5C]" : "text-[#0B3B5C]"}`}>
+          {it.name}
+        </span>
+        <span className={`shrink-0 inline-flex items-baseline ${active ? "text-[#D4A94A]" : "text-[#64748B]"}`}>
+          <span className="text-[11px] font-mono opacity-70 mr-0.5">$</span>
+          <span className={`font-black text-lg leading-none ${active ? "text-[#D4A94A]" : "text-[#0B3B5C]"}`}>{it.price}</span>
+        </span>
       </div>
       {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-2">
+        <div className="flex flex-wrap gap-1 mt-2.5">
           {tags.map((t) => {
             const m = TAG_META[t];
             if (!m) return null;
+            const Icon = m.Icon;
             return (
               <span key={t}
                 title={m.label}
-                className="text-[9px] tracking-[0.18em] font-black px-1.5 py-0.5 rounded border border-[#E2E8F0] text-[#64748B] bg-[#F8FAFC]">
+                className={`inline-flex items-center gap-1 text-[9px] tracking-[0.18em] font-black px-1.5 py-0.5 rounded border transition-colors ${
+                  active
+                    ? "border-[#D4A94A]/30 text-[#D4A94A] bg-[#FBF7EF]"
+                    : "border-[#E2E8F0] text-[#64748B] bg-[#F8FAFC]"
+                }`}>
+                {Icon && <Icon className="w-2.5 h-2.5 shrink-0" strokeWidth={2.4} />}
                 {m.code}
               </span>
             );
@@ -675,8 +721,9 @@ function MenuTile({ it, active, onClick, testId }) {
         </div>
       )}
       {active && it.include_sides && (
-        <div className="mt-2 text-[9px] text-[#D4A94A] font-black uppercase tracking-[0.28em]">
-          Choose sides ↓
+        <div className="mt-2 text-[10px] text-[#D4A94A] font-black uppercase tracking-[0.28em] inline-flex items-center gap-1">
+          <span>Choose sides</span>
+          <span className="animate-bounce">↓</span>
         </div>
       )}
     </button>
@@ -797,24 +844,33 @@ function FoodMenu({
         return (
           <button key={combo.id} type="button" onClick={active ? clearCombo : applyCombo}
             data-testid={`cable-combo-${combo.id}`}
-            className={`relative w-full text-left rounded-xl border p-5 mb-5 transition-all overflow-hidden ${active ? "border-[#D4A94A] bg-white shadow-[0_10px_40px_rgba(212,169,74,0.15)]" : "border-[#E2E8F0] bg-white hover:border-[#D4A94A]"}`}>
-            <span className={`absolute left-0 top-0 bottom-0 w-[3px] ${active ? "bg-[#D4A94A]" : "bg-transparent"}`} />
+            className={`group relative w-full text-left rounded-2xl border p-5 mb-5 transition-all duration-300 overflow-hidden ${
+              active
+                ? "border-[#D4A94A] bg-gradient-to-br from-white via-[#FBF7EF] to-white shadow-[0_16px_50px_rgba(212,169,74,0.22)]"
+                : "border-[#E2E8F0] bg-white hover:border-[#D4A94A] hover:shadow-[0_10px_30px_rgba(212,169,74,0.1)] hover:-translate-y-0.5"
+            }`}>
+            <span className={`absolute left-0 top-0 bottom-0 w-[4px] transition-colors ${
+              active ? "bg-gradient-to-b from-[#D4A94A] via-[#F0C36F] to-[#D4A94A]" : "bg-transparent group-hover:bg-[#D4A94A]/50"
+            }`} />
+            {active && (
+              <span className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-[#D4A94A]/15 blur-2xl pointer-events-none" />
+            )}
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-2">
-                  <ChefHat className="w-3.5 h-3.5 text-[#D4A94A]" />
-                  <span className="text-[9px] tracking-[0.32em] uppercase font-black text-[#D4A94A]">Chef's selection</span>
-                  {active && <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-700">Applied</span>}
+                  <ChefHat className="w-4 h-4 text-[#D4A94A]" />
+                  <span className="text-[10px] tracking-[0.32em] uppercase font-black text-[#D4A94A]">Chef's selection</span>
+                  {active && <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">Applied</span>}
                 </div>
-                <div className="serif text-xl text-[#0B3B5C] leading-tight">{combo.name}</div>
-                <div className="text-[12px] text-[#64748B] mt-1 italic">{combo.subtitle}</div>
-                <div className="text-[11px] text-[#0B3B5C]/80 mt-2 font-medium">
+                <div className="serif text-2xl sm:text-3xl font-black text-[#0B3B5C] leading-tight tracking-tight">{combo.name}</div>
+                <div className="text-[13px] text-[#64748B] mt-1 italic">{combo.subtitle}</div>
+                <div className="text-[12px] text-[#0B3B5C]/80 mt-2.5 font-semibold">
                   {comboItems.map((it) => it.name).join(" · ")}
                 </div>
               </div>
               <div className="text-right shrink-0 pl-4 border-l border-[#E2E8F0]">
-                <div className="text-[9px] text-[#94A3B8] uppercase tracking-[0.28em] font-black">You save</div>
-                <div className="serif text-3xl text-[#0B3B5C] font-black mt-1">${combo.discount}</div>
+                <div className="text-[10px] text-[#94A3B8] uppercase tracking-[0.28em] font-black">You save</div>
+                <div className="serif text-4xl text-[#D4A94A] font-black mt-1 tabular-nums">${combo.discount}</div>
               </div>
             </div>
           </button>
@@ -825,11 +881,11 @@ function FoodMenu({
           for a consistent, grown-up taxonomy (no emoji glyphs). */}
       {(() => {
         const DIET = [
-          { id: "gluten_free",    code: "GF", label: "Gluten-free" },
-          { id: "pescatarian",    code: "PE", label: "Pescatarian" },
-          { id: "dairy_free",     code: "DF", label: "Dairy-free" },
-          { id: "peanut_free",    code: "NF", label: "Peanut-free" },
-          { id: "shellfish_free", code: "SF", label: "Shellfish-free" },
+          { id: "gluten_free",    code: "GF", label: "Gluten-free",    Icon: WheatOff },
+          { id: "pescatarian",    code: "PE", label: "Pescatarian",    Icon: Fish },
+          { id: "dairy_free",     code: "DF", label: "Dairy-free",     Icon: MilkOff },
+          { id: "peanut_free",    code: "NF", label: "Peanut-free",    Icon: NutOff },
+          { id: "shellfish_free", code: "SF", label: "Shellfish-free", Icon: Shell },
         ];
         return (
           <div className="mb-6" data-testid="cable-diet-filters">
@@ -837,6 +893,7 @@ function FoodMenu({
               <span className="text-[9px] text-[#94A3B8] font-black uppercase tracking-[0.3em] mr-1">Dietary</span>
               {DIET.map((d) => {
                 const active = dietFilters.has(d.id);
+                const Icon = d.Icon;
                 return (
                   <button key={d.id} type="button"
                     onClick={() => setDietFilters((prev) => {
@@ -844,9 +901,14 @@ function FoodMenu({
                     })}
                     data-testid={`cable-diet-${d.id}`}
                     title={d.label}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${active ? "bg-[#0B3B5C] text-white border border-[#0B3B5C]" : "border border-[#E2E8F0] bg-white text-[#64748B] hover:border-[#0B3B5C]/40 hover:text-[#0B3B5C]"}`}>
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-200 ${
+                      active
+                        ? "bg-gradient-to-br from-[#0B3B5C] to-[#082941] text-white shadow-[0_4px_12px_rgba(11,59,92,0.25)] border border-[#D4A94A]"
+                        : "border border-[#E2E8F0] bg-white text-[#64748B] hover:border-[#D4A94A] hover:text-[#D4A94A] hover:-translate-y-0.5"
+                    }`}>
+                    {Icon && <Icon className={`w-3.5 h-3.5 shrink-0 ${active ? "text-[#D4A94A]" : ""}`} strokeWidth={2.2} />}
                     <span>{d.code}</span>
-                    <span className="font-semibold tracking-normal normal-case text-[10px] opacity-80">{d.label}</span>
+                    <span className="font-semibold tracking-normal normal-case text-[10px] opacity-85">{d.label}</span>
                   </button>
                 );
               })}
@@ -936,15 +998,15 @@ function SidePicker({ dinner, sides, selected, freeCount, extraPrice, onToggle }
               type="button"
               onClick={() => onToggle(s.id)}
               data-testid={`cable-side-${dinner.id}-${s.id}`}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12px] font-bold transition-all duration-200 ${
                 picked
-                  ? "bg-[#0B3B5C] text-white"
-                  : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#0B3B5C]/40"
+                  ? "bg-gradient-to-br from-[#0B3B5C] to-[#082941] text-white shadow-[0_4px_14px_rgba(11,59,92,0.3)] scale-[1.02]"
+                  : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#D4A94A] hover:text-[#D4A94A] hover:-translate-y-0.5"
               }`}
             >
               {s.name}
-              {over && <span className="text-[9px] font-black text-[#D4A94A]">+${extraPrice}</span>}
-              {picked && <span className="text-[10px] opacity-80">✓</span>}
+              {over && <span className="text-[10px] font-black text-[#D4A94A]">+${extraPrice}</span>}
+              {picked && <span className="text-[11px] opacity-90">✓</span>}
             </button>
           );
         })}
