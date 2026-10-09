@@ -568,3 +568,14 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - After tap → shows green "Checked in" card with arrival timestamp.
 
 **Verified end-to-end** on preview: QR PNG renders, token verification works (401 bad / 200 good), `Mark Arrived` fires guest SMS + email + owner SMS and is idempotent on repeat tap, mobile viewport screenshot renders cleanly, CI-strict `yarn build` passes without warnings.
+
+## Feb 2026 — Cable Beach "Package Unavailable" Hardening (Fixed)
+- **Fix:** `CableBeachDay.jsx` gate changed from `if (!cfg.active)` → `if (cfg.active === false)` so a missing/null `active` field never hides the package. Admin toggle at `CableBeachPackageCard.jsx:94` still gates with `Power` pill (Live / Paused).
+
+## Feb 2026 — Operational Suite (Fares, SW Buster, PDF QR, Arrivals Board)
+- **New taxi route:** `downtown-junkanoo` — Downtown Nassau → Junkanoo Beach, $20/pax one-way, $40/pax round-trip. Seed + live DB.
+- **Updated taxi route:** `paradise-love-beach` — Paradise Island → Love Beach repriced to $40/pax one-way with new `round_trip_price_per_pax=$35` field ($70 total for 2 pax round-trip). Seed + live DB.
+- **Backend pricing engine:** server.py `create_booking` now honors `round_trip_price_per_pax` on per-person taxi routes (per-pax round-trip total = pp × billed_pax; auto 10% discount skipped). `BookingFlow.jsx` mirrors the math.
+- **Service-worker cache buster** (`frontend/public/index.html`): dependency-free guard reads the CRA build hash from `main.*.js`, nukes any stale SW + CacheStorage on hash mismatch (one auto-reload), and belt-and-braces 24h expiry on every registered SW. Fixes the "live site serves old bundle after redeploy" blanking issue.
+- **Attendant QR on invoice PDF** (`pdf_utils.build_receipt_pdf`): Cable Beach bookings now swap the QR target from `/booking/{id}/pass` to `/attendant/scan?b=…&t=…` so a printed invoice doubles as the beach attendant check-in pass.
+- **Live arrivals board** (`AdminArrivalsCard.jsx` + `GET /api/admin/cable-beach/arrivals-today`): on `/admin`, auto-polling (10s) card lists every Cable Beach party checked in since midnight Nassau — party size, guest name, how long ago, which attendant tapped them in. New arrivals since last poll flash gold. Auto-hides on quiet mornings.

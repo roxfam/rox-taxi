@@ -2702,9 +2702,23 @@ async def create_booking(req: BookingCreate, request: Request):
         # UNLESS the service has a `round_trip_price_override` (e.g. Queen's
         # Staircase where the driver-wait cost is priced into a flat $30 RT),
         # in which case we use that override as the base — no auto-discount.
+        # For per-person taxi routes we support `round_trip_price_per_pax` so
+        # a route can advertise a cheaper round-trip rate (e.g. Paradise →
+        # Love Beach: $40 one-way, $35 pp round-trip = $70 for 2).
         if req.round_trip:
             _rt_override = float(_svc_doc.get("round_trip_price_override") or 0.0) if not _per_person_taxi else 0.0
-            if _rt_override > 0:
+            _rt_pp_override = float(_svc_doc.get("round_trip_price_per_pax") or 0.0) if _per_person_taxi else 0.0
+            if _rt_pp_override > 0:
+                # Per-person round-trip: _rt_pp_override is the per-passenger
+                # round-trip fare. Billed pax respects the 2-pax minimum used
+                # for the outbound base, so the total matches what the admin
+                # advertises on the service card.
+                _rt_total = round(_rt_pp_override * _pax_billed, 2)
+                round_trip_fare_addition = round(_rt_total - base, 2)
+                round_trip_discount = 0.0
+                booking["round_trip"] = True
+                booking["round_trip_price_per_pax"] = _rt_pp_override
+            elif _rt_override > 0:
                 # Base becomes the override; extra-passenger surcharge still
                 # applies below. Skip the auto discount + fare doubling.
                 round_trip_fare_addition = round(_rt_override - base, 2)

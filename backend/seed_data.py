@@ -246,11 +246,19 @@ TAXI_SERVICES: List[Dict] = [
      "pricing_mode": "per_person",
      "description": f"{_TARIFF_NOTE} Quick hop to Arawak Cay Fish Fry beach — the strip of native seafood shacks. $7 per person · round-trip option available.",
      "image_url": _TAXI_IMG, "addons": _ADDON_BEACH + _ADDON_CRUISE},
-    {"id": "paradise-love-beach", "name": "Paradise Island → Love Beach", "price": 30.0,
+    {"id": "paradise-love-beach", "name": "Paradise Island → Love Beach", "price": 40.0,
      "route": "Paradise Island → Love Beach", "featured": True,
      "pricing_mode": "per_person",
-     "description": f"{_TARIFF_NOTE} Cross the bridge and head west to Love Beach — bridge toll included. $30 per person · round-trip option available.",
+     "round_trip_price_per_pax": 35.0,
+     "description": f"{_TARIFF_NOTE} Cross the bridge and head west to Love Beach — bridge toll included. $40 per person one-way · round-trip $70 for 2 ($35/person) when both legs booked together.",
      "image_url": _TAXI_IMG, "addons": _ADDON_BEACH},
+    # Downtown → Junkanoo Beach — the walk-in beach right off Bay Street.
+    # Priced per passenger · round-trip math is pax × 2 (auto).
+    {"id": "downtown-junkanoo", "name": "Downtown Nassau → Junkanoo Beach", "price": 20.0,
+     "route": "Downtown Nassau → Junkanoo Beach", "featured": True,
+     "pricing_mode": "per_person",
+     "description": f"{_TARIFF_NOTE} Fastest run from Bay Street to Junkanoo Beach — the free public beach a 5-minute drive from the cruise port. $20 per person one-way · $40 per person round-trip.",
+     "image_url": _TAXI_IMG, "addons": _ADDON_BEACH + _ADDON_CRUISE},
     # ── Queen's Staircase flat fare with custom round-trip override ────
     # Flat $15 covers the first 2 passengers ($5 each additional). Round
     # trip is a fixed $30 for 2 (no auto 10% off) because the extra-hour

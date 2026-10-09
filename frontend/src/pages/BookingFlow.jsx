@@ -203,6 +203,11 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   // this value (extra-passenger surcharge still layered on top).
   const rtPriceOverride = !isPerPersonTaxi ? Number(item?.round_trip_price_override || 0) : 0;
   const hasRtOverride = isRoundTrip && rtPriceOverride > 0;
+  // Per-person routes can advertise a cheaper round-trip rate (e.g.
+  // Paradise → Love Beach: $40 one-way, $35 pp round-trip = $70 for 2).
+  // When set, we use the override directly instead of fare × 2 × (1 - 10%).
+  const rtPricePerPax = isPerPersonTaxi ? Number(item?.round_trip_price_per_pax || 0) : 0;
+  const hasRtPerPaxOverride = isRoundTrip && rtPricePerPax > 0;
 
   // Per-person pricing (e.g. Nassau City Tour) — activates only when the
   // catalog item ships a `child_price`. Adults × fare + Kids × child_price
@@ -241,16 +246,18 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     : serviceType === "rental"
       ? singleFare * Math.max(1, Number(form.days || 1))
       : isPerPersonTaxi
-        ? (isRoundTrip ? perPersonTaxiBase * 2 : perPersonTaxiBase)
+        ? (hasRtPerPaxOverride
+            ? rtPricePerPax * perPersonBilledPax
+            : (isRoundTrip ? perPersonTaxiBase * 2 : perPersonTaxiBase))
         : hasRtOverride
           ? rtPriceOverride
           : isRoundTrip
             ? singleFare * 2
             : singleFare;
   // Round-trip discount doesn't apply to per-person tours (not routes) OR
-  // to routes with an explicit round_trip_price_override — the override IS
-  // the discounted price.
-  const roundTripDiscount = (isRoundTrip && !hasChildPricing && !hasRtOverride) ? rawBase * ROUND_TRIP_DISCOUNT_PCT : 0;
+  // to routes with an explicit round_trip_price_override / per-pax override
+  // — the override IS the discounted price.
+  const roundTripDiscount = (isRoundTrip && !hasChildPricing && !hasRtOverride && !hasRtPerPaxOverride) ? rawBase * ROUND_TRIP_DISCOUNT_PCT : 0;
   const base = rawBase - roundTripDiscount - groupDiscount;
   const luggageFee = serviceType === "taxi" && !hasChildPricing ? Number(form.extra_luggage || 0) * LUGGAGE_FEE : 0;
   // Extra-passenger surcharge (+$5/pax over 2) only applies to flat-fare

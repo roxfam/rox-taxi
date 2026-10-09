@@ -1480,3 +1480,35 @@ async def send_attendant_pass_to_guest(booking_id: str) -> None:
         {"id": bid},
         {"$set": {"attendant_pass_sent_at": _now_iso()}},
     )
+
+
+
+# ─────────────────── Admin: Live Arrivals Board ──────────────────────────
+@router.get("/admin/cable-beach/arrivals-today")
+async def admin_cable_beach_arrivals_today(_admin: str = Depends(_require_admin_dep)):
+    """Live feed for the `/admin` arrivals board — every Cable Beach
+    booking marked arrived today, sorted newest-first. Lightweight by
+    design: polled every 10s client-side, returns ≤100 rows.
+
+    Nassau timezone is UTC-5 (no DST) — we compute "today" there, not UTC,
+    so an attendant tapping at 8pm Nassau doesn't disappear from the board
+    the moment UTC rolls over at 7pm local.
+    """
+    nassau = timezone(timedelta(hours=-5))
+    now_nassau = datetime.now(nassau)
+    start_of_day = now_nassau.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_iso = start_of_day.astimezone(timezone.utc).isoformat()
+    cursor = _db.bookings.find({
+        "item_id": "cable-beach-day",
+        "attendant_arrived_at": {"$gte": start_iso},
+    }).sort("attendant_arrived_at", -1).limit(100)
+    out = []
+    async for b in cursor:
+        out.append({
+            "id": b.get("id"),
+            "customer_name": b.get("customer_name", ""),
+            "pax": b.get("pax") or 1,
+            "arrived_at": b.get("attendant_arrived_at"),
+            "attendant_arrived_by": b.get("attendant_arrived_by") or "",
+        })
+    return {"arrivals": out, "nassau_date": start_of_day.date().isoformat()}

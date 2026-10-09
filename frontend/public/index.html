@@ -297,6 +297,69 @@
         <!-- Prevent the noisy Chrome DataCloneError from bubbling in dev -->
         <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
 
+        <!-- ═══ Service Worker + Build Cache-Buster ═══════════════════════
+             Stale service workers were pinning old JS bundles after redeploys,
+             blanking the admin and public pages for users with cached SWs.
+             This tiny guard:
+               1. Reads the current build hash from CRA's hashed main.*.js URL
+                  (changes every production build).
+               2. Compares against the hash last seen for this user.
+               3. If different → unregisters every active SW, nukes all Cache
+                  Storage entries, and does ONE auto-reload so the user lands
+                  on the fresh bundle immediately.
+               4. Belt-and-braces 24-hour expiry — any SW older than a day gets
+                  unregistered on next visit even if the hash somehow matches.
+             Dependency-free, ~800 bytes, runs synchronously in <head>. -->
+        <script>
+          (function(){
+            try {
+              var SW_KEY='rox-sw-build-v1', TS_KEY='rox-sw-ts-v1', ONE_DAY=86400000;
+              function kill() {
+                try {
+                  if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(function(rs){
+                      rs.forEach(function(r){ try { r.unregister(); } catch(_){} });
+                    }).catch(function(){});
+                  }
+                  if ('caches' in window) {
+                    caches.keys().then(function(ks){
+                      ks.forEach(function(k){ try { caches.delete(k); } catch(_){} });
+                    }).catch(function(){});
+                  }
+                } catch(_){}
+              }
+              function check() {
+                try {
+                  var main = document.querySelector('script[src*="/static/js/main."]');
+                  var m = main && main.src.match(/main\.([a-z0-9]+)\./i);
+                  var buildId = m ? m[1] : null;
+                  if (!buildId) return;
+                  var stored = localStorage.getItem(SW_KEY);
+                  var reloadKey = 'rox-sw-reload-' + buildId;
+                  if (stored && stored !== buildId && !sessionStorage.getItem(reloadKey)) {
+                    kill();
+                    sessionStorage.setItem(reloadKey, '1');
+                    localStorage.setItem(SW_KEY, buildId);
+                    localStorage.setItem(TS_KEY, Date.now().toString());
+                    setTimeout(function(){ window.location.reload(); }, 60);
+                    return;
+                  }
+                  localStorage.setItem(SW_KEY, buildId);
+                  var now = Date.now();
+                  var ts = parseInt(localStorage.getItem(TS_KEY) || '0', 10);
+                  if (!ts) { localStorage.setItem(TS_KEY, now.toString()); return; }
+                  if (now - ts > ONE_DAY) {
+                    kill();
+                    localStorage.setItem(TS_KEY, now.toString());
+                  }
+                } catch(_){}
+              }
+              if (document.readyState !== 'loading') check();
+              else document.addEventListener('DOMContentLoaded', check);
+            } catch(_){}
+          })();
+        </script>
+
         <!-- Google Translate widget — powers the header language switcher for
              Spanish, French, Haitian Creole, German, Dutch, Chinese, Turkish.
              The switcher sets a `googtrans` cookie which this widget consumes

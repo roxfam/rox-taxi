@@ -23,6 +23,7 @@ import GroupPricingCard from "./admin/GroupPricingCard";
 import AdminBalanceDuePanel from "./admin/AdminBalanceDuePanel";
 import AdminChatSearchCard from "./admin/AdminChatSearchCard";
 import CableBeachPackageCard from "./admin/CableBeachPackageCard";
+import AdminArrivalsCard from "./admin/AdminArrivalsCard";
 import TeamSmsCard from "./admin/TeamSmsCard";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
@@ -306,6 +307,10 @@ export default function AdminDashboard() {
         {/* Group-booking pricing admin control (min pax, discount %,
             deposit %, lead hours) — surfaces on /groups/book immediately. */}
         <GroupPricingCard />
+
+        {/* Live arrivals board — today's Cable Beach check-ins from the
+            attendant QR scan flow. Auto-hides on quiet mornings. */}
+        <AdminArrivalsCard />
 
         {/* Cable Beach day · pricing, menu + live/paused toggle. */}
         <CableBeachPackageCard />

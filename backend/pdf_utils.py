@@ -286,13 +286,44 @@ def build_receipt_pdf(booking: dict) -> bytes:
     # ID so staff can pull it up without typing. QR takes guests straight to
     # the live boarding pass. Both are regenerated per-PDF so a reprint keeps
     # working.
+    #
+    # Cable Beach bookings swap the QR target to the beach-attendant pass
+    # (/attendant/pass/{id}) so the SAME printed receipt doubles as the
+    # beach pass — attendants scan it on the sand with their phone camera.
     try:
         import qrcode as _qrcode
         from io import BytesIO as _BIO
         from reportlab.graphics.barcode import code128 as _code128
 
+        _is_cable_beach = booking.get("item_id") == "cable-beach-day"
+        if _is_cable_beach:
+            import os as _os, hmac as _hmac, hashlib as _hashlib
+            _tok = _hmac.new(
+                _os.environ.get("JWT_SECRET", "rox-fallback-secret").encode(),
+                f"cable-beach-attendant:{booking['id']}".encode(),
+                _hashlib.sha256,
+            ).hexdigest()[:24]
+            _qr_url = f"https://roxtaxi.com/attendant/scan?b={booking['id']}&t={_tok}"
+            _qr_caption = (
+                "<b>Scan QR</b> — beach attendants see your full order (chairs, "
+                "lunch, drinks, water sports) and check your party in on arrival.<br/>"
+                "<b>Scan barcode</b> at pickup — the driver verifies your booking "
+                "in one tap.<br/>"
+                "<font color='#64748B'>Keep this receipt. Rox Taxi Service &amp; "
+                "Tours · TIN on file.</font>"
+            )
+        else:
+            _qr_url = f"https://roxtaxi.com/booking/{booking['id']}/pass"
+            _qr_caption = (
+                "<b>Scan QR</b> for your live boarding pass + driver tracker.<br/>"
+                "<b>Scan barcode</b> at pickup — the driver verifies your booking "
+                "in one tap.<br/>"
+                "<font color='#64748B'>Keep this receipt. Rox Taxi Service &amp; "
+                "Tours · TIN on file.</font>"
+            )
+
         qr = _qrcode.QRCode(version=1, box_size=4, border=1)
-        qr.add_data(f"https://roxtaxi.com/booking/{booking['id']}/pass")
+        qr.add_data(_qr_url)
         qr.make(fit=True)
         # qrcode uses PIL under the hood, which requires string/tuple colors
         # — reportlab's HexColor object would raise. Hex string works both
@@ -334,12 +365,7 @@ def build_receipt_pdf(booking: dict) -> bytes:
 
         footer_tbl = Table(
             [[qr_img,
-              Paragraph(
-                "<b>Scan QR</b> for your live boarding pass + driver tracker.<br/>"
-                "<b>Scan barcode</b> at pickup — the driver verifies your booking in one tap.<br/>"
-                "<font color='#64748B'>Keep this receipt. Rox Taxi Service &amp; Tours · TIN on file.</font>",
-                small,
-              ),
+              Paragraph(_qr_caption, small),
               bc]],
             colWidths=[1.0 * inch, 3.6 * inch, 1.9 * inch],
         )
