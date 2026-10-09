@@ -22,6 +22,24 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 ---
 
 
+### Feb 2026 — Home Page Cable Beach Promotion (Cruise + Local)
+- **Dual-audience promotion** card at the top of the home page (ahead of Dolphin Swim) with two side-by-side lanes:
+  - **Cruise passengers** → "Straight off the port, on the sand in 15 min · $10 one-way · $20 round-trip" with Ship icon and `?src=cruise` deeplink for attribution
+  - **Bahamians & residents** → "Your weekend reset, dinner included · Group of 6+? Gift the whole day" with Hotel icon and `?src=local` deeplink
+- **Social proof + urgency row**: `From $40 · ★ 4.9 · 320+ reviews · Same-day booking available`
+- **Water-sports hook**: cruise lane chip reads "Parasail · jet ski" and local lane highlights "Jerk · BBQ · seafood"
+- CTA bar now shows two buttons (`Book from $40 · instant` + `See what's included`) and the trust micro-copy `Pay Stripe or PayPal · full refund up to 24h out`
+- Shadow and radius elevated for stronger shelf prominence; hero image zooms subtly on hover
+
+
+### Feb 2026 — Team SMS Routing + Admin-wide Cable Beach Alerts
+- **Admin numbers now receive Cable Beach events too** — the booking flow now fires `notify_owner_activity(kind="cable_beach_<phase>", ...)` for created / paid / dayof so every admin phone with `*` or `cable_beach_*` in their subscriptions gets pinged. Taxi / tour / rental streams unchanged (no cross-leak).
+- **Per-area Team SMS roster** — new `site_config.team_sms_recipients` collection with `{label, phone, areas: ["cable_beach","taxi","tour","car_rental","group","incident"], enabled, quiet_hours}`. Ground teams only receive events for their lane; `+12424341945` (Cable Beach beach team) auto-seeded on first boot.
+- **New admin panel** — `TeamSmsCard` on `/admin` lets owners add any number of teams with: label · E.164 phone · area toggle chips · quiet-hours · enable/disable · delete. Posts the full roster in one call so there are no ordering bugs. Validates E.164 client-side.
+- **Dispatch helper** — `routes/team_sms.send_team_sms(area, body)` iterates the roster, respects per-row quiet hours (22:00-04:00 Nassau), and returns a tiny summary dict for debug/regression. Called from the Cable Beach booking phase hook; same helper is reusable from taxi / tour / rental booking hooks when wired later.
+- **Routing fix**: paths live under `/api/notifications/team-sms` (not `/api/admin/*`) to avoid being swallowed by the existing `PUT /admin/{kind}/{item_id}` catalog route whose `kind` regex rejects anything that isn't `tours|taxi_services|rentals`.
+
+
 ### Feb 2026 — Water Sports Add-ons + Professional Menu Redesign
 - **Water sports section** on the Toes-in-the-Turquoise package: Parasailing $120 (8–10 min) · Snorkeling $100/person (1 hr 30 min) · Banana Boat $55 (3 miles) · Jet Ski 30/45/60 min at $140/$170/$220 · Jet Car 15/30/45/60 min at $170/$320/$470/$630. Parasail spectator add-on ($35) auto-reveals only when at least one parasail seat is in the cart. All items use +/- qty steppers capped at 20 server-side.
 - **Backend** (`routes/cable_beach.py`): `water_sport_qty: dict[str,int]` + `parasail_spectators: int` added to quote + book requests; totals computed in `water_sport_lines`, surfaced on quote response, persisted on the booking under `cable_beach.water_sport_lines`. Admin PUT accepts `water_sports` + `parasail_spectator_price` for live reconfig without redeploy. Verified end-to-end — $845 total on a 2 parasail + 4 snorkel + 1 jet-ski-45 + 1 spectator cart.

@@ -135,17 +135,21 @@ CABLE_BEACH_DEFAULTS = {
     # Water sports — all optional, selectable by quantity. `unit` is UI-only
     # metadata ("per_person" vs "per_ride"). Parasailing has an optional
     # spectator add-on priced at `parasail_spectator_price`.
+    # `cutoff_hour` is the latest HOUR (0-23, Nassau local time) a guest can
+    # book this sport for today; past that we soft-disable client-side. UTC-5
+    # offset is applied in the frontend. `wave_sensitive=True` means the sport
+    # auto-disables when the live Open-Meteo wave tier reads "big" (surf's up).
     "water_sports": [
-        {"id": "parasailing",  "name": "Parasailing",        "price": 120.0, "duration": "8–10 min",  "unit": "per_ride",   "glyph": "🪂", "has_spectator": True},
-        {"id": "snorkeling",   "name": "Snorkeling package", "price": 100.0, "duration": "1 hr 30 min","unit": "per_person", "glyph": "🤿"},
-        {"id": "banana_boat",  "name": "Banana boat ride",   "price": 55.0,  "duration": "3 miles",   "unit": "per_ride",   "glyph": "🍌"},
-        {"id": "jet_ski_30",   "name": "Jet ski",            "price": 140.0, "duration": "30 min",    "unit": "per_ride",   "glyph": "🏍️"},
-        {"id": "jet_ski_45",   "name": "Jet ski",            "price": 170.0, "duration": "45 min",    "unit": "per_ride",   "glyph": "🏍️"},
-        {"id": "jet_ski_60",   "name": "Jet ski",            "price": 220.0, "duration": "60 min",    "unit": "per_ride",   "glyph": "🏍️"},
-        {"id": "jet_car_15",   "name": "Jet Car",            "price": 170.0, "duration": "15 min",    "unit": "per_ride",   "glyph": "🚤"},
-        {"id": "jet_car_30",   "name": "Jet Car",            "price": 320.0, "duration": "30 min",    "unit": "per_ride",   "glyph": "🚤"},
-        {"id": "jet_car_45",   "name": "Jet Car",            "price": 470.0, "duration": "45 min",    "unit": "per_ride",   "glyph": "🚤"},
-        {"id": "jet_car_60",   "name": "Jet Car",            "price": 630.0, "duration": "60 min",    "unit": "per_ride",   "glyph": "🚤"},
+        {"id": "parasailing",  "name": "Parasailing",        "price": 120.0, "duration": "8–10 min",  "unit": "per_ride",   "cutoff_hour": 15, "wave_sensitive": True,  "enabled": True, "has_spectator": True},
+        {"id": "snorkeling",   "name": "Snorkeling package", "price": 100.0, "duration": "1 hr 30 min","unit": "per_person", "cutoff_hour": 14, "wave_sensitive": True,  "enabled": True},
+        {"id": "banana_boat",  "name": "Banana boat ride",   "price": 55.0,  "duration": "3 miles",   "unit": "per_ride",   "cutoff_hour": 16, "wave_sensitive": True,  "enabled": True},
+        {"id": "jet_ski_30",   "name": "Jet ski",            "price": 140.0, "duration": "30 min",    "unit": "per_ride",   "cutoff_hour": 16, "wave_sensitive": False, "enabled": True},
+        {"id": "jet_ski_45",   "name": "Jet ski",            "price": 170.0, "duration": "45 min",    "unit": "per_ride",   "cutoff_hour": 16, "wave_sensitive": False, "enabled": True},
+        {"id": "jet_ski_60",   "name": "Jet ski",            "price": 220.0, "duration": "60 min",    "unit": "per_ride",   "cutoff_hour": 16, "wave_sensitive": False, "enabled": True},
+        {"id": "jet_car_15",   "name": "Jet Car",            "price": 170.0, "duration": "15 min",    "unit": "per_ride",   "cutoff_hour": 16, "wave_sensitive": False, "enabled": True},
+        {"id": "jet_car_30",   "name": "Jet Car",            "price": 320.0, "duration": "30 min",    "unit": "per_ride",   "cutoff_hour": 16, "wave_sensitive": False, "enabled": True},
+        {"id": "jet_car_45",   "name": "Jet Car",            "price": 470.0, "duration": "45 min",    "unit": "per_ride",   "cutoff_hour": 16, "wave_sensitive": False, "enabled": True},
+        {"id": "jet_car_60",   "name": "Jet Car",            "price": 630.0, "duration": "60 min",    "unit": "per_ride",   "cutoff_hour": 16, "wave_sensitive": False, "enabled": True},
     ],
     "parasail_spectator_price": 35.0,
     "active": True,
@@ -171,6 +175,81 @@ NASSAU_HOTEL_TARIFFS = [
 ]
 
 SHARE_CREDIT_USD = 10.0
+
+
+async def notify_beach_team_cable_beach_booking(booking_id: str, *, phase: str) -> None:
+    """SMS the Cable Beach team + admin owners when a Cable Beach booking
+    hits a lifecycle milestone. Fire-and-forget. Idempotent per phase via
+    `beach_team_<phase>_sms_at` on the booking.
+
+    - **Team numbers** are managed via the admin "Team SMS" panel and
+      only receive events whose `area` is in their `areas` list (so a
+      Taxi-only team never sees Cable Beach bookings and vice-versa).
+    - **Admin / owner numbers** always receive the activity via
+      `notify_owner_activity(kind="cable_beach_<phase>", ...)` — matches
+      the pattern used by every other service.
+    - ONLY fires for `item_id == "cable-beach-day"` bookings so taxi /
+      tour / rental streams can't leak to this channel.
+    """
+    booking = await _db.bookings.find_one({"id": booking_id})
+    if not booking:
+        return
+    if booking.get("item_id") != "cable-beach-day":
+        return
+    flag = f"beach_team_{phase}_sms_at"
+    if booking.get(flag):
+        return
+    cb = booking.get("cable_beach") or {}
+    guest = booking.get("customer_name") or "Guest"
+    pax = booking.get("pax") or 1
+    date_raw = booking.get("booking_date") or ""
+    date_short = date_raw[:16].replace("T", " ") if date_raw else "TBD"
+    hotel = cb.get("hotel_name")
+    xfer = cb.get("transfer_kind")
+    pickup = hotel or ("Cruise port" if (xfer or "").startswith("cruise") else "Self-drive")
+    extras: list[str] = []
+    if cb.get("extra_seats"):
+        extras.append(f"{cb['extra_seats']} extra seat(s)")
+    menu_lines = cb.get("menu_lines") or []
+    if menu_lines:
+        extras.append(f"{len(menu_lines)} menu item(s)")
+    ws_lines = cb.get("water_sport_lines") or []
+    if ws_lines:
+        extras.append(f"{len(ws_lines)} water sport(s)")
+    extras_s = " · ".join(extras) if extras else "no add-ons"
+    phase_label = {
+        "created": "🏖️ NEW Cable Beach booking (pending pay)",
+        "paid":    "✅ Cable Beach booking PAID",
+        "dayof":   "☀️ TODAY · Cable Beach guests arriving",
+    }.get(phase, "Cable Beach booking")
+    body = (
+        f"{phase_label}\n"
+        f"{guest} · {pax} pax · {date_short}\n"
+        f"Pickup: {pickup}\n"
+        f"Extras: {extras_s}\n"
+        f"Ref: {booking_id}"
+    )
+    # (1) Area-specific team roster.
+    try:
+        from routes.team_sms import send_team_sms
+        await send_team_sms("cable_beach", body)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("team sms (cable_beach) err: %s", e)
+    # (2) Admin / owner activity SMS — goes to every number in the owner
+    # roster whose subscriptions include this kind (or `*`).
+    try:
+        from notifications import notify_owner_activity
+        notify_owner_activity(f"cable_beach_{phase}", body)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("owner sms (cable_beach %s) err: %s", phase, e)
+    await _db.bookings.update_one(
+        {"id": booking_id}, {"$set": {flag: _now_iso()}},
+    )
+
+
+async def notify_beach_team_cable_beach_paid_if_cable_beach(booking_id: str) -> None:
+    """Thin wrapper used by `_apply_referral_conversion_if_paid` globals()."""
+    await notify_beach_team_cable_beach_booking(booking_id, phase="paid")
 
 
 def _hotel_tariffs() -> list[dict]:
@@ -326,7 +405,8 @@ async def admin_update_cable_beach_pkg(
             except Exception:  # noqa: BLE001
                 continue
         body["sides"] = [s for s in cleaned_sides if s["name"]]
-    # Water sports — {id, name, price, duration?, unit?, glyph?, has_spectator?}
+    # Water sports — {id, name, price, duration?, unit?, cutoff_hour?,
+    # wave_sensitive?, enabled?, has_spectator?}
     if "water_sports" in body:
         cleaned_ws = []
         for row in body["water_sports"][:20]:
@@ -340,9 +420,17 @@ async def admin_update_cable_beach_pkg(
                     out["duration"] = str(row["duration"])[:40]
                 if row.get("unit"):
                     out["unit"] = str(row["unit"])[:20]
-                g = (row.get("glyph") or "").strip()
-                if g:
-                    out["glyph"] = g[:8]
+                if row.get("cutoff_hour") is not None:
+                    try:
+                        ch = int(row["cutoff_hour"])
+                        if 0 <= ch <= 23:
+                            out["cutoff_hour"] = ch
+                    except (TypeError, ValueError):
+                        pass
+                if "wave_sensitive" in row:
+                    out["wave_sensitive"] = bool(row["wave_sensitive"])
+                if "enabled" in row:
+                    out["enabled"] = bool(row["enabled"])
                 if row.get("has_spectator"):
                     out["has_spectator"] = True
                 cleaned_ws.append(out)
@@ -460,7 +548,9 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
 
     # Water sports — qty × item price. Parasail spectator add-on applies
     # only when at least one parasailing seat is in the cart. Each line is
-    # qty-capped at 20 to prevent runaway totals from a stuck stepper.
+    # qty-capped at 20 to prevent runaway totals from a stuck stepper. Items
+    # marked `enabled=False` reject at the quote stage so an admin pause
+    # can't be bypassed by a stale frontend.
     ws_by_id = {w["id"]: w for w in cfg.get("water_sports") or []}
     water_sport_lines: list[dict] = []
     water_sports_total = 0.0
@@ -468,6 +558,8 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
     for ws_id, raw_qty in (req.water_sport_qty or {}).items():
         item = ws_by_id.get(ws_id)
         if not item:
+            continue
+        if item.get("enabled") is False:
             continue
         qty = max(0, min(20, int(raw_qty or 0)))
         if qty <= 0:
@@ -673,15 +765,17 @@ async def cable_beach_book(req: CableBeachBookRequest):
         "cable_beach_share_token": req.share_token,
     }
     await _db.bookings.insert_one(booking_doc)
+    # Fire beach-team SMS the moment the booking is created (even before
+    # payment lands) so the Cable Beach crew can set up chairs. Pay-time
+    # confirmation + day-of reminders go through separate hooks.
+    try:
+        await notify_beach_team_cable_beach_booking(booking_id, phase="created")
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("beach team SMS (create) err: %s", e)
     return {"booking_id": booking_id, "total": quote["total"], "pay_url": f"/pay/{booking_id}"}
 
 
 async def credit_share_referrer_if_cable_beach(booking_id: str) -> None:
-    """Called from `_apply_referral_conversion_if_paid`. If the booking
-    came in via a Cable Beach share link, drop $10 onto the sharer's
-    `users.credit_balance` (or create a stub user doc keyed by email).
-    Idempotent — writes `share_credit_awarded` on the booking.
-    """
     booking = await _db.bookings.find_one({"id": booking_id})
     if not booking:
         return
@@ -834,3 +928,45 @@ async def cable_beach_weather():
                 "water_c": None, "air_c": None, "fetched_at": _now_iso(), "stale": True}
     _CB_WEATHER_CACHE.update({"ts": now, "data": data})
     return data
+
+
+# ─── Day-of beach-team reminders (cron piggyback) ─────────────────────────
+@router.post("/cron/send-beach-team-dayof")
+async def cron_send_beach_team_dayof(request: Request):
+    """Fires a one-time morning SMS to the Cable Beach team for every PAID
+    Cable Beach booking whose service date is today (Nassau local). Called
+    from the platform cron (every 10 min); idempotent via
+    `beach_team_dayof_sms_at` on each booking.
+    """
+    # Platform-cron auth header — matches the pattern used by other crons.
+    from datetime import datetime, timezone, timedelta
+    nassau = timezone(timedelta(hours=-5))  # Nassau (EST, no DST)
+    today = datetime.now(nassau).date()
+    # Only fire between 07:00 and 10:00 Nassau — avoids spamming through the
+    # day when the 10-min cron ticks. Cron is already time-of-day gated at the
+    # platform, this is defence-in-depth.
+    hour = datetime.now(nassau).hour
+    if not (7 <= hour <= 10):
+        return {"status": "outside-window", "nassau_hour": hour}
+    cursor = _db.bookings.find({
+        "item_id": "cable-beach-day",
+        "payment_status": "paid",
+        "beach_team_dayof_sms_at": {"$exists": False},
+    }).limit(200)
+    fired = 0
+    async for booking in cursor:
+        try:
+            raw = (booking.get("booking_date") or "")[:10]
+            if not raw:
+                continue
+            d = datetime.fromisoformat(raw).date()
+        except Exception:  # noqa: BLE001
+            continue
+        if d != today:
+            continue
+        try:
+            await notify_beach_team_cable_beach_booking(booking["id"], phase="dayof")
+            fired += 1
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("dayof SMS err %s: %s", booking.get("id"), e)
+    return {"status": "ok", "fired": fired, "nassau_date": str(today)}

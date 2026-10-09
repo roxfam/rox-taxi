@@ -41,6 +41,7 @@ from routes import cron as cron_module
 from routes import tip_topup as tip_topup_module
 from routes import seo as seo_module
 from routes import cable_beach as cable_beach_module
+from routes import team_sms as team_sms_module
 import secrets_store
 
 ROOT_DIR = Path(__file__).parent
@@ -752,6 +753,15 @@ async def _apply_referral_conversion_if_paid(booking_id: str) -> Optional[dict]:
             await _try_combo_badge(booking_id)
         except Exception as e:  # noqa: BLE001
             logging.getLogger(__name__).warning("combo badge email err: %s", e)
+    # Beach-team SMS on paid Cable Beach bookings — ONLY Cable Beach items
+    # (the function itself gates on `item_id == "cable-beach-day"` so taxi /
+    # tour / rental payments never leak to this number).
+    _try_beach_team = globals().get("_notify_beach_team_cable_beach_paid")
+    if _try_beach_team:
+        try:
+            await _try_beach_team(booking_id)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("beach team paid SMS err: %s", e)
     return {"referrer_id": referrer_id, "conv_count": conv_count, "credit_awarded": credit_awarded}
 
 
@@ -6605,6 +6615,19 @@ cable_beach_module.configure(
 )
 api_router.include_router(cable_beach_module.router)
 _credit_share_referrer_if_cable_beach = cable_beach_module.credit_share_referrer_if_cable_beach
+_notify_beach_team_cable_beach_paid = cable_beach_module.notify_beach_team_cable_beach_paid_if_cable_beach
+
+# Team SMS roster — per-area notification recipients. Seeded on startup.
+team_sms_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
+api_router.include_router(team_sms_module.router)
+
+
+@app.on_event("startup")
+async def _seed_team_sms_startup():
+    try:
+        await team_sms_module.seed_if_empty()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("team_sms seed err: %s", e)
 
 @api_router.get("/stripe/public-key")
 async def stripe_public_key():

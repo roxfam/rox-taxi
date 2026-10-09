@@ -47,3 +47,10 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/send-balance-reminders"
     method: POST
     enabled: true
+
+  - name: send-beach-team-dayof
+    description: "Nassau morning (07:00-10:00 local): finds every paid Cable Beach booking with service date = today and sends the beach team an arrival SMS. Idempotent via `beach_team_dayof_sms_at`."
+    cron: "*/15 12 * * *"
+    endpoint: "{{BASE_URL}}/api/cron/send-beach-team-dayof"
+    method: POST
+    enabled: true
