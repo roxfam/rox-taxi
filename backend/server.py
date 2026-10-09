@@ -3769,6 +3769,16 @@ CABLE_BEACH_DEFAULTS = {
         {"id": "baked_pork_chop","name": "Baked Pork Chop Dinner","price": 40.0, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
         {"id": "snapper_dinner", "name": "Snapper Dinner",        "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free", "shellfish_free"]},
         {"id": "soamoo_dinner",  "name": "Soamoo Dinner",         "price": 35.0, "tags": ["dairy_free", "peanut_free"]},
+        # Seafood combo plates — tags conservative (no shellfish_free since
+        # most contain lobster/shrimp; chicken-wings combo isn't pescatarian).
+        {"id": "combo_lcs",      "name": "Lobster · Conch · Shrimp Combo",          "price": 65.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_lcsf",     "name": "Lobster · Conch · Shrimp · Fish Combo",   "price": 70.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_scsl",     "name": "Salmon · Conch · Shrimp · Lobster Combo", "price": 70.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_cs",       "name": "Conch & Shrimp",                          "price": 70.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_ls",       "name": "Lobster & Shrimp",                        "price": 60.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_gc",       "name": "Grouper & Conch",                         "price": 60.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_gl",       "name": "Grouper & Lobster",                       "price": 35.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_ws",       "name": "Wings & Shrimp",                          "price": 50.0, "tags": ["dairy_free", "peanut_free"]},
     ],
     # Chef's-choice combos — frontend highlights these above the menu;
     # backend validates and applies the bundle discount only when all

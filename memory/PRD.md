@@ -23,6 +23,18 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Seafood Combo Plates (× 8)
+- **8 new seafood combos** added to the Cable Beach food menu (defaults + live DB upsert):
+  - `combo_lcs`  — Lobster · Conch · Shrimp Combo — **$65**
+  - `combo_lcsf` — Lobster · Conch · Shrimp · Fish Combo — **$70**
+  - `combo_scsl` — Salmon · Conch · Shrimp · Lobster Combo — **$70**
+  - `combo_cs`   — Conch & Shrimp — **$70**
+  - `combo_ls`   — Lobster & Shrimp — **$60**
+  - `combo_gc`   — Grouper & Conch — **$60**
+  - `combo_gl`   — Grouper & Lobster — **$35**
+  - `combo_ws`   — Wings & Shrimp — **$50**
+- Allergen tags curated per plate: all seafood plates are `pescatarian · dairy_free · peanut_free`; the chicken-wings-plus-shrimp plate drops the `pescatarian` tag so it's filtered out when a guest ticks "Pescatarian". None carry the `shellfish_free` tag (all contain lobster / shrimp / conch), so they correctly disappear when "Shellfish-free" is active. Total food menu now 24 items. Verified end-to-end: live quote (2 pax + $70 LCSF + $35 Grouper&Lobster = $228.98).
+
 ### Feb 2026 — Smart Allergen Prompt + Emoji-Icon Badge Pass
 - **Emoji badges on every food tile** (`MenuTile` in `CableBeachDay.jsx`): the GF/P/DF/PF/SF letter codes were replaced with icon pills — 🌾❌ · 🐟 · 🥛❌ · 🥜❌ · 🦐❌ — each with a tooltip, pastel background, and brand-coloured text. Filter chips mirror the same glyph next to the full label so the visual language matches the menu grid. Scans ~3× faster on mobile.
 - **Smart allergen prompt** (`AllergyPrompt` component): the moment a guest ticks "Shellfish-free" or "Peanut-free", a yellow-amber banner appears asking "Any {allergen} allergy in your party?" with a one-tap "Yes, flag it" button. Clicking turns the banner red and the button to "Allergy flagged ✓". Flagged allergens are passed to `/cable-beach/book` as an `allergies: ["shellfish","peanut"]` array; backend prepends "⚠️ ALLERGIES: Shellfish, Peanut." to the booking's `special_requests` so dispatch and the kitchen see it at the top of the booking record. Verified end-to-end: live quote $127.05, booking persists allergies + prefixed note.
