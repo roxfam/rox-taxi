@@ -634,7 +634,7 @@ function CableBeachHomePromo() {
               <Sparkles className="w-3 h-3" /> Rox signature · Cable Beach
             </span>
             <h2 className="serif text-4xl sm:text-6xl tracking-tight leading-[1.02] drop-shadow-lg">
-              Toes in the <em className="italic text-[#F7E6C6]">Turquoise.</em>
+              Toes in the Sandy <em className="italic text-[#F7E6C6]">Turquoise</em> of Cable Beach
             </h2>
             <p className="text-sm sm:text-base text-white/85 leading-relaxed">
               A full day at Cable Beach / Goodman's Bay — reserved chair + umbrella per guest, kayaks and watersports on-site, round-trip ride from your hotel or cruise port. One upfront price. No haggling.

@@ -123,7 +123,7 @@ export default function CableBeachDay() {
       {
         "@type": "TouristTrip",
         "@id": `${PAGE_CANONICAL}#trip`,
-        "name": "Toes in the Turquoise — Cable Beach (Goodman's Bay) Day, Nassau",
+        "name": "Toes in the Sandy Turquoise of Cable Beach (Goodman's Bay), Nassau",
         "alternateName": ["A Day at Cable Beach Nassau", "Cable Beach Day Package", "Goodman's Bay Beach Day"],
         "description": "Half-day beach package at Cable Beach / Goodman's Bay in Nassau, Bahamas. Includes a reserved chair + umbrella per guest, optional round-trip transfer from the Nassau cruise port or any Nassau / Paradise Island hotel, extra beach seats, and local lunch and drink add-ons. Round-trip hotel fares are quoted from the published Rox taxi zone tariff.",
         "touristType": ["Beach", "Family", "Cruise excursion", "Group"],
@@ -157,7 +157,7 @@ export default function CableBeachDay() {
       {
         "@type": "Product",
         "@id": `${PAGE_CANONICAL}#product`,
-        "name": "Toes in the Turquoise — Cable Beach Day, Nassau",
+        "name": "Toes in the Sandy Turquoise of Cable Beach, Nassau",
         "description": "Beach day at Cable Beach (Goodman's Bay), Nassau. Reserved chair and umbrella per guest, optional cruise-port or hotel round-trip transfer, extra beach seats, lunch and drink add-ons. All fares include 10% VAT and 5% processing fee at checkout.",
         "image": [`${SITE_URL}${HERO_IMAGE}`],
         "brand": { "@type": "Brand", "name": "Rox Taxi & Tours Bahamas" },
@@ -176,7 +176,7 @@ export default function CableBeachDay() {
         "itemListElement": [
           { "@type": "ListItem", "position": 1, "name": "Home", "item": SITE_URL },
           { "@type": "ListItem", "position": 2, "name": "Tours", "item": `${SITE_URL}/tours` },
-          { "@type": "ListItem", "position": 3, "name": "Toes in the Turquoise · Cable Beach", "item": PAGE_CANONICAL }
+          { "@type": "ListItem", "position": 3, "name": "Toes in the Sandy Turquoise of Cable Beach", "item": PAGE_CANONICAL }
         ]
       }
     ]
@@ -242,8 +242,8 @@ export default function CableBeachDay() {
   return (
     <div className="max-w-6xl mx-auto px-6 py-10" data-testid="cable-beach-day">
       <Seo
-        title="Toes in the Turquoise · A Day at Cable Beach, Nassau | Rox"
-        description="Toes in the Turquoise — the Rox day at Cable Beach / Goodman's Bay, Nassau. Reserved chair + umbrella per guest, round-trip taxi from your hotel or the cruise port, lunch and drink add-ons. Transparent pricing, instant booking."
+        title="Toes in the Sandy Turquoise of Cable Beach, Nassau | Rox"
+        description="Toes in the Sandy Turquoise of Cable Beach — the Rox day at Goodman's Bay, Nassau. Reserved chair + umbrella per guest, round-trip taxi from your hotel or the cruise port, lunch and drink add-ons. Transparent pricing, instant booking."
         canonical={PAGE_CANONICAL}
         keywords="toes in the turquoise, day at cable beach nassau, cable beach day package, goodman's bay beach day, nassau beach day, cruise port to cable beach"
         ogImage={`${SITE_URL}${HERO_IMAGE}`}
@@ -255,7 +255,7 @@ export default function CableBeachDay() {
       <header className="mb-8">
         <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">Rox Beach Day · Signature</div>
         <h1 className="serif text-4xl sm:text-5xl text-[#0B3B5C] mt-2">
-          Toes in the Turquoise
+          Toes in the Sandy Turquoise of Cable Beach
           <span className="block text-xl sm:text-2xl text-[#64748B] font-normal italic mt-1">A day at Cable Beach / Goodman's Bay, Nassau</span>
         </h1>
         <p className="text-[#64748B] mt-3 max-w-2xl">Soft sand, calm shelf water, kayaks and watersports right there on the beach — 10 minutes from downtown Nassau. Every booking includes a reserved chair + umbrella per guest. Add a round-trip transfer, extra seats, lunch and drinks.</p>
@@ -485,7 +485,7 @@ function HeroCard() {
           <Umbrella className="w-3 h-3" /> Cable Beach · Goodman's Bay
         </div>
         <div className="serif text-4xl sm:text-6xl font-bold leading-[1.02] mt-3 drop-shadow-lg">
-          Toes in the <em className="italic text-[#F7E6C6]">Turquoise.</em>
+          Toes in the Sandy <em className="italic text-[#F7E6C6]">Turquoise</em> of Cable Beach
         </div>
         <div className="text-sm sm:text-base text-white/90 mt-2 max-w-xl">
           Reserved chair, umbrella shade, kayaks and watersports on-site, round-trip taxi from your hotel. Priced upfront — no haggling.
@@ -1092,7 +1092,7 @@ function ShareLinkModal({ onClose, quote, pax, transferKind, hotelName }) {
     : "";
 
   const buildText = (url) =>
-    `🌴 Toes in the Turquoise · Cable Beach, Nassau\nJust priced our beach day for ${paxLabel} — ${money(quote?.total || 0)} all-in (chair + umbrella${transferLabel}).\nBook your spot: ${url}`;
+    `🌴 Toes in the Sandy Turquoise of Cable Beach, Nassau\nJust priced our beach day for ${paxLabel} — ${money(quote?.total || 0)} all-in (chair + umbrella${transferLabel}).\nBook your spot: ${url}`;
 
   const share = async (opts) => {
     setBusy(true);
@@ -1113,7 +1113,7 @@ function ShareLinkModal({ onClose, quote, pax, transferKind, hotelName }) {
       const nav = typeof navigator !== "undefined" ? navigator : null;
       if (nav?.share) {
         try {
-          await nav.share({ title: "Toes in the Turquoise · Cable Beach Nassau", text, url: shareUrl });
+          await nav.share({ title: "Toes in the Sandy Turquoise of Cable Beach, Nassau", text, url: shareUrl });
           toast.success(opts.useEmail ? "Shared · $10 credit tracked" : "Shared · no credit (anonymous)");
           onClose();
           return;
@@ -1140,7 +1140,7 @@ function ShareLinkModal({ onClose, quote, pax, transferKind, hotelName }) {
           <button onClick={onClose} className="text-[#64748B] hover:text-[#0B3B5C]" data-testid="cable-share-close">✕</button>
         </div>
         <p className="text-sm text-[#64748B] mb-4">
-          Drop your email so we can track your referral — when a friend books Toes in the Turquoise through your link, you'll get a <b className="text-[#128C7E]">$10 Rox credit</b> on your next trip.
+          Drop your email so we can track your referral — when a friend books Toes in the Sandy Turquoise of Cable Beach through your link, you'll get a <b className="text-[#128C7E]">$10 Rox credit</b> on your next trip.
         </p>
         <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your email" type="email"
           className="w-full px-3 py-2.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#128C7E] mb-3"
@@ -1363,7 +1363,7 @@ function GiftBeachDayModal({ onClose, suggestedAmount }) {
     setBusy(true);
     try {
       const prefixedMessage =
-        `🌴 Toes in the Turquoise — your Cable Beach day on me.` +
+        `🌴 Toes in the Sandy Turquoise of Cable Beach — your beach day on me.` +
         (form.message ? `\n\n${form.message}` : "");
       const scheduledIso = deliverMode === "scheduled" && deliverAt
         ? new Date(deliverAt).toISOString() : null;
@@ -1393,7 +1393,7 @@ function GiftBeachDayModal({ onClose, suggestedAmount }) {
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
             <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">Gift a beach day</div>
-            <h3 className="serif text-2xl text-[#0B3B5C]">Send Toes in the Turquoise</h3>
+            <h3 className="serif text-2xl text-[#0B3B5C]">Send Toes in the Sandy Turquoise of Cable Beach</h3>
             <div className="text-xs text-[#64748B] mt-1">Branded voucher · instant email delivery · never expires</div>
           </div>
           <button onClick={onClose} className="text-[#64748B] hover:text-[#0B3B5C]" data-testid="cable-gift-close">✕</button>

@@ -800,7 +800,7 @@ async def cable_beach_book(req: CableBeachBookRequest):
         "id": booking_id,
         "service_type": "tour",
         "item_id": "cable-beach-day",
-        "item_name": "Toes in the Turquoise · Cable Beach Day",
+        "item_name": "Toes in the Sandy Turquoise of Cable Beach",
         "customer_name": req.customer_name,
         "customer_email": req.customer_email.lower(),
         "customer_phone": req.customer_phone,
@@ -913,7 +913,7 @@ async def credit_share_referrer_if_cable_beach(booking_id: str) -> None:
                 </td></tr>
                 <tr><td style="padding:28px 32px 8px">
                   <p style="font-size:15px;line-height:1.55;margin:0 0 12px">Hey {display_name},</p>
-                  <p style="font-size:15px;line-height:1.55;margin:0 0 16px">A friend you shared <b>Toes in the Turquoise</b> with just booked their Cable Beach day. Nice work — we've dropped <b style="color:#128C7E">${SHARE_CREDIT_USD:.0f}</b> onto your Rox wallet.</p>
+                  <p style="font-size:15px;line-height:1.55;margin:0 0 16px">A friend you shared <b>Toes in the Sandy Turquoise of Cable Beach</b> with just booked their day at the beach. Nice work — we've dropped <b style="color:#128C7E">${SHARE_CREDIT_USD:.0f}</b> onto your Rox wallet.</p>
                   <table role="presentation" cellspacing="0" cellpadding="0" style="margin:12px 0 20px;background:#F0FDF4;border:1px solid #86EFAC;border-radius:12px;padding:14px 18px;width:100%">
                     <tr>
                       <td><div style="font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:0.2em;font-weight:700">Wallet balance</div>

@@ -3784,7 +3784,7 @@ async def _send_gift_voucher_email(gc: dict) -> dict:
           <table width="100%" cellspacing="0" cellpadding="0" style="padding:32px 16px"><tr><td align="center">
             <table width="560" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 20px 50px rgba(11,25,44,0.08)">
               <tr><td style="background:linear-gradient(135deg,#0B3B5C,#128C7E);padding:34px;color:#fff">
-                <div style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;font-weight:900;opacity:0.9">Toes in the Turquoise · Cable Beach, Nassau</div>
+                <div style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;font-weight:900;opacity:0.9">Toes in the Sandy Turquoise of Cable Beach, Nassau</div>
                 <div style="font-family:Georgia,serif;font-size:36px;font-weight:700;margin-top:8px;line-height:1.1">You've been <em style="font-style:italic;color:#F7E6C6">gifted</em> a Rox beach day.</div>
               </td></tr>
               <tr><td style="padding:28px 32px 8px">
