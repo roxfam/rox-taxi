@@ -3779,6 +3779,12 @@ CABLE_BEACH_DEFAULTS = {
         {"id": "combo_gc",       "name": "Grouper & Conch",                         "price": 60.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
         {"id": "combo_gl",       "name": "Grouper & Lobster",                       "price": 35.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
         {"id": "combo_ws",       "name": "Wings & Shrimp",                          "price": 50.0, "tags": ["dairy_free", "peanut_free"]},
+        # Burgers & sandwiches — buns contain gluten; cheese likely so no DF default.
+        {"id": "burger_hamburger","name": "Hamburger",       "price": 30.0, "tags": ["peanut_free", "shellfish_free"]},
+        {"id": "burger_shrimp",   "name": "Shrimp Burger",   "price": 33.0, "tags": ["peanut_free", "pescatarian"]},
+        {"id": "burger_conch",    "name": "Conch Burger",    "price": 33.0, "tags": ["peanut_free", "pescatarian"]},
+        {"id": "burger_lobster",  "name": "Lobster Burger",  "price": 33.0, "tags": ["peanut_free", "pescatarian"]},
+        {"id": "burger_chicken",  "name": "Chicken Burger",  "price": 25.0, "tags": ["peanut_free", "shellfish_free"]},
     ],
     # Chef's-choice combos — frontend highlights these above the menu;
     # backend validates and applies the bundle discount only when all

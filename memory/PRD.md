@@ -23,6 +23,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ## CHANGELOG
 
+### Feb 2026 — Burgers & Sandwiches (× 5)
+- **5 burger items** added to the Cable Beach food menu (defaults + live DB upsert): Hamburger **$30** · Shrimp Burger **$33** · Conch Burger **$33** · Lobster Burger **$33** · Chicken Burger **$25**. Food menu now 29 items.
+- **Allergen tags** curated per burger — all are `peanut_free`; seafood burgers (shrimp/conch/lobster) add `pescatarian`; non-seafood burgers (hamburger/chicken) add `shellfish_free`. None are gluten-free (buns) or dairy-free (likely cheese).
+- Verified live: 2 pax + Shrimp Burger $33 + Hamburger $30 quote returns correctly through the Cable Beach quote endpoint; all 5 tiles render with the right emoji badges and respect the dietary filters.
+
 ### Feb 2026 — Seafood Combo Plates (× 8)
 - **8 new seafood combos** added to the Cable Beach food menu (defaults + live DB upsert):
   - `combo_lcs`  — Lobster · Conch · Shrimp Combo — **$65**
