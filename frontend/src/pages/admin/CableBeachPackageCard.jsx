@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Umbrella, Plus, Trash2, Save, Power, Share2, TrendingUp } from "lucide-react";
+import { Umbrella, Plus, Trash2, Save, Power, Share2, TrendingUp, Ship } from "lucide-react";
 import { api } from "../../lib/api";
 
 /**
@@ -25,6 +25,9 @@ export default function CableBeachPackageCard() {
         lunch_items: data.lunch_items || [],
         drink_items: data.drink_items || [],
         combos: data.combos || [],
+        // Admin paste-list of today's docked cruise ships — one per line.
+        // Backend stores the array; UI edits as a textarea for speed.
+        cruise_ships_today: Array.isArray(data.cruise_ships_today) ? data.cruise_ships_today : [],
         active: data.active !== false,
       });
     } catch (e) {
@@ -110,6 +113,12 @@ export default function CableBeachPackageCard() {
         ))}
       </div>
 
+      {/* Cruise-ship context — admin pastes today's docked ships, one per
+          line. First line surfaces as the gold ribbon on the home-page
+          Cable Beach promo. Keep lines short ("Carnival Pride") — the
+          ribbon only shows the first entry. */}
+      <CruiseShipsEditor cfg={cfg} setCfg={setCfg} save={save} saving={saving} />
+
       {["lunch_items", "drink_items"].map((key) => (
         <div key={key} className="mt-6">
           <div className="flex items-center justify-between mb-2">
@@ -160,6 +169,72 @@ export default function CableBeachPackageCard() {
 
       <ShareStatsPanel />
     </section>
+  );
+}
+
+/**
+ * CruiseShipsEditor — tiny textarea the admin uses each morning to paste
+ * today's docked ships. One ship per line. First line powers the gold
+ * "Welcome <ship> guests" ribbon on the home page promo card.
+ */
+function CruiseShipsEditor({ cfg, setCfg, save, saving }) {
+  const value = (cfg.cruise_ships_today || []).join("\n");
+  const onChange = (next) =>
+    setCfg((c) => ({
+      ...c,
+      cruise_ships_today: next.split("\n").map((s) => s.trim()).filter(Boolean),
+    }));
+  const first = (cfg.cruise_ships_today || [])[0];
+  return (
+    <div className="mt-6 rounded-xl border border-[#E2E8F0] bg-[#FBFBFB] p-4" data-testid="cable-beach-ships-editor">
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+        <div className="flex items-center gap-2">
+          <Ship className="w-4 h-4 text-[#D4A94A]" />
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-[#0B3B5C]">Cruise ships docked today</div>
+            <div className="text-[11px] text-[#64748B] mt-0.5">
+              One ship per line. First entry pins the gold "Welcome <b>&lt;ship&gt;</b> guests" ribbon on the home page.
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setCfg((c) => ({ ...c, cruise_ships_today: [] })); save({ cruise_ships_today: [] }); }}
+            disabled={saving || (cfg.cruise_ships_today || []).length === 0}
+            className="inline-flex items-center gap-1 text-xs text-[#64748B] border border-[#E2E8F0] bg-white rounded-full px-2.5 py-1 hover:border-[#D4A94A] disabled:opacity-40"
+            data-testid="cable-beach-ships-clear">
+            Clear
+          </button>
+          <button
+            onClick={() => save({ cruise_ships_today: cfg.cruise_ships_today || [] })}
+            disabled={saving}
+            className="inline-flex items-center gap-1 text-xs text-white bg-[#0B3B5C] rounded-full px-2.5 py-1 hover:bg-[#0a2a44] disabled:opacity-50"
+            data-testid="cable-beach-ships-save">
+            <Save className="w-3 h-3" /> Save ships
+          </button>
+        </div>
+      </div>
+      <textarea
+        rows={4}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={"Carnival Pride\nRoyal Caribbean Icon of the Seas"}
+        data-testid="cable-beach-ships-textarea"
+        className="w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#D4A94A] resize-y"
+      />
+      {first ? (
+        <div className="mt-3 flex items-center gap-2" data-testid="cable-beach-ships-preview">
+          <span className="text-[10px] text-[#94A3B8] font-black uppercase tracking-[0.28em]">Live preview</span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-[#D4A94A] text-[#0B192C] px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] shadow-sm">
+            <Ship className="w-3.5 h-3.5" />
+            Welcome {first} guests · same-day round-trip just $20/person
+          </span>
+          <span className="text-[11px] text-[#64748B]">{(cfg.cruise_ships_today || []).length} ship{(cfg.cruise_ships_today || []).length === 1 ? "" : "s"} today</span>
+        </div>
+      ) : (
+        <div className="mt-3 text-[11px] text-[#94A3B8] italic">No ribbon on the home page until you add a ship.</div>
+      )}
+    </div>
   );
 }
 

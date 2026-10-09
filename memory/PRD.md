@@ -22,6 +22,13 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 ---
 
 
+### Feb 2026 — Admin Cruise-Ships-Today Editor
+- New **CruiseShipsEditor** block on the admin Cable Beach package card. One textarea (ship-per-line), Save + Clear buttons, and a live gold-ribbon preview that mirrors what guests see on the home page.
+- First line of the list powers the `/` home promo ribbon: *"Welcome <ship> guests · same-day round-trip just $20/person"*. If the list is empty, no ribbon renders.
+- Reuses the existing `PUT /api/admin/cable-beach-package` endpoint (already accepts `cruise_ships_today: list[str]` + stamps `cruise_ships_updated_at`). No new backend code needed.
+- Testids: `cable-beach-ships-editor`, `cable-beach-ships-textarea`, `cable-beach-ships-save`, `cable-beach-ships-clear`, `cable-beach-ships-preview`.
+
+
 ### Feb 2026 — Beach Team Email + Admin Email Alerts (Cable Beach)
 - **Team SMS roster now carries email too** — `TeamSMSRecipient` has optional `email` alongside `phone`; the admin UI shows a side-by-side `+1242…` + `team@example.com` input. Either channel is accepted (saves fail only when both are empty) and the dispatcher fires both when present.
 - **Cable Beach beach team seeded with `kevinhanna300@gmail.com`** on the existing `+12424341945` row — paid Mongo update already applied; new installs seed both channels on boot.
