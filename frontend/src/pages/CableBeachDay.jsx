@@ -782,13 +782,31 @@ function FoodMenu({
   return (
     <section className="relative py-7 scroll-mt-24" data-testid="cable-food-menu">
       <div className="h-px w-full bg-gradient-to-r from-transparent via-[#E2E8F0] to-transparent mb-6" />
-      <div className="flex items-end justify-between gap-3 mb-6">
+      <div className="flex items-end justify-between gap-3 mb-5">
         <div>
           <div className="text-[10px] tracking-[0.32em] uppercase text-[#D4A94A] font-black">The menu</div>
-          <h2 className="serif text-2xl text-[#0B3B5C] mt-1 leading-tight">Lunch, dinner & drinks</h2>
-          <p className="text-[11px] text-[#64748B] mt-1">Dinners include two island sides · each additional side $5.</p>
+          <h2 className="serif text-3xl text-[#0B3B5C] mt-1 leading-tight">Lunch, dinner & drinks</h2>
         </div>
-        <Utensils className="w-5 h-5 text-[#94A3B8]" />
+        <Utensils className="w-6 h-6 text-[#D4A94A]/60" />
+      </div>
+
+      {/* Dinners-include-2-sides banner — gold-rail callout so the free-sides
+          offer reads at a glance (previously it was buried in a 11px subhead
+          line that most guests scrolled right past). */}
+      <div
+        className="relative overflow-hidden rounded-xl border border-[#D4A94A]/50 bg-gradient-to-br from-[#FBF7EF] via-white to-[#FBF7EF] px-4 py-3 mb-6 flex items-center gap-3"
+        data-testid="cable-dinners-sides-banner"
+      >
+        <span className="absolute left-0 top-0 bottom-0 w-[4px] bg-gradient-to-b from-[#D4A94A] via-[#F0C36F] to-[#D4A94A]" />
+        <Utensils className="w-5 h-5 text-[#D4A94A] shrink-0 ml-1" />
+        <div className="min-w-0">
+          <div className="text-[10px] tracking-[0.3em] uppercase font-black text-[#D4A94A]">Dinners</div>
+          <div className="text-sm sm:text-base text-[#0B3B5C] font-bold leading-tight mt-0.5">
+            All dinners include <span className="text-[#D4A94A] font-black">2 free sides</span>
+            <span className="text-[#64748B] font-semibold"> · each additional side </span>
+            <span className="text-[#0B3B5C] font-black">$5</span>
+          </div>
+        </div>
       </div>
 
       {/* Sticky editorial jump-link nav. Section labels are serif + hairline
