@@ -546,3 +546,25 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - **ChatWidget Rewrite** (`ChatWidget.jsx`, complexity 83) → split into `MessageList` + `MessageInput` + `useChatConnection`.
 - **license_ai.py Refactor** → break into smaller helpers.
 - **Array-index-as-key** fixes in dynamic admin lists (`VisitorsPanel`, `ReviewsPanel`).
+
+## Feb 2026 — Cable Beach "Package Unavailable" Bug (Fixed)
+- **Symptom:** live Cable Beach page showed `Cable Beach day — unavailable` after admin toggled Live/Paused.
+- **Root cause:** `CableBeachDay.jsx:186` used `if (!cfg.active)` — truthy check — so a missing/null `active` field would hide the page, not just an explicit false. The admin toggle at `CableBeachPackageCard.jsx:94` had stored `active:false` on the user's prod DB.
+- **Fix:** switched gate to `cfg.active === false` so only an explicit toggle-off hides the package — missing field defaults to shown. Instructed user to also flip the admin Live/Paused toggle on `/admin` back to Live.
+- Preview DB `cable_beach_pkg.active` set to `true` for parity.
+**Goal:** every PAID Cable Beach guest gets a QR + invoice; beach staff scan the QR on their phone to see the full order and tap "Mark Arrived".
+
+**Backend** (`/app/backend/routes/cable_beach.py`):
+- `GET  /api/cable-beach/{booking_id}/qr.png` → PNG QR encoding the attendant scan URL (public; HMAC inside URL gates the detail payload).
+- `GET  /api/cable-beach/{booking_id}/attendant-view?t=TOKEN` → returns guest name, pax, phone, transfer, menu lines, water-sports lines, allergy flags, special requests. 401 on bad token.
+- `POST /api/cable-beach/{booking_id}/attendant-arrived` → flips `status=arrived`, stamps `attendant_arrived_at` + `attendant_arrived_by`, fires guest welcome SMS + email + owner SMS. **Idempotent** on repeat.
+- `send_attendant_pass_to_guest(booking_id)` → wired into `_apply_referral_conversion_if_paid` so it fires once on first paid settle (idempotent via `attendant_pass_sent_at`). Sends guest an email with embedded QR img + invoice-PDF link + pass-URL CTA, and an SMS with pass URL + invoice URL.
+
+**Token model:** `hmac_sha256(JWT_SECRET, "cable-beach-attendant:{booking_id}")[:24]`. Not time-limited — the QR survives the trip.
+
+**Frontend** (`/app/frontend/src/pages/AttendantScan.jsx`):
+- Route: `/attendant/scan?b={booking_id}&t={hmac_token}`.
+- Mobile-optimised: red allergy banner, guest card, order list, water-sports list, special-notes card, big emerald "Mark arrived — send welcome SMS" button.
+- After tap → shows green "Checked in" card with arrival timestamp.
+
+**Verified end-to-end** on preview: QR PNG renders, token verification works (401 bad / 200 good), `Mark Arrived` fires guest SMS + email + owner SMS and is idempotent on repeat tap, mobile viewport screenshot renders cleanly, CI-strict `yarn build` passes without warnings.

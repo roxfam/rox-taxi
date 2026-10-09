@@ -183,7 +183,10 @@ export default function CableBeachDay() {
   } : null, [cfg]);
 
   if (!cfg) return <div className="max-w-4xl mx-auto px-6 py-16 text-[#64748B]">Loading package…</div>;
-  if (!cfg.active) return <div className="max-w-xl mx-auto px-6 py-24 text-center">
+  // Only hide the package when `active` is EXPLICITLY false. A missing /
+  // undefined / null field means the admin never set it — keep the page
+  // live by default so a bad migration never silently kills bookings.
+  if (cfg.active === false) return <div className="max-w-xl mx-auto px-6 py-24 text-center">
     <Seo title="Day at Cable Beach · Rox Taxi" description="Paused — beach day package will be back soon." canonical={PAGE_CANONICAL} />
     <h1 className="serif text-3xl text-[#0B3B5C]">Cable Beach day — unavailable</h1>
     <p className="text-sm text-[#64748B] mt-3">This package is paused. Check back soon or <a href="/contact" className="text-[#D4A94A] underline">reach out directly</a>.</p>

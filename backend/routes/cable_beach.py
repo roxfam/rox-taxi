@@ -11,9 +11,14 @@ import logging
 import secrets
 import time
 import uuid
+import os
+import hmac
+import hashlib
+from io import BytesIO
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -1178,3 +1183,300 @@ async def cron_send_beach_team_dayof(request: Request):
         except Exception as e:  # noqa: BLE001
             logging.getLogger(__name__).warning("dayof SMS err %s: %s", booking.get("id"), e)
     return {"status": "ok", "fired": fired, "nassau_date": str(today)}
+
+
+# ─────────────────── Beach Attendant QR Check-in ──────────────────────────
+# Guest receives a QR via email + SMS on PAID. Beach attendant scans it from
+# their phone camera → opens /attendant/scan?b=ID&t=TOKEN → sees the full
+# order (lunch, drinks, water sports, allergies, transfer) + a one-tap
+# "Mark Arrived" button that fires a welcome SMS back to the guest, marks
+# the booking status "arrived" in the admin dashboard, and SMS-pings the
+# owner so they know the party has landed.
+
+def _attendant_token(booking_id: str) -> str:
+    """HMAC-SHA256 short token (24 hex) scoped to one Cable Beach booking.
+    Not time-limited on purpose — guest keeps the QR for the whole trip."""
+    key = os.environ.get("JWT_SECRET", "rox-fallback-secret").encode()
+    return hmac.new(key, f"cable-beach-attendant:{booking_id}".encode(),
+                    hashlib.sha256).hexdigest()[:24]
+
+
+def _verify_attendant_token(booking_id: str, token: str) -> bool:
+    return hmac.compare_digest(_attendant_token(booking_id), (token or "").strip())
+
+
+def _public_site_url() -> str:
+    return (os.environ.get("PUBLIC_SITE_URL", "")
+            or os.environ.get("REACT_APP_BACKEND_URL", "")
+            or "https://roxtaxi.com").rstrip("/")
+
+
+@router.get("/cable-beach/{booking_id}/qr.png")
+async def cable_beach_qr_png(booking_id: str):
+    """PNG QR encoding the attendant scan URL for this Cable Beach booking.
+    Public endpoint — the embedded token itself gates access to the actual
+    booking details, so anyone with the image can scan but only staff on-site
+    will ever see one."""
+    bid = booking_id.upper()
+    booking = await _db.bookings.find_one({"id": bid})
+    if not booking or booking.get("item_id") != "cable-beach-day":
+        raise HTTPException(404, "Cable Beach booking not found")
+    import qrcode
+    token = _attendant_token(bid)
+    scan_url = f"{_public_site_url()}/attendant/scan?b={bid}&t={token}"
+    img = qrcode.make(scan_url, box_size=10, border=2)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return Response(
+        content=buf.getvalue(),
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=600"},
+    )
+
+
+@router.get("/cable-beach/{booking_id}/attendant-view")
+async def cable_beach_attendant_view(booking_id: str, t: str = ""):
+    """Attendant-side scan payload — guest name, pax, contact, transfer,
+    full food/drink/water-sports order, allergy flags. 401 if token invalid
+    so booking IDs can't be brute-forced from guesses."""
+    bid = booking_id.upper()
+    if not _verify_attendant_token(bid, t):
+        raise HTTPException(401, "Invalid or expired scan link.")
+    b = await _db.bookings.find_one({"id": bid})
+    if not b or b.get("item_id") != "cable-beach-day":
+        raise HTTPException(404, "Cable Beach booking not found")
+    cb = b.get("cable_beach") or {}
+    xfer_kind = cb.get("transfer_kind") or "none"
+    xfer_label = {
+        "cruise_oneway":    "Cruise port · one-way",
+        "cruise_roundtrip": "Cruise port · round-trip",
+        "hotel":            f"Hotel pickup · {cb.get('hotel_name') or 'TBD'}",
+        "none":             "Self-drive / meet at beach",
+    }.get(xfer_kind, xfer_kind)
+    return {
+        "id": b["id"],
+        "status": b.get("status", "pending"),
+        "payment_status": b.get("payment_status", "pending"),
+        "arrived_at": b.get("attendant_arrived_at"),
+        "customer_name": b.get("customer_name", ""),
+        "customer_phone": b.get("customer_phone", ""),
+        "customer_email": b.get("customer_email", ""),
+        "pax": b.get("pax") or 1,
+        "booking_date": b.get("booking_date", ""),
+        "transfer_label": xfer_label,
+        "pickup_location": b.get("pickup_location", ""),
+        "allergies": b.get("allergies") or [],
+        "special_requests": b.get("special_requests") or "",
+        "extra_seats": cb.get("extra_seats") or 0,
+        "menu_lines": cb.get("menu_lines") or [],
+        "water_sport_lines": cb.get("water_sport_lines") or [],
+        "parasail_spectators": cb.get("parasail_spectators") or 0,
+        "sides_detail": cb.get("sides_detail") or [],
+        "combo_applied": cb.get("combo_applied"),
+        "total_price": b.get("total_price"),
+    }
+
+
+class AttendantArrivedRequest(BaseModel):
+    token: str = Field(..., min_length=8, max_length=128)
+    attendant_name: Optional[str] = Field(None, max_length=80)
+
+
+@router.post("/cable-beach/{booking_id}/attendant-arrived")
+async def cable_beach_attendant_arrived(booking_id: str, req: AttendantArrivedRequest):
+    """Beach attendant taps "Mark Arrived" — flips booking status to
+    `arrived`, SMSes the guest a welcome ping, emails them a stamped
+    confirmation receipt, and fires an owner SMS so the admin dashboard
+    reflects live arrivals. Idempotent — re-taps are no-ops."""
+    bid = booking_id.upper()
+    if not _verify_attendant_token(bid, req.token):
+        raise HTTPException(401, "Invalid or expired scan link.")
+    b = await _db.bookings.find_one({"id": bid})
+    if not b or b.get("item_id") != "cable-beach-day":
+        raise HTTPException(404, "Cable Beach booking not found")
+
+    already = bool(b.get("attendant_arrived_at"))
+    arrived_at = b.get("attendant_arrived_at") or _now_iso()
+    if not already:
+        await _db.bookings.update_one(
+            {"id": bid},
+            {"$set": {
+                "status": "arrived",
+                "attendant_arrived_at": arrived_at,
+                "attendant_arrived_by": (req.attendant_name or "beach team").strip()[:80],
+            }},
+        )
+        # Fire guest welcome SMS + email + owner SMS. Fire-and-forget — any
+        # one failing never breaks the attendant tap.
+        try:
+            import asyncio
+            from notifications import send_sms, send_owner_sms
+            if _send_email is None:
+                _email_fn = None
+            else:
+                _email_fn = _send_email
+            guest_name = (b.get("customer_name") or "Guest").split()[0]
+            pax = b.get("pax") or 1
+
+            # Guest SMS — short + warm.
+            phone = b.get("customer_phone")
+            if phone:
+                sms_body = (
+                    f"🏖️ Welcome {guest_name}! Your Cable Beach team "
+                    f"has you checked in ({pax} pax). Enjoy your day — "
+                    f"ask anyone on our team if you need a thing. — Rox"
+                )
+                try:
+                    await asyncio.to_thread(send_sms, phone, sms_body)
+                except Exception as _e:  # noqa: BLE001
+                    logging.getLogger(__name__).warning("attendant guest SMS err: %s", _e)
+
+            # Guest email — stamped confirmation.
+            email = b.get("customer_email")
+            if email and _email_fn:
+                cb = b.get("cable_beach") or {}
+                menu_html = ""
+                lines = cb.get("menu_lines") or []
+                if lines:
+                    menu_html = "<ul style='margin:8px 0;padding-left:18px;color:#0B3B5C'>" + "".join(
+                        f"<li>{str(ln.get('label') or ln.get('name') or '')}</li>" for ln in lines
+                    ) + "</ul>"
+                ws_html = ""
+                ws = cb.get("water_sport_lines") or []
+                if ws:
+                    ws_html = "<ul style='margin:8px 0;padding-left:18px;color:#0B3B5C'>" + "".join(
+                        f"<li>{str(ln.get('label') or ln.get('name') or '')}</li>" for ln in ws
+                    ) + "</ul>"
+                html = (
+                    "<div style='font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto'>"
+                    "<div style='font-size:11px;letter-spacing:.3em;text-transform:uppercase;font-weight:900;color:#D4A94A'>Rox · cable beach</div>"
+                    f"<h1 style='font-family:Georgia,serif;color:#0B3B5C;margin:6px 0 4px'>You're checked in, {guest_name}</h1>"
+                    f"<p style='color:#64748B;font-size:14px'>Your beach team marked your party of {pax} as arrived at "
+                    f"{arrived_at[:16].replace('T',' ')} (UTC). Enjoy Cable Beach ✨</p>"
+                    "<div style='border-left:3px solid #D4A94A;background:#FBF7EF;padding:14px 18px;border-radius:8px;margin:14px 0'>"
+                    f"<div style='font-size:12px;color:#64748B'>Booking ref</div>"
+                    f"<div style='font-size:18px;font-weight:900;color:#0B3B5C;letter-spacing:.08em'>{bid}</div>"
+                    "</div>"
+                    + (f"<h3 style='color:#0B3B5C;margin-top:18px'>Your order</h3>{menu_html}" if menu_html else "")
+                    + (f"<h3 style='color:#0B3B5C;margin-top:18px'>Water sports</h3>{ws_html}" if ws_html else "")
+                    + "<p style='color:#94A3B8;font-size:11px;margin-top:22px'>If anything's off, flag any Rox beach team member or reply to this email.</p>"
+                    "</div>"
+                )
+                try:
+                    await asyncio.to_thread(
+                        _email_fn,
+                        email,
+                        f"🏖️ Checked in · Cable Beach · {bid}",
+                        html,
+                        None,
+                        "confirmation",
+                        None,
+                    )
+                except Exception as _e:  # noqa: BLE001
+                    logging.getLogger(__name__).warning("attendant guest email err: %s", _e)
+
+            # Owner / admin SMS so the dashboard dot flips live.
+            # Called inline (sync) rather than via asyncio.to_thread because
+            # send_owner_sms uses loop.create_task internally for quiet-hour
+            # enqueueing — running it in a worker thread would detach from
+            # the event loop and lose the enqueue.
+            try:
+                attendant_label = (req.attendant_name or "beach team").strip()[:40]
+                send_owner_sms(
+                    f"✅ {guest_name} · {pax} pax arrived at Cable Beach "
+                    f"(ref {bid}) — checked in by {attendant_label}",
+                    "cable_beach_arrived",
+                )
+            except Exception as _e:  # noqa: BLE001
+                logging.getLogger(__name__).warning("attendant owner SMS err: %s", _e)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("attendant notify chain err: %s", e)
+
+    return {
+        "ok": True,
+        "already": already,
+        "arrived_at": arrived_at,
+        "booking_id": bid,
+    }
+
+
+async def send_attendant_pass_to_guest(booking_id: str) -> None:
+    """Fires once per booking the moment payment settles. Sends the guest
+    the attendant QR + invoice link via email AND a short SMS with the
+    boarding-pass link. Idempotent via `attendant_pass_sent_at` flag.
+
+    Called from server.py `_apply_referral_conversion_if_paid` through the
+    globals()-based lookup pattern used by the other Cable Beach hooks.
+    """
+    b = await _db.bookings.find_one({"id": booking_id})
+    if not b or b.get("item_id") != "cable-beach-day":
+        return
+    if b.get("attendant_pass_sent_at"):
+        return
+    if b.get("payment_status") != "paid":
+        return
+
+    bid = b["id"]
+    guest_name = (b.get("customer_name") or "Guest").split()[0]
+    pax = b.get("pax") or 1
+    base = _public_site_url()
+    pass_url = f"{base}/attendant/pass/{bid}"
+    qr_url = f"{base}/api/cable-beach/{bid}/qr.png"
+    invoice_url = f"{base}/api/bookings/{bid}/receipt.pdf"
+
+    import asyncio
+    from notifications import send_sms
+
+    # Guest SMS — short, with pass URL only (no QR img in SMS).
+    phone = b.get("customer_phone")
+    if phone:
+        sms = (
+            f"🏖️ Cable Beach confirmed · {pax} pax\n"
+            f"Show at check-in: {pass_url}\n"
+            f"Invoice (PDF): {invoice_url}\n"
+            f"Ref: {bid}"
+        )
+        try:
+            await asyncio.to_thread(send_sms, phone, sms[:600])
+        except Exception as _e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("attendant pass guest SMS err: %s", _e)
+
+    # Guest email — QR embedded + invoice link + pass link.
+    email = b.get("customer_email")
+    if email and _send_email is not None:
+        html = (
+            "<div style='font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto'>"
+            "<div style='font-size:11px;letter-spacing:.3em;text-transform:uppercase;font-weight:900;color:#D4A94A'>Rox · cable beach</div>"
+            f"<h1 style='font-family:Georgia,serif;color:#0B3B5C;margin:6px 0 4px'>Your beach pass, {guest_name}</h1>"
+            f"<p style='color:#64748B;font-size:14px;margin-bottom:18px'>Show this QR to any Cable Beach team member on arrival. "
+            f"One scan and we have your full order — chairs, lunch, drinks, water sports — ready to go.</p>"
+            f"<div style='text-align:center;padding:18px;border:1px solid #E2E8F0;border-radius:14px;background:#FBF7EF'>"
+            f"<img src='{qr_url}' alt='Cable Beach pass QR' width='220' height='220' style='display:block;margin:0 auto 10px;border-radius:8px'/>"
+            f"<div style='font-size:11px;color:#64748B;letter-spacing:.2em;text-transform:uppercase'>Booking</div>"
+            f"<div style='font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:18px;color:#0B3B5C;font-weight:900;margin-top:4px'>{bid}</div>"
+            f"<div style='font-size:13px;color:#0B3B5C;margin-top:4px'>Party of {pax}</div>"
+            f"</div>"
+            f"<div style='text-align:center;margin:18px 0'>"
+            f"<a href='{pass_url}' style='display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px;font-size:13px;margin:4px'>Open full pass →</a>"
+            f"<a href='{invoice_url}' style='display:inline-block;background:#D4A94A;color:#0B3B5C;text-decoration:none;font-weight:700;padding:11px 22px;border-radius:999px;font-size:13px;margin:4px'>Download invoice (PDF)</a>"
+            f"</div>"
+            "<p style='color:#94A3B8;font-size:11px;margin-top:18px;text-align:center'>Save this email — it works offline. Screenshot the QR for the beach.</p>"
+            "</div>"
+        )
+        try:
+            await asyncio.to_thread(
+                _send_email,
+                email,
+                f"🏖️ Your Cable Beach pass · {bid}",
+                html,
+                None,
+                "confirmation",
+                None,
+            )
+        except Exception as _e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("attendant pass guest email err: %s", _e)
+
+    await _db.bookings.update_one(
+        {"id": bid},
+        {"$set": {"attendant_pass_sent_at": _now_iso()}},
+    )

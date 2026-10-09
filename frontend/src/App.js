@@ -19,6 +19,7 @@ const DriverShare = lazy(() => import("./pages/DriverShare"));
 const DriverManifest = lazy(() => import("./pages/DriverManifest"));
 const DriverHelp = lazy(() => import("./pages/DriverHelp"));
 const DriverScan = lazy(() => import("./pages/DriverScan"));
+const AttendantScan = lazy(() => import("./pages/AttendantScan"));
 const Contact = lazy(() => import("./pages/Contact"));
 const About = lazy(() => import("./pages/About"));
 const Groups = lazy(() => import("./pages/Groups"));
@@ -106,6 +107,7 @@ function AppRouter() {
       <Route path="/driver/manifest" element={<DriverManifest />} />
       <Route path="/driver/help" element={<DriverHelp />} />
       <Route path="/driver/scan" element={<DriverScan />} />
+      <Route path="/attendant/scan" element={<AttendantScan />} />
       <Route path="/contact" element={<CustomerShell><Contact /></CustomerShell>} />
       <Route path="/about" element={<CustomerShell><About /></CustomerShell>} />
       <Route path="/groups" element={<CustomerShell><Groups /></CustomerShell>} />

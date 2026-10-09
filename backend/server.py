@@ -762,6 +762,14 @@ async def _apply_referral_conversion_if_paid(booking_id: str) -> Optional[dict]:
             await _try_beach_team(booking_id)
         except Exception as e:  # noqa: BLE001
             logging.getLogger(__name__).warning("beach team paid SMS err: %s", e)
+    # Guest attendant QR + invoice pass — fires once per Cable Beach booking
+    # on first paid settle. Email with embedded QR + SMS with pass URL.
+    _try_attendant_pass = globals().get("_send_attendant_pass_to_guest")
+    if _try_attendant_pass:
+        try:
+            await _try_attendant_pass(booking_id)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger(__name__).warning("attendant pass send err: %s", e)
     return {"referrer_id": referrer_id, "conv_count": conv_count, "credit_awarded": credit_awarded}
 
 
@@ -6616,6 +6624,7 @@ cable_beach_module.configure(
 api_router.include_router(cable_beach_module.router)
 _credit_share_referrer_if_cable_beach = cable_beach_module.credit_share_referrer_if_cable_beach
 _notify_beach_team_cable_beach_paid = cable_beach_module.notify_beach_team_cable_beach_paid_if_cable_beach
+_send_attendant_pass_to_guest = cable_beach_module.send_attendant_pass_to_guest
 
 # Team SMS roster — per-area notification recipients. Seeded on startup.
 team_sms_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
