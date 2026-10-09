@@ -54,3 +54,17 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/send-beach-team-dayof"
     method: POST
     enabled: true
+
+  - name: send-ship-reminder
+    description: "Nassau 06:30: nudges admin owners (SMS + email) to paste today's docked cruise ships into the Cable Beach card so the home page ribbon stays current. Idempotent per Nassau date."
+    cron: "30 11 * * *"
+    endpoint: "{{BASE_URL}}/api/cron/send-ship-reminder"
+    method: POST
+    enabled: true
+
+  - name: sync-cruise-ships
+    description: "Nassau 06:00: best-effort scrape of nassaucruiseport.com for today's arrivals. Only writes when admin's list is empty and the lock flag is off. Admin edits always win."
+    cron: "0 11 * * *"
+    endpoint: "{{BASE_URL}}/api/cron/sync-cruise-ships"
+    method: POST
+    enabled: true

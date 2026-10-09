@@ -22,6 +22,14 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 ---
 
 
+### Feb 2026 — Clean Food Slate · Live Alert Test · Ship Automation
+- **Auto-seed food/drink/combos wiped** — Mongo lunch_items / drink_items / combos arrays cleared; `_cable_beach_cfg` fallback changed to `[]` so empty stays empty. Admin starts with a clean slate and types/pastes only what they want sold.
+- **Live Twilio + SMTP smoke test** fired via `POST /api/cable-beach/book` — booking `created` phase triggered beach-team SMS to `+12424341945`, team email to `kevinhanna300@gmail.com`, and admin branded email to `roxfam2509@gmail.com`. All channels logged "sent" in supervisor.
+- **Daily ship-reminder cron** `/api/cron/send-ship-reminder` — fires an admin SMS + branded email at **06:30 Nassau** reminding them to paste today's docked ships. Idempotent per Nassau date (`ship_reminder_sent_on`).
+- **Auto-scrape cron** `/api/cron/sync-cruise-ships` — tries nassaucruiseport.com each morning at **06:00 Nassau**. Only writes when admin's list is empty AND `cruise_ships_locked_by_admin` is off — admin edits always win. Stamps `cruise_ships_source: "nassaucruiseport.com"` when a scrape succeeds so admins can tell manual vs automatic.
+- Both new crons registered in `.emergent/crons.yml` (`send-ship-reminder` at `30 11 * * *`, `sync-cruise-ships` at `0 11 * * *`).
+
+
 ### Feb 2026 — Admin Cruise-Ships-Today Editor
 - New **CruiseShipsEditor** block on the admin Cable Beach package card. One textarea (ship-per-line), Save + Clear buttons, and a live gold-ribbon preview that mirrors what guests see on the home page.
 - First line of the list powers the `/` home promo ribbon: *"Welcome <ship> guests · same-day round-trip just $20/person"*. If the list is empty, no ribbon renders.

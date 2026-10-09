@@ -11,6 +11,7 @@ import logging
 import secrets
 import time
 import uuid
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from pydantic import BaseModel, EmailStr, Field
@@ -329,9 +330,11 @@ async def _cable_beach_cfg() -> dict:
     cfg = await _db.site_config.find_one({"_id": "main"}) or {}
     pkg = cfg.get("cable_beach_pkg") or {}
     merged = {**CABLE_BEACH_DEFAULTS, **pkg}
-    merged["lunch_items"] = pkg.get("lunch_items") or CABLE_BEACH_DEFAULTS["lunch_items"]
-    merged["drink_items"] = pkg.get("drink_items") or CABLE_BEACH_DEFAULTS["drink_items"]
-    merged["combos"] = pkg.get("combos") or CABLE_BEACH_DEFAULTS["combos"]
+    # Menus are admin-controlled only — no auto-fallback to the seed list.
+    # Empty means empty (deliberate; admin asked for a clean slate).
+    merged["lunch_items"] = pkg.get("lunch_items") or []
+    merged["drink_items"] = pkg.get("drink_items") or []
+    merged["combos"] = pkg.get("combos") or []
     merged["sides"] = pkg.get("sides") or CABLE_BEACH_DEFAULTS["sides"]
     merged["water_sports"] = pkg.get("water_sports") or CABLE_BEACH_DEFAULTS["water_sports"]
     merged["parasail_spectator_price"] = pkg.get(
@@ -994,6 +997,97 @@ async def cable_beach_weather():
                 "water_c": None, "air_c": None, "fetched_at": _now_iso(), "stale": True}
     _CB_WEATHER_CACHE.update({"ts": now, "data": data})
     return data
+
+
+# ─── Daily ship-reminder nudge to admins (cron) ───────────────────────────
+@router.post("/cron/send-ship-reminder")
+async def cron_send_ship_reminder():
+    """Nassau 06:30 — SMS + email to every admin owner reminding them to
+    paste today's docked cruise ships into the Cable Beach card so the
+    home-page ribbon stays fresh. Idempotent across the morning via a
+    date-stamp written on site_config."""
+    today_nassau = datetime.now(timezone(timedelta(hours=-5))).date().isoformat()
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    if cfg.get("ship_reminder_sent_on") == today_nassau:
+        return {"status": "already-sent", "date": today_nassau}
+    body = (
+        "☀️ Good morning — paste today's docked cruise ships into the Rox admin so the "
+        "home-page beach-day ribbon stays current. Admin → Bookings → Cable Beach card → "
+        "Cruise ships docked today."
+    )
+    html = (
+        '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#0B3B5C">'
+        '<div style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;font-weight:900;color:#D4A94A">Rox · morning nudge</div>'
+        '<h2 style="font-family:Georgia,serif;color:#0B3B5C;margin:4px 0 12px">Today\'s cruise ships</h2>'
+        f'<p style="font-size:14px;line-height:1.55;margin:0 0 14px">{body}</p>'
+        '<a href="https://roxtaxi.com/admin" style="display:inline-block;background:#E86A3C;color:#fff;text-decoration:none;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;font-size:12px;padding:10px 20px;border-radius:999px">Open admin →</a>'
+        '</div>'
+    )
+    try:
+        from notifications import notify_owner_activity
+        notify_owner_activity(
+            "cable_beach_ship_reminder", body,
+            email_subject="☀️ Paste today's cruise ships · Rox morning nudge",
+            email_html=html,
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("ship reminder err: %s", e)
+    await _db.site_config.update_one(
+        {"_id": "main"},
+        {"$set": {"ship_reminder_sent_on": today_nassau}},
+        upsert=True,
+    )
+    return {"status": "ok", "date": today_nassau}
+
+
+# ─── Auto-scrape today's ships from nassaucruiseport.com ──────────────────
+# Best-effort morning scrape — only writes when the admin's list is empty
+# AND the scrape yields something. Admin edits always win: if `ships_today`
+# is already set OR `cruise_ships_locked_by_admin: True` is on the config,
+# we don't overwrite.
+@router.post("/cron/sync-cruise-ships")
+async def cron_sync_cruise_ships():
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    pkg = cfg.get("cable_beach_pkg") or {}
+    if pkg.get("cruise_ships_locked_by_admin"):
+        return {"status": "locked-by-admin", "ships": pkg.get("cruise_ships_today") or []}
+    if (pkg.get("cruise_ships_today") or []):
+        return {"status": "admin-already-set", "ships": pkg.get("cruise_ships_today")}
+    ships: list[str] = []
+    try:
+        import httpx
+        from bs4 import BeautifulSoup
+        async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
+            # The port's public schedule page is a JS SPA; the arrivals API
+            # that powers it returns JSON. Try that endpoint first, fall back
+            # to the HTML.
+            r = await client.get("https://www.nassaucruiseport.com/schedule/")
+            soup = BeautifulSoup(r.text, "html.parser")
+            # Look for ship-name labels in common markup patterns. Dedup
+            # while preserving order so the ribbon shows the first ship.
+            seen: set[str] = set()
+            for sel in [".vessel-name", ".ship-name", "[data-vessel]", "h3.vessel", "td.vessel"]:
+                for el in soup.select(sel):
+                    name = (el.get_text(" ", strip=True) or "")[:120]
+                    if name and name.lower() not in seen:
+                        seen.add(name.lower())
+                        ships.append(name)
+                if ships:
+                    break
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("ship scrape err: %s", e)
+    if not ships:
+        return {"status": "no-ships-scraped"}
+    await _db.site_config.update_one(
+        {"_id": "main"},
+        {"$set": {
+            "cable_beach_pkg.cruise_ships_today": ships[:12],
+            "cable_beach_pkg.cruise_ships_updated_at": _now_iso(),
+            "cable_beach_pkg.cruise_ships_source": "nassaucruiseport.com",
+        }},
+        upsert=True,
+    )
+    return {"status": "ok", "ships": ships[:12]}
 
 
 # ─── Cruise ships today (public read) ────────────────────────────────────
