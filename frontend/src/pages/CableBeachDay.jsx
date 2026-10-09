@@ -769,7 +769,7 @@ function SidePicker({ dinner, sides, selected, freeCount, extraPrice, onToggle }
           {count}/{freeCount}{extras > 0 && <span className="text-[#E86A3C]"> · +${extraCost}</span>}
         </div>
       </div>
-      <div className="flex flex-wrap gap-1">
+      <div className="grid grid-cols-3 gap-1.5">
         {sides.map((s) => {
           const picked = selected.has(s.id);
           const over = picked ? false : count >= freeCount;
@@ -779,14 +779,24 @@ function SidePicker({ dinner, sides, selected, freeCount, extraPrice, onToggle }
               type="button"
               onClick={() => onToggle(s.id)}
               data-testid={`cable-side-${dinner.id}-${s.id}`}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+              className={`relative flex flex-col items-center gap-1 rounded-xl px-1.5 py-2 text-[10px] font-bold transition ${
                 picked
-                  ? "bg-[#0B3B5C] text-white"
+                  ? "bg-[#0B3B5C] text-white shadow-sm"
                   : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"
               }`}
             >
-              {s.name}
-              {over && <span className="text-[9px] font-black text-[#E86A3C] ml-0.5">+${extraPrice}</span>}
+              {s.image_url ? (
+                <img src={s.image_url} alt={s.name} loading="lazy"
+                  className={`w-10 h-10 rounded-full object-cover border-2 ${picked ? "border-[#D4A94A]" : "border-[#E2E8F0]"}`} />
+              ) : (
+                <span className={`w-10 h-10 rounded-full flex items-center justify-center text-2xl leading-none ${picked ? "bg-white/15" : "bg-[#FFF4EC]"}`}
+                  aria-hidden="true">
+                  {s.glyph || "🍽️"}
+                </span>
+              )}
+              <span className="text-center leading-tight line-clamp-2">{s.name}</span>
+              {over && <span className="absolute top-1 right-1 text-[9px] font-black text-[#E86A3C] bg-white rounded-full px-1 shadow">+${extraPrice}</span>}
+              {picked && <span className="absolute top-1 right-1 text-[9px] font-black text-white bg-[#D4A94A] rounded-full w-4 h-4 flex items-center justify-center">✓</span>}
             </button>
           );
         })}

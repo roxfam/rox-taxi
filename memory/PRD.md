@@ -22,6 +22,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 ---
 
 
+### Feb 2026 — Side Dish Thumbnails + server.py Split (Cable Beach)
+- **Side pickers now visual**: each of the 6 sides renders as a round emoji thumbnail (🧀 🥔 🥬 🥦 🍌 🌽) on a 3-column grid with a check-badge when selected and a `+$5` corner tag when the pick exceeds the 2-free limit. Scans in under a second on mobile.
+- **Admin-ready photo upgrade path**: `sides` schema now carries `glyph` + optional `image_url`; the admin update endpoint accepts both and the frontend prefers `image_url` (object-cover circle) over the glyph so real food photos can be swapped in later without a code change.
+- **server.py split (P1)**: 685 lines of Cable Beach logic (defaults, hotel tariffs, quote, book, share-credit, weather, admin update) moved to **`/app/backend/routes/cable_beach.py`** (650 lines, self-contained). server.py: **7,363 → 6,679 lines**. Wiring follows the existing `configure(...) + include_router(...)` pattern (payments / auth / customer); `_credit_share_referrer_if_cable_beach` is re-exposed at module scope so `_apply_referral_conversion_if_paid` keeps picking it up via `globals().get`. Verified end-to-end: `/api/public/cable-beach-package` + `/api/cable-beach/weather` + `/api/cable-beach/hotels` + `/api/cable-beach/quote` all return 200; 3 sides on a jerk-chicken quote still bills $5 extra.
+
+
 ### Feb 2026 — Dinner Sides + Food Menu Jump-Link Nav
 - **6 Bahamian sides** now attach to every dinner (jerk / BBQ / classic): Mac & Cheese · Bahamian Potato Salad · Steamed Cabbage · Broccoli · Plantain · Loose Corn. Policy: **2 free per dinner, $5 each extra** (`sides_included_per_dinner` + `extra_side_price` live in `cable_beach_pkg`, admin-overridable).
 - **Server-side pricing**: `/api/cable-beach/quote` now accepts `side_selections: {dinner_id: [side_id, ...]}` and returns `sides_detail` + `sides_extra_count` + `sides_extra_total`; the booking doc persists the same under `cable_beach.sides_detail`. Sides on non-dinner items (burgers, appetizers, combos) are ignored safely.
