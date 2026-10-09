@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "../../lib/api";
 import { toast } from "sonner";
-import { Plus, Trash2, ArrowUp, ArrowDown, Images, Save, Loader2, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, ArrowUp, ArrowDown, Images, Loader2, Eye, EyeOff, Upload } from "lucide-react";
 
 /**
  * CableBeachCarouselCard — admin editor for the home-page carousel slides.
@@ -22,6 +22,9 @@ export default function CableBeachCarouselCard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState({ src: "", src_mobile: "", alt: "" });
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,6 +93,47 @@ export default function CableBeachCarouselCard() {
     }];
     save(next);
     setDraft({ src: "", src_mobile: "", alt: "" });
+  };
+
+  // Drag-drop / click upload — posts to the backend, auto-generates the
+  // 4:5 mobile crop, then appends the slide to the carousel in one tap.
+  const uploadFile = async (file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please drop an image file");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Image must be ≤ 10MB");
+      return;
+    }
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const { data } = await api.post("/admin/cable-beach/carousel/upload", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const next = [...slides, {
+        src: data.src,
+        src_mobile: data.src_mobile || null,
+        alt: file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "),
+        active: true,
+      }];
+      await save(next);
+      toast.success("Uploaded + added · mobile crop auto-generated");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer?.files?.[0];
+    if (f) uploadFile(f);
   };
 
   return (
@@ -212,43 +256,89 @@ export default function CableBeachCarouselCard() {
           </ul>
 
           {slides.length < 8 && (
-            <div className="border-t border-[#F1F5F9] pt-3">
-              <div className="text-[10px] font-black tracking-widest uppercase text-[#64748B] mb-2">
-                Add a slide
-              </div>
-              <div className="grid gap-1.5">
-                <input
-                  value={draft.src}
-                  onChange={(e) => setDraft((d) => ({ ...d, src: e.target.value }))}
-                  placeholder="Desktop image URL — /images/your-photo.jpg"
-                  className="text-xs font-mono border border-[#E2E8F0] rounded px-2.5 py-2 focus:outline-none focus:border-[#D4A94A]"
-                  data-testid="new-slide-src"
-                />
-                <div className="flex gap-1.5">
-                  <input
-                    value={draft.src_mobile}
-                    onChange={(e) => setDraft((d) => ({ ...d, src_mobile: e.target.value }))}
-                    placeholder="Mobile 4:5 WebP (optional)"
-                    className="flex-1 text-[11px] font-mono border border-[#E2E8F0] rounded px-2.5 py-2 focus:outline-none focus:border-[#D4A94A]"
-                    data-testid="new-slide-src-mobile"
-                  />
-                  <input
-                    value={draft.alt}
-                    onChange={(e) => setDraft((d) => ({ ...d, alt: e.target.value }))}
-                    placeholder="Alt text"
-                    className="flex-1 text-[11px] border border-[#E2E8F0] rounded px-2.5 py-2 focus:outline-none focus:border-[#D4A94A]"
-                    data-testid="new-slide-alt"
-                  />
-                  <button
-                    onClick={addSlide}
-                    disabled={!draft.src.trim() || saving}
-                    className="bg-[#0B3B5C] text-white rounded px-3 py-2 text-xs font-black uppercase tracking-wider hover:bg-[#082941] disabled:opacity-50 inline-flex items-center gap-1.5"
-                    data-testid="add-slide-btn"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add
-                  </button>
+            <div className="border-t border-[#F1F5F9] pt-3 space-y-3">
+              {/* Drag-drop / click upload — primary path. Falls back to the
+                  URL form below for admins who want to point at an existing
+                  file on the server. */}
+              <div>
+                <div className="text-[10px] font-black tracking-widest uppercase text-[#64748B] mb-2">
+                  Drop or pick a photo
                 </div>
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={onDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`cursor-pointer rounded-xl border-2 border-dashed p-4 text-center transition ${
+                    dragOver
+                      ? "border-[#D4A94A] bg-[#FBF7EF]"
+                      : "border-[#E2E8F0] bg-[#F8FAFC] hover:border-[#D4A94A]/60 hover:bg-[#FBF7EF]"
+                  }`}
+                  data-testid="carousel-upload-zone"
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(e) => uploadFile(e.target.files?.[0])}
+                    data-testid="carousel-upload-input"
+                  />
+                  {uploading ? (
+                    <div className="flex items-center justify-center gap-2 text-sm text-[#64748B]">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Uploading + generating mobile crop…
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center gap-2 text-sm text-[#64748B]">
+                      <Upload className="w-4 h-4 text-[#D4A94A]" />
+                      <span>
+                        <b className="text-[#0B3B5C]">Drag a photo here</b> or click to browse ·
+                        <span className="text-[11px]"> PNG · JPG · WebP · GIF · ≤10MB</span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[11px] text-[#94A3B8] mt-1.5">
+                  We auto-generate a 4:5 WebP crop for mobile so phones don't pull the full desktop image.
+                </p>
               </div>
+
+              <details className="text-xs">
+                <summary className="cursor-pointer text-[#64748B] hover:text-[#0B3B5C]">Or paste a URL manually</summary>
+                <div className="grid gap-1.5 mt-2">
+                  <input
+                    value={draft.src}
+                    onChange={(e) => setDraft((d) => ({ ...d, src: e.target.value }))}
+                    placeholder="Desktop image URL — /images/your-photo.jpg"
+                    className="text-xs font-mono border border-[#E2E8F0] rounded px-2.5 py-2 focus:outline-none focus:border-[#D4A94A]"
+                    data-testid="new-slide-src"
+                  />
+                  <div className="flex gap-1.5">
+                    <input
+                      value={draft.src_mobile}
+                      onChange={(e) => setDraft((d) => ({ ...d, src_mobile: e.target.value }))}
+                      placeholder="Mobile 4:5 WebP (optional)"
+                      className="flex-1 text-[11px] font-mono border border-[#E2E8F0] rounded px-2.5 py-2 focus:outline-none focus:border-[#D4A94A]"
+                      data-testid="new-slide-src-mobile"
+                    />
+                    <input
+                      value={draft.alt}
+                      onChange={(e) => setDraft((d) => ({ ...d, alt: e.target.value }))}
+                      placeholder="Alt text"
+                      className="flex-1 text-[11px] border border-[#E2E8F0] rounded px-2.5 py-2 focus:outline-none focus:border-[#D4A94A]"
+                      data-testid="new-slide-alt"
+                    />
+                    <button
+                      onClick={addSlide}
+                      disabled={!draft.src.trim() || saving}
+                      className="bg-[#0B3B5C] text-white rounded px-3 py-2 text-xs font-black uppercase tracking-wider hover:bg-[#082941] disabled:opacity-50 inline-flex items-center gap-1.5"
+                      data-testid="add-slide-btn"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add
+                    </button>
+                  </div>
+                </div>
+              </details>
             </div>
           )}
         </>

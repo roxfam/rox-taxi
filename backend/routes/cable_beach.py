@@ -17,7 +17,7 @@ import hashlib
 from io import BytesIO
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, HTTPException, Depends, Header, Request
+from fastapi import APIRouter, HTTPException, Depends, Header, Request, UploadFile, File
 from fastapi.responses import Response
 from pydantic import BaseModel, EmailStr, Field
 
@@ -1608,4 +1608,89 @@ async def admin_put_carousel(req: CarouselUpdate,
         upsert=True,
     )
     return {"ok": True, "slides": cleaned}
+
+
+
+# ─────────────────── Admin: Carousel Image Upload ────────────────────────
+@router.post("/admin/cable-beach/carousel/upload")
+async def admin_carousel_upload(file: UploadFile = File(...),
+                                 _admin: str = Depends(_require_admin_dep)):
+    """Drag-drop upload for the home-page carousel. Accepts any image,
+    stores the original via Emergent Object Storage, then generates a
+    4:5 WebP mobile crop (800×1000) and stores that too. Returns the
+    two public URLs so the admin editor can wire the new slide in one tap.
+
+    Server-side auto-crop keeps the editor friction-free — admins pick a
+    photo, we handle sizing. Falls back to the original URL for mobile if
+    PIL fails on an exotic format (e.g. HEIC without pillow-heif)."""
+    allowed = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+    from pathlib import Path as _Path
+    ext = _Path(file.filename or "").suffix.lower()
+    if ext not in allowed:
+        raise HTTPException(400, f"Unsupported file type. Use {', '.join(sorted(allowed))}")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Image must be ≤ 10MB")
+
+    from storage import put_object as _put_object
+    import re as _re
+    stem = _Path(file.filename or "slide").stem
+    slug = _re.sub(r"[^a-zA-Z0-9._-]+", "-", stem).strip("-")[:40] or "slide"
+    base = f"cb-slide-{slug}-{uuid.uuid4().hex[:6]}"
+    name_desktop = f"{base}{ext}"
+    name_mobile = f"{base}-mobile.webp"
+
+    ct_map = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+              "webp": "image/webp", "gif": "image/gif"}
+    ct_desktop = ct_map.get(ext.lstrip("."), file.content_type or "application/octet-stream")
+
+    if not _put_object(name_desktop, content, ct_desktop):
+        raise HTTPException(503, "Object storage unavailable; try again in a moment")
+
+    # Generate 4:5 mobile crop via PIL. On failure we skip the mobile
+    # variant so the upload still succeeds — admin just loses the mobile
+    # bandwidth optimisation for this one slide.
+    mobile_url: Optional[str] = None
+    try:
+        from PIL import Image
+        from io import BytesIO as _BIO
+        im = Image.open(_BIO(content)).convert("RGB")
+        w, h = im.size
+        target_ratio = 4 / 5  # width/height — portrait
+        if w / h > target_ratio:
+            new_w = int(h * target_ratio)
+            left = (w - new_w) // 2
+            im = im.crop((left, 0, left + new_w, h))
+        else:
+            new_h = int(w / target_ratio)
+            top = max(0, (h - new_h) // 2)
+            im = im.crop((0, top, w, top + new_h))
+        im = im.resize((800, 1000), Image.LANCZOS)
+        buf = _BIO()
+        im.save(buf, "WEBP", quality=80, method=6)
+        mobile_bytes = buf.getvalue()
+        if _put_object(name_mobile, mobile_bytes, "image/webp"):
+            mobile_url = f"/api/uploads/{name_mobile}"
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).warning("carousel mobile crop err: %s", e)
+
+    desktop_url = f"/api/uploads/{name_desktop}"
+    # Mirror into uploaded_images so the global catalog browser can see it.
+    try:
+        await _db.uploaded_images.update_one(
+            {"name": name_desktop},
+            {"$set": {
+                "name": name_desktop, "url": desktop_url, "kind": "cable_beach_slide",
+                "mobile_url": mobile_url, "size": len(content),
+                "content_type": ct_desktop,
+                "original_filename": file.filename or "",
+                "uploaded_at": _now_iso(),
+            }},
+            upsert=True,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {"src": desktop_url, "src_mobile": mobile_url}
 
