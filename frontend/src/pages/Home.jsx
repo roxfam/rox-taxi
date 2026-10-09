@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Car, MapPinned, ShipWheel, Ship, Hotel, Star, ShieldCheck, Clock, Users, X, Facebook, MessageCircle, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { api, money } from "../lib/api";
@@ -592,6 +592,25 @@ function FeaturedGuestWall() {
 function CableBeachHomePromo() {
   const [weather, setWeather] = useState(null);
   const [ships, setShips] = useState([]);
+  // Rotating hero carousel — 4 Cable Beach shots on auto-advance every 5.5s.
+  // Reduces visitor fatigue vs a single static image and surfaces more of
+  // the day's vibe (chairs, aerial, water, Rox guests on-site).
+  // The first slide ships a tight 4:5 mobile crop so phones don't pull in
+  // the full desktop landscape — bandwidth win on cruise-port Wi-Fi.
+  const SLIDES = useMemo(() => ([
+    { src: "/images/cable-beach-home.jpg",
+      srcMobile: "/images/cable-beach-home-mobile.webp",
+      alt: "Blue striped beach chairs and jet skis on Cable Beach, Nassau — the Rox beach day setup" },
+    { src: "/images/cable-beach-hero.jpg",
+      srcMobile: "/images/cable-beach-hero-mobile.webp",
+      alt: "Aerial of Cable Beach, Nassau — rows of beach chairs, kayaks and watersports on the turquoise shelf" },
+    { src: "/images/cable-beach-slide-2.webp",
+      alt: "Cable Beach calm turquoise shelf water — perfect for kayaks and snorkeling" },
+    { src: "/images/cable-beach-slide-3.webp",
+      alt: "Rox guests enjoying a signature Cable Beach day — chairs, umbrella and watersports on-site" },
+  ]), []);
+  const [slideIdx, setSlideIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     const api = process.env.REACT_APP_BACKEND_URL;
@@ -605,15 +624,54 @@ function CableBeachHomePromo() {
       .catch(() => {});
   }, []);
 
+  // Auto-advance every 5.5s. Pauses while a user is dragging-dotting between
+  // slides OR when the user hovers (desktop) — respects reduced-motion too.
+  useEffect(() => {
+    if (SLIDES.length <= 1 || paused) return;
+    if (typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const t = setInterval(() => setSlideIdx((i) => (i + 1) % SLIDES.length), 5500);
+    return () => clearInterval(t);
+  }, [SLIDES.length, paused]);
+
   return (
     <section className="max-w-7xl mx-auto px-6 lg:px-10 py-14" data-testid="home-cable-beach-day">
-      <div className="relative overflow-hidden rounded-[32px] group shadow-[0_30px_80px_rgba(11,25,44,0.25)]">
-        <img
-          src="/images/cable-beach-home.jpg"
-          alt="Blue striped beach chairs and jet skis on Cable Beach, Nassau — the Rox beach day setup"
-          loading="lazy"
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1200ms] group-hover:scale-105"
-        />
+      <div
+        className="relative overflow-hidden rounded-[32px] group shadow-[0_30px_80px_rgba(11,25,44,0.25)]"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+      >
+        {/* Carousel layer — all slides mounted at once, cross-fade via opacity.
+            Keeps every image warm in the browser cache so a tap on a dot
+            doesn't trigger a fresh network fetch. */}
+        <div
+          className="absolute inset-0"
+          aria-roledescription="carousel"
+          aria-label="Cable Beach photos"
+          data-testid="cable-beach-carousel"
+        >
+          {SLIDES.map((s, i) => (
+            <picture
+              key={s.src}
+              className={`absolute inset-0 transition-opacity duration-[900ms] ease-in-out ${
+                i === slideIdx ? "opacity-100" : "opacity-0"
+              }`}
+              aria-hidden={i !== slideIdx}
+              data-testid={`cable-beach-slide-${i}`}
+            >
+              {s.srcMobile && (
+                <source media="(max-width: 640px)" srcSet={s.srcMobile} type="image/webp" />
+              )}
+              <img
+                src={s.src}
+                alt={s.alt}
+                loading={i === 0 ? "eager" : "lazy"}
+                fetchpriority={i === 0 ? "high" : "auto"}
+                className="w-full h-full object-cover transition-transform duration-[1200ms] group-hover:scale-105"
+              />
+            </picture>
+          ))}
+        </div>
         <div className="absolute inset-0 bg-gradient-to-br from-[#0B192C]/90 via-[#0B192C]/60 to-[#0B192C]/30" />
 
         {/* Cruise-ship context ribbon — pins above the headline when the
@@ -736,6 +794,35 @@ function CableBeachHomePromo() {
             <span className="text-[11px] text-white/60 ml-1">Pay Stripe or PayPal · full refund up to 24 h out</span>
           </div>
         </div>
+
+        {/* Slide-dot indicator — click to jump, pauses auto-advance for 8s
+            after a manual tap so the user has time to read the slide. */}
+        {SLIDES.length > 1 && (
+          <div
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10"
+            data-testid="cable-beach-carousel-dots"
+          >
+            {SLIDES.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                aria-label={`Show photo ${i + 1} of ${SLIDES.length}`}
+                aria-current={i === slideIdx}
+                data-testid={`cable-beach-dot-${i}`}
+                onClick={() => {
+                  setSlideIdx(i);
+                  setPaused(true);
+                  setTimeout(() => setPaused(false), 8000);
+                }}
+                className={`h-2 rounded-full transition-all ${
+                  i === slideIdx
+                    ? "w-8 bg-[#D4A94A] shadow-lg"
+                    : "w-2 bg-white/40 hover:bg-white/70"
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
