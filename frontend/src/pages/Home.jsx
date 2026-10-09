@@ -629,14 +629,14 @@ function CableBeachHomePromo() {
       .catch(() => {});
   }, []);
 
-  // Auto-advance every 7s — slower pace matches the gentler cross-fade.
+  // Auto-advance every 8s — breathing room matches the slower 2.2s fade.
   // Pauses while a user is dragging-dotting between slides OR when the
   // user hovers (desktop) — respects reduced-motion too.
   useEffect(() => {
     if (SLIDES.length <= 1 || paused) return;
     if (typeof window !== "undefined" &&
         window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const t = setInterval(() => setSlideIdx((i) => (i + 1) % SLIDES.length), 7000);
+    const t = setInterval(() => setSlideIdx((i) => (i + 1) % SLIDES.length), 8000);
     return () => clearInterval(t);
   }, [SLIDES.length, paused]);
 
@@ -663,29 +663,40 @@ function CableBeachHomePromo() {
           aria-label="Cable Beach photos"
           data-testid="cable-beach-carousel"
         >
-          {SLIDES.map((s, i) => (
-            <picture
-              key={`${s.src}-${i}`}
-              className={`absolute inset-0 transition-opacity ease-[cubic-bezier(0.37,0,0.17,1)] duration-[1600ms] ${
-                i === slideIdx ? "opacity-100" : "opacity-0"
-              }`}
-              aria-hidden={i !== slideIdx}
-              data-testid={`cable-beach-slide-${i}`}
-            >
-              {s.src_mobile && (
-                <source media="(max-width: 640px)" srcSet={s.src_mobile} type="image/webp" />
-              )}
-              <img
-                src={s.src}
-                alt={s.alt || "Cable Beach photo"}
-                loading={i === 0 ? "eager" : "lazy"}
-                fetchpriority={i === 0 ? "high" : "auto"}
-                className={`w-full h-full object-cover transition-transform ease-[cubic-bezier(0.37,0,0.17,1)] duration-[7000ms] ${
-                  i === slideIdx ? "scale-[1.04]" : "scale-100"
-                } group-hover:scale-105`}
-              />
-            </picture>
-          ))}
+          {SLIDES.map((s, i) => {
+            const active = i === slideIdx;
+            return (
+              <picture
+                key={`${s.src}-${i}`}
+                className="absolute inset-0 motion-reduce:transition-none"
+                style={{
+                  opacity: active ? 1 : 0,
+                  filter: active ? "blur(0px)" : "blur(2px)",
+                  transition:
+                    "opacity 2400ms cubic-bezier(0.65, 0, 0.35, 1), filter 2400ms cubic-bezier(0.65, 0, 0.35, 1)",
+                  willChange: "opacity, filter",
+                }}
+                aria-hidden={!active}
+                data-testid={`cable-beach-slide-${i}`}
+              >
+                {s.src_mobile && (
+                  <source media="(max-width: 640px)" srcSet={s.src_mobile} type="image/webp" />
+                )}
+                <img
+                  src={s.src}
+                  alt={s.alt || "Cable Beach photo"}
+                  loading={i === 0 ? "eager" : "lazy"}
+                  fetchpriority={i === 0 ? "high" : "auto"}
+                  className="w-full h-full object-cover group-hover:scale-105"
+                  style={{
+                    transform: active ? "scale(1.06)" : "scale(1)",
+                    transition: "transform 11000ms cubic-bezier(0.65, 0, 0.35, 1)",
+                    willChange: "transform",
+                  }}
+                />
+              </picture>
+            );
+          })}
         </div>
         <div className="absolute inset-0 bg-gradient-to-br from-[#0B192C]/90 via-[#0B192C]/60 to-[#0B192C]/30" />
 
