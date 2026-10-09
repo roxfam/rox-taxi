@@ -76,6 +76,7 @@ _SEED_TEAMS = [
     {
         "label": "Cable Beach beach team",
         "phone": "+12424341945",
+        "email": "kevinhanna300@gmail.com",
         "areas": ["cable_beach"],
         "enabled": True,
         "quiet_hours": False,  # Beach team sees day-of bookings any time
@@ -109,7 +110,8 @@ async def seed_if_empty() -> None:
 class TeamSMSRecipient(BaseModel):
     id: Optional[str] = Field(None, max_length=20)
     label: str = Field(..., min_length=1, max_length=80)
-    phone: str = Field(..., min_length=5, max_length=24)
+    phone: Optional[str] = Field(None, max_length=24)
+    email: Optional[str] = Field(None, max_length=120)
     areas: list[str] = Field(default_factory=list)
     enabled: bool = True
     quiet_hours: bool = False
@@ -137,19 +139,26 @@ async def admin_save_team_sms(
     PATCH endpoints."""
     valid_area_ids = {a["id"] for a in TEAM_AREAS}
     cleaned = []
-    seen_phones: set[str] = set()
+    seen_keys: set[str] = set()
     for r in batch.recipients[:40]:
-        phone = (r.phone or "").strip()
-        if not phone or not phone.startswith("+"):
-            continue  # Reject anything that isn't E.164
-        if phone in seen_phones:
-            continue  # No duplicates
-        seen_phones.add(phone)
+        phone = (r.phone or "").strip() or None
+        if phone and not phone.startswith("+"):
+            phone = None  # Reject anything that isn't E.164
+        email = (r.email or "").strip().lower() or None
+        if email and "@" not in email:
+            email = None
+        if not phone and not email:
+            continue  # No channel = no row
+        key = f"{phone or ''}|{email or ''}"
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
         areas = [a for a in (r.areas or []) if a in valid_area_ids][:12]
         cleaned.append({
             "id": r.id or uuid.uuid4().hex[:10],
             "label": (r.label or "").strip()[:80],
             "phone": phone,
+            "email": email,
             "areas": areas,
             "enabled": bool(r.enabled),
             "quiet_hours": bool(r.quiet_hours),
@@ -173,38 +182,70 @@ def _in_quiet_hours() -> bool:
     return h >= 22 or h < 4
 
 
-async def send_team_sms(area: str, body: str) -> dict:
-    """Fire SMS to every enabled team recipient whose `areas` includes
-    `area`. Quiet-hours recipients are silently skipped during the Nassau
-    quiet window (they can still catch up by call-log the next morning).
+async def send_team_sms(area: str, body: str, subject: Optional[str] = None) -> dict:
+    """Fire SMS + email to every enabled team recipient whose `areas`
+    includes `area`. SMS goes to `phone` (if set); email goes to `email`
+    (if set). Quiet-hours recipients are silently skipped during the
+    Nassau quiet window (SMS only — email always goes through).
 
-    Returns a small summary dict — ``{"attempted": n, "skipped_quiet": m,
-    "numbers": [...]}`` — mostly for debug + regression tests.
+    Returns a small summary dict for debug + regression tests.
     """
     try:
         from notifications import send_sms
     except Exception:  # noqa: BLE001
-        return {"attempted": 0, "skipped_quiet": 0, "numbers": []}
+        send_sms = None  # type: ignore
+    try:
+        from notifications import send_email
+    except Exception:  # noqa: BLE001
+        send_email = None  # type: ignore
     quiet = _in_quiet_hours()
     recipients = await list_team_recipients()
-    attempted = 0
+    sms_sent = 0
+    emails_sent = 0
     skipped = 0
     reached: list[str] = []
+    # Build a tiny HTML version of the SMS body — one <pre> block keeps
+    # whitespace / line breaks intact without pulling in a template engine.
+    safe_body = body.replace("<", "&lt;")
+    html = (
+        '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#0B3B5C">'
+        f'<pre style="font-family:inherit;font-size:14px;line-height:1.5;white-space:pre-wrap;margin:0">{safe_body}</pre>'
+        '</div>'
+    )
+    subj = subject or (body.split("\n", 1)[0][:120] if body else "Team alert")
     for r in recipients:
         if not r.get("enabled", True):
             continue
         if area not in (r.get("areas") or []):
             continue
-        if quiet and r.get("quiet_hours"):
-            skipped += 1
-            continue
         phone = (r.get("phone") or "").strip()
-        if not phone:
-            continue
-        try:
-            send_sms(phone, body)
-            reached.append(phone)
-            attempted += 1
-        except Exception as e:  # noqa: BLE001
-            logging.getLogger(__name__).warning("team sms err %s: %s", phone, e)
-    return {"attempted": attempted, "skipped_quiet": skipped, "numbers": reached}
+        if phone and send_sms:
+            if quiet and r.get("quiet_hours"):
+                skipped += 1
+            else:
+                try:
+                    send_sms(phone, body)
+                    reached.append(phone)
+                    sms_sent += 1
+                except Exception as e:  # noqa: BLE001
+                    logging.getLogger(__name__).warning("team sms err %s: %s", phone, e)
+        email = (r.get("email") or "").strip()
+        if email and send_email:
+            try:
+                send_email(
+                    to_email=email,
+                    subject=subj,
+                    html=html,
+                    text=body,
+                    category="team_notification",
+                )
+                reached.append(email)
+                emails_sent += 1
+            except Exception as e:  # noqa: BLE001
+                logging.getLogger(__name__).warning("team email err %s: %s", email, e)
+    return {
+        "sms_sent": sms_sent,
+        "emails_sent": emails_sent,
+        "skipped_quiet": skipped,
+        "numbers": reached,
+    }

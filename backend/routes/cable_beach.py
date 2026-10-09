@@ -229,17 +229,36 @@ async def notify_beach_team_cable_beach_booking(booking_id: str, *, phase: str) 
         f"Extras: {extras_s}\n"
         f"Ref: {booking_id}"
     )
-    # (1) Area-specific team roster.
+    # (1) Area-specific team roster (SMS + email).
     try:
         from routes.team_sms import send_team_sms
-        await send_team_sms("cable_beach", body)
+        subj_prefix = {
+            "created": "🏖️ New Cable Beach booking",
+            "paid":    "✅ Cable Beach booking paid",
+            "dayof":   "☀️ Today — Cable Beach guests",
+        }.get(phase, "Cable Beach booking")
+        subject = f"{subj_prefix} · {guest} · {pax} pax · {date_short}"
+        await send_team_sms("cable_beach", body, subject=subject)
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("team sms (cable_beach) err: %s", e)
-    # (2) Admin / owner activity SMS — goes to every number in the owner
-    # roster whose subscriptions include this kind (or `*`).
+    # (2) Admin / owner activity — SMS AND email through the shared
+    # owner-notification helper. Fires on every Cable Beach phase so admins
+    # see the booking even when the team SMS roster is empty.
     try:
         from notifications import notify_owner_activity
-        notify_owner_activity(f"cable_beach_{phase}", body)
+        notify_owner_activity(
+            f"cable_beach_{phase}",
+            body,
+            email_subject=f"{phase_label.strip()} · {guest} · {pax} pax · {date_short}",
+            email_html=(
+                f'<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#0B3B5C;max-width:560px">'
+                f'<div style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;font-weight:900;color:#D4A94A">Rox · cable beach</div>'
+                f'<h2 style="font-family:Georgia,serif;color:#0B3B5C;margin:4px 0 12px">{phase_label.strip()}</h2>'
+                f'<pre style="font-family:inherit;white-space:pre-wrap;font-size:14px;line-height:1.55;background:#FBF7EF;border-left:3px solid #D4A94A;padding:14px 18px;border-radius:8px">{body.replace("<", "&lt;")}</pre>'
+                f'<p style="font-size:11px;color:#64748B;margin-top:14px">Booking ref: <code>{booking_id}</code></p>'
+                f'</div>'
+            ),
+        )
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("owner sms (cable_beach %s) err: %s", phase, e)
     await _db.bookings.update_one(
@@ -357,6 +376,12 @@ class CableBeachPkgUpdate(BaseModel):
     extra_side_price: Optional[float] = Field(None, ge=0, le=50)
     water_sports: Optional[list] = None
     parasail_spectator_price: Optional[float] = Field(None, ge=0, le=400)
+    # Admin-paste today's cruise ships (lightweight — one short line per ship,
+    # we don't model arrival/departure times). Admin may update daily or wire a
+    # cron scrape later. Public endpoint returns the current list.
+    cruise_ships_today: Optional[list[str]] = None
+    # Loyalty: Nth paid Cable Beach visit is free (base * pax). Default 5.
+    loyalty_free_every: Optional[int] = Field(None, ge=2, le=20)
     active: Optional[bool] = None
 
 
@@ -437,6 +462,17 @@ async def admin_update_cable_beach_pkg(
             except Exception:  # noqa: BLE001
                 continue
         body["water_sports"] = [w for w in cleaned_ws if w["name"] and w["price"] >= 0]
+    # Cruise ships-today — tiny list of ≤120-char strings. Admin may paste
+    # the morning schedule; frontend home page shows the first one as a
+    # "Welcome, Carnival Pride guests" ribbon.
+    if "cruise_ships_today" in body:
+        cleaned_ships = []
+        for row in body["cruise_ships_today"][:12]:
+            s = str(row or "").strip()[:120]
+            if s:
+                cleaned_ships.append(s)
+        body["cruise_ships_today"] = cleaned_ships
+        body["cruise_ships_updated_at"] = _now_iso()
     if "combos" in body:
         cleaned_combos = []
         for row in body["combos"][:12]:
@@ -475,6 +511,9 @@ class CableBeachQuoteRequest(BaseModel):
     # Each entry is capped at 20 server-side to avoid runaway totals.
     water_sport_qty: dict[str, int] = Field(default_factory=dict)
     parasail_spectators: int = Field(0, ge=0, le=20)
+    # Loyalty email — when the guest has `loyalty_free_every - 1` prior
+    # paid Cable Beach bookings for this email, we zero out `base`.
+    loyalty_email: Optional[str] = Field(None, max_length=120)
 
 
 @router.post("/cable-beach/quote")
@@ -594,7 +633,26 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
         })
     water_sports_total = round(water_sports_total, 2)
 
-    subtotal = round(base + extra + transfer + menu_total + sides_extra_total + water_sports_total, 2)
+    # Loyalty redemption — check *before* assembling the subtotal so the
+    # free base shows as a crisp standalone line in the breakdown.
+    loyalty_discount = 0.0
+    loyalty_free_applied = False
+    loyalty_stamps = 0
+    loyalty_cycle = int(cfg.get("loyalty_free_every") or 5)
+    if req.loyalty_email:
+        email_norm = req.loyalty_email.strip().lower()
+        paid = await _db.bookings.count_documents({
+            "item_id": "cable-beach-day",
+            "customer_email": email_norm,
+            "payment_status": "paid",
+            "loyalty_free_applied": {"$ne": True},
+        })
+        loyalty_stamps = paid % loyalty_cycle
+        if paid >= (loyalty_cycle - 1) and loyalty_stamps == (loyalty_cycle - 1):
+            loyalty_free_applied = True
+            loyalty_discount = base  # Zero out the base = 5th day free.
+
+    subtotal = round(base + extra + transfer + menu_total + sides_extra_total + water_sports_total - loyalty_discount, 2)
 
     combo_discount = 0.0
     combo_applied = None
@@ -633,6 +691,10 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
         "water_sports_total": water_sports_total,
         "parasail_spectators": spectator_qty,
         "parasail_spectator_price": float(cfg.get("parasail_spectator_price", 35.0) or 0.0),
+        "loyalty_free_applied": loyalty_free_applied,
+        "loyalty_discount": loyalty_discount,
+        "loyalty_stamps": loyalty_stamps,
+        "loyalty_cycle": loyalty_cycle,
         "combo_applied": combo_applied,
         "combo_discount": combo_discount,
         "subtotal": subtotal,
@@ -666,6 +728,7 @@ class CableBeachBookRequest(BaseModel):
     side_selections: dict[str, list[str]] = Field(default_factory=dict)
     water_sport_qty: dict[str, int] = Field(default_factory=dict)
     parasail_spectators: int = Field(0, ge=0, le=20)
+    loyalty_email: Optional[str] = Field(None, max_length=120)
     allergies: list[str] = Field(default_factory=list)
     special_requests: Optional[str] = Field(None, max_length=500)
     share_token: Optional[str] = Field(None, max_length=40)
@@ -714,6 +777,7 @@ async def cable_beach_book(req: CableBeachBookRequest):
         side_selections=req.side_selections,
         water_sport_qty=req.water_sport_qty,
         parasail_spectators=req.parasail_spectators,
+        loyalty_email=req.loyalty_email or req.customer_email,
     )
     quote = await cable_beach_quote(quote_req)
     hotel_match = next((h for h in _hotel_tariffs() if h["id"] == req.hotel_id), None) if req.hotel_id else None
@@ -763,6 +827,8 @@ async def cable_beach_book(req: CableBeachBookRequest):
             "combo_discount": quote.get("combo_discount") or 0.0,
         },
         "cable_beach_share_token": req.share_token,
+        "loyalty_free_applied": bool(quote.get("loyalty_free_applied")),
+        "loyalty_discount": quote.get("loyalty_discount") or 0.0,
     }
     await _db.bookings.insert_one(booking_doc)
     # Fire beach-team SMS the moment the booking is created (even before
@@ -928,6 +994,54 @@ async def cable_beach_weather():
                 "water_c": None, "air_c": None, "fetched_at": _now_iso(), "stale": True}
     _CB_WEATHER_CACHE.update({"ts": now, "data": data})
     return data
+
+
+# ─── Cruise ships today (public read) ────────────────────────────────────
+@router.get("/cable-beach/cruise-ships-today")
+async def cruise_ships_today():
+    """Admin-maintained list of cruise ships docked at Nassau today.
+    Frontend uses this to pin a context ribbon on the home-page promotion
+    ("Welcome Carnival Pride guests — same-day beach day only $35 r/t").
+    Returns an empty list when nothing is docked / unset."""
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    pkg = cfg.get("cable_beach_pkg") or {}
+    return {
+        "ships": list(pkg.get("cruise_ships_today") or []),
+        "updated_at": pkg.get("cruise_ships_updated_at"),
+    }
+
+
+# ─── Local loyalty punch card ────────────────────────────────────────────
+# Count paid Cable Beach bookings for a given email. Every Nth visit
+# (default 5) is free — the next quote with `loyalty_email` passed in
+# applies a `base_price × pax` discount and marks the resulting booking
+# with `loyalty_free_applied: True` so it doesn't count toward the next
+# cycle.
+@router.get("/cable-beach/loyalty")
+async def cable_beach_loyalty(email: Optional[str] = None):
+    if not email:
+        return {"email": None, "paid_visits": 0, "stamps": 0,
+                "cycle_size": 5, "free_available": False}
+    cfg = await _cable_beach_cfg()
+    cycle = int(cfg.get("loyalty_free_every") or 5)
+    normalised = email.strip().lower()
+    # Only count paid bookings that didn't already redeem a free day.
+    paid = await _db.bookings.count_documents({
+        "item_id": "cable-beach-day",
+        "customer_email": normalised,
+        "payment_status": "paid",
+        "loyalty_free_applied": {"$ne": True},
+    })
+    stamps = paid % cycle
+    free_available = paid >= (cycle - 1) and stamps == (cycle - 1)
+    return {
+        "email": normalised,
+        "paid_visits": paid,
+        "stamps": stamps,
+        "cycle_size": cycle,
+        "free_available": free_available,
+        "next_free_in": (cycle - 1 - stamps) if not free_available else 0,
+    }
 
 
 # ─── Day-of beach-team reminders (cron piggyback) ─────────────────────────

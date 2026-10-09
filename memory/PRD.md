@@ -22,6 +22,14 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 ---
 
 
+### Feb 2026 — Beach Team Email + Admin Email Alerts (Cable Beach)
+- **Team SMS roster now carries email too** — `TeamSMSRecipient` has optional `email` alongside `phone`; the admin UI shows a side-by-side `+1242…` + `team@example.com` input. Either channel is accepted (saves fail only when both are empty) and the dispatcher fires both when present.
+- **Cable Beach beach team seeded with `kevinhanna300@gmail.com`** on the existing `+12424341945` row — paid Mongo update already applied; new installs seed both channels on boot.
+- **Admin owner emails get Cable Beach phases** — `notify_owner_activity(kind="cable_beach_<phase>", ..., email_subject=..., email_html=...)` is called for `created`, `paid`, and `dayof` so every owner number/email in the Owner SMS panel with a matching subscription receives the branded alert.
+- **Dispatcher rename**: `send_team_sms(area, body, subject=None)` now returns `{sms_sent, emails_sent, skipped_quiet, numbers}`. Quiet-hours only gates SMS; email always goes through so overnight paid bookings never miss the morning rush.
+- **Admin UI**: `TeamSmsCard` validates both channels, allows adding a row with just an email (no phone), and persists the full roster in one PUT.
+
+
 ### Feb 2026 — Home Page Cable Beach Promotion (Cruise + Local)
 - **Dual-audience promotion** card at the top of the home page (ahead of Dolphin Swim) with two side-by-side lanes:
   - **Cruise passengers** → "Straight off the port, on the sand in 15 min · $10 one-way · $20 round-trip" with Ship icon and `?src=cruise` deeplink for attribution

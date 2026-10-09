@@ -50,14 +50,22 @@ export default function TeamSmsCard() {
       return { ...row, areas: Array.from(cur) };
     }));
   const addRow = () => setRows((r) => [...r, {
-    id: "", label: "", phone: "+1", areas: [], enabled: true, quiet_hours: false,
+    id: "", label: "", phone: "+1", email: "", areas: [], enabled: true, quiet_hours: false,
   }]);
   const removeRow = (idx) => setRows((r) => r.filter((_, i) => i !== idx));
 
   const save = async () => {
     for (const r of rows) {
-      if (!r.phone || !r.phone.startsWith("+")) {
+      if (r.phone && !r.phone.startsWith("+")) {
         toast.error(`Phone for "${r.label || "(no label)"}" must start with + (E.164)`);
+        return;
+      }
+      if (r.email && !r.email.includes("@")) {
+        toast.error(`Email for "${r.label || "(no label)"}" looks invalid`);
+        return;
+      }
+      if (!r.phone && !r.email) {
+        toast.error(`"${r.label || "(no label)"}" needs a phone or email to receive alerts`);
         return;
       }
     }
@@ -109,15 +117,19 @@ export default function TeamSmsCard() {
           </div>
         ) : rows.map((row, i) => (
           <div key={row.id || `new-${i}`} className="rounded-xl border border-[#E2E8F0] p-3.5" data-testid={`team-sms-row-${i}`}>
-            <div className="grid sm:grid-cols-[1fr_200px_auto_auto_auto] gap-2 items-center">
+            <div className="grid sm:grid-cols-[1fr_200px_240px_auto_auto_auto] gap-2 items-center">
               <input value={row.label} placeholder="e.g. Cable Beach beach team"
                 onChange={(e) => update(i, { label: e.target.value })}
                 className="text-sm bg-white border border-[#E2E8F0] rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#D4A94A]"
                 data-testid={`team-sms-label-${i}`} />
-              <input value={row.phone} placeholder="+1242…"
+              <input value={row.phone || ""} placeholder="+1242…"
                 onChange={(e) => update(i, { phone: e.target.value })}
                 className="text-sm font-mono bg-white border border-[#E2E8F0] rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#D4A94A]"
                 data-testid={`team-sms-phone-${i}`} />
+              <input value={row.email || ""} placeholder="team@example.com"
+                onChange={(e) => update(i, { email: e.target.value })}
+                className="text-sm bg-white border border-[#E2E8F0] rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#D4A94A]"
+                data-testid={`team-sms-email-${i}`} />
               <button onClick={() => update(i, { quiet_hours: !row.quiet_hours })}
                 title="Suppress 22:00-04:00 Nassau"
                 data-testid={`team-sms-quiet-${i}`}

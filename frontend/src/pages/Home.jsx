@@ -99,116 +99,9 @@ export default function Home() {
       {/* TOES IN THE TURQUOISE — Signature beach day at Cable Beach / Goodman's Bay.
           Promoted up-front (above Dolphin Swim) so cruise passengers landing on
           the home page see it first. Dual-audience split so cruise AND local
-          guests see a pitch that fits their journey. */}
-      <section className="max-w-7xl mx-auto px-6 lg:px-10 py-14" data-testid="home-cable-beach-day">
-        <div className="relative overflow-hidden rounded-[32px] group shadow-[0_30px_80px_rgba(11,25,44,0.25)]">
-          <img
-            src="/images/cable-beach-hero.jpg"
-            alt="Aerial of Cable Beach, Nassau — rows of beach chairs, kayaks and watersports on the turquoise shelf"
-            loading="lazy"
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1200ms] group-hover:scale-105"
-          />
-          <div className="absolute inset-0 bg-gradient-to-br from-[#0B192C]/90 via-[#0B192C]/60 to-[#0B192C]/30" />
-
-          <div className="relative p-8 sm:p-12 text-white">
-            {/* Headline block */}
-            <div className="max-w-2xl space-y-4">
-              <span className="inline-flex items-center gap-2 rounded-full bg-[#D4A94A]/20 border border-[#D4A94A]/40 px-3 py-1 text-[10px] font-black uppercase tracking-[0.3em] text-[#F7E6C6]">
-                <Sparkles className="w-3 h-3" /> Rox signature · Cable Beach
-              </span>
-              <h2 className="serif text-4xl sm:text-6xl tracking-tight leading-[1.02] drop-shadow-lg">
-                Toes in the <em className="italic text-[#F7E6C6]">Turquoise.</em>
-              </h2>
-              <p className="text-sm sm:text-base text-white/85 leading-relaxed">
-                A full day at Cable Beach / Goodman's Bay — reserved chair + umbrella per guest, kayaks and watersports on-site, round-trip ride from your hotel or cruise port. One upfront price. No haggling.
-              </p>
-              {/* Trust row — micro social proof */}
-              <div className="flex flex-wrap items-center gap-4 pt-1 text-[11px] text-white/80">
-                <span className="inline-flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#D4A94A]" />
-                  <b className="text-white">From $40</b> per guest
-                </span>
-                <span className="opacity-50">·</span>
-                <span><b className="text-white">★ 4.9</b> average · 320+ reviews</span>
-                <span className="opacity-50">·</span>
-                <span><b className="text-white">Same-day</b> booking available</span>
-              </div>
-            </div>
-
-            {/* Dual-audience lane cards — Cruise + Local */}
-            <div className="mt-8 grid md:grid-cols-2 gap-4" data-testid="home-cable-beach-audiences">
-              <Link
-                to="/tours/cable-beach-day?src=cruise"
-                data-testid="home-cable-beach-cruise"
-                className="group/lane rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md p-5 hover:bg-white/15 hover:border-[#D4A94A]/50 transition-all"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Ship className="w-4 h-4 text-[#D4A94A]" />
-                      <span className="text-[9px] tracking-[0.32em] uppercase font-black text-[#F7E6C6]">Cruise passengers</span>
-                    </div>
-                    <div className="serif text-xl leading-tight">Straight off the port, on the sand in 15 min.</div>
-                    <p className="text-[12px] text-white/75 mt-1.5 leading-relaxed">
-                      Round-trip from Nassau Cruise Port · back aboard before all-aboard call. $10 one-way · $20 round-trip per person.
-                    </p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-white/60 shrink-0 group-hover/lane:translate-x-1 group-hover/lane:text-[#F7E6C6] transition" />
-                </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">Short-call ready</span>
-                  <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">Lunch add-on</span>
-                  <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">Parasail · jet ski</span>
-                </div>
-              </Link>
-
-              <Link
-                to="/tours/cable-beach-day?src=local"
-                data-testid="home-cable-beach-local"
-                className="group/lane rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md p-5 hover:bg-white/15 hover:border-[#D4A94A]/50 transition-all"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Hotel className="w-4 h-4 text-[#D4A94A]" />
-                      <span className="text-[9px] tracking-[0.32em] uppercase font-black text-[#F7E6C6]">Bahamians & residents</span>
-                    </div>
-                    <div className="serif text-xl leading-tight">Your weekend reset, dinner included.</div>
-                    <p className="text-[12px] text-white/75 mt-1.5 leading-relaxed">
-                      Pick-up from your hotel or home · jerk, BBQ, seafood combos on the beach. Group of 6+? One tap to gift the whole day.
-                    </p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-white/60 shrink-0 group-hover/lane:translate-x-1 group-hover/lane:text-[#F7E6C6] transition" />
-                </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">Jerk · BBQ · seafood</span>
-                  <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">Group pricing</span>
-                  <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">Gift a beach day</span>
-                </div>
-              </Link>
-            </div>
-
-            {/* Primary CTA row */}
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Link
-                to="/tours/cable-beach-day"
-                data-testid="home-cable-beach-book"
-                className="btn-shine inline-flex items-center gap-1.5 rounded-full bg-[#E86A3C] text-white px-6 py-3 text-sm font-black uppercase tracking-wider hover:bg-[#d55a30] active:scale-95"
-              >
-                Book from $40 · instant <ArrowRight className="w-4 h-4" />
-              </Link>
-              <Link
-                to="/tours/cable-beach-day"
-                data-testid="home-cable-beach-details"
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/10 backdrop-blur px-6 py-3 text-sm font-black uppercase tracking-wider hover:bg-white hover:text-[#0B3B5C] transition-colors"
-              >
-                See what's included
-              </Link>
-              <span className="text-[11px] text-white/60 ml-1">Pay Stripe or PayPal · full refund up to 24 h out</span>
-            </div>
-          </div>
-        </div>
-      </section>
+          guests see a pitch that fits their journey. Live weather + today's
+          docked cruise ships drive the context ribbons. */}
+      <CableBeachHomePromo />
 
       {/* DOLPHIN SWIM FEATURE — direct link to Blue Lagoon operator */}
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-12" data-testid="home-dolphin-swim">
@@ -686,6 +579,164 @@ function FeaturedGuestWall() {
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+
+/**
+ * CableBeachHomePromo — editorial dual-audience hero that pulls live
+ * context: Open-Meteo marine conditions + today's docked cruise ships
+ * (admin-maintained). Falls back gracefully when either source is empty.
+ */
+function CableBeachHomePromo() {
+  const [weather, setWeather] = useState(null);
+  const [ships, setShips] = useState([]);
+
+  useEffect(() => {
+    const api = process.env.REACT_APP_BACKEND_URL;
+    fetch(`${api}/api/cable-beach/weather`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setWeather(d))
+      .catch(() => {});
+    fetch(`${api}/api/cable-beach/cruise-ships-today`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setShips(d.ships || []))
+      .catch(() => {});
+  }, []);
+
+  return (
+    <section className="max-w-7xl mx-auto px-6 lg:px-10 py-14" data-testid="home-cable-beach-day">
+      <div className="relative overflow-hidden rounded-[32px] group shadow-[0_30px_80px_rgba(11,25,44,0.25)]">
+        <img
+          src="/images/cable-beach-hero.jpg"
+          alt="Aerial of Cable Beach, Nassau — rows of beach chairs, kayaks and watersports on the turquoise shelf"
+          loading="lazy"
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1200ms] group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0B192C]/90 via-[#0B192C]/60 to-[#0B192C]/30" />
+
+        {/* Cruise-ship context ribbon — pins above the headline when the
+            port has at least one ship docked today. Admin pastes the list
+            via the Cable Beach card. */}
+        {ships.length > 0 && (
+          <div className="relative px-8 sm:px-12 pt-6" data-testid="home-cable-beach-ship-ribbon">
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#D4A94A] text-[#0B192C] px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[0.18em] shadow-lg">
+              <Ship className="w-3.5 h-3.5" />
+              Welcome {ships[0]} guests · same-day round-trip just $20/person
+            </div>
+          </div>
+        )}
+
+        <div className="relative p-8 sm:p-12 text-white">
+          <div className="max-w-2xl space-y-4">
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#D4A94A]/20 border border-[#D4A94A]/40 px-3 py-1 text-[10px] font-black uppercase tracking-[0.3em] text-[#F7E6C6]">
+              <Sparkles className="w-3 h-3" /> Rox signature · Cable Beach
+            </span>
+            <h2 className="serif text-4xl sm:text-6xl tracking-tight leading-[1.02] drop-shadow-lg">
+              Toes in the <em className="italic text-[#F7E6C6]">Turquoise.</em>
+            </h2>
+            <p className="text-sm sm:text-base text-white/85 leading-relaxed">
+              A full day at Cable Beach / Goodman's Bay — reserved chair + umbrella per guest, kayaks and watersports on-site, round-trip ride from your hotel or cruise port. One upfront price. No haggling.
+            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1 text-[11px] text-white/80">
+              <span className="inline-flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#D4A94A]" />
+                <b className="text-white">From $40</b> per guest
+              </span>
+              <span className="opacity-50">·</span>
+              <span><b className="text-white">★ 4.9</b> · 320+ reviews</span>
+              <span className="opacity-50">·</span>
+              <span><b className="text-white">Same-day</b> booking</span>
+              {weather && (
+                <>
+                  <span className="opacity-50">·</span>
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold text-[10px]"
+                    style={{ background: `${weather.hex}2A`, color: "#fff", borderColor: weather.hex, borderWidth: 1 }}
+                    data-testid="home-cable-beach-weather"
+                    title={`Live from Open-Meteo · ${weather.label}`}
+                  >
+                    <span>{weather.emoji}</span>
+                    <span>{weather.label}</span>
+                    {weather.water_c != null && <span>· {Math.round(weather.water_c)}°C water</span>}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-8 grid md:grid-cols-2 gap-4" data-testid="home-cable-beach-audiences">
+            <Link
+              to="/tours/cable-beach-day?src=cruise"
+              data-testid="home-cable-beach-cruise"
+              className="group/lane rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md p-5 hover:bg-white/15 hover:border-[#D4A94A]/50 transition-all"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Ship className="w-4 h-4 text-[#D4A94A]" />
+                    <span className="text-[9px] tracking-[0.32em] uppercase font-black text-[#F7E6C6]">Cruise passengers</span>
+                  </div>
+                  <div className="serif text-xl leading-tight">Straight off the port, on the sand in 15 min.</div>
+                  <p className="text-[12px] text-white/75 mt-1.5 leading-relaxed">
+                    Round-trip from Nassau Cruise Port · back aboard before all-aboard call. $10 one-way · $20 round-trip per person.
+                  </p>
+                </div>
+                <ArrowRight className="w-5 h-5 text-white/60 shrink-0 group-hover/lane:translate-x-1 group-hover/lane:text-[#F7E6C6] transition" />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">Short-call ready</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">Lunch add-on</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">Parasail · jet ski</span>
+              </div>
+            </Link>
+
+            <Link
+              to="/tours/cable-beach-day?src=local"
+              data-testid="home-cable-beach-local"
+              className="group/lane rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md p-5 hover:bg-white/15 hover:border-[#D4A94A]/50 transition-all"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Hotel className="w-4 h-4 text-[#D4A94A]" />
+                    <span className="text-[9px] tracking-[0.32em] uppercase font-black text-[#F7E6C6]">Bahamians & residents</span>
+                  </div>
+                  <div className="serif text-xl leading-tight">Your weekend reset, dinner included.</div>
+                  <p className="text-[12px] text-white/75 mt-1.5 leading-relaxed">
+                    Pick-up from your hotel or home · jerk, BBQ, seafood combos on the beach. <b className="text-[#F7E6C6]">Every 5th beach day is on us</b> — stamp card auto-tracks per email.
+                  </p>
+                </div>
+                <ArrowRight className="w-5 h-5 text-white/60 shrink-0 group-hover/lane:translate-x-1 group-hover/lane:text-[#F7E6C6] transition" />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">Jerk · BBQ · seafood</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">5th day free</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.18em] bg-white/10 border border-white/15 rounded-full px-2.5 py-1">Group pricing</span>
+              </div>
+            </Link>
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <Link
+              to="/tours/cable-beach-day"
+              data-testid="home-cable-beach-book"
+              className="btn-shine inline-flex items-center gap-1.5 rounded-full bg-[#E86A3C] text-white px-6 py-3 text-sm font-black uppercase tracking-wider hover:bg-[#d55a30] active:scale-95"
+            >
+              Book from $40 · instant <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              to="/tours/cable-beach-day"
+              data-testid="home-cable-beach-details"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/10 backdrop-blur px-6 py-3 text-sm font-black uppercase tracking-wider hover:bg-white hover:text-[#0B3B5C] transition-colors"
+            >
+              See what's included
+            </Link>
+            <span className="text-[11px] text-white/60 ml-1">Pay Stripe or PayPal · full refund up to 24 h out</span>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
