@@ -31,6 +31,9 @@ export default function CableBeachDay() {
   const [comboId, setComboId] = useState(null);                 // Chef's-choice bundle
   const [dietFilters, setDietFilters] = useState(new Set());    // GF / pescatarian / DF filters
   const [allergies, setAllergies] = useState(new Set());        // Confirmed allergies for dispatch
+  // Per-dinner side selections keyed by lunch item id: {dinnerId: Set<sideId>}.
+  // Stored as a plain object so the quote-body memo can shallow-serialise it.
+  const [sideSelections, setSideSelections] = useState({});
   const [quote, setQuote] = useState(null);
   const [quoting, setQuoting] = useState(false);
   const [shareToken, setShareToken] = useState(null);     // Inbound ?r=<token>
@@ -60,13 +63,25 @@ export default function CableBeachDay() {
     } catch { /* noop */ }
   }, []);
 
-  const quoteBody = useMemo(() => ({
-    pax, extra_seats: extraSeats, transfer_kind: transferKind,
-    hotel_id: transferKind === "hotel" ? (hotelId || null) : null,
-    lunch_item_ids: Array.from(lunchIds),
-    drink_item_ids: Array.from(drinkIds),
-    combo_id: comboId,
-  }), [pax, extraSeats, transferKind, hotelId, lunchIds, drinkIds, comboId]);
+  const quoteBody = useMemo(() => {
+    // Only submit side_selections for dinners actually in the cart —
+    // keeps the quote body stable when a user de-selects a dinner but
+    // their old picks still live in sideSelections.
+    const sideBody = {};
+    Object.entries(sideSelections).forEach(([dinnerId, sids]) => {
+      if (lunchIds.has(dinnerId) && sids && sids.size > 0) {
+        sideBody[dinnerId] = Array.from(sids);
+      }
+    });
+    return {
+      pax, extra_seats: extraSeats, transfer_kind: transferKind,
+      hotel_id: transferKind === "hotel" ? (hotelId || null) : null,
+      lunch_item_ids: Array.from(lunchIds),
+      drink_item_ids: Array.from(drinkIds),
+      combo_id: comboId,
+      side_selections: sideBody,
+    };
+  }, [pax, extraSeats, transferKind, hotelId, lunchIds, drinkIds, comboId, sideSelections]);
 
   useEffect(() => {
     if (!cfg?.active) return;
@@ -187,6 +202,11 @@ export default function CableBeachDay() {
       lunch_item_ids: Array.from(lunchIds),
       drink_item_ids: Array.from(drinkIds),
       combo_id: comboId,
+      side_selections: Object.fromEntries(
+        Object.entries(sideSelections)
+          .filter(([dinnerId, sids]) => lunchIds.has(dinnerId) && sids && sids.size > 0)
+          .map(([dinnerId, sids]) => [dinnerId, Array.from(sids)])
+      ),
       allergies: Array.from(allergies),
       special_requests: guest.special_requests || null,
       share_token: shareToken || null,
@@ -274,106 +294,22 @@ export default function CableBeachDay() {
             )}
           </Section>
 
-          <Section icon={Utensils} title="Food menu (optional) — dinners include rice & 2 sides">
-            {/* Chef's-choice combo card — one-tap selects the bundle items + applies the discount. */}
-            {(cfg.combos || []).map((combo) => {
-              const required = new Set(combo.items || []);
-              const allSelected = Array.from(required).every((id) => lunchIds.has(id) || drinkIds.has(id));
-              const active = comboId === combo.id && allSelected;
-              const applyCombo = () => {
-                const nextLunch = new Set(lunchIds);
-                const nextDrink = new Set(drinkIds);
-                const lunchIdsAll = new Set((cfg.lunch_items || []).map((x) => x.id));
-                combo.items.forEach((id) => {
-                  if (lunchIdsAll.has(id)) nextLunch.add(id);
-                  else nextDrink.add(id);
-                });
-                setLunchIds(nextLunch); setDrinkIds(nextDrink); setComboId(combo.id);
-                toast.success(`${combo.name} applied · save $${combo.discount}`);
-              };
-              const clearCombo = () => { setComboId(null); toast.success("Combo removed"); };
-              const comboItems = combo.items.map((id) =>
-                (cfg.lunch_items || []).find((x) => x.id === id)
-                || (cfg.drink_items || []).find((x) => x.id === id)
-              ).filter(Boolean);
-              return (
-                <button key={combo.id} type="button" onClick={active ? clearCombo : applyCombo}
-                  data-testid={`cable-combo-${combo.id}`}
-                  className={`w-full text-left rounded-xl border-2 p-3 mb-3 transition ${active ? "border-[#D4A94A] bg-gradient-to-br from-[#FFF4EC] to-[#FBF7EF]" : "border-dashed border-[#D4A94A]/50 bg-white hover:border-[#D4A94A]"}`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <ChefHat className={`w-4 h-4 ${active ? "text-[#D4A94A]" : "text-[#64748B]"}`} />
-                        <span className="text-[10px] tracking-[0.28em] uppercase font-black text-[#D4A94A]">Chef's pick</span>
-                        {active && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 rounded-full px-2 py-0.5">Applied</span>}
-                      </div>
-                      <div className="serif text-xl text-[#0B3B5C] mt-1">{combo.name}</div>
-                      <div className="text-[11px] text-[#64748B] mt-0.5">{combo.subtitle}</div>
-                      <div className="text-[11px] text-[#0B3B5C] mt-1 font-medium">
-                        {comboItems.map((it) => it.name).join(" + ")}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Save</div>
-                      <div className="serif text-2xl text-[#E86A3C] font-black">${combo.discount}</div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-            {/* Dietary filter chips */}
-            {(() => {
-              const DIET = [
-                { id: "gluten_free",    label: "Gluten-free",    glyph: "🌾❌" },
-                { id: "pescatarian",    label: "Pescatarian",    glyph: "🐟" },
-                { id: "dairy_free",     label: "Dairy-free",     glyph: "🥛❌" },
-                { id: "peanut_free",    label: "Peanut-free",    glyph: "🥜❌" },
-                { id: "shellfish_free", label: "Shellfish-free", glyph: "🦐❌" },
-              ];
-              return (
-                <div className="mb-3" data-testid="cable-diet-filters">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider mr-1">Filter:</span>
-                    {DIET.map((d) => {
-                      const active = dietFilters.has(d.id);
-                      return (
-                        <button key={d.id} type="button"
-                          onClick={() => setDietFilters((prev) => {
-                            const n = new Set(prev); n.has(d.id) ? n.delete(d.id) : n.add(d.id); return n;
-                          })}
-                          data-testid={`cable-diet-${d.id}`}
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${active ? "bg-[#0B3B5C] text-white" : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"}`}>
-                          <span className="text-[12px] leading-none">{d.glyph}</span>
-                          <span>{d.label}</span>
-                        </button>
-                      );
-                    })}
-                    {dietFilters.size > 0 && (
-                      <button onClick={() => setDietFilters(new Set())} className="text-[11px] text-[#64748B] underline hover:text-[#0B3B5C]"
-                        data-testid="cable-diet-clear">Clear</button>
-                    )}
-                  </div>
-                  <AllergyPrompt dietFilters={dietFilters} allergies={allergies} setAllergies={setAllergies} />
-                </div>
-              );
-            })()}
-            {cfg.lunch_items.length === 0 ? (
-              <p className="text-xs text-[#64748B]">Menu will be published shortly. Call dispatch to add dinner after booking.</p>
-            ) : (
-              <div className="grid sm:grid-cols-2 gap-2">
-                {cfg.lunch_items
-                  .filter((it) => dietFilters.size === 0 || Array.from(dietFilters).every((f) => (it.tags || []).includes(f)))
-                  .map((it) => (
-                    <MenuTile key={it.id} it={it} active={lunchIds.has(it.id)}
-                      onClick={() => toggleItem(setLunchIds, it.id)}
-                      testId={`cable-lunch-${it.id}`} />
-                  ))}
-                {cfg.lunch_items.filter((it) => dietFilters.size === 0 || Array.from(dietFilters).every((f) => (it.tags || []).includes(f))).length === 0 && (
-                  <div className="col-span-full text-xs text-[#64748B] italic py-3 text-center">No dinners match these filters — try fewer tags.</div>
-                )}
-              </div>
-            )}
-          </Section>
+          <FoodMenu
+            cfg={cfg}
+            lunchIds={lunchIds}
+            drinkIds={drinkIds}
+            comboId={comboId}
+            dietFilters={dietFilters}
+            allergies={allergies}
+            sideSelections={sideSelections}
+            setLunchIds={setLunchIds}
+            setDrinkIds={setDrinkIds}
+            setComboId={setComboId}
+            setDietFilters={setDietFilters}
+            setAllergies={setAllergies}
+            setSideSelections={setSideSelections}
+            toggleItem={toggleItem}
+          />
 
           <Section icon={Wine} title="Drinks (optional)">
             {cfg.drink_items.length === 0 ? (
@@ -403,6 +339,10 @@ export default function CableBeachDay() {
                   <div className="pt-1 text-[11px] font-bold uppercase tracking-wider text-[#0B3B5C]">Menu</div>
                   {quote.menu_lines.map((m) => <Line key={m.id} label={m.name}>{money(m.price)}</Line>)}
                 </>
+              )}
+              {quote.sides_extra_total > 0 && (
+                <Line label={`Extra sides · ${quote.sides_extra_count}× $${quote.extra_side_price}`}
+                  >{money(quote.sides_extra_total)}</Line>
               )}
               {quote.combo_applied && (
                 <Line label={`Chef's combo · ${quote.combo_applied.name}`}>
@@ -595,7 +535,263 @@ function MenuTile({ it, active, onClick, testId }) {
           })}
         </div>
       )}
+      {active && it.include_sides && (
+        <div className="mt-1.5 text-[10px] text-[#E86A3C] font-bold uppercase tracking-wider">
+          Pick 2 sides below ↓
+        </div>
+      )}
     </button>
+  );
+}
+
+/**
+ * FoodMenu — jump-link nav + grouped categories (Appetizers · Burgers · Jerk
+ * · BBQ · Seafood Combos · Dinners) + chef's-choice combo card + per-dinner
+ * side pickers. Sticky nav keeps the categories one-tap away for cruise
+ * guests browsing on mobile, where a 29-item flat list would hide half the
+ * menu below the fold.
+ */
+const MENU_SECTIONS = [
+  { id: "appetizer",     label: "Appetizers",     anchor: "menu-appetizer" },
+  { id: "burger",        label: "Burgers",        anchor: "menu-burger" },
+  { id: "jerk",          label: "Jerk",           anchor: "menu-jerk" },
+  { id: "bbq",           label: "BBQ",            anchor: "menu-bbq" },
+  { id: "seafood_combo", label: "Seafood Combos", anchor: "menu-seafood-combo" },
+  { id: "dinner",        label: "Dinners",        anchor: "menu-dinner" },
+];
+
+function FoodMenu({
+  cfg, lunchIds, drinkIds, comboId, dietFilters, allergies, sideSelections,
+  setLunchIds, setDrinkIds, setComboId, setDietFilters, setAllergies, setSideSelections,
+  toggleItem,
+}) {
+  // Filter helper used by every category.
+  const matchesFilter = (it) =>
+    dietFilters.size === 0
+    || Array.from(dietFilters).every((f) => (it.tags || []).includes(f));
+  const visibleItems = (cfg.lunch_items || []).filter(matchesFilter);
+  const grouped = MENU_SECTIONS.map((sec) => ({
+    ...sec,
+    items: visibleItems.filter((it) => (it.category || "dinner") === sec.id),
+  }));
+  const visibleSections = grouped.filter((g) => g.items.length > 0);
+
+  const scrollTo = (anchor) => {
+    const el = document.getElementById(anchor);
+    if (!el) return;
+    const y = el.getBoundingClientRect().top + window.pageYOffset - 80; // offset sticky header
+    window.scrollTo({ top: y, behavior: "smooth" });
+  };
+
+  // Side-picker toggle: never allow more than a reasonable max (6 sides).
+  const toggleSide = (dinnerId, sideId) => setSideSelections((prev) => {
+    const next = { ...prev };
+    const cur = new Set(next[dinnerId] || []);
+    if (cur.has(sideId)) cur.delete(sideId);
+    else if (cur.size < 6) cur.add(sideId);
+    next[dinnerId] = cur;
+    return next;
+  });
+
+  return (
+    <section className="rounded-2xl border border-[#E2E8F0] bg-white p-5" data-testid="cable-food-menu">
+      <div className="flex items-center gap-2 mb-3">
+        <Utensils className="w-5 h-5 text-[#D4A94A]" />
+        <h2 className="font-bold text-[#0B3B5C]">Food menu <span className="text-[11px] text-[#64748B] font-normal">(optional) · dinners include 2 free sides · extra $5 each</span></h2>
+      </div>
+
+      {/* Sticky jump-link nav bar — scrolls with the viewport and keeps the
+          categories one-tap away even deep into the 29-item menu. */}
+      <nav
+        className="sticky top-20 z-10 -mx-5 px-5 py-2 bg-white/90 backdrop-blur border-y border-[#E2E8F0] mb-4"
+        data-testid="cable-menu-nav"
+      >
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <span className="text-[10px] text-[#64748B] font-black uppercase tracking-wider mr-1 shrink-0">Hungry?</span>
+          {visibleSections.map((sec) => (
+            <button
+              key={sec.id}
+              type="button"
+              onClick={() => scrollTo(sec.anchor)}
+              data-testid={`cable-menu-jump-${sec.id}`}
+              className="shrink-0 inline-flex items-center gap-1 rounded-full border border-[#E2E8F0] bg-white px-3 py-1 text-[11px] font-bold text-[#0B3B5C] hover:border-[#D4A94A] hover:text-[#E86A3C] transition"
+            >
+              {sec.label}
+              <span className="text-[10px] text-[#94A3B8] font-mono">{sec.items.length}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* Chef's-choice combo card — one-tap selects the bundle items + applies the discount. */}
+      {(cfg.combos || []).map((combo) => {
+        const required = new Set(combo.items || []);
+        const allSelected = Array.from(required).every((id) => lunchIds.has(id) || drinkIds.has(id));
+        const active = comboId === combo.id && allSelected;
+        const applyCombo = () => {
+          const nextLunch = new Set(lunchIds);
+          const nextDrink = new Set(drinkIds);
+          const lunchIdsAll = new Set((cfg.lunch_items || []).map((x) => x.id));
+          combo.items.forEach((id) => {
+            if (lunchIdsAll.has(id)) nextLunch.add(id);
+            else nextDrink.add(id);
+          });
+          setLunchIds(nextLunch); setDrinkIds(nextDrink); setComboId(combo.id);
+          toast.success(`${combo.name} applied · save $${combo.discount}`);
+        };
+        const clearCombo = () => { setComboId(null); toast.success("Combo removed"); };
+        const comboItems = combo.items.map((id) =>
+          (cfg.lunch_items || []).find((x) => x.id === id)
+          || (cfg.drink_items || []).find((x) => x.id === id)
+        ).filter(Boolean);
+        return (
+          <button key={combo.id} type="button" onClick={active ? clearCombo : applyCombo}
+            data-testid={`cable-combo-${combo.id}`}
+            className={`w-full text-left rounded-xl border-2 p-3 mb-3 transition ${active ? "border-[#D4A94A] bg-gradient-to-br from-[#FFF4EC] to-[#FBF7EF]" : "border-dashed border-[#D4A94A]/50 bg-white hover:border-[#D4A94A]"}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <ChefHat className={`w-4 h-4 ${active ? "text-[#D4A94A]" : "text-[#64748B]"}`} />
+                  <span className="text-[10px] tracking-[0.28em] uppercase font-black text-[#D4A94A]">Chef's pick</span>
+                  {active && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 rounded-full px-2 py-0.5">Applied</span>}
+                </div>
+                <div className="serif text-xl text-[#0B3B5C] mt-1">{combo.name}</div>
+                <div className="text-[11px] text-[#64748B] mt-0.5">{combo.subtitle}</div>
+                <div className="text-[11px] text-[#0B3B5C] mt-1 font-medium">
+                  {comboItems.map((it) => it.name).join(" + ")}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Save</div>
+                <div className="serif text-2xl text-[#E86A3C] font-black">${combo.discount}</div>
+              </div>
+            </div>
+          </button>
+        );
+      })}
+
+      {/* Dietary filter chips */}
+      {(() => {
+        const DIET = [
+          { id: "gluten_free",    label: "Gluten-free",    glyph: "🌾❌" },
+          { id: "pescatarian",    label: "Pescatarian",    glyph: "🐟" },
+          { id: "dairy_free",     label: "Dairy-free",     glyph: "🥛❌" },
+          { id: "peanut_free",    label: "Peanut-free",    glyph: "🥜❌" },
+          { id: "shellfish_free", label: "Shellfish-free", glyph: "🦐❌" },
+        ];
+        return (
+          <div className="mb-4" data-testid="cable-diet-filters">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider mr-1">Filter:</span>
+              {DIET.map((d) => {
+                const active = dietFilters.has(d.id);
+                return (
+                  <button key={d.id} type="button"
+                    onClick={() => setDietFilters((prev) => {
+                      const n = new Set(prev); n.has(d.id) ? n.delete(d.id) : n.add(d.id); return n;
+                    })}
+                    data-testid={`cable-diet-${d.id}`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${active ? "bg-[#0B3B5C] text-white" : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"}`}>
+                    <span className="text-[12px] leading-none">{d.glyph}</span>
+                    <span>{d.label}</span>
+                  </button>
+                );
+              })}
+              {dietFilters.size > 0 && (
+                <button onClick={() => setDietFilters(new Set())} className="text-[11px] text-[#64748B] underline hover:text-[#0B3B5C]"
+                  data-testid="cable-diet-clear">Clear</button>
+              )}
+            </div>
+            <AllergyPrompt dietFilters={dietFilters} allergies={allergies} setAllergies={setAllergies} />
+          </div>
+        );
+      })()}
+
+      {(cfg.lunch_items || []).length === 0 ? (
+        <p className="text-xs text-[#64748B]">Menu will be published shortly. Call dispatch to add dinner after booking.</p>
+      ) : visibleSections.length === 0 ? (
+        <div className="text-xs text-[#64748B] italic py-3 text-center" data-testid="cable-menu-empty">
+          No dishes match these filters — try fewer tags.
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {visibleSections.map((sec) => (
+            <div key={sec.id} id={sec.anchor} data-testid={`cable-menu-section-${sec.id}`}>
+              <div className="flex items-center justify-between mb-2 pt-1">
+                <h3 className="text-[11px] tracking-[0.3em] uppercase font-black text-[#D4A94A]">{sec.label}</h3>
+                <span className="text-[10px] text-[#94A3B8] font-mono">{sec.items.length} dish{sec.items.length === 1 ? "" : "es"}</span>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-2">
+                {sec.items.map((it) => (
+                  <div key={it.id} className="space-y-1.5">
+                    <MenuTile it={it} active={lunchIds.has(it.id)}
+                      onClick={() => toggleItem(setLunchIds, it.id)}
+                      testId={`cable-lunch-${it.id}`} />
+                    {lunchIds.has(it.id) && it.include_sides && (
+                      <SidePicker
+                        dinner={it}
+                        sides={cfg.sides || []}
+                        selected={sideSelections[it.id] || new Set()}
+                        freeCount={cfg.sides_included_per_dinner || 2}
+                        extraPrice={cfg.extra_side_price || 5}
+                        onToggle={(sideId) => toggleSide(it.id, sideId)}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * SidePicker — 6 side chips revealed when the guest selects a dinner that
+ * `include_sides`. First `freeCount` picks are free; each additional side
+ * costs `extraPrice`. Running count updates in real time so there's no
+ * surprise at checkout.
+ */
+function SidePicker({ dinner, sides, selected, freeCount, extraPrice, onToggle }) {
+  const count = selected.size;
+  const extras = Math.max(0, count - freeCount);
+  const extraCost = extras * extraPrice;
+  return (
+    <div className="rounded-lg border border-[#D4A94A]/40 bg-[#FBF7EF] p-2.5"
+      data-testid={`cable-sides-${dinner.id}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="text-[10px] font-black uppercase tracking-wider text-[#0B3B5C]">
+          Pick your sides · <span className="text-[#64748B]">{freeCount} free</span>
+        </div>
+        <div className="text-[11px] font-mono text-[#0B3B5C]">
+          {count}/{freeCount}{extras > 0 && <span className="text-[#E86A3C]"> · +${extraCost}</span>}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {sides.map((s) => {
+          const picked = selected.has(s.id);
+          const over = picked ? false : count >= freeCount;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onToggle(s.id)}
+              data-testid={`cable-side-${dinner.id}-${s.id}`}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                picked
+                  ? "bg-[#0B3B5C] text-white"
+                  : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"
+              }`}
+            >
+              {s.name}
+              {over && <span className="text-[9px] font-black text-[#E86A3C] ml-0.5">+${extraPrice}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

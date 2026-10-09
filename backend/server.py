@@ -3749,42 +3749,57 @@ CABLE_BEACH_DEFAULTS = {
     "extra_seat_price": 15.0,        # Additional chairs beyond 1-per-guest
     "cruise_oneway_price": 10.0,     # Transfer FROM cruise port (per person)
     "cruise_roundtrip_price": 20.0,  # Round-trip cruise port (per person)
+    # Dinner side-dish policy — every dinner (jerk / bbq / classic dinner)
+    # includes 2 sides free; additional sides are charged a flat
+    # `extra_side_price` each.
+    "sides_included_per_dinner": 2,
+    "extra_side_price": 5.0,
+    "sides": [
+        {"id": "mac_cheese",   "name": "Mac & Cheese"},
+        {"id": "potato_salad", "name": "Bahamian Potato Salad"},
+        {"id": "cabbage",      "name": "Steamed Cabbage"},
+        {"id": "broccoli",     "name": "Broccoli"},
+        {"id": "plantain",     "name": "Plantain"},
+        {"id": "loose_corn",   "name": "Loose Corn"},
+    ],
     # Starter menus — admin can rename / reprice / remove via the dashboard.
     # Dinners include rice & two sides; appetizers listed per piece-count.
     # `tags` are informational dietary flags (gluten_free, pescatarian, dairy_free).
+    # `category` powers the mobile jump-link nav bar on the food menu.
+    # `include_sides=True` reveals the 2-free-sides picker ($5 each extra).
     "lunch_items": [
-        {"id": "conch_fritters_5",  "name": "Bahamian Conch Fritters · 5 pc",  "price": 10.0, "tags": ["pescatarian", "dairy_free", "peanut_free"]},
-        {"id": "conch_fritters_8",  "name": "Bahamian Conch Fritters · 8 pc",  "price": 15.0, "tags": ["pescatarian", "dairy_free", "peanut_free"]},
-        {"id": "conch_fritters_12", "name": "Bahamian Conch Fritters · 12 pc", "price": 18.0, "tags": ["pescatarian", "dairy_free", "peanut_free"]},
-        {"id": "jerk_chicken",   "name": "Jerk Chicken Dinner",   "price": 30.0, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
-        {"id": "jerk_pork",      "name": "Jerk Pork Dinner",      "price": 30.0, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
-        {"id": "jerk_ribs",      "name": "Jerk Ribs Dinner",      "price": 30.0, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
-        {"id": "jerk_salmon",    "name": "Jerk Salmon Dinner",    "price": 35.0, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free", "shellfish_free"]},
-        {"id": "jerk_shrimp",    "name": "Jerk Shrimp Dinner",    "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free"]},
-        {"id": "jerk_conch",     "name": "Jerk Conch Dinner",     "price": 35.0, "tags": ["dairy_free", "pescatarian", "peanut_free"]},
-        {"id": "jerk_lobster",   "name": "Jerk Lobster Dinner",   "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free"]},
-        {"id": "bbq_chicken",    "name": "BBQ Chicken Dinner",    "price": 25.0, "tags": ["dairy_free", "peanut_free", "shellfish_free"]},
-        {"id": "bbq_pork",       "name": "BBQ Pork Dinner",       "price": 30.0, "tags": ["dairy_free", "peanut_free", "shellfish_free"]},
-        {"id": "bbq_ribs",       "name": "BBQ Ribs Dinner",       "price": 30.0, "tags": ["dairy_free", "peanut_free", "shellfish_free"]},
-        {"id": "baked_pork_chop","name": "Baked Pork Chop Dinner","price": 40.0, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
-        {"id": "snapper_dinner", "name": "Snapper Dinner",        "price": 40.0, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free", "shellfish_free"]},
-        {"id": "soamoo_dinner",  "name": "Soamoo Dinner",         "price": 35.0, "tags": ["dairy_free", "peanut_free"]},
+        {"id": "conch_fritters_5",  "name": "Bahamian Conch Fritters · 5 pc",  "price": 10.0, "category": "appetizer", "tags": ["pescatarian", "dairy_free", "peanut_free"]},
+        {"id": "conch_fritters_8",  "name": "Bahamian Conch Fritters · 8 pc",  "price": 15.0, "category": "appetizer", "tags": ["pescatarian", "dairy_free", "peanut_free"]},
+        {"id": "conch_fritters_12", "name": "Bahamian Conch Fritters · 12 pc", "price": 18.0, "category": "appetizer", "tags": ["pescatarian", "dairy_free", "peanut_free"]},
+        {"id": "jerk_chicken",   "name": "Jerk Chicken Dinner",   "price": 30.0, "category": "jerk", "include_sides": True, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "jerk_pork",      "name": "Jerk Pork Dinner",      "price": 30.0, "category": "jerk", "include_sides": True, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "jerk_ribs",      "name": "Jerk Ribs Dinner",      "price": 30.0, "category": "jerk", "include_sides": True, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "jerk_salmon",    "name": "Jerk Salmon Dinner",    "price": 35.0, "category": "jerk", "include_sides": True, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free", "shellfish_free"]},
+        {"id": "jerk_shrimp",    "name": "Jerk Shrimp Dinner",    "price": 40.0, "category": "jerk", "include_sides": True, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free"]},
+        {"id": "jerk_conch",     "name": "Jerk Conch Dinner",     "price": 35.0, "category": "jerk", "include_sides": True, "tags": ["dairy_free", "pescatarian", "peanut_free"]},
+        {"id": "jerk_lobster",   "name": "Jerk Lobster Dinner",   "price": 40.0, "category": "jerk", "include_sides": True, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free"]},
+        {"id": "bbq_chicken",    "name": "BBQ Chicken Dinner",    "price": 25.0, "category": "bbq",  "include_sides": True, "tags": ["dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "bbq_pork",       "name": "BBQ Pork Dinner",       "price": 30.0, "category": "bbq",  "include_sides": True, "tags": ["dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "bbq_ribs",       "name": "BBQ Ribs Dinner",       "price": 30.0, "category": "bbq",  "include_sides": True, "tags": ["dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "baked_pork_chop","name": "Baked Pork Chop Dinner","price": 40.0, "category": "dinner", "include_sides": True, "tags": ["gluten_free", "dairy_free", "peanut_free", "shellfish_free"]},
+        {"id": "snapper_dinner", "name": "Snapper Dinner",        "price": 40.0, "category": "dinner", "include_sides": True, "tags": ["gluten_free", "dairy_free", "pescatarian", "peanut_free", "shellfish_free"]},
+        {"id": "soamoo_dinner",  "name": "Soamoo Dinner",         "price": 35.0, "category": "dinner", "include_sides": True, "tags": ["dairy_free", "peanut_free"]},
         # Seafood combo plates — tags conservative (no shellfish_free since
         # most contain lobster/shrimp; chicken-wings combo isn't pescatarian).
-        {"id": "combo_lcs",      "name": "Lobster · Conch · Shrimp Combo",          "price": 65.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
-        {"id": "combo_lcsf",     "name": "Lobster · Conch · Shrimp · Fish Combo",   "price": 70.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
-        {"id": "combo_scsl",     "name": "Salmon · Conch · Shrimp · Lobster Combo", "price": 70.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
-        {"id": "combo_cs",       "name": "Conch & Shrimp",                          "price": 70.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
-        {"id": "combo_ls",       "name": "Lobster & Shrimp",                        "price": 60.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
-        {"id": "combo_gc",       "name": "Grouper & Conch",                         "price": 60.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
-        {"id": "combo_gl",       "name": "Grouper & Lobster",                       "price": 35.0, "tags": ["dairy_free", "peanut_free", "pescatarian"]},
-        {"id": "combo_ws",       "name": "Wings & Shrimp",                          "price": 50.0, "tags": ["dairy_free", "peanut_free"]},
+        {"id": "combo_lcs",      "name": "Lobster · Conch · Shrimp Combo",          "price": 65.0, "category": "seafood_combo", "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_lcsf",     "name": "Lobster · Conch · Shrimp · Fish Combo",   "price": 70.0, "category": "seafood_combo", "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_scsl",     "name": "Salmon · Conch · Shrimp · Lobster Combo", "price": 70.0, "category": "seafood_combo", "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_cs",       "name": "Conch & Shrimp",                          "price": 70.0, "category": "seafood_combo", "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_ls",       "name": "Lobster & Shrimp",                        "price": 60.0, "category": "seafood_combo", "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_gc",       "name": "Grouper & Conch",                         "price": 60.0, "category": "seafood_combo", "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_gl",       "name": "Grouper & Lobster",                       "price": 35.0, "category": "seafood_combo", "tags": ["dairy_free", "peanut_free", "pescatarian"]},
+        {"id": "combo_ws",       "name": "Wings & Shrimp",                          "price": 50.0, "category": "seafood_combo", "tags": ["dairy_free", "peanut_free"]},
         # Burgers & sandwiches — buns contain gluten; cheese likely so no DF default.
-        {"id": "burger_hamburger","name": "Hamburger",       "price": 30.0, "tags": ["peanut_free", "shellfish_free"]},
-        {"id": "burger_shrimp",   "name": "Shrimp Burger",   "price": 33.0, "tags": ["peanut_free", "pescatarian"]},
-        {"id": "burger_conch",    "name": "Conch Burger",    "price": 33.0, "tags": ["peanut_free", "pescatarian"]},
-        {"id": "burger_lobster",  "name": "Lobster Burger",  "price": 33.0, "tags": ["peanut_free", "pescatarian"]},
-        {"id": "burger_chicken",  "name": "Chicken Burger",  "price": 25.0, "tags": ["peanut_free", "shellfish_free"]},
+        {"id": "burger_hamburger","name": "Hamburger",       "price": 30.0, "category": "burger", "tags": ["peanut_free", "shellfish_free"]},
+        {"id": "burger_shrimp",   "name": "Shrimp Burger",   "price": 33.0, "category": "burger", "tags": ["peanut_free", "pescatarian"]},
+        {"id": "burger_conch",    "name": "Conch Burger",    "price": 33.0, "category": "burger", "tags": ["peanut_free", "pescatarian"]},
+        {"id": "burger_lobster",  "name": "Lobster Burger",  "price": 33.0, "category": "burger", "tags": ["peanut_free", "pescatarian"]},
+        {"id": "burger_chicken",  "name": "Chicken Burger",  "price": 25.0, "category": "burger", "tags": ["peanut_free", "shellfish_free"]},
     ],
     # Chef's-choice combos — frontend highlights these above the menu;
     # backend validates and applies the bundle discount only when all
@@ -3843,6 +3858,35 @@ def _hotel_tariffs() -> list[dict]:
     ]
 
 
+# Infer `category` + `include_sides` for lunch items persisted before the
+# jump-link nav / sides picker shipped. Admin can override by saving the
+# items again from the dashboard. Kept narrow: only sets fields that are
+# missing, never overwrites a value the admin already chose.
+_CATEGORY_PREFIX_MAP = (
+    ("conch_fritters", "appetizer"),
+    ("burger_",        "burger"),
+    ("jerk_",          "jerk"),
+    ("bbq_",           "bbq"),
+    ("combo_",         "seafood_combo"),
+)
+_SIDED_CATEGORIES = {"jerk", "bbq", "dinner"}
+
+
+def _classify_lunch_item(item: dict) -> dict:
+    out = dict(item or {})
+    if not out.get("category"):
+        iid = str(out.get("id") or "")
+        cat = None
+        for prefix, c in _CATEGORY_PREFIX_MAP:
+            if iid.startswith(prefix):
+                cat = c
+                break
+        out["category"] = cat or "dinner"
+    if "include_sides" not in out:
+        out["include_sides"] = out["category"] in _SIDED_CATEGORIES
+    return out
+
+
 async def _cable_beach_cfg() -> dict:
     cfg = await db.site_config.find_one({"_id": "main"}) or {}
     pkg = cfg.get("cable_beach_pkg") or {}
@@ -3852,6 +3896,19 @@ async def _cable_beach_cfg() -> dict:
     merged["lunch_items"] = pkg.get("lunch_items") or CABLE_BEACH_DEFAULTS["lunch_items"]
     merged["drink_items"] = pkg.get("drink_items") or CABLE_BEACH_DEFAULTS["drink_items"]
     merged["combos"] = pkg.get("combos") or CABLE_BEACH_DEFAULTS["combos"]
+    # Sides policy — admin can override list / count / price via dashboard but
+    # we fall back to defaults for every missing key individually so old DB
+    # docs don't blank out the picker.
+    merged["sides"] = pkg.get("sides") or CABLE_BEACH_DEFAULTS["sides"]
+    merged["sides_included_per_dinner"] = pkg.get(
+        "sides_included_per_dinner", CABLE_BEACH_DEFAULTS["sides_included_per_dinner"],
+    )
+    merged["extra_side_price"] = pkg.get(
+        "extra_side_price", CABLE_BEACH_DEFAULTS["extra_side_price"],
+    )
+    # Classify items that live in the DB from previous saves and are missing
+    # the new `category` / `include_sides` fields the jump-link nav expects.
+    merged["lunch_items"] = [_classify_lunch_item(it) for it in merged["lunch_items"]]
     merged["hotel_fares"] = _hotel_tariffs()
     return merged
 
@@ -3876,6 +3933,9 @@ class CableBeachPkgUpdate(BaseModel):
     lunch_items: Optional[list] = None
     drink_items: Optional[list] = None
     combos: Optional[list] = None
+    sides: Optional[list] = None
+    sides_included_per_dinner: Optional[int] = Field(None, ge=0, le=6)
+    extra_side_price: Optional[float] = Field(None, ge=0, le=50)
     active: Optional[bool] = None
 
 
@@ -3887,21 +3947,39 @@ async def admin_update_cable_beach_pkg(
     if not body:
         raise HTTPException(400, "No fields provided.")
     # Light validation on menu items — must be [{id,name,price,tags?}].
-    # `tags` (allergen flags) are preserved on save.
+    # `tags` (allergen flags) are preserved on save, as are `category` /
+    # `include_sides` so the jump-link nav + sides picker keep working.
     for key in ("lunch_items", "drink_items"):
         if key in body:
             cleaned = []
             for row in body[key][:40]:
                 try:
-                    cleaned.append({
+                    out = {
                         "id": str(row.get("id") or uuid.uuid4().hex[:6]),
                         "name": str(row.get("name", "")).strip()[:80],
                         "price": round(float(row.get("price") or 0), 2),
                         "tags": [str(t) for t in (row.get("tags") or []) if t][:8],
-                    })
+                    }
+                    if row.get("category"):
+                        out["category"] = str(row["category"])[:30]
+                    if "include_sides" in row:
+                        out["include_sides"] = bool(row["include_sides"])
+                    cleaned.append(out)
                 except Exception:  # noqa: BLE001
                     continue
             body[key] = [r for r in cleaned if r["name"] and r["price"] >= 0]
+    # Side-dish list — tiny shape {id,name}; max 12 entries.
+    if "sides" in body:
+        cleaned_sides = []
+        for row in body["sides"][:12]:
+            try:
+                cleaned_sides.append({
+                    "id": str(row.get("id") or uuid.uuid4().hex[:6]),
+                    "name": str(row.get("name", "")).strip()[:40],
+                })
+            except Exception:  # noqa: BLE001
+                continue
+        body["sides"] = [s for s in cleaned_sides if s["name"]]
     # Admin combo builder — each combo = {id, name, subtitle?, items[], discount}.
     if "combos" in body:
         cleaned_combos = []
@@ -3935,6 +4013,10 @@ class CableBeachQuoteRequest(BaseModel):
     lunch_item_ids: list[str] = Field(default_factory=list)
     drink_item_ids: list[str] = Field(default_factory=list)
     combo_id: Optional[str] = Field(None, max_length=40)      # Chef's-choice bundle discount
+    # Per-dinner side selections: {dinner_item_id: [side_id, side_id, ...]}.
+    # First N (sides_included_per_dinner) are free; extras priced at
+    # cfg.extra_side_price each.
+    side_selections: dict[str, list[str]] = Field(default_factory=dict)
 
 
 @api_router.post("/cable-beach/quote")
@@ -3974,7 +4056,41 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
         menu_lines.append({"id": mid, "name": it.get("name"), "price": price})
     menu_total = round(menu_total, 2)
 
-    subtotal = round(base + extra + transfer + menu_total, 2)
+    # Dinner side-dish totals. Guests get N free sides per dinner; each
+    # additional side costs cfg.extra_side_price. We only count sides for
+    # items that opt-in via `include_sides` AND are actually in the order.
+    sides_by_id = {s["id"]: s for s in cfg.get("sides") or []}
+    free_sides = int(cfg.get("sides_included_per_dinner", 2) or 0)
+    extra_side_price = float(cfg.get("extra_side_price", 5.0) or 0.0)
+    sides_detail: list[dict] = []
+    total_extra_sides = 0
+    for dinner_id, side_ids in (req.side_selections or {}).items():
+        item = menu_by_id.get(dinner_id)
+        if not item or not item.get("include_sides"):
+            continue
+        if dinner_id not in set(req.lunch_item_ids):
+            continue
+        valid = []
+        seen: set[str] = set()
+        for sid in (side_ids or [])[:12]:
+            if sid in sides_by_id and sid not in seen:
+                valid.append(sid)
+                seen.add(sid)
+        if not valid:
+            continue
+        extras = max(0, len(valid) - free_sides)
+        total_extra_sides += extras
+        sides_detail.append({
+            "dinner_id": dinner_id,
+            "dinner_name": item.get("name"),
+            "side_ids": valid,
+            "side_names": [sides_by_id[sid]["name"] for sid in valid],
+            "free_count": min(len(valid), free_sides),
+            "extra_count": extras,
+        })
+    sides_extra_total = round(total_extra_sides * extra_side_price, 2)
+
+    subtotal = round(base + extra + transfer + menu_total + sides_extra_total, 2)
 
     # Chef's-choice combo — subtract bundle discount only if the booking
     # actually contains every item the combo requires. Protects against
@@ -4007,6 +4123,11 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
         "transfer_total": transfer,
         "menu_lines": menu_lines,
         "menu_total": menu_total,
+        "sides_detail": sides_detail,
+        "sides_extra_count": total_extra_sides,
+        "sides_extra_total": sides_extra_total,
+        "sides_included_per_dinner": free_sides,
+        "extra_side_price": extra_side_price,
         "combo_applied": combo_applied,
         "combo_discount": combo_discount,
         "subtotal": subtotal,
@@ -4044,6 +4165,7 @@ class CableBeachBookRequest(BaseModel):
     lunch_item_ids: list[str] = Field(default_factory=list)
     drink_item_ids: list[str] = Field(default_factory=list)
     combo_id: Optional[str] = Field(None, max_length=40)
+    side_selections: dict[str, list[str]] = Field(default_factory=dict)
     allergies: list[str] = Field(default_factory=list)        # ["shellfish","peanut",...]
     special_requests: Optional[str] = Field(None, max_length=500)
     share_token: Optional[str] = Field(None, max_length=40)  # Credit the sharer
@@ -4094,6 +4216,7 @@ async def cable_beach_book(req: CableBeachBookRequest):
         extra_seats=req.extra_seats,
         lunch_item_ids=req.lunch_item_ids, drink_item_ids=req.drink_item_ids,
         combo_id=req.combo_id,
+        side_selections=req.side_selections,
     )
     quote = await cable_beach_quote(quote_req)
     hotel_match = next((h for h in _hotel_tariffs() if h["id"] == req.hotel_id), None) if req.hotel_id else None
@@ -4135,6 +4258,9 @@ async def cable_beach_book(req: CableBeachBookRequest):
             "hotel_name": hotel_match["name"] if hotel_match else None,
             "extra_seats": req.extra_seats,
             "menu_lines": quote["menu_lines"],
+            "sides_detail": quote.get("sides_detail") or [],
+            "sides_extra_count": quote.get("sides_extra_count") or 0,
+            "sides_extra_total": quote.get("sides_extra_total") or 0.0,
             "combo_applied": quote.get("combo_applied"),
             "combo_discount": quote.get("combo_discount") or 0.0,
         },

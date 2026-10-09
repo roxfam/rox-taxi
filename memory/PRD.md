@@ -21,6 +21,15 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 ---
 
+
+### Feb 2026 — Dinner Sides + Food Menu Jump-Link Nav
+- **6 Bahamian sides** now attach to every dinner (jerk / BBQ / classic): Mac & Cheese · Bahamian Potato Salad · Steamed Cabbage · Broccoli · Plantain · Loose Corn. Policy: **2 free per dinner, $5 each extra** (`sides_included_per_dinner` + `extra_side_price` live in `cable_beach_pkg`, admin-overridable).
+- **Server-side pricing**: `/api/cable-beach/quote` now accepts `side_selections: {dinner_id: [side_id, ...]}` and returns `sides_detail` + `sides_extra_count` + `sides_extra_total`; the booking doc persists the same under `cable_beach.sides_detail`. Sides on non-dinner items (burgers, appetizers, combos) are ignored safely.
+- **Category field** added to every lunch item (`appetizer | burger | jerk | bbq | seafood_combo | dinner`) with an inference helper so historical DB rows auto-classify without a redeploy.
+- **Sticky jump-link nav bar** on the food menu — "Hungry?" row of pills (Appetizers · Burgers · Jerk · BBQ · Seafood Combos · Dinners) with live item counts; one tap smooth-scrolls to each category heading. Mobile-first with horizontal swipe.
+- **Inline side picker** appears below any selected dinner tile: 6 chips, running count `n/2`, extras flagged in orange with `+$5` so the guest sees the surcharge before tapping.
+- Smoke-tested end-to-end: quote returns $10 for 2 extra sides on a jerk chicken + ignores extra sides on a shrimp burger.
+
 ## CHANGELOG
 
 ### Feb 2026 — Burgers & Sandwiches (× 5)
