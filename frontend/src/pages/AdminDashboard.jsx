@@ -23,6 +23,7 @@ import GroupPricingCard from "./admin/GroupPricingCard";
 import AdminBalanceDuePanel from "./admin/AdminBalanceDuePanel";
 import AdminChatSearchCard from "./admin/AdminChatSearchCard";
 import CableBeachPackageCard from "./admin/CableBeachPackageCard";
+import CableBeachCarouselCard from "./admin/CableBeachCarouselCard";
 import AdminArrivalsCard from "./admin/AdminArrivalsCard";
 import TeamSmsCard from "./admin/TeamSmsCard";
 
@@ -314,6 +315,7 @@ export default function AdminDashboard() {
 
         {/* Cable Beach day · pricing, menu + live/paused toggle. */}
         <CableBeachPackageCard />
+        <CableBeachCarouselCard />
         <TeamSmsCard />
 
         {/* Balance-due panel — every booking with outstanding balance,

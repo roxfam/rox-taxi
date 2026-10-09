@@ -592,23 +592,24 @@ function FeaturedGuestWall() {
 function CableBeachHomePromo() {
   const [weather, setWeather] = useState(null);
   const [ships, setShips] = useState([]);
-  // Rotating hero carousel — 4 Cable Beach shots on auto-advance every 5.5s.
-  // Reduces visitor fatigue vs a single static image and surfaces more of
-  // the day's vibe (chairs, aerial, water, Rox guests on-site).
-  // The first slide ships a tight 4:5 mobile crop so phones don't pull in
-  // the full desktop landscape — bandwidth win on cruise-port Wi-Fi.
-  const SLIDES = useMemo(() => ([
+  const [adminSlides, setAdminSlides] = useState(null);
+  // Fallback slides — ship with the bundle so a brand-new install (empty
+  // site_config) still renders a carousel. Admin editor overrides these.
+  const FALLBACK_SLIDES = useMemo(() => ([
     { src: "/images/cable-beach-home.jpg",
-      srcMobile: "/images/cable-beach-home-mobile.webp",
+      src_mobile: "/images/cable-beach-home-mobile.webp",
       alt: "Blue striped beach chairs and jet skis on Cable Beach, Nassau — the Rox beach day setup" },
     { src: "/images/cable-beach-hero.jpg",
-      srcMobile: "/images/cable-beach-hero-mobile.webp",
+      src_mobile: "/images/cable-beach-hero-mobile.webp",
       alt: "Aerial of Cable Beach, Nassau — rows of beach chairs, kayaks and watersports on the turquoise shelf" },
     { src: "/images/cable-beach-slide-2.webp",
+      src_mobile: "/images/cable-beach-slide-2-mobile.webp",
       alt: "Cable Beach calm turquoise shelf water — perfect for kayaks and snorkeling" },
     { src: "/images/cable-beach-slide-3.webp",
-      alt: "Rox guests enjoying a signature Cable Beach day — chairs, umbrella and watersports on-site" },
+      src_mobile: "/images/cable-beach-slide-3-mobile.webp",
+      alt: "Rox guests enjoying a signature Cable Beach day on Nassau's turquoise shelf" },
   ]), []);
+  const SLIDES = adminSlides && adminSlides.length > 0 ? adminSlides : FALLBACK_SLIDES;
   const [slideIdx, setSlideIdx] = useState(0);
   const [paused, setPaused] = useState(false);
 
@@ -622,17 +623,28 @@ function CableBeachHomePromo() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setShips(d.ships || []))
       .catch(() => {});
+    fetch(`${api}/api/public/cable-beach-home-slides`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.slides && Array.isArray(d.slides) && setAdminSlides(d.slides))
+      .catch(() => {});
   }, []);
 
-  // Auto-advance every 5.5s. Pauses while a user is dragging-dotting between
-  // slides OR when the user hovers (desktop) — respects reduced-motion too.
+  // Auto-advance every 7s — slower pace matches the gentler cross-fade.
+  // Pauses while a user is dragging-dotting between slides OR when the
+  // user hovers (desktop) — respects reduced-motion too.
   useEffect(() => {
     if (SLIDES.length <= 1 || paused) return;
     if (typeof window !== "undefined" &&
         window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const t = setInterval(() => setSlideIdx((i) => (i + 1) % SLIDES.length), 5500);
+    const t = setInterval(() => setSlideIdx((i) => (i + 1) % SLIDES.length), 7000);
     return () => clearInterval(t);
   }, [SLIDES.length, paused]);
+
+  // Clamp slide index inside bounds whenever the admin edits the list
+  // (so removing the active slide doesn't leave the carousel on a blank).
+  useEffect(() => {
+    if (slideIdx >= SLIDES.length) setSlideIdx(0);
+  }, [SLIDES.length, slideIdx]);
 
   return (
     <section className="max-w-7xl mx-auto px-6 lg:px-10 py-14" data-testid="home-cable-beach-day">
@@ -641,9 +653,10 @@ function CableBeachHomePromo() {
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
       >
-        {/* Carousel layer — all slides mounted at once, cross-fade via opacity.
-            Keeps every image warm in the browser cache so a tap on a dot
-            doesn't trigger a fresh network fetch. */}
+        {/* Carousel layer — all slides mounted at once, cross-fade via
+            opacity + a gentle Ken-Burns scale on the active slide. The
+            custom cubic-bezier easing (deep ease-in-out) feels more
+            cinematic than the stock `ease-in-out`. */}
         <div
           className="absolute inset-0"
           aria-roledescription="carousel"
@@ -652,22 +665,24 @@ function CableBeachHomePromo() {
         >
           {SLIDES.map((s, i) => (
             <picture
-              key={s.src}
-              className={`absolute inset-0 transition-opacity duration-[900ms] ease-in-out ${
+              key={`${s.src}-${i}`}
+              className={`absolute inset-0 transition-opacity ease-[cubic-bezier(0.37,0,0.17,1)] duration-[1600ms] ${
                 i === slideIdx ? "opacity-100" : "opacity-0"
               }`}
               aria-hidden={i !== slideIdx}
               data-testid={`cable-beach-slide-${i}`}
             >
-              {s.srcMobile && (
-                <source media="(max-width: 640px)" srcSet={s.srcMobile} type="image/webp" />
+              {s.src_mobile && (
+                <source media="(max-width: 640px)" srcSet={s.src_mobile} type="image/webp" />
               )}
               <img
                 src={s.src}
-                alt={s.alt}
+                alt={s.alt || "Cable Beach photo"}
                 loading={i === 0 ? "eager" : "lazy"}
                 fetchpriority={i === 0 ? "high" : "auto"}
-                className="w-full h-full object-cover transition-transform duration-[1200ms] group-hover:scale-105"
+                className={`w-full h-full object-cover transition-transform ease-[cubic-bezier(0.37,0,0.17,1)] duration-[7000ms] ${
+                  i === slideIdx ? "scale-[1.04]" : "scale-100"
+                } group-hover:scale-105`}
               />
             </picture>
           ))}

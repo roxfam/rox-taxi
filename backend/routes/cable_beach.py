@@ -1512,3 +1512,100 @@ async def admin_cable_beach_arrivals_today(_admin: str = Depends(_require_admin_
             "attendant_arrived_by": b.get("attendant_arrived_by") or "",
         })
     return {"arrivals": out, "nassau_date": start_of_day.date().isoformat()}
+
+
+# ─────────────────── Admin: Home Carousel Editor ─────────────────────────
+# Config stored at site_config.cable_beach_home_slides as an array of
+# `{ src, src_mobile?, alt, active }` dicts. Public endpoint auto-filters
+# inactive slides so a paused slide never surfaces on the home page.
+
+class CarouselSlide(BaseModel):
+    src: str = Field(..., min_length=2, max_length=500)
+    src_mobile: Optional[str] = Field(None, max_length=500)
+    alt: Optional[str] = Field("", max_length=240)
+    active: Optional[bool] = True
+
+
+class CarouselUpdate(BaseModel):
+    slides: List[CarouselSlide] = Field(..., max_length=8)
+
+
+_DEFAULT_HOME_SLIDES: List[Dict[str, Any]] = [
+    {"src": "/images/cable-beach-home.jpg",
+     "src_mobile": "/images/cable-beach-home-mobile.webp",
+     "alt": "Blue striped beach chairs and jet skis on Cable Beach, Nassau — the Rox beach day setup",
+     "active": True},
+    {"src": "/images/cable-beach-hero.jpg",
+     "src_mobile": "/images/cable-beach-hero-mobile.webp",
+     "alt": "Aerial of Cable Beach, Nassau — rows of beach chairs, kayaks and watersports on the turquoise shelf",
+     "active": True},
+    {"src": "/images/cable-beach-slide-2.webp",
+     "src_mobile": "/images/cable-beach-slide-2-mobile.webp",
+     "alt": "Cable Beach calm turquoise shelf water — perfect for kayaks and snorkeling",
+     "active": True},
+    {"src": "/images/cable-beach-slide-3.webp",
+     "src_mobile": "/images/cable-beach-slide-3-mobile.webp",
+     "alt": "Rox guests enjoying a signature Cable Beach day on Nassau's turquoise shelf",
+     "active": True},
+]
+
+
+async def _get_home_slides_raw() -> List[Dict[str, Any]]:
+    sc = await _db.site_config.find_one({}) or {}
+    slides = sc.get("cable_beach_home_slides")
+    if not isinstance(slides, list) or len(slides) == 0:
+        return list(_DEFAULT_HOME_SLIDES)
+    out = []
+    for s in slides:
+        if not isinstance(s, dict) or not s.get("src"):
+            continue
+        out.append({
+            "src": str(s["src"])[:500],
+            "src_mobile": (str(s.get("src_mobile")) if s.get("src_mobile") else None),
+            "alt": str(s.get("alt") or "")[:240],
+            "active": s.get("active") is not False,
+        })
+    return out
+
+
+@router.get("/public/cable-beach-home-slides")
+async def public_cable_beach_home_slides():
+    """Public feed for the home-page Cable Beach carousel. Returns only
+    active slides so paused slides never leak to the public."""
+    all_slides = await _get_home_slides_raw()
+    return {"slides": [s for s in all_slides if s["active"]]}
+
+
+@router.get("/admin/cable-beach/carousel")
+async def admin_get_carousel(_admin: str = Depends(_require_admin_dep)):
+    """Admin view — returns every slide including paused ones so the
+    toggle state renders correctly in the editor."""
+    return {"slides": await _get_home_slides_raw()}
+
+
+@router.put("/admin/cable-beach/carousel")
+async def admin_put_carousel(req: CarouselUpdate,
+                              _admin: str = Depends(_require_admin_dep)):
+    """Replace the full slide list. Max 8 slides enforced via Pydantic.
+    Empty-src rows are dropped before persistence so a half-typed URL
+    doesn't nuke the carousel on autosave."""
+    cleaned: List[Dict[str, Any]] = []
+    for s in req.slides:
+        if not s.src.strip():
+            continue
+        cleaned.append({
+            "src": s.src.strip()[:500],
+            "src_mobile": (s.src_mobile.strip()[:500] if (s.src_mobile and s.src_mobile.strip()) else None),
+            "alt": (s.alt or "").strip()[:240],
+            "active": s.active if s.active is not None else True,
+        })
+    await _db.site_config.update_one(
+        {},
+        {"$set": {
+            "cable_beach_home_slides": cleaned,
+            "cable_beach_home_slides_updated_at": _now_iso(),
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "slides": cleaned}
+
