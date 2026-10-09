@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin, Share2, Gift, Search, ChevronDown, ChefHat } from "lucide-react";
+import { Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin, Share2, Gift, Search, ChevronDown, ChefHat, Waves } from "lucide-react";
 import { API, money } from "../lib/api";
 import Seo from "../components/Seo";
 
@@ -34,6 +34,9 @@ export default function CableBeachDay() {
   // Per-dinner side selections keyed by lunch item id: {dinnerId: Set<sideId>}.
   // Stored as a plain object so the quote-body memo can shallow-serialise it.
   const [sideSelections, setSideSelections] = useState({});
+  // Water sports qty by id — all optional, qty 0 means not selected.
+  const [waterSportQty, setWaterSportQty] = useState({});
+  const [parasailSpectators, setParasailSpectators] = useState(0);
   const [quote, setQuote] = useState(null);
   const [quoting, setQuoting] = useState(false);
   const [shareToken, setShareToken] = useState(null);     // Inbound ?r=<token>
@@ -80,8 +83,12 @@ export default function CableBeachDay() {
       drink_item_ids: Array.from(drinkIds),
       combo_id: comboId,
       side_selections: sideBody,
+      water_sport_qty: Object.fromEntries(
+        Object.entries(waterSportQty).filter(([, q]) => Number(q) > 0),
+      ),
+      parasail_spectators: Number(waterSportQty.parasailing || 0) > 0 ? parasailSpectators : 0,
     };
-  }, [pax, extraSeats, transferKind, hotelId, lunchIds, drinkIds, comboId, sideSelections]);
+  }, [pax, extraSeats, transferKind, hotelId, lunchIds, drinkIds, comboId, sideSelections, waterSportQty, parasailSpectators]);
 
   useEffect(() => {
     if (!cfg?.active) return;
@@ -207,6 +214,10 @@ export default function CableBeachDay() {
           .filter(([dinnerId, sids]) => lunchIds.has(dinnerId) && sids && sids.size > 0)
           .map(([dinnerId, sids]) => [dinnerId, Array.from(sids)])
       ),
+      water_sport_qty: Object.fromEntries(
+        Object.entries(waterSportQty).filter(([, q]) => Number(q) > 0),
+      ),
+      parasail_spectators: Number(waterSportQty.parasailing || 0) > 0 ? parasailSpectators : 0,
       allergies: Array.from(allergies),
       special_requests: guest.special_requests || null,
       share_token: shareToken || null,
@@ -315,13 +326,21 @@ export default function CableBeachDay() {
             {cfg.drink_items.length === 0 ? (
               <p className="text-xs text-[#64748B]">Drink menu coming soon — Bahama Mamas, Sky Juice, Beer and more. Call dispatch to add drinks after booking.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-2">
+              <div className="grid sm:grid-cols-2 gap-2.5">
                 {cfg.drink_items.map((it) => (
                   <MenuTile key={it.id} it={it} active={drinkIds.has(it.id)} onClick={() => toggleItem(setDrinkIds, it.id)} testId={`cable-drink-${it.id}`} />
                 ))}
               </div>
             )}
           </Section>
+
+          <WaterSportsSection
+            cfg={cfg}
+            waterSportQty={waterSportQty}
+            setWaterSportQty={setWaterSportQty}
+            parasailSpectators={parasailSpectators}
+            setParasailSpectators={setParasailSpectators}
+          />
         </div>
 
         <aside className="lg:sticky lg:top-24 self-start rounded-2xl border border-[#E2E8F0] bg-white p-5" data-testid="cable-beach-summary">
@@ -343,6 +362,16 @@ export default function CableBeachDay() {
               {quote.sides_extra_total > 0 && (
                 <Line label={`Extra sides · ${quote.sides_extra_count}× $${quote.extra_side_price}`}
                   >{money(quote.sides_extra_total)}</Line>
+              )}
+              {(quote.water_sport_lines && quote.water_sport_lines.length > 0) && (
+                <>
+                  <div className="pt-1 text-[11px] font-bold uppercase tracking-wider text-[#0B3B5C]">Water sports</div>
+                  {quote.water_sport_lines.map((w) => (
+                    <Line key={w.id} label={`${w.name}${w.duration ? ` · ${w.duration}` : ""} · ${w.qty}×`}>
+                      {money(w.line_total)}
+                    </Line>
+                  ))}
+                </>
               )}
               {quote.combo_applied && (
                 <Line label={`Chef's combo · ${quote.combo_applied.name}`}>
@@ -463,12 +492,20 @@ function HeroCard() {
   );
 }
 
-function Section({ icon: Icon, title, children }) {
+function Section({ icon: Icon, title, children, eyebrow }) {
+  // Professional/modern: hairline top rule, uppercase micro-eyebrow, serif
+  // headline. Removes the heavy card chrome in favour of editorial spacing.
   return (
-    <section className="rounded-2xl border border-[#E2E8F0] bg-white p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <Icon className="w-5 h-5 text-[#D4A94A]" />
-        <h2 className="font-bold text-[#0B3B5C]">{title}</h2>
+    <section className="relative py-7">
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#E2E8F0] to-transparent mb-6" />
+      <div className="flex items-end justify-between gap-3 mb-4">
+        <div>
+          {eyebrow && (
+            <div className="text-[10px] tracking-[0.32em] uppercase text-[#D4A94A] font-black">{eyebrow}</div>
+          )}
+          <h2 className="serif text-2xl text-[#0B3B5C] mt-1 leading-tight">{title}</h2>
+        </div>
+        {Icon && <Icon className="w-5 h-5 text-[#94A3B8]" />}
       </div>
       {children}
     </section>
@@ -502,42 +539,141 @@ function TransferTile({ active, onClick, title, sub, Icon = Ship, testId }) {
   );
 }
 
+/**
+ * WaterSportsSection — editorial list with a quantity stepper on each
+ * sport. Parasailing reveals an inline "+ spectator seat" row when at
+ * least one flight is in the cart. Stepper-only (no tap-to-increment).
+ */
+function WaterSportsSection({ cfg, waterSportQty, setWaterSportQty, parasailSpectators, setParasailSpectators }) {
+  const sports = cfg.water_sports || [];
+  if (sports.length === 0) return null;
+  const setQty = (id, delta) => setWaterSportQty((prev) => {
+    const cur = Math.max(0, Math.min(20, Number(prev[id] || 0) + delta));
+    const next = { ...prev, [id]: cur };
+    if (cur === 0) delete next[id];
+    return next;
+  });
+  const parasailQty = Number(waterSportQty.parasailing || 0);
+  const spectatorPrice = cfg.parasail_spectator_price || 35;
+
+  return (
+    <section className="relative py-7 scroll-mt-24" data-testid="cable-water-sports">
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#E2E8F0] to-transparent mb-6" />
+      <div className="flex items-end justify-between gap-3 mb-6">
+        <div>
+          <div className="text-[10px] tracking-[0.32em] uppercase text-[#D4A94A] font-black">On the water</div>
+          <h2 className="serif text-2xl text-[#0B3B5C] mt-1 leading-tight">Water sports</h2>
+          <p className="text-[11px] text-[#64748B] mt-1">Optional add-ons — booked with your beach day, paid in one checkout.</p>
+        </div>
+        <Waves className="w-5 h-5 text-[#94A3B8]" />
+      </div>
+
+      <ul className="divide-y divide-[#E2E8F0] border-y border-[#E2E8F0]">
+        {sports.map((w) => {
+          const qty = Number(waterSportQty[w.id] || 0);
+          const unitLabel = w.unit === "per_person" ? "per person" : "per ride";
+          return (
+            <li key={w.id} className="flex items-center justify-between gap-4 py-4" data-testid={`cable-ws-${w.id}`}>
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="serif text-base text-[#0B3B5C]">{w.name}</span>
+                  {w.duration && (
+                    <span className="text-[10px] tracking-[0.2em] uppercase font-black text-[#94A3B8]">{w.duration}</span>
+                  )}
+                </div>
+                <div className="text-[11px] text-[#64748B] mt-0.5 flex items-center gap-2">
+                  <span className="font-mono text-[#0B3B5C]">${w.price}</span>
+                  <span>·</span>
+                  <span>{unitLabel}</span>
+                </div>
+              </div>
+              <div className="shrink-0 flex items-center gap-2">
+                <button onClick={() => setQty(w.id, -1)} disabled={qty === 0}
+                  data-testid={`cable-ws-${w.id}-minus`}
+                  className="w-8 h-8 rounded-full border border-[#E2E8F0] text-[#0B3B5C] flex items-center justify-center hover:border-[#0B3B5C]/40 disabled:opacity-30 disabled:cursor-not-allowed">
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <span className={`serif text-xl w-8 text-center ${qty > 0 ? "text-[#0B3B5C]" : "text-[#CBD5E1]"}`}
+                  data-testid={`cable-ws-${w.id}-qty`}>{qty}</span>
+                <button onClick={() => setQty(w.id, +1)}
+                  data-testid={`cable-ws-${w.id}-plus`}
+                  className="w-8 h-8 rounded-full border border-[#0B3B5C] text-[#0B3B5C] flex items-center justify-center hover:bg-[#0B3B5C] hover:text-white transition">
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      {parasailQty > 0 && (
+        <div className="mt-5 rounded-xl border border-[#D4A94A]/40 bg-[#FBFBFB] p-4" data-testid="cable-parasail-spectator">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-[9px] tracking-[0.32em] uppercase font-black text-[#D4A94A]">Add-on</div>
+              <div className="serif text-base text-[#0B3B5C] mt-0.5">Parasail spectator seat</div>
+              <div className="text-[11px] text-[#64748B] mt-0.5">Non-flying companion rides in the boat · ${spectatorPrice} per seat</div>
+            </div>
+            <div className="shrink-0 flex items-center gap-2">
+              <button onClick={() => setParasailSpectators((p) => Math.max(0, p - 1))} disabled={parasailSpectators === 0}
+                data-testid="cable-spectator-minus"
+                className="w-8 h-8 rounded-full border border-[#E2E8F0] text-[#0B3B5C] flex items-center justify-center hover:border-[#0B3B5C]/40 disabled:opacity-30">
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <span className={`serif text-xl w-8 text-center ${parasailSpectators > 0 ? "text-[#0B3B5C]" : "text-[#CBD5E1]"}`}
+                data-testid="cable-spectator-qty">{parasailSpectators}</span>
+              <button onClick={() => setParasailSpectators((p) => Math.min(20, p + 1))}
+                data-testid="cable-spectator-plus"
+                className="w-8 h-8 rounded-full border border-[#0B3B5C] text-[#0B3B5C] flex items-center justify-center hover:bg-[#0B3B5C] hover:text-white transition">
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+
+
 function MenuTile({ it, active, onClick, testId }) {
-  // Emoji-first allergen badges — strikethrough semantic is implied by the ❌.
-  // Scans 2–3× faster than letter codes on mobile.
+  // Professional dietary labels — short upper-case codes in muted stone
+  // palette. No emoji badges on the tile itself (filter row already shows
+  // the full taxonomy); this keeps each dish card clean and scannable.
   const TAG_META = {
-    gluten_free:    { glyph: "🌾❌", label: "Gluten-free",    bg: "#D1FAE5", fg: "#047857" },
-    pescatarian:    { glyph: "🐟",   label: "Pescatarian",    bg: "#DBEAFE", fg: "#1D4ED8" },
-    dairy_free:     { glyph: "🥛❌", label: "Dairy-free",     bg: "#FEF3C7", fg: "#92400E" },
-    peanut_free:    { glyph: "🥜❌", label: "Peanut-free",    bg: "#EDE9FE", fg: "#5B21B6" },
-    shellfish_free: { glyph: "🦐❌", label: "Shellfish-free", bg: "#FCE7F3", fg: "#9D174D" },
+    gluten_free:    { code: "GF", label: "Gluten-free" },
+    pescatarian:    { code: "PE", label: "Pescatarian" },
+    dairy_free:     { code: "DF", label: "Dairy-free" },
+    peanut_free:    { code: "NF", label: "Peanut-free" },
+    shellfish_free: { code: "SF", label: "Shellfish-free" },
   };
   const tags = Array.isArray(it.tags) ? it.tags : [];
   return (
     <button onClick={onClick} data-testid={testId}
-      className={`text-left rounded-xl border p-3 transition ${active ? "border-[#E86A3C] bg-[#FFF4EC]" : "border-[#E2E8F0] bg-white hover:border-[#D4A94A]"}`}>
-      <div className="flex items-center justify-between gap-2">
-        <span className={`text-sm font-bold ${active ? "text-[#E86A3C]" : "text-[#0B3B5C]"}`}>{it.name}</span>
-        <span className="text-sm font-mono text-[#0B3B5C]">${it.price}</span>
+      className={`group text-left rounded-xl border p-3.5 transition-all ${active ? "border-[#0B3B5C] bg-white shadow-[0_8px_30px_rgba(11,59,92,0.08)]" : "border-[#E2E8F0] bg-white hover:border-[#0B3B5C]/40"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <span className={`text-sm font-semibold leading-tight ${active ? "text-[#0B3B5C]" : "text-[#0B3B5C]"}`}>{it.name}</span>
+        <span className={`text-sm font-mono shrink-0 ${active ? "text-[#D4A94A]" : "text-[#64748B]"}`}>${it.price}</span>
       </div>
       {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-1.5">
+        <div className="flex flex-wrap gap-1 mt-2">
           {tags.map((t) => {
             const m = TAG_META[t];
             if (!m) return null;
             return (
-              <span key={t} className="text-[11px] rounded-full px-1.5 py-0.5 leading-none inline-flex items-center"
+              <span key={t}
                 title={m.label}
-                style={{ color: m.fg, background: m.bg }}>
-                {m.glyph}
+                className="text-[9px] tracking-[0.18em] font-black px-1.5 py-0.5 rounded border border-[#E2E8F0] text-[#64748B] bg-[#F8FAFC]">
+                {m.code}
               </span>
             );
           })}
         </div>
       )}
       {active && it.include_sides && (
-        <div className="mt-1.5 text-[10px] text-[#E86A3C] font-bold uppercase tracking-wider">
-          Pick 2 sides below ↓
+        <div className="mt-2 text-[9px] text-[#D4A94A] font-black uppercase tracking-[0.28em]">
+          Choose sides ↓
         </div>
       )}
     </button>
@@ -594,36 +730,47 @@ function FoodMenu({
   });
 
   return (
-    <section className="rounded-2xl border border-[#E2E8F0] bg-white p-5" data-testid="cable-food-menu">
-      <div className="flex items-center gap-2 mb-3">
-        <Utensils className="w-5 h-5 text-[#D4A94A]" />
-        <h2 className="font-bold text-[#0B3B5C]">Food menu <span className="text-[11px] text-[#64748B] font-normal">(optional) · dinners include 2 free sides · extra $5 each</span></h2>
+    <section className="relative py-7 scroll-mt-24" data-testid="cable-food-menu">
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-[#E2E8F0] to-transparent mb-6" />
+      <div className="flex items-end justify-between gap-3 mb-6">
+        <div>
+          <div className="text-[10px] tracking-[0.32em] uppercase text-[#D4A94A] font-black">The menu</div>
+          <h2 className="serif text-2xl text-[#0B3B5C] mt-1 leading-tight">Lunch, dinner & drinks</h2>
+          <p className="text-[11px] text-[#64748B] mt-1">Dinners include two island sides · each additional side $5.</p>
+        </div>
+        <Utensils className="w-5 h-5 text-[#94A3B8]" />
       </div>
 
-      {/* Sticky jump-link nav bar — scrolls with the viewport and keeps the
-          categories one-tap away even deep into the 29-item menu. */}
+      {/* Sticky editorial jump-link nav. Section labels are serif + hairline
+          separators (not pills), so the bar reads like a magazine ToC and
+          keeps the eye calm as the guest scans a 30-item menu. */}
       <nav
-        className="sticky top-20 z-10 -mx-5 px-5 py-2 bg-white/90 backdrop-blur border-y border-[#E2E8F0] mb-4"
+        className="sticky top-20 z-10 -mx-5 px-5 py-3 bg-white/85 backdrop-blur-md border-y border-[#E2E8F0]/80 mb-6"
         data-testid="cable-menu-nav"
       >
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          <span className="text-[10px] text-[#64748B] font-black uppercase tracking-wider mr-1 shrink-0">Hungry?</span>
-          {visibleSections.map((sec) => (
+        <div className="flex items-center gap-5 overflow-x-auto no-scrollbar">
+          <span className="shrink-0 text-[9px] text-[#94A3B8] font-black uppercase tracking-[0.3em]">Menu</span>
+          {visibleSections.map((sec, idx) => (
             <button
               key={sec.id}
               type="button"
               onClick={() => scrollTo(sec.anchor)}
               data-testid={`cable-menu-jump-${sec.id}`}
-              className="shrink-0 inline-flex items-center gap-1 rounded-full border border-[#E2E8F0] bg-white px-3 py-1 text-[11px] font-bold text-[#0B3B5C] hover:border-[#D4A94A] hover:text-[#E86A3C] transition"
+              className="group shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#0B3B5C] hover:text-[#D4A94A] transition-colors"
             >
-              {sec.label}
-              <span className="text-[10px] text-[#94A3B8] font-mono">{sec.items.length}</span>
+              <span className="relative">
+                {sec.label}
+                <span className="absolute left-0 right-0 -bottom-0.5 h-px bg-[#D4A94A] scale-x-0 group-hover:scale-x-100 origin-left transition-transform" />
+              </span>
+              <span className="text-[9px] text-[#CBD5E1] font-mono">{String(sec.items.length).padStart(2, "0")}</span>
+              {idx < visibleSections.length - 1 && <span className="text-[#E2E8F0] ml-3">·</span>}
             </button>
           ))}
         </div>
       </nav>
 
-      {/* Chef's-choice combo card — one-tap selects the bundle items + applies the discount. */}
+      {/* Chef's-choice combo card — editorial / monochrome: ivory field with a
+          hairline border and a subtle gold accent rule, no gradient wash. */}
       {(cfg.combos || []).map((combo) => {
         const required = new Set(combo.items || []);
         const allSelected = Array.from(required).every((id) => lunchIds.has(id) || drinkIds.has(id));
@@ -647,42 +794,44 @@ function FoodMenu({
         return (
           <button key={combo.id} type="button" onClick={active ? clearCombo : applyCombo}
             data-testid={`cable-combo-${combo.id}`}
-            className={`w-full text-left rounded-xl border-2 p-3 mb-3 transition ${active ? "border-[#D4A94A] bg-gradient-to-br from-[#FFF4EC] to-[#FBF7EF]" : "border-dashed border-[#D4A94A]/50 bg-white hover:border-[#D4A94A]"}`}>
-            <div className="flex items-center justify-between gap-3">
+            className={`relative w-full text-left rounded-xl border p-5 mb-5 transition-all overflow-hidden ${active ? "border-[#D4A94A] bg-white shadow-[0_10px_40px_rgba(212,169,74,0.15)]" : "border-[#E2E8F0] bg-white hover:border-[#D4A94A]"}`}>
+            <span className={`absolute left-0 top-0 bottom-0 w-[3px] ${active ? "bg-[#D4A94A]" : "bg-transparent"}`} />
+            <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <ChefHat className={`w-4 h-4 ${active ? "text-[#D4A94A]" : "text-[#64748B]"}`} />
-                  <span className="text-[10px] tracking-[0.28em] uppercase font-black text-[#D4A94A]">Chef's pick</span>
-                  {active && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 rounded-full px-2 py-0.5">Applied</span>}
+                <div className="flex items-center gap-2 mb-2">
+                  <ChefHat className="w-3.5 h-3.5 text-[#D4A94A]" />
+                  <span className="text-[9px] tracking-[0.32em] uppercase font-black text-[#D4A94A]">Chef's selection</span>
+                  {active && <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-700">Applied</span>}
                 </div>
-                <div className="serif text-xl text-[#0B3B5C] mt-1">{combo.name}</div>
-                <div className="text-[11px] text-[#64748B] mt-0.5">{combo.subtitle}</div>
-                <div className="text-[11px] text-[#0B3B5C] mt-1 font-medium">
-                  {comboItems.map((it) => it.name).join(" + ")}
+                <div className="serif text-xl text-[#0B3B5C] leading-tight">{combo.name}</div>
+                <div className="text-[12px] text-[#64748B] mt-1 italic">{combo.subtitle}</div>
+                <div className="text-[11px] text-[#0B3B5C]/80 mt-2 font-medium">
+                  {comboItems.map((it) => it.name).join(" · ")}
                 </div>
               </div>
-              <div className="text-right shrink-0">
-                <div className="text-[10px] text-[#64748B] uppercase tracking-wider font-bold">Save</div>
-                <div className="serif text-2xl text-[#E86A3C] font-black">${combo.discount}</div>
+              <div className="text-right shrink-0 pl-4 border-l border-[#E2E8F0]">
+                <div className="text-[9px] text-[#94A3B8] uppercase tracking-[0.28em] font-black">You save</div>
+                <div className="serif text-3xl text-[#0B3B5C] font-black mt-1">${combo.discount}</div>
               </div>
             </div>
           </button>
         );
       })}
 
-      {/* Dietary filter chips */}
+      {/* Dietary filter — matches the GF/DF/PE/NF/SF codes used on each tile
+          for a consistent, grown-up taxonomy (no emoji glyphs). */}
       {(() => {
         const DIET = [
-          { id: "gluten_free",    label: "Gluten-free",    glyph: "🌾❌" },
-          { id: "pescatarian",    label: "Pescatarian",    glyph: "🐟" },
-          { id: "dairy_free",     label: "Dairy-free",     glyph: "🥛❌" },
-          { id: "peanut_free",    label: "Peanut-free",    glyph: "🥜❌" },
-          { id: "shellfish_free", label: "Shellfish-free", glyph: "🦐❌" },
+          { id: "gluten_free",    code: "GF", label: "Gluten-free" },
+          { id: "pescatarian",    code: "PE", label: "Pescatarian" },
+          { id: "dairy_free",     code: "DF", label: "Dairy-free" },
+          { id: "peanut_free",    code: "NF", label: "Peanut-free" },
+          { id: "shellfish_free", code: "SF", label: "Shellfish-free" },
         ];
         return (
-          <div className="mb-4" data-testid="cable-diet-filters">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider mr-1">Filter:</span>
+          <div className="mb-6" data-testid="cable-diet-filters">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[9px] text-[#94A3B8] font-black uppercase tracking-[0.3em] mr-1">Dietary</span>
               {DIET.map((d) => {
                 const active = dietFilters.has(d.id);
                 return (
@@ -691,14 +840,15 @@ function FoodMenu({
                       const n = new Set(prev); n.has(d.id) ? n.delete(d.id) : n.add(d.id); return n;
                     })}
                     data-testid={`cable-diet-${d.id}`}
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${active ? "bg-[#0B3B5C] text-white" : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"}`}>
-                    <span className="text-[12px] leading-none">{d.glyph}</span>
-                    <span>{d.label}</span>
+                    title={d.label}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${active ? "bg-[#0B3B5C] text-white border border-[#0B3B5C]" : "border border-[#E2E8F0] bg-white text-[#64748B] hover:border-[#0B3B5C]/40 hover:text-[#0B3B5C]"}`}>
+                    <span>{d.code}</span>
+                    <span className="font-semibold tracking-normal normal-case text-[10px] opacity-80">{d.label}</span>
                   </button>
                 );
               })}
               {dietFilters.size > 0 && (
-                <button onClick={() => setDietFilters(new Set())} className="text-[11px] text-[#64748B] underline hover:text-[#0B3B5C]"
+                <button onClick={() => setDietFilters(new Set())} className="text-[10px] text-[#94A3B8] underline hover:text-[#0B3B5C]"
                   data-testid="cable-diet-clear">Clear</button>
               )}
             </div>
@@ -714,14 +864,17 @@ function FoodMenu({
           No dishes match these filters — try fewer tags.
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {visibleSections.map((sec) => (
-            <div key={sec.id} id={sec.anchor} data-testid={`cable-menu-section-${sec.id}`}>
-              <div className="flex items-center justify-between mb-2 pt-1">
-                <h3 className="text-[11px] tracking-[0.3em] uppercase font-black text-[#D4A94A]">{sec.label}</h3>
-                <span className="text-[10px] text-[#94A3B8] font-mono">{sec.items.length} dish{sec.items.length === 1 ? "" : "es"}</span>
+            <div key={sec.id} id={sec.anchor} data-testid={`cable-menu-section-${sec.id}`} className="scroll-mt-24">
+              <div className="flex items-baseline justify-between gap-3 mb-3 pb-2 border-b border-[#E2E8F0]">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[9px] tracking-[0.4em] uppercase font-black text-[#D4A94A]">{String(visibleSections.indexOf(sec) + 1).padStart(2, "0")}</span>
+                  <h3 className="serif text-lg text-[#0B3B5C]">{sec.label}</h3>
+                </div>
+                <span className="text-[9px] text-[#94A3B8] font-mono tracking-wider uppercase">{sec.items.length} {sec.items.length === 1 ? "dish" : "dishes"}</span>
               </div>
-              <div className="grid sm:grid-cols-2 gap-2">
+              <div className="grid sm:grid-cols-2 gap-2.5">
                 {sec.items.map((it) => (
                   <div key={it.id} className="space-y-1.5">
                     <MenuTile it={it} active={lunchIds.has(it.id)}
@@ -749,27 +902,28 @@ function FoodMenu({
 }
 
 /**
- * SidePicker — 6 side chips revealed when the guest selects a dinner that
- * `include_sides`. First `freeCount` picks are free; each additional side
- * costs `extraPrice`. Running count updates in real time so there's no
- * surprise at checkout.
+ * SidePicker — minimal, text-only chips revealed when the guest selects a
+ * dinner that `include_sides`. First `freeCount` picks are free; each
+ * additional side costs `extraPrice`. Modern/professional look: no emoji
+ * thumbnails, no colored circles — just clean typography and a crisp
+ * "included vs. extra" badge.
  */
 function SidePicker({ dinner, sides, selected, freeCount, extraPrice, onToggle }) {
   const count = selected.size;
   const extras = Math.max(0, count - freeCount);
   const extraCost = extras * extraPrice;
   return (
-    <div className="rounded-lg border border-[#D4A94A]/40 bg-[#FBF7EF] p-2.5"
+    <div className="rounded-xl border border-[#E2E8F0] bg-[#FBFBFB] p-3"
       data-testid={`cable-sides-${dinner.id}`}>
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="text-[10px] font-black uppercase tracking-wider text-[#0B3B5C]">
-          Pick your sides · <span className="text-[#64748B]">{freeCount} free</span>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[9px] font-black uppercase tracking-[0.28em] text-[#64748B]">
+          Sides · <span className="text-[#0B3B5C]">{freeCount} included</span>
         </div>
         <div className="text-[11px] font-mono text-[#0B3B5C]">
-          {count}/{freeCount}{extras > 0 && <span className="text-[#E86A3C]"> · +${extraCost}</span>}
+          {count}/{freeCount}{extras > 0 && <span className="text-[#D4A94A]"> · +${extraCost}</span>}
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         {sides.map((s) => {
           const picked = selected.has(s.id);
           const over = picked ? false : count >= freeCount;
@@ -779,24 +933,15 @@ function SidePicker({ dinner, sides, selected, freeCount, extraPrice, onToggle }
               type="button"
               onClick={() => onToggle(s.id)}
               data-testid={`cable-side-${dinner.id}-${s.id}`}
-              className={`relative flex flex-col items-center gap-1 rounded-xl px-1.5 py-2 text-[10px] font-bold transition ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all ${
                 picked
-                  ? "bg-[#0B3B5C] text-white shadow-sm"
-                  : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#D4A94A]"
+                  ? "bg-[#0B3B5C] text-white"
+                  : "border border-[#E2E8F0] bg-white text-[#0B3B5C] hover:border-[#0B3B5C]/40"
               }`}
             >
-              {s.image_url ? (
-                <img src={s.image_url} alt={s.name} loading="lazy"
-                  className={`w-10 h-10 rounded-full object-cover border-2 ${picked ? "border-[#D4A94A]" : "border-[#E2E8F0]"}`} />
-              ) : (
-                <span className={`w-10 h-10 rounded-full flex items-center justify-center text-2xl leading-none ${picked ? "bg-white/15" : "bg-[#FFF4EC]"}`}
-                  aria-hidden="true">
-                  {s.glyph || "🍽️"}
-                </span>
-              )}
-              <span className="text-center leading-tight line-clamp-2">{s.name}</span>
-              {over && <span className="absolute top-1 right-1 text-[9px] font-black text-[#E86A3C] bg-white rounded-full px-1 shadow">+${extraPrice}</span>}
-              {picked && <span className="absolute top-1 right-1 text-[9px] font-black text-white bg-[#D4A94A] rounded-full w-4 h-4 flex items-center justify-center">✓</span>}
+              {s.name}
+              {over && <span className="text-[9px] font-black text-[#D4A94A]">+${extraPrice}</span>}
+              {picked && <span className="text-[10px] opacity-80">✓</span>}
             </button>
           );
         })}

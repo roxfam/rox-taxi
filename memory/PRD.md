@@ -22,6 +22,19 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 ---
 
 
+### Feb 2026 — Water Sports Add-ons + Professional Menu Redesign
+- **Water sports section** on the Toes-in-the-Turquoise package: Parasailing $120 (8–10 min) · Snorkeling $100/person (1 hr 30 min) · Banana Boat $55 (3 miles) · Jet Ski 30/45/60 min at $140/$170/$220 · Jet Car 15/30/45/60 min at $170/$320/$470/$630. Parasail spectator add-on ($35) auto-reveals only when at least one parasail seat is in the cart. All items use +/- qty steppers capped at 20 server-side.
+- **Backend** (`routes/cable_beach.py`): `water_sport_qty: dict[str,int]` + `parasail_spectators: int` added to quote + book requests; totals computed in `water_sport_lines`, surfaced on quote response, persisted on the booking under `cable_beach.water_sport_lines`. Admin PUT accepts `water_sports` + `parasail_spectator_price` for live reconfig without redeploy. Verified end-to-end — $845 total on a 2 parasail + 4 snorkel + 1 jet-ski-45 + 1 spectator cart.
+- **Professional/modern UI rewrite** of the Cable Beach package page:
+  - Replaced emoji picture thumbnails on side picker with **clean text-only pill chips** (name + `✓` or `+$5`)
+  - Replaced emoji dietary badges on menu tiles with **small text codes** (`GF`, `DF`, `PE`, `NF`, `SF`) in muted stone palette; dietary filter row now uses the same codes
+  - **Editorial Section component**: hairline gradient divider · uppercase gold micro-eyebrow · serif Playfair-style H2 (no more card chrome)
+  - **Jump-link nav** turned from pill cluster into a magazine-ToC: serif labels, underline-on-hover, 2-digit padded counts, hairline mid-dots
+  - **Chef's choice combo** card rebuilt as an editorial card with vertical gold accent rule + "You save" column divider
+  - **Category section headers**: 2-digit numeric eyebrow (`01 Appetizers`, `02 Burgers`, …) with underline border and uppercase dish count
+  - Water sports section rendered as a divided-list (not a grid of boxes) — reads like a signature-cocktails page
+
+
 ### Feb 2026 — Side Dish Thumbnails + server.py Split (Cable Beach)
 - **Side pickers now visual**: each of the 6 sides renders as a round emoji thumbnail (🧀 🥔 🥬 🥦 🍌 🌽) on a 3-column grid with a check-badge when selected and a `+$5` corner tag when the pick exceeds the 2-free limit. Scans in under a second on mobile.
 - **Admin-ready photo upgrade path**: `sides` schema now carries `glyph` + optional `image_url`; the admin update endpoint accepts both and the frontend prefers `image_url` (object-cover circle) over the glyph so real food photos can be swapped in later without a code change.

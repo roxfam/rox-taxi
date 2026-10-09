@@ -132,6 +132,22 @@ CABLE_BEACH_DEFAULTS = {
         {"id": "water",         "name": "Bottled water",   "price": 3.0},
         {"id": "soda",          "name": "Soda / fruit punch","price": 4.0},
     ],
+    # Water sports — all optional, selectable by quantity. `unit` is UI-only
+    # metadata ("per_person" vs "per_ride"). Parasailing has an optional
+    # spectator add-on priced at `parasail_spectator_price`.
+    "water_sports": [
+        {"id": "parasailing",  "name": "Parasailing",        "price": 120.0, "duration": "8–10 min",  "unit": "per_ride",   "glyph": "🪂", "has_spectator": True},
+        {"id": "snorkeling",   "name": "Snorkeling package", "price": 100.0, "duration": "1 hr 30 min","unit": "per_person", "glyph": "🤿"},
+        {"id": "banana_boat",  "name": "Banana boat ride",   "price": 55.0,  "duration": "3 miles",   "unit": "per_ride",   "glyph": "🍌"},
+        {"id": "jet_ski_30",   "name": "Jet ski",            "price": 140.0, "duration": "30 min",    "unit": "per_ride",   "glyph": "🏍️"},
+        {"id": "jet_ski_45",   "name": "Jet ski",            "price": 170.0, "duration": "45 min",    "unit": "per_ride",   "glyph": "🏍️"},
+        {"id": "jet_ski_60",   "name": "Jet ski",            "price": 220.0, "duration": "60 min",    "unit": "per_ride",   "glyph": "🏍️"},
+        {"id": "jet_car_15",   "name": "Jet Car",            "price": 170.0, "duration": "15 min",    "unit": "per_ride",   "glyph": "🚤"},
+        {"id": "jet_car_30",   "name": "Jet Car",            "price": 320.0, "duration": "30 min",    "unit": "per_ride",   "glyph": "🚤"},
+        {"id": "jet_car_45",   "name": "Jet Car",            "price": 470.0, "duration": "45 min",    "unit": "per_ride",   "glyph": "🚤"},
+        {"id": "jet_car_60",   "name": "Jet Car",            "price": 630.0, "duration": "60 min",    "unit": "per_ride",   "glyph": "🚤"},
+    ],
+    "parasail_spectator_price": 35.0,
     "active": True,
 }
 
@@ -219,6 +235,10 @@ async def _cable_beach_cfg() -> dict:
     merged["drink_items"] = pkg.get("drink_items") or CABLE_BEACH_DEFAULTS["drink_items"]
     merged["combos"] = pkg.get("combos") or CABLE_BEACH_DEFAULTS["combos"]
     merged["sides"] = pkg.get("sides") or CABLE_BEACH_DEFAULTS["sides"]
+    merged["water_sports"] = pkg.get("water_sports") or CABLE_BEACH_DEFAULTS["water_sports"]
+    merged["parasail_spectator_price"] = pkg.get(
+        "parasail_spectator_price", CABLE_BEACH_DEFAULTS["parasail_spectator_price"],
+    )
     merged["sides_included_per_dinner"] = pkg.get(
         "sides_included_per_dinner", CABLE_BEACH_DEFAULTS["sides_included_per_dinner"],
     )
@@ -256,6 +276,8 @@ class CableBeachPkgUpdate(BaseModel):
     sides: Optional[list] = None
     sides_included_per_dinner: Optional[int] = Field(None, ge=0, le=6)
     extra_side_price: Optional[float] = Field(None, ge=0, le=50)
+    water_sports: Optional[list] = None
+    parasail_spectator_price: Optional[float] = Field(None, ge=0, le=400)
     active: Optional[bool] = None
 
 
@@ -304,6 +326,29 @@ async def admin_update_cable_beach_pkg(
             except Exception:  # noqa: BLE001
                 continue
         body["sides"] = [s for s in cleaned_sides if s["name"]]
+    # Water sports — {id, name, price, duration?, unit?, glyph?, has_spectator?}
+    if "water_sports" in body:
+        cleaned_ws = []
+        for row in body["water_sports"][:20]:
+            try:
+                out = {
+                    "id": str(row.get("id") or uuid.uuid4().hex[:6]),
+                    "name": str(row.get("name", "")).strip()[:60],
+                    "price": round(float(row.get("price") or 0), 2),
+                }
+                if row.get("duration"):
+                    out["duration"] = str(row["duration"])[:40]
+                if row.get("unit"):
+                    out["unit"] = str(row["unit"])[:20]
+                g = (row.get("glyph") or "").strip()
+                if g:
+                    out["glyph"] = g[:8]
+                if row.get("has_spectator"):
+                    out["has_spectator"] = True
+                cleaned_ws.append(out)
+            except Exception:  # noqa: BLE001
+                continue
+        body["water_sports"] = [w for w in cleaned_ws if w["name"] and w["price"] >= 0]
     if "combos" in body:
         cleaned_combos = []
         for row in body["combos"][:12]:
@@ -338,6 +383,10 @@ class CableBeachQuoteRequest(BaseModel):
     drink_item_ids: list[str] = Field(default_factory=list)
     combo_id: Optional[str] = Field(None, max_length=40)
     side_selections: dict[str, list[str]] = Field(default_factory=dict)
+    # Water sports qty by item id, e.g. {"parasailing": 2, "snorkeling": 4}.
+    # Each entry is capped at 20 server-side to avoid runaway totals.
+    water_sport_qty: dict[str, int] = Field(default_factory=dict)
+    parasail_spectators: int = Field(0, ge=0, le=20)
 
 
 @router.post("/cable-beach/quote")
@@ -409,7 +458,51 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
         })
     sides_extra_total = round(total_extra_sides * extra_side_price, 2)
 
-    subtotal = round(base + extra + transfer + menu_total + sides_extra_total, 2)
+    # Water sports — qty × item price. Parasail spectator add-on applies
+    # only when at least one parasailing seat is in the cart. Each line is
+    # qty-capped at 20 to prevent runaway totals from a stuck stepper.
+    ws_by_id = {w["id"]: w for w in cfg.get("water_sports") or []}
+    water_sport_lines: list[dict] = []
+    water_sports_total = 0.0
+    parasailing_qty = 0
+    for ws_id, raw_qty in (req.water_sport_qty or {}).items():
+        item = ws_by_id.get(ws_id)
+        if not item:
+            continue
+        qty = max(0, min(20, int(raw_qty or 0)))
+        if qty <= 0:
+            continue
+        price_each = round(float(item.get("price") or 0.0), 2)
+        line_total = round(price_each * qty, 2)
+        water_sports_total += line_total
+        water_sport_lines.append({
+            "id": ws_id,
+            "name": item.get("name"),
+            "duration": item.get("duration"),
+            "qty": qty,
+            "price_each": price_each,
+            "line_total": line_total,
+        })
+        if ws_id == "parasailing":
+            parasailing_qty = qty
+    spectator_total = 0.0
+    spectator_qty = 0
+    if parasailing_qty > 0 and req.parasail_spectators > 0:
+        spectator_qty = min(20, int(req.parasail_spectators))
+        spectator_price = float(cfg.get("parasail_spectator_price", 35.0) or 0.0)
+        spectator_total = round(spectator_qty * spectator_price, 2)
+        water_sports_total += spectator_total
+        water_sport_lines.append({
+            "id": "parasail_spectator",
+            "name": "Parasail spectator seat",
+            "duration": None,
+            "qty": spectator_qty,
+            "price_each": spectator_price,
+            "line_total": spectator_total,
+        })
+    water_sports_total = round(water_sports_total, 2)
+
+    subtotal = round(base + extra + transfer + menu_total + sides_extra_total + water_sports_total, 2)
 
     combo_discount = 0.0
     combo_applied = None
@@ -444,6 +537,10 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
         "sides_extra_total": sides_extra_total,
         "sides_included_per_dinner": free_sides,
         "extra_side_price": extra_side_price,
+        "water_sport_lines": water_sport_lines,
+        "water_sports_total": water_sports_total,
+        "parasail_spectators": spectator_qty,
+        "parasail_spectator_price": float(cfg.get("parasail_spectator_price", 35.0) or 0.0),
         "combo_applied": combo_applied,
         "combo_discount": combo_discount,
         "subtotal": subtotal,
@@ -475,6 +572,8 @@ class CableBeachBookRequest(BaseModel):
     drink_item_ids: list[str] = Field(default_factory=list)
     combo_id: Optional[str] = Field(None, max_length=40)
     side_selections: dict[str, list[str]] = Field(default_factory=dict)
+    water_sport_qty: dict[str, int] = Field(default_factory=dict)
+    parasail_spectators: int = Field(0, ge=0, le=20)
     allergies: list[str] = Field(default_factory=list)
     special_requests: Optional[str] = Field(None, max_length=500)
     share_token: Optional[str] = Field(None, max_length=40)
@@ -521,6 +620,8 @@ async def cable_beach_book(req: CableBeachBookRequest):
         lunch_item_ids=req.lunch_item_ids, drink_item_ids=req.drink_item_ids,
         combo_id=req.combo_id,
         side_selections=req.side_selections,
+        water_sport_qty=req.water_sport_qty,
+        parasail_spectators=req.parasail_spectators,
     )
     quote = await cable_beach_quote(quote_req)
     hotel_match = next((h for h in _hotel_tariffs() if h["id"] == req.hotel_id), None) if req.hotel_id else None
@@ -563,6 +664,9 @@ async def cable_beach_book(req: CableBeachBookRequest):
             "sides_detail": quote.get("sides_detail") or [],
             "sides_extra_count": quote.get("sides_extra_count") or 0,
             "sides_extra_total": quote.get("sides_extra_total") or 0.0,
+            "water_sport_lines": quote.get("water_sport_lines") or [],
+            "water_sports_total": quote.get("water_sports_total") or 0.0,
+            "parasail_spectators": quote.get("parasail_spectators") or 0,
             "combo_applied": quote.get("combo_applied"),
             "combo_discount": quote.get("combo_discount") or 0.0,
         },
