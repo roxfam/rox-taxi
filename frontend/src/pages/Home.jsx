@@ -609,8 +609,8 @@ function CableBeachHomePromo() {
     <section className="max-w-7xl mx-auto px-6 lg:px-10 py-14" data-testid="home-cable-beach-day">
       <div className="relative overflow-hidden rounded-[32px] group shadow-[0_30px_80px_rgba(11,25,44,0.25)]">
         <img
-          src="/images/cable-beach-hero.jpg"
-          alt="Aerial of Cable Beach, Nassau — rows of beach chairs, kayaks and watersports on the turquoise shelf"
+          src="/images/cable-beach-home.jpg"
+          alt="Blue striped beach chairs and jet skis on Cable Beach, Nassau — the Rox beach day setup"
           loading="lazy"
           className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1200ms] group-hover:scale-105"
         />
