@@ -22,6 +22,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 ---
 
 
+### Feb 2026 — One-Click Menu Trim
+- **Trash icon on every menu row now saves immediately** — no more "delete then tap Save menu" two-step. Backend PUT fires inline on each click, state + server stay in sync.
+- Added **"Clear all"** button beside Add/Save on each menu block for a one-tap wipe of either lunch or drinks (confirm dialog guards accidental taps).
+- Verified end-to-end: starting at 29 lunch items, one trash click → 28 lunch items in state AND via public API.
+
+
 ### Feb 2026 — Clean Food Slate · Live Alert Test · Ship Automation
 - **Auto-seed food/drink/combos wiped** — Mongo lunch_items / drink_items / combos arrays cleared; `_cable_beach_cfg` fallback changed to `[]` so empty stays empty. Admin starts with a clean slate and types/pastes only what they want sold.
 - **Live Twilio + SMTP smoke test** fired via `POST /api/cable-beach/book` — booking `created` phase triggered beach-team SMS to `+12424341945`, team email to `kevinhanna300@gmail.com`, and admin branded email to `roxfam2509@gmail.com`. All channels logged "sent" in supervisor.

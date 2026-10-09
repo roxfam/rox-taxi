@@ -64,9 +64,17 @@ export default function CableBeachPackageCard() {
   const addItem = (key) => setCfg((c) => ({
     ...c, [key]: [...c[key], { id: "", name: "", price: 0 }],
   }));
-  const removeItem = (key, idx) => setCfg((c) => ({
-    ...c, [key]: c[key].filter((_, i) => i !== idx),
-  }));
+  const removeItem = (key, idx) => {
+    const next = cfg[key].filter((_, i) => i !== idx);
+    setCfg((c) => ({ ...c, [key]: next }));
+    // Persist immediately — one-click delete, no need to tap "Save menu".
+    save({ [key]: next });
+  };
+  const clearAll = (key) => {
+    if (!window.confirm(`Delete ALL ${cfg[key].length} ${KEY_LABELS[key] || key} items? This cannot be undone.`)) return;
+    setCfg((c) => ({ ...c, [key]: [] }));
+    save({ [key]: [] });
+  };
 
   return (
     <section className="mt-8 rounded-2xl bg-white border border-[#E2E8F0] p-5" data-testid="cable-beach-admin">
@@ -127,6 +135,13 @@ export default function CableBeachPackageCard() {
               <span className="ml-2 text-[10px] text-[#94A3B8]">{cfg[key].length} item{cfg[key].length === 1 ? "" : "s"}</span>
             </div>
             <div className="flex items-center gap-2">
+              {cfg[key].length > 0 && (
+                <button onClick={() => clearAll(key)}
+                  className="inline-flex items-center gap-1 text-xs text-[#B91C1C] border border-[#FECACA] bg-white rounded-full px-2.5 py-1 hover:bg-[#FEF2F2]"
+                  data-testid={`cable-beach-${key}-clear`}>
+                  <Trash2 className="w-3 h-3" /> Clear all
+                </button>
+              )}
               <button onClick={() => addItem(key)}
                 className="inline-flex items-center gap-1 text-xs text-[#0B3B5C] border border-[#E2E8F0] bg-white rounded-full px-2.5 py-1 hover:border-[#D4A94A]"
                 data-testid={`cable-beach-${key}-add`}>
@@ -154,7 +169,8 @@ export default function CableBeachPackageCard() {
                     className="w-full pl-6 pr-2 py-1.5 text-sm mono bg-white border border-[#E2E8F0] rounded-lg focus:outline-none focus:border-[#D4A94A]" />
                 </div>
                 <button onClick={() => removeItem(key, i)}
-                  className="w-9 h-9 rounded-lg border border-[#FECACA] bg-white text-[#B91C1C] hover:bg-[#FEF2F2] flex items-center justify-center"
+                  title="Delete this item (saves immediately)"
+                  className="w-9 h-9 rounded-lg border border-[#FECACA] bg-white text-[#B91C1C] hover:bg-[#FEF2F2] active:scale-95 flex items-center justify-center"
                   data-testid={`cable-beach-${key}-remove-${i}`}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
