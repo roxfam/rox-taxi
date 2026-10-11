@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 28: Verified Guest Text Inbox + Unconfirmed Alert end-to-end. Backend: 7/7 pytest cases pass covering GET /api/admin/guest-sms/inbox (threads with phone_key/unread/customer_name/booking_id, unread_total aggregate), GET /api/admin/guest-sms/thread/{phone_key} (ascending order + auto-mark-read verified by follow-up inbox unread=0), POST /api/admin/guest-sms/reply (empty body -> 400, missing X-CSRF-Token -> 403), unauth inbox -> 401. run_unconfirmed_alert(force=True) with mocked notifications.send_owner_sms: pending TEST booking today triggered one send_owner_sms call with body containing booking id, '[name] haven't replied YES' text; confirmed booking excluded; when count==0 no SMS fired. All TEST seed docs (inbound_sms + bookings) cleaned up in finally blocks. Frontend: /admin/login -> /admin/manage -> admin-tab-guest_texts renders sms-inbox-panel, sms-inbox-empty when no threads; after seeding 3 inbound docs, sms-inbox-thread-list shows sms-thread-2425550177 with sms-thread-unread-2425550177 badge '3'; clicking opens sms-conversation with sms-message-list rendering 3 messages ascending, sms-reply-input + sms-reply-send-btn disabled when empty, enabled after typing. Unread badge disappears after thread open (read marked). Mobile 390x844 viewport also renders panel + empty state cleanly. Regression: Owner SMS tab still shows dayof-reminders-card above payment-digest-card. Cable Beach bookings in DB only carry total_price (no total); AdminDashboard uses `b.total || b.total_price` fallback (line 474 AdminDashboard.jsx) — verified by code inspection + sample bookings showing total_price values (e.g. $179.03, $92.40).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Manage / Guest Texts (mobile 390px)", "issues": ["Panel uses grid md:grid-cols-[320px_1fr] so on mobile the thread list stacks above the conversation pane which is fine, but the fixed h-[560px] conversation + 560px scroll list makes mobile view scroll-heavy. Cosmetic only."]},
+      {"screen": "Admin Manage / Guest Texts (desktop)", "issues": ["A transient 'Missing token' toast appeared briefly on mobile reload before admin cookie was re-established (visible in first mobile screenshot). Does not affect panel usage; recovers in <1s."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter28_sms_inbox.py",
+    "/app/test_reports/pytest/iter28.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/dayof_reminders.py: admin_sms_inbox groups by phone_key with newest-first sort then builds dict so threads naturally keep newest-first order (dict preserves insertion). Correct.",
+    "admin_sms_thread.$regex uses the raw phone_key — fine since digits only (no regex metachars), but prefer `re.escape` as defensive coding.",
+    "admin_sms_reply raises 502 when Twilio fails but still returns a message dict only on success. No DB write on failure — correct, prevents phantom 'out' messages.",
+    "run_unconfirmed_alert correctly short-circuits (returns None) before 9 AM Nassau when not forced; writes site_config.unconfirmed_alert_last_date to idempotently guard same-day repeats; still records cron_runs entry even when count==0 — good observability.",
+    "twilio_inbound_sms signature validation requires both token and signature; returns 403 on invalid sig, good.",
+    "SmsInboxPanel.jsx: 20s inbox poll is reasonable; openThread optimistically resets unread locally — nice UX. Reply uses api.post which attaches CSRF automatically; busy state prevents double-submit."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter28_sms_inbox.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100%"},
+  "test_credentials": "roxfam2509@gmail.com / admin123 (per /app/memory/test_credentials.md)",
+  "seed_data_creation": "Backend tests seed inbound_sms docs with booking_id='TESTSMS1' and bookings prefixed TEST_UNC_* / TEST_UNC_C_* / TEST_UNC_ONLY_*; all cleaned up in fixture teardown / finally blocks. UI seed (3 inbound_sms) manually cleaned via mongo after Playwright run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter28_sms_inbox.py covers inbox + thread + reply CSRF + unconfirmed alert (mocked send_owner_sms). Reusable. Note: UI relies on 'Missing token' toast being transient at page load — if more severe auth regressions appear, inspect lib/api.js interceptor + sessionStorage.admin_csrf fallback. Cable Beach regression confirmed by code (AdminDashboard.jsx:474 `b.total || b.total_price`)."
+}

@@ -605,4 +605,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - UI: "✓ Guest confirmed" under Total in admin table; "guest confirmed" badge in DayOfRemindersCard.
 - Setup on Twilio: Phone Numbers → your number → Messaging → "A message comes in" → Webhook POST `https://roxtaxi.com/api/webhooks/twilio/sms`.
 
+## 2026-10-11 — Guest Text Inbox · 9 AM Unconfirmed Alert
+- Admin Manage → "Guest Texts" tab (`SmsInboxPanel.jsx`): threads grouped by phone (last 10 digits), unread badges, conversation view, reply box. Endpoints (in `routes/dayof_reminders.py`, under `/admin/guest-sms/*` because `/admin/{kind}` catches single-segment paths): `GET /inbox`, `GET /thread/{phone_key}` (marks read), `POST /reply` (sends Twilio SMS, stores `direction: out`). Inbound webhook now stores `direction/phone_key/read/customer_name` in `inbound_sms`.
+- `run_unconfirmed_alert()` in the day-of loop: 9 AM Nassau, idempotent `site_config.unconfirmed_alert_last_date`; SMS owners (force priority) today's guests with a phone who haven't replied YES; skips when none.
+- Tested: iteration_28 all passed.
+
+
 
