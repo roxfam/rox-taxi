@@ -21,7 +21,8 @@ export default function DayOfRemindersCard() {
     setSending(true);
     try {
       const { data: r } = await api.post("/admin/dayof-reminders/send-now");
-      toast.success(`Today's list sent (${r.count} bookings) · ${r.guest_reminders_sent} new guest reminder(s)`);
+      if (!r.count) toast.info("No bookings today — nothing sent");
+      else toast.success(`Today's list sent (${r.count} bookings) · ${r.guest_reminders_sent} new guest reminder(s)`);
       load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Send failed");

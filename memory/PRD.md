@@ -591,3 +591,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - `ResendPayLinkButton.jsx` in the Pay column of every unpaid, non-cancelled/completed booking on `/admin`. Reuses `POST /api/admin/bookings/{id}/send-payment-email` (one-tap pay email + invoice PDF, 60s rate limit). Fixed that endpoint to fall back to `total_price` (Cable Beach bookings previously emailed $0.00).
 - Known (pre-existing, not changed): admin bookings table "Total" column shows $0.00 for Cable Beach bookings because it reads `total` only.
 
+
+## 2026-10-11 — Upcoming/Past filters · Stripe Secrets fix · Day-of reminders · CSRF fix
+- Admin bookings table: `filter-upcoming` (future, active, soonest first) and `filter-past` (newest first).
+- Stripe key + webhook secret now read via `secrets_store.get_secret` (Admin Secrets panel DB value → env) in payments.py, admin stripe-live-check and server.py. Previously DB-saved keys were ignored and checkout fell back to `sk_test_emergent`.
+- `routes/dayof_reminders.py`: 12:00 AM Nassau loop (idempotent `site_config.dayof_last_date`). Guests with a booking today get email + SMS (`dayof_reminder_sent_at`, track link, pay link if unpaid). Owners get one email (ADMIN_EMAIL) + SMS list — skipped entirely when there are 0 bookings that day. Existing 24h reminders unchanged. Endpoints: `GET /api/admin/dayof-reminders/preview`, `POST /api/admin/dayof-reminders/send-now`. UI: `DayOfRemindersCard.jsx` in Admin Manage → Owner SMS tab.
+- CSRF: live bundle calls API at `https://roxtaxi.com`; on `www.roxtaxi.com` JS can't read the `admin_csrf` cookie → "CSRF validation failed". Login now stores `csrf_token` in sessionStorage and the axios interceptor falls back to it.
+- Tested: iteration_27 all passed.
+

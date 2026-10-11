@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 27 regression tests passed. Verified: (1) AdminDashboard filter-upcoming / filter-past buttons present and clickable alongside filter-all/filter-deposits-held. (2) /api/admin/stripe-live-check reads STRIPE_API_KEY via secrets_store and returns key_prefix starting with 'sk_test_' (not empty as the original bug). (3) /api/admin/dayof-reminders/preview returns schedule 'Daily at 12:00 AM Nassau time', today[] list, and last_run. (4) /api/admin/dayof-reminders/send-now requires CSRF — POST without X-CSRF-Token header is rejected (403). With CSRF it returns the run dict with count + guest_reminders_sent. (5) send_guest_reminders idempotency unit test with real Mongo + mocked notifications confirms second call skips already-reminded TEST booking. Test doc deleted. (6) UI: Admin login completes, sessionStorage.admin_csrf is set (len=43) and sessionStorage.admin_email populated. (7) Admin Manage → Owner SMS tab shows dayof-reminders-card above payment-digest-card with dayof-schedule, dayof-today-list, dayof-send-now-btn, dayof-last-run testids. 'Last run' timestamp was already populated from earlier cron tick.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Manage / Owner SMS tab", "issues": ["Recharts console warning: 'The width(-1) and height(-1) of chart should be greater than 0' repeats multiple times — chart container size evaluating before mount. Non-blocking cosmetic console noise."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter27_dayof_csrf_stripe.py",
+    "/app/test_reports/pytest/iter27_dayof.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/dayof_reminders.py send_guest_reminders uses atomic $exists guard — good idempotency pattern.",
+    "stripe_live_check in admin.py imports secrets_store.get_secret lazily inside the handler — correct for live DB override lookup.",
+    "frontend/src/lib/api.js axios interceptor correctly falls back to sessionStorage.admin_csrf when cookie is missing (cross-origin www.roxtaxi.com case).",
+    "AdminLogin stores csrf_token in sessionStorage only when response contains it — defensive null-check present.",
+    "Minor: Recharts width/height(-1) warnings in Owner SMS panel suggest a chart container w/o explicit min dimensions; cosmetic."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter27_dayof_csrf_stripe.py"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100%"},
+  "test_credentials": "roxfam2509@gmail.com / admin123 (per /app/memory/test_credentials.md)",
+  "seed_data_creation": "Idempotency test creates TEST_dayof_<uuid> booking and deletes it in finally block — no residual TEST_ data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iteration_27.json documents dayof-reminders + stripe-live-check + CSRF fallback regression. Reusable backend test at /app/backend/tests/test_iter27_dayof_csrf_stripe.py (5 tests, all pass). CSRF double-submit enforcement verified."
+}

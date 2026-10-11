@@ -151,7 +151,10 @@ async def run_dayof(force_owner: bool = False) -> Optional[dict]:
     await _db.site_config.update_one({"_id": "main"}, {"$set": {"dayof_last_date": today}}, upsert=True)
     bookings = await todays_bookings()
     guests = await send_guest_reminders(bookings)
-    owner = await send_owner_list(bookings)
+    if not bookings:
+        owner = {"count": 0, "emails": [], "sms_sent": False, "sms_error": None, "skipped": "no bookings today"}
+    else:
+        owner = await send_owner_list(bookings)
     result = {"date": today, "guest_reminders_sent": guests, **owner}
     await _db.cron_runs.update_one({"kind": "dayof_reminders"},
                                    {"$set": {"last_run_at": _now_iso(), "last_result": result}}, upsert=True)
