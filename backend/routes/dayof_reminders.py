@@ -7,6 +7,9 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, Request
+from fastapi.responses import Response
+
+import secrets_store
 
 from routes.payment_digest import NASSAU, _admin_emails, _site_url
 
@@ -92,7 +95,7 @@ def _guest_reminder(b: dict) -> dict:
                                      html, text, category="confirmation")
     if b.get("customer_phone"):
         sms = (f"Rox: Hi {first}! Reminder — {item} is today at {_time(b)}"
-               f"{' from ' + pickup if pickup else ''}. Ref {b['id']}. {pay_line}Track: {track}")
+               f"{' from ' + pickup if pickup else ''}. Ref {b['id']}. {pay_line}Reply YES to confirm. Track: {track}")
         report["sms"] = send_sms(b["customer_phone"], sms[:600])
     return report
 
@@ -178,6 +181,7 @@ async def admin_dayof_preview(_: str = Depends(_admin_dep)):
         "schedule": "Daily at 12:00 AM Nassau time",
         "today": [{"id": b["id"], "time": _time(b), "item_name": b.get("item_name"),
                    "customer_name": b.get("customer_name"),
+                   "confirmed": bool(b.get("guest_confirmed_at")),
                    "reminded": bool(b.get("dayof_reminder_sent_at"))} for b in bookings],
         "last_run": run,
     }
@@ -187,3 +191,75 @@ async def admin_dayof_preview(_: str = Depends(_admin_dep)):
 async def admin_dayof_send_now(_: str = Depends(_admin_dep)):
     """Re-sends the owner list; guests already reminded today are skipped."""
     return await run_dayof(force_owner=True)
+
+
+# ─── Inbound guest SMS (Twilio Messaging webhook) ──────────────────────────
+YES_WORDS = {"yes", "y", "yes!", "yep", "yeah", "confirm", "confirmed", "ok", "okay"}
+
+
+def _digits(p) -> str:
+    return "".join(c for c in str(p or "") if c.isdigit())[-10:]
+
+
+def _twiml(msg: str = "") -> Response:
+    body = f"<Message>{_html.escape(msg)}</Message>" if msg else ""
+    return Response(f'<?xml version="1.0" encoding="UTF-8"?><Response>{body}</Response>',
+                    media_type="application/xml")
+
+
+def _valid_twilio(request: Request, params: dict) -> bool:
+    from twilio.request_validator import RequestValidator  # noqa: PLC0415
+    token = (secrets_store.get_secret("TWILIO_AUTH_TOKEN", "") or "").strip()
+    sig = request.headers.get("X-Twilio-Signature", "")
+    if not token or not sig:
+        return False
+    v = RequestValidator(token)
+    urls = {f"{_site_url()}{request.url.path}", str(request.url),
+            str(request.url).replace("http://", "https://", 1)}
+    return any(v.validate(u, params, sig) for u in urls)
+
+
+async def _match_booking(phone: str) -> Optional[dict]:
+    key = _digits(phone)
+    if len(key) < 7:
+        return None
+    today = datetime.now(NASSAU).date()
+    best = None
+    async for b in _db.bookings.find({"status": {"$nin": INACTIVE}, "customer_phone": {"$exists": True}}, {"_id": 0}):
+        if _digits(b.get("customer_phone")) != key:
+            continue
+        dt = _local_dt(b.get("booking_date"))
+        if not dt or dt.date() < today:
+            continue
+        if best is None or dt < best[0]:
+            best = (dt, b)
+    return best[1] if best else None
+
+
+@router.post("/webhooks/twilio/sms")
+async def twilio_inbound_sms(request: Request):
+    form = await request.form()
+    params = {k: v for k, v in form.items()}
+    if not _valid_twilio(request, params):
+        log.warning("twilio inbound: bad signature")
+        return Response(status_code=403)
+    from_num = params.get("From", "")
+    text = (params.get("Body") or "").strip()
+    b = await _match_booking(from_num)
+    from notifications import send_owner_sms  # noqa: PLC0415
+    await _db.inbound_sms.insert_one({"from": from_num, "body": text[:1000],
+                                      "booking_id": (b or {}).get("id"), "received_at": _now_iso()})
+    if b and text.lower().strip(" .!") in YES_WORDS | {w.strip("!") for w in YES_WORDS}:
+        await _db.bookings.update_one(
+            {"id": b["id"]},
+            {"$set": {"guest_confirmed_at": _now_iso(), "guest_confirmed_via": "sms"}},
+        )
+        await asyncio.to_thread(
+            send_owner_sms,
+            f"Rox: {b.get('customer_name', 'Guest')} CONFIRMED {b['id']} ({b.get('item_name', '')}) by text.",
+            "booking",
+        )
+        return _twiml(f"Thanks! Your Rox booking {b['id']} is confirmed. See you soon!")
+    who = f"{b.get('customer_name', 'Guest')} ({b['id']})" if b else from_num
+    await asyncio.to_thread(send_owner_sms, f"Rox: text from {who}: {text[:300]}", "booking")
+    return _twiml()

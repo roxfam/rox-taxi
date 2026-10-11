@@ -599,3 +599,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - CSRF: live bundle calls API at `https://roxtaxi.com`; on `www.roxtaxi.com` JS can't read the `admin_csrf` cookie → "CSRF validation failed". Login now stores `csrf_token` in sessionStorage and the axios interceptor falls back to it.
 - Tested: iteration_27 all passed.
 
+## 2026-10-11 — Cable Beach totals · Guest "Reply YES" confirm
+- Admin table + BookingDetailModal show `total || total_price` (Cable Beach no longer $0.00).
+- Day-of guest SMS now ends with "Reply YES to confirm". New Twilio inbound webhook `POST /api/webhooks/twilio/sms` (X-Twilio-Signature validated with TWILIO_AUTH_TOKEN against PUBLIC_SITE_URL+path; unsigned → 403). Matches sender to the soonest active booking today/upcoming by last-10-digits phone. YES/Y/OK/CONFIRM → `guest_confirmed_at`, TwiML thank-you reply, owner SMS. Any other text is forwarded to owners. All inbound logged to `inbound_sms`.
+- UI: "✓ Guest confirmed" under Total in admin table; "guest confirmed" badge in DayOfRemindersCard.
+- Setup on Twilio: Phone Numbers → your number → Messaging → "A message comes in" → Webhook POST `https://roxtaxi.com/api/webhooks/twilio/sms`.
+
+

@@ -470,7 +470,14 @@ export default function AdminDashboard() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-[#64748B]">{new Date(b.booking_date).toLocaleString()}</td>
-                      <td className="px-4 py-3 mono text-[#E86A3C] font-semibold">{money(b.total)}</td>
+                      <td className="px-4 py-3 mono text-[#E86A3C] font-semibold">
+                        {money(b.total || b.total_price)}
+                        {b.guest_confirmed_at && (
+                          <span className="block mt-1 text-[10px] font-sans font-bold text-[#059669]" data-testid={`admin-guest-confirmed-${b.id}`} title={`Guest replied YES ${new Date(b.guest_confirmed_at).toLocaleString()}`}>
+                            ✓ Guest confirmed
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         {hasDeposit ? (
                           <div data-testid={`admin-deposit-cell-${b.id}`}>

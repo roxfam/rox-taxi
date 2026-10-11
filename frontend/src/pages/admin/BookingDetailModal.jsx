@@ -94,7 +94,7 @@ export default function BookingDetailModal({ booking, onClose, onChanged, onOpen
               {booking.status?.replace("_", " ")}
             </span>
           </h2>
-          <div className="text-sm text-white/80 mt-1">{booking.customer_name} · {money(booking.total)}</div>
+          <div className="text-sm text-white/80 mt-1">{booking.customer_name} · {money(booking.total || booking.total_price)}</div>
         </header>
 
         <div className="overflow-y-auto p-6 space-y-5">
@@ -193,7 +193,7 @@ export default function BookingDetailModal({ booking, onClose, onChanged, onOpen
               }`}>{booking.payment_status || "unpaid"}</span>
               <span className="ml-2 text-xs text-[#64748B]">{booking.payment_method || "—"}</span>
             </Row>
-            <Row icon={DollarSign} label="Total">{money(booking.total)}</Row>
+            <Row icon={DollarSign} label="Total">{money(booking.total || booking.total_price)}</Row>
             {booking.deposit_amount > 0 && (
               <Row icon={booking.deposit_status === "released" ? ShieldCheck : ShieldOff} label="Deposit">
                 {money(booking.deposit_amount)} · {booking.deposit_status || "held"}
@@ -312,7 +312,7 @@ function SendPaymentEmailDialog({ booking, onClose, onDone }) {
           <p className="text-xs text-[#64748B] mt-1.5">
             {paid
               ? "The guest will get a thank-you email with the branded invoice PDF attached."
-              : <>They'll get a one-tap pay button for <strong>{money(booking.total)}</strong> plus the invoice PDF.</>
+              : <>They'll get a one-tap pay button for <strong>{money(booking.total || booking.total_price)}</strong> plus the invoice PDF.</>
             }
           </p>
         </div>

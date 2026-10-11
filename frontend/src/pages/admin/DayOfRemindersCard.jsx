@@ -59,7 +59,8 @@ export default function DayOfRemindersCard() {
         {today.map((b) => (
           <li key={b.id} className="py-2 flex items-center justify-between gap-3 text-sm" data-testid={`dayof-row-${b.id}`}>
             <span className="text-[#0B3B5C]"><strong>{b.time}</strong> · {b.item_name} · {b.customer_name}</span>
-            {b.reminded && <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="w-3 h-3" /> reminded</span>}
+            {b.confirmed && <span className="inline-flex items-center gap-1 text-xs text-[#059669] font-semibold" data-testid={`dayof-confirmed-${b.id}`}><CheckCircle2 className="w-3 h-3" /> guest confirmed</span>}
+            {b.reminded && !b.confirmed && <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="w-3 h-3" /> reminded</span>}
           </li>
         ))}
         {today.length === 0 && <li className="py-2 text-sm text-[#94a3b8]">No bookings today.</li>}
