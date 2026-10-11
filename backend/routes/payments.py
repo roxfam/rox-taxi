@@ -76,7 +76,7 @@ async def create_checkout(req: CheckoutRequest, request: Request):
     cancel_url = f"{req.origin_url}/payment/cancel?booking_id={booking['id']}"
 
     checkout_req = CheckoutSessionRequest(
-        amount=float(booking["total"]),
+        amount=float(booking.get("total") or booking.get("total_price") or 0),
         currency="usd",
         success_url=success_url,
         cancel_url=cancel_url,
@@ -87,7 +87,7 @@ async def create_checkout(req: CheckoutRequest, request: Request):
     await _db.payment_transactions.insert_one({
         "session_id": session.session_id,
         "booking_id": booking["id"],
-        "amount": float(booking["total"]),
+        "amount": float(booking.get("total") or booking.get("total_price") or 0),
         "currency": "usd",
         "status": "initiated",
         "payment_status": "pending",
@@ -418,7 +418,7 @@ async def paypal_create_order(req: PayPalCreateOrderRequest):
 
     try:
         order = await paypal_client.create_order(
-            amount=float(booking["total"]),
+            amount=float(booking.get("total") or booking.get("total_price") or 0),
             booking_id=booking["id"],
             description=f"{booking.get('item_name','Rox Taxi booking')} — {booking['id']}",
         )
@@ -430,7 +430,7 @@ async def paypal_create_order(req: PayPalCreateOrderRequest):
         "provider": "paypal",
         "session_id": order["id"],
         "booking_id": booking["id"],
-        "amount": float(booking["total"]),
+        "amount": float(booking.get("total") or booking.get("total_price") or 0),
         "currency": "usd",
         "status": order.get("status", "CREATED"),
         "payment_status": "pending",
