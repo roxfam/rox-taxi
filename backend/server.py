@@ -43,6 +43,7 @@ from routes import seo as seo_module
 from routes import cable_beach as cable_beach_module
 from routes import team_sms as team_sms_module
 from routes import payment_digest as payment_digest_module
+from routes import dayof_reminders as dayof_module
 import secrets_store
 
 ROOT_DIR = Path(__file__).parent
@@ -1602,6 +1603,7 @@ async def seed_db():
     except Exception as e:  # noqa: BLE001
         logging.warning("dispatcher digest loop start warn: %s", e)
     asyncio.create_task(payment_digest_module.digest_loop())
+    asyncio.create_task(dayof_module.dayof_loop())
     # ── Owner-SMS routing cache — refreshed every 60s from site_config ──
     # notifications.send_owner_sms() reads this cache on every call, so
     # subscription + quiet-hours edits go live within a minute of save.
@@ -1808,7 +1810,7 @@ def _new_gift_code() -> str:
 async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
     """Creates a pending gift card and a Stripe Checkout Session for it.
     Card is activated when the Stripe webhook confirms payment."""
-    stripe_key = os.environ.get("STRIPE_API_KEY", "")
+    stripe_key = secrets_store.get_secret("STRIPE_API_KEY", "")
     if not stripe_key:
         raise HTTPException(503, "Stripe not configured")
 
@@ -3439,14 +3441,14 @@ async def cancel_booking(booking_id: str):
                     # Stripe: retrieve session to get payment_intent, then refund
                     s = await ac.get(
                         f"https://api.stripe.com/v1/checkout/sessions/{doc['stripe_session_id']}",
-                        auth=(os.environ.get("STRIPE_API_KEY", ""), ""),
+                        auth=(secrets_store.get_secret("STRIPE_API_KEY", ""), ""),
                     )
                     intent_id = (s.json() or {}).get("payment_intent")
                     if intent_id:
                         r = await ac.post(
                             "https://api.stripe.com/v1/refunds",
                             data={"payment_intent": intent_id, "amount": str(int(refund * 100))},
-                            auth=(os.environ.get("STRIPE_API_KEY", ""), ""),
+                            auth=(secrets_store.get_secret("STRIPE_API_KEY", ""), ""),
                         )
                         j = r.json()
                         refund_result.update({"ok": r.status_code == 200, "id": j.get("id"), "status": j.get("status")})
@@ -4019,7 +4021,7 @@ async def group_booking_checkout(req: GroupBookingCheckout):
     # Build Stripe Checkout session for the deposit (or full) amount.
     try:
         from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
-        api_key = (os.environ.get("STRIPE_API_KEY") or "sk_test_emergent").strip()
+        api_key = (secrets_store.get_secret("STRIPE_API_KEY", "") or "sk_test_emergent").strip()
         base_url = os.environ.get("SITE_BASE_URL", "https://roxtaxi.com").rstrip("/")
         checkout = StripeCheckout(api_key=api_key, webhook_url=f"{base_url}/api/webhooks/stripe")
         session = await checkout.create_checkout_session(CheckoutSessionRequest(
@@ -4213,7 +4215,7 @@ async def pay_balance(booking_id: str, t: str = Query(...)):
 
     try:
         from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
-        api_key = (os.environ.get("STRIPE_API_KEY") or "sk_test_emergent").strip()
+        api_key = (secrets_store.get_secret("STRIPE_API_KEY", "") or "sk_test_emergent").strip()
         base_url = os.environ.get("SITE_BASE_URL", "https://roxtaxi.com").rstrip("/")
         checkout = StripeCheckout(api_key=api_key, webhook_url=f"{base_url}/api/webhooks/stripe")
         session = await checkout.create_checkout_session(CheckoutSessionRequest(
@@ -6648,6 +6650,9 @@ api_router.include_router(team_sms_module.router)
 
 payment_digest_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
 api_router.include_router(payment_digest_module.router)
+
+dayof_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
+api_router.include_router(dayof_module.router)
 
 
 @app.on_event("startup")

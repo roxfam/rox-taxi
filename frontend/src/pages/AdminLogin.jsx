@@ -19,6 +19,7 @@ export default function AdminLogin() {
       // store a non-sensitive email sentinel so the UI can short-circuit
       // the "am I signed in?" guard before the first API round-trip.
       sessionStorage.setItem("admin_email", data.email);
+      if (data.csrf_token) sessionStorage.setItem("admin_csrf", data.csrf_token);
       // Clear any legacy localStorage token from the pre-cookie era.
       localStorage.removeItem("admin_token");
       localStorage.removeItem("admin_email");

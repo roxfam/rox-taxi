@@ -44,6 +44,12 @@ def configure(db, stripe_api_key: str, notify_fn, now_iso_fn, clean_fn, require_
     _require_admin = require_admin
 
 
+def _key() -> str:
+    """Admin Secrets panel (DB) value wins, then env, then startup default."""
+    import secrets_store  # noqa: PLC0415
+    return (secrets_store.get_secret("STRIPE_API_KEY", "") or _stripe_api_key or "").strip()
+
+
 def _admin_dep(authorization: Optional[str] = Header(None)):
     return _require_admin(authorization) if callable(_require_admin) else None
 
@@ -70,7 +76,7 @@ async def create_checkout(req: CheckoutRequest, request: Request):
 
     host_url = str(request.base_url)
     webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=_stripe_api_key, webhook_url=webhook_url)
+    stripe_checkout = StripeCheckout(api_key=_key(), webhook_url=webhook_url)
 
     success_url = f"{req.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{req.origin_url}/payment/cancel?booking_id={booking['id']}"
@@ -244,7 +250,7 @@ async def payment_status(session_id: str, request: Request):
     if record.get("payment_status") != "paid":
         host_url = str(request.base_url)
         webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
-        sc = StripeCheckout(api_key=_stripe_api_key, webhook_url=webhook_url)
+        sc = StripeCheckout(api_key=_key(), webhook_url=webhook_url)
         try:
             status = await sc.get_checkout_status(session_id)
             if status.payment_status == "paid" or status.status == "complete":
@@ -269,7 +275,7 @@ async def payment_status(session_id: str, request: Request):
 async def stripe_webhook(request: Request):
     host_url = str(request.base_url)
     webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
-    sc = StripeCheckout(api_key=_stripe_api_key, webhook_url=webhook_url)
+    sc = StripeCheckout(api_key=_key(), webhook_url=webhook_url)
     body = await request.body()
     sig = request.headers.get("Stripe-Signature", "")
     try:
@@ -387,7 +393,8 @@ async def stripe_webhook_v2(request: Request, background: BackgroundTasks):
     - Returns `{"received": true}` 200 immediately; provisioning runs in
       a FastAPI BackgroundTask so Stripe's 30 s timeout is never hit.
     """
-    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    import secrets_store  # noqa: PLC0415
+    webhook_secret = (secrets_store.get_secret("STRIPE_WEBHOOK_SECRET", "") or "").strip()
     if not webhook_secret:
         logging.error("STRIPE_WEBHOOK_SECRET missing — refusing webhook")
         raise HTTPException(503, "Webhook secret not configured")
@@ -519,7 +526,7 @@ async def _stripe_refund(payment_intent: str, amount_cents: int, reason: str) ->
     async with httpx.AsyncClient(timeout=30.0) as _client:
         r = await _client.post(
             "https://api.stripe.com/v1/refunds",
-            auth=(_stripe_api_key, ""),
+            auth=(_key(), ""),
             data={
                 "payment_intent": payment_intent,
                 "amount": str(amount_cents),
@@ -549,7 +556,7 @@ async def _resolve_stripe_payment_intent(booking_id: str) -> Optional[str]:
     async with httpx.AsyncClient(timeout=20.0) as _client:
         r = await _client.get(
             f"https://api.stripe.com/v1/checkout/sessions/{session_id}",
-            auth=(_stripe_api_key, ""),
+            auth=(_key(), ""),
         )
     if r.status_code >= 400:
         logging.warning("Stripe session lookup failed: %s %s", r.status_code, r.text)
@@ -636,7 +643,7 @@ async def card_hold_create(
     # The shared `sk_test_emergent` key is a proxied sandbox — it only works
     # through the emergentintegrations library, not raw Stripe REST. Setup
     # mode requires a real Stripe key (claimable sandbox or live).
-    if (_stripe_api_key or "").strip().lower() in ("sk_test_emergent", ""):
+    if (_key() or "").strip().lower() in ("sk_test_emergent", ""):
         raise HTTPException(
             503,
             "Card-on-file needs a real Stripe key. Claim your Stripe sandbox from the "
@@ -648,7 +655,7 @@ async def card_hold_create(
     cancel_url = f"{origin}/card-hold/cancel?booking_id={booking['id']}"
     try:
         session = await _card_hold.create_setup_checkout(
-            stripe_key=_stripe_api_key,
+            stripe_key=_key(),
             booking=booking,
             success_url=success_url,
             cancel_url=cancel_url,
@@ -725,17 +732,17 @@ async def _refresh_card_hold(booking: Dict[str, Any]) -> Dict[str, Any]:
     session_id = hold.get("session_id")
     if not session_id:
         return hold
-    session = await _card_hold.retrieve_setup_session(_stripe_api_key, session_id)
+    session = await _card_hold.retrieve_setup_session(_key(), session_id)
     hold["status"] = session.get("status") or hold.get("status")
     hold["customer_id"] = session.get("customer") or hold.get("customer_id")
     setup_intent_id = session.get("setup_intent")
     if setup_intent_id and not hold.get("payment_method_id"):
-        si = await _card_hold.retrieve_setup_intent(_stripe_api_key, setup_intent_id)
+        si = await _card_hold.retrieve_setup_intent(_key(), setup_intent_id)
         pm_id = si.get("payment_method")
         if pm_id:
             hold["payment_method_id"] = pm_id
             try:
-                pm = await _card_hold.retrieve_payment_method(_stripe_api_key, pm_id)
+                pm = await _card_hold.retrieve_payment_method(_key(), pm_id)
                 card = (pm.get("card") or {})
                 hold["card_brand"] = card.get("brand")
                 hold["card_last4"] = card.get("last4")
@@ -952,7 +959,7 @@ async def card_hold_charge(
     amount_cents = int(round(float(req.amount) * 100))
     try:
         pi = await _card_hold.charge_saved_card(
-            stripe_key=_stripe_api_key,
+            stripe_key=_key(),
             customer_id=hold["customer_id"],
             payment_method_id=hold["payment_method_id"],
             amount_cents=amount_cents,

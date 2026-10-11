@@ -19,7 +19,7 @@ export const api = axios.create({ baseURL: API, withCredentials: true });
 api.interceptors.request.use((config) => {
   const method = (config.method || "get").toLowerCase();
   if (["post", "put", "patch", "delete"].includes(method)) {
-    const csrf = readCookie("admin_csrf");
+    const csrf = readCookie("admin_csrf") || (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("admin_csrf") : "");
     if (csrf) config.headers["X-CSRF-Token"] = csrf;
   }
   // Transitional fallback: any browser that still has a legacy localStorage
@@ -48,6 +48,9 @@ api.interceptors.response.use(
       data.detail_raw = data.detail;
       data.detail = String(detailToString(data.detail));
     }
+    if (data?.detail === "CSRF validation failed") {
+      data.detail = "Your admin session expired — please sign out and sign in again.";
+    }
     return Promise.reject(error);
   },
 );
@@ -65,6 +68,7 @@ export function isAdminAuthed() {
 export function clearAdminAuth() {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem("admin_email");
+  sessionStorage.removeItem("admin_csrf");
   localStorage.removeItem("admin_token");
   localStorage.removeItem("admin_email");
 }

@@ -180,6 +180,15 @@ export default function AdminDashboard() {
 
   const filtered = useMemo(() => {
     if (filter === "all") return bookings;
+    if (filter === "upcoming" || filter === "past") {
+      const now = Date.now();
+      const ts = (b) => new Date(b.booking_date).getTime();
+      const live = (b) => !["cancelled", "completed", "no_show"].includes(b.status);
+      if (filter === "upcoming") {
+        return bookings.filter((b) => ts(b) >= now && live(b)).sort((a, c) => ts(a) - ts(c));
+      }
+      return bookings.filter((b) => !(ts(b) >= now && live(b))).sort((a, c) => (ts(c) || 0) - (ts(a) || 0));
+    }
     if (filter === "deposits_held") return bookings.filter((b) => (b.deposit_amount || 0) > 0 && b.deposit_status === "held");
     if (filter === "deposits") return bookings.filter((b) => (b.deposit_amount || 0) > 0);
     return bookings.filter((b) => b.status === filter);
@@ -372,6 +381,9 @@ export default function AdminDashboard() {
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">
             <button onClick={() => setFilter("all")} className={`text-xs px-3 py-1.5 rounded-md ${filter === "all" ? "bg-[#0B3B5C] text-white" : "hover:bg-[#F1F5F9]"}`} data-testid="filter-all">All</button>
+            <button onClick={() => setFilter("upcoming")} className={`text-xs px-3 py-1.5 rounded-md ${filter === "upcoming" ? "bg-[#059669] text-white" : "hover:bg-[#F1F5F9] text-[#059669]"}`} data-testid="filter-upcoming">Upcoming</button>
+            <button onClick={() => setFilter("past")} className={`text-xs px-3 py-1.5 rounded-md ${filter === "past" ? "bg-[#64748B] text-white" : "hover:bg-[#F1F5F9] text-[#64748B]"}`} data-testid="filter-past">Past</button>
+            <span className="w-px h-5 bg-[#E2E8F0] mx-1" />
             <button onClick={() => setFilter("deposits_held")} className={`text-xs px-3 py-1.5 rounded-md flex items-center gap-1.5 ${filter === "deposits_held" ? "bg-[#D4A94A] text-white" : "hover:bg-[#F1F5F9] text-[#D4A94A]"}`} data-testid="filter-deposits-held">
               <Lock className="w-3 h-3" /> Deposits held
             </button>

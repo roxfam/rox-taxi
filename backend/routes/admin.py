@@ -3943,12 +3943,13 @@ async def public_weekend_surcharge():
 # glance which env the deployed backend is using.
 @router.get("/admin/stripe-live-check")
 async def stripe_live_check(admin: str = Depends(_require_admin_placeholder)):
-    key = (os.environ.get("STRIPE_API_KEY") or "").strip()
+    from secrets_store import get_secret as _gs  # noqa: PLC0415
+    key = (_gs("STRIPE_API_KEY", "") or "").strip()
     prefix = key[:8] if key else ""
     is_sandbox_proxy = (key.lower() == "sk_test_emergent")
     is_test = key.startswith("sk_test_")
     is_live = key.startswith("sk_live_")
-    webhook_secret_set = bool((os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip())
+    webhook_secret_set = bool((_gs("STRIPE_WEBHOOK_SECRET", "") or "").strip())
 
     # Peek at the most recent payment_transactions row so we can also
     # show whether real sessions have landed with a `cs_live_` prefix.

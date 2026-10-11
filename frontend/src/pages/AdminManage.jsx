@@ -18,6 +18,7 @@ import ReviewsPanel from "./admin/ReviewsPanel";
 import DriverSpotlightsPanel from "./admin/DriverSpotlightsPanel";
 import OwnerSmsPanel from "./admin/OwnerSmsPanel";
 import PaymentDigestCard from "./admin/PaymentDigestCard";
+import DayOfRemindersCard from "./admin/DayOfRemindersCard";
 
 const TABS = [
   { key: "home_slides", label: "Home Slides" },
@@ -92,7 +93,7 @@ export default function AdminManage() {
           ))}
         </div>
         {tab === "site" ? <SiteConfigPanel />
-          : tab === "owner_sms" ? <><PaymentDigestCard /><OwnerSmsPanel /></>
+          : tab === "owner_sms" ? <><DayOfRemindersCard /><PaymentDigestCard /><OwnerSmsPanel /></>
           : tab === "tokens" ? <TokensPanel />
           : tab === "images" ? <ImagesPanel />
           : tab === "image_health" ? <BrokenImagesPanel />
