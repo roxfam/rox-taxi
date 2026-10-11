@@ -10,7 +10,9 @@ Every endpoint here MUST:
 Wired up in server.py via configure() + include_router().
 """
 import hmac
+import logging
 import os
+import re
 from typing import Callable, Optional
 
 import httpx
@@ -228,10 +230,10 @@ async def _sync_google_reviews_bg() -> None:
             r = await client.get(url, headers=headers)
         if r.status_code != 200:
             await _db.cron_runs.update_one(
-                {"kind": "google_reviews", "started_at": {"$exists": True}},
+                {"kind": "google_reviews"},
                 {"$set": {"last_error": f"{r.status_code}: {r.text[:400]}",
                           "last_error_at": _now_iso()}},
-                sort=[("started_at", -1)],
+                upsert=True,
             )
             return
 
@@ -298,23 +300,91 @@ async def _sync_google_reviews_bg() -> None:
                         )
                 except Exception:  # noqa: BLE001
                     pass
+        await _sync_newest_legacy(api_key, place_id, headers["Referer"])
         await _db.cron_runs.update_one(
             {"kind": "google_reviews"},
             {"$set": {"last_success_at": _now_iso(), "last_upserted": upserted,
                       "last_skipped_low_rating": skipped_low_rating,
                       "last_upstream_rating": data.get("rating"),
                       "last_upstream_count": data.get("userRatingCount")}},
-            sort=[("started_at", -1)],
+            upsert=True,
         )
     except Exception as ex:  # noqa: BLE001
         try:
             await _db.cron_runs.update_one(
                 {"kind": "google_reviews"},
                 {"$set": {"last_error": str(ex)[:400], "last_error_at": _now_iso()}},
-                sort=[("started_at", -1)],
+                upsert=True,
             )
         except Exception:  # noqa: BLE001
             pass
+
+
+async def _sync_newest_legacy(api_key: str, place_id: str, referer: str) -> int:
+    """Places API (New) only returns the 5 'most relevant' reviews, so the pool
+    rarely changes. The legacy Details endpoint supports reviews_sort=newest —
+    pull that too so brand-new 4-5 star reviews reach the homepage. No-op if
+    the legacy API isn't enabled on the key."""
+    added = 0
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(
+                "https://maps.googleapis.com/maps/api/place/details/json",
+                params={"place_id": place_id, "fields": "reviews", "reviews_sort": "newest",
+                        "reviews_no_translations": "true", "key": api_key},
+                headers={"Referer": referer},
+            )
+        data = r.json() if r.status_code == 200 else {}
+        if data.get("status") != "OK":
+            await _db.cron_runs.update_one(
+                {"kind": "google_reviews_newest"},
+                {"$set": {"last_error": f"{data.get('status')}: {data.get('error_message', '')}"[:400],
+                          "last_error_at": _now_iso()}}, upsert=True)
+            return 0
+        for rev in (data.get("result") or {}).get("reviews") or []:
+            rating = int(rev.get("rating") or 0)
+            body = (rev.get("text") or "")[:2000]
+            author = rev.get("author_name") or "Google reviewer"
+            if rating < 4:
+                continue
+            dup = await _db.reviews.find_one({"author_name": author, "text": {"$regex": f"^{re.escape(body[:60])}"}})
+            if dup:
+                continue
+            await _db.reviews.insert_one({
+                "id": f"google_legacy_{rev.get('time', '')}_{abs(hash(author)) % 10**8}",
+                "google_review_id": f"legacy/{rev.get('time', '')}/{author}",
+                "author_name": author,
+                "author_url": rev.get("author_url", ""),
+                "profile_photo_url": rev.get("profile_photo_url", ""),
+                "rating": rating,
+                "text": body,
+                "relative_time": rev.get("relative_time_description", ""),
+                "active": True,
+                "hidden_reason": "",
+                "source": "google",
+                "driver_tags": await _extract_driver_tags(body, _db),
+                "synced_at": _now_iso(),
+                "created_at": _now_iso(),
+            })
+            added += 1
+        await _db.cron_runs.update_one(
+            {"kind": "google_reviews_newest"},
+            {"$set": {"last_success_at": _now_iso(), "last_added": added}}, upsert=True)
+    except Exception as ex:  # noqa: BLE001
+        logging.warning("google newest reviews sync err: %s", ex)
+    return added
+
+
+GOOGLE_REVIEWS_SYNC_SECONDS = 30 * 60
+
+
+async def google_reviews_loop() -> None:
+    """In-app scheduler so self-hosted installs (no platform cron) keep syncing."""
+    import asyncio  # noqa: PLC0415
+    await asyncio.sleep(60)
+    while True:
+        await _sync_google_reviews_bg()
+        await asyncio.sleep(GOOGLE_REVIEWS_SYNC_SECONDS)
 
 
 @router.post("/admin/reviews/sync-google-now")

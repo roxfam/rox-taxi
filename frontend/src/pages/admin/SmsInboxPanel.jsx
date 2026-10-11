@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MessageSquare, Send, RefreshCw } from "lucide-react";
 import { api } from "../../lib/api";
+import QuickReplies from "./QuickReplies";
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : "");
 
@@ -73,6 +74,7 @@ function Conversation({ thread, messages, onSent }) {
           );
         })}
       </div>
+      <QuickReplies firstName={(thread.customer_name || "").split(" ")[0]} onPick={setText} />
       <form onSubmit={send} className="p-3 border-t border-[#E2E8F0] flex gap-2">
         <input
           value={text}

@@ -335,6 +335,32 @@ class SmsReply(BaseModel):
     body: str
 
 
+DEFAULT_QUICK_REPLIES = [
+    "Hi {first}, your driver is on the way!",
+    "See you at the lobby, {first}.",
+    "Your driver has arrived and is waiting outside.",
+    "Running about 10 minutes late — thanks for your patience!",
+    "Thanks {first}! You're all confirmed.",
+]
+
+
+class QuickReplies(BaseModel):
+    templates: list[str]
+
+
+@router.get("/admin/guest-sms/templates")
+async def admin_sms_templates(_: str = Depends(_admin_dep)):
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    return {"templates": cfg.get("sms_quick_replies") or DEFAULT_QUICK_REPLIES}
+
+
+@router.put("/admin/guest-sms/templates")
+async def admin_sms_templates_save(req: QuickReplies, _: str = Depends(_admin_dep)):
+    cleaned = [t.strip()[:300] for t in req.templates if t and t.strip()][:20]
+    await _db.site_config.update_one({"_id": "main"}, {"$set": {"sms_quick_replies": cleaned}}, upsert=True)
+    return {"templates": cleaned or DEFAULT_QUICK_REPLIES}
+
+
 @router.post("/admin/guest-sms/reply")
 async def admin_sms_reply(req: SmsReply, admin: str = Depends(_admin_dep)):
     text = req.body.strip()
