@@ -315,11 +315,42 @@ def _owner_sms_recipients_resolved() -> list:
 
 def _matches_subscription(recipient: dict, kind: Optional[str]) -> bool:
     """Wildcard-aware subscription filter. `["*"]` matches any kind;
-    otherwise the kind must be in the list. Missing/unknown kind ⇒ True."""
+    otherwise the kind must be in the list. Missing/unknown kind ⇒ True.
+
+    **Service-prefix aliases:** booking-flavoured kinds like
+    `cable_beach_created`, `taxi_paid`, `tour_dayof`, `group_booking` all
+    count as "booking" so an admin subscribed only to "booking" doesn't
+    silently miss service-specific lifecycle events. Same aliasing for
+    "payment", "dispatch", "security" and "activity".
+    """
     if not kind:
         return True
     subs = recipient.get("subscriptions") or ["*"]
-    return "*" in subs or kind in subs
+    if "*" in subs:
+        return True
+    if kind in subs:
+        return True
+    # Prefix aliases — map service-flavoured kinds to the broad category
+    # that admins typically subscribe to.
+    k = str(kind).lower()
+    aliases = {
+        "booking": (
+            "cable_beach_created", "cable_beach_paid", "cable_beach_dayof",
+            "cable_beach_arrived",
+            "taxi_created", "taxi_paid", "taxi_booking",
+            "tour_created", "tour_paid", "tour_booking",
+            "rental_created", "rental_paid", "rental_booking",
+            "group_booking", "wedding_booking",
+        ),
+        "payment": ("checkout_paid", "payment_failed", "refund_issued",
+                    "payout_sent", "share_conversion"),
+        "dispatch": ("driver_assigned", "driver_scan", "en_route"),
+        "security": ("admin_login", "password_reset"),
+    }
+    for parent, kinds in aliases.items():
+        if parent in subs and k in kinds:
+            return True
+    return False
 
 
 def _owner_sms_numbers() -> list:
@@ -369,9 +400,12 @@ def send_owner_sms(body: str, kind: Optional[str] = None, force_priority: bool =
         if quiet_now and r.get("quiet_hours", True) and not priority:
             # Enqueue for the morning digest. Motor 3.x returns a Future
             # for collection methods, so we wrap in a coroutine before
-            # scheduling as a task. During quiet hours we DO NOT fall
-            # through to live send if enqueue fails — the whole point of
-            # quiet hours is silence.
+            # scheduling as a task.
+            #
+            # IMPORTANT: if we're called from a sync code path (no running
+            # event loop) `asyncio.create_task` throws RuntimeError and the
+            # SMS silently vanishes. In that case we fall back to a LIVE
+            # send so an admin booking alert never gets lost at 3am.
             queued = False
             if _owner_sms_db is not None:
                 try:
@@ -389,15 +423,24 @@ def send_owner_sms(body: str, kind: Optional[str] = None, force_priority: bool =
                     async def _enqueue(d=doc):
                         await _owner_sms_db.owner_sms_queue.insert_one(d)
 
-                    _aio.create_task(_enqueue())
-                    queued = True
-                    queued_count += 1
+                    try:
+                        _aio.get_running_loop()
+                        _aio.create_task(_enqueue())
+                        queued = True
+                        queued_count += 1
+                    except RuntimeError:
+                        # No running loop — fall through to live send below
+                        # so this SMS is never silently dropped. Admin can
+                        # tolerate one buzz at 3am better than a lost booking.
+                        pass
                 except Exception as ex:  # noqa: BLE001
                     logger.warning("owner_sms_queue enqueue err: %s", ex)
-            report.append({"to": phone, "label": r.get("label", phone),
-                           "sent": False, "queued": queued,
-                           "reason": "quiet_hours" if queued else "quiet_hours_enqueue_failed"})
-            continue
+            if queued:
+                report.append({"to": phone, "label": r.get("label", phone),
+                               "sent": False, "queued": True,
+                               "reason": "quiet_hours"})
+                continue
+            # Fall through — enqueue didn't work, so just send live.
         # Live send
         res = send_sms(phone, body)
         entry = {"to": phone, "label": r.get("label", phone),

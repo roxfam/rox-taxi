@@ -4242,3 +4242,44 @@ async def admin_delete_item(
     if res.deleted_count == 0:
         raise HTTPException(404, "Item not found")
     return {"deleted": True}
+
+
+# ─────────────────── Admin: Owner SMS Live Diagnostic ────────────────────
+@router.post("/admin/diag/owner-sms-live")
+async def admin_diag_owner_sms_live(_: str = Depends(_admin_dep)):
+    """Live diagnostic for the admin SMS pipeline. Fires a real test SMS
+    through `send_owner_sms` with `force_priority=True` so the quiet-hour
+    gate never silently queues it, then returns the full per-recipient
+    report (phone, label, sent, error, provider).
+
+    Also exposes the exact Twilio from-number + SID prefix so an admin can
+    verify at a glance whether the right credentials are loaded on prod.
+
+    Use when real bookings aren't buzzing — hit this once from `/admin` and
+    the response tells you if it's a bad from-number, deactivated SID, or
+    an empty recipient roster. Does NOT read bookings — pure plumbing test.
+    """
+    from notifications import send_owner_sms, _owner_sms_recipients_resolved, _in_owner_quiet_hours
+    from secrets_store import get_secret as _gs
+
+    sid = (_gs("TWILIO_ACCOUNT_SID") or "").strip()
+    from_num = (_gs("TWILIO_FROM_NUMBER") or "").strip()
+    recipients_cfg = _owner_sms_recipients_resolved()
+    msg = (
+        "Rox prod SMS test · if you see this, Twilio + roster + routing are all healthy. "
+        "Reply STOP to opt out."
+    )
+    report = send_owner_sms(msg, kind="activity", force_priority=True)
+    return {
+        "ok": bool(report.get("sent")),
+        "twilio_from_number": from_num or "(not set)",
+        "twilio_sid_prefix": (sid[:6] + "…") if sid else "(not set)",
+        "quiet_hours_now": _in_owner_quiet_hours(),
+        "recipients_configured": [
+            {"phone": r["phone"], "label": r["label"],
+             "subscriptions": r["subscriptions"], "quiet_hours": r["quiet_hours"]}
+            for r in recipients_cfg
+        ],
+        "report": report,
+    }
+
