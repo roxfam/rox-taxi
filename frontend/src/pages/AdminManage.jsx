@@ -19,6 +19,7 @@ import DriverSpotlightsPanel from "./admin/DriverSpotlightsPanel";
 import OwnerSmsPanel from "./admin/OwnerSmsPanel";
 import PaymentDigestCard from "./admin/PaymentDigestCard";
 import DayOfRemindersCard from "./admin/DayOfRemindersCard";
+import SmsInboxPanel from "./admin/SmsInboxPanel";
 
 const TABS = [
   { key: "home_slides", label: "Home Slides" },
@@ -37,6 +38,7 @@ const TABS = [
   { key: "payments", label: "Payments" },
   { key: "content", label: "Content" },
   { key: "site", label: "Site Config" },
+  { key: "guest_texts", label: "Guest Texts" },
   { key: "owner_sms", label: "Owner SMS" },
   { key: "tokens", label: "Tokens" },
 ];
@@ -93,6 +95,7 @@ export default function AdminManage() {
           ))}
         </div>
         {tab === "site" ? <SiteConfigPanel />
+          : tab === "guest_texts" ? <SmsInboxPanel />
           : tab === "owner_sms" ? <><DayOfRemindersCard /><PaymentDigestCard /><OwnerSmsPanel /></>
           : tab === "tokens" ? <TokensPanel />
           : tab === "images" ? <ImagesPanel />

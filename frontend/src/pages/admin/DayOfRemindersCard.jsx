@@ -42,7 +42,7 @@ export default function DayOfRemindersCard() {
         <div>
           <h2 className="font-[Georgia] text-[#0B3B5C] text-2xl">Today: {today.length} booking(s)</h2>
           <p className="text-sm text-[#64748B]" data-testid="dayof-schedule">
-            {data?.schedule || "Daily at 12:00 AM Nassau time"} · guests get email + SMS, owners get the full list
+            {data?.schedule || "Daily at 12:00 AM Nassau time"} · guests get email + SMS, owners get the full list · 9 AM text to owners listing guests who haven't replied YES
           </p>
         </div>
         <button

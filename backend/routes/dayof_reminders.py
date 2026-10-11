@@ -6,8 +6,9 @@ import html as _html
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, Request, HTTPException
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 import secrets_store
 
@@ -170,7 +171,40 @@ async def dayof_loop() -> None:
             await run_dayof()
         except Exception as e:  # noqa: BLE001
             log.warning("dayof tick err: %s", e)
+        try:
+            await run_unconfirmed_alert()
+        except Exception as e:  # noqa: BLE001
+            log.warning("unconfirmed alert tick err: %s", e)
         await asyncio.sleep(120)
+
+
+UNCONFIRMED_ALERT_HOUR = 9
+
+
+async def run_unconfirmed_alert(force: bool = False) -> Optional[dict]:
+    """9 AM Nassau: SMS owners today's reminded guests who haven't replied YES. Skips if none."""
+    now_local = datetime.now(NASSAU)
+    today = now_local.date().isoformat()
+    if not force:
+        if now_local.hour < UNCONFIRMED_ALERT_HOUR:
+            return None
+        cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+        if cfg.get("unconfirmed_alert_last_date") == today:
+            return None
+        await _db.site_config.update_one({"_id": "main"}, {"$set": {"unconfirmed_alert_last_date": today}}, upsert=True)
+    pending = [b for b in await todays_bookings()
+               if b.get("customer_phone") and not b.get("guest_confirmed_at")]
+    result = {"date": today, "count": len(pending), "sms_sent": False}
+    if pending:
+        from notifications import send_owner_sms  # noqa: PLC0415
+        lines = [f"{_time(b)} · {b.get('customer_name') or 'guest'} · {b.get('customer_phone')} · {b['id']}"
+                 for b in pending]
+        body = f"Rox: {len(pending)} guest(s) today haven't replied YES:\n" + "\n".join(lines)
+        r = await asyncio.to_thread(send_owner_sms, body[:1500], "booking", True)
+        result["sms_sent"] = bool(r.get("sent"))
+    await _db.cron_runs.update_one({"kind": "unconfirmed_alert"},
+                                   {"$set": {"last_run_at": _now_iso(), "last_result": result}}, upsert=True)
+    return result
 
 
 @router.get("/admin/dayof-reminders/preview")
@@ -247,8 +281,11 @@ async def twilio_inbound_sms(request: Request):
     text = (params.get("Body") or "").strip()
     b = await _match_booking(from_num)
     from notifications import send_owner_sms  # noqa: PLC0415
-    await _db.inbound_sms.insert_one({"from": from_num, "body": text[:1000],
-                                      "booking_id": (b or {}).get("id"), "received_at": _now_iso()})
+    await _db.inbound_sms.insert_one({"from": from_num, "body": text[:1000], "direction": "in",
+                                      "phone_key": _digits(from_num), "read": False,
+                                      "booking_id": (b or {}).get("id"),
+                                      "customer_name": (b or {}).get("customer_name"),
+                                      "received_at": _now_iso()})
     if b and text.lower().strip(" .!") in YES_WORDS | {w.strip("!") for w in YES_WORDS}:
         await _db.bookings.update_one(
             {"id": b["id"]},
@@ -263,3 +300,54 @@ async def twilio_inbound_sms(request: Request):
     who = f"{b.get('customer_name', 'Guest')} ({b['id']})" if b else from_num
     await asyncio.to_thread(send_owner_sms, f"Rox: text from {who}: {text[:300]}", "booking")
     return _twiml()
+
+
+# ─── Admin guest-text inbox ─────────────────────────────────────────────────────────────
+@router.get("/admin/guest-sms/inbox")
+async def admin_sms_inbox(_: str = Depends(_admin_dep)):
+    threads: dict = {}
+    async for m in _db.inbound_sms.find({}, {"_id": 0}).sort("received_at", -1).limit(2000):
+        key = m.get("phone_key") or _digits(m.get("from"))
+        t = threads.setdefault(key, {"phone_key": key, "phone": m.get("from") if m.get("direction", "in") == "in" else m.get("to"),
+                                     "last_body": m.get("body"), "last_at": m.get("received_at"),
+                                     "last_direction": m.get("direction", "in"), "unread": 0,
+                                     "booking_id": None, "customer_name": None})
+        if m.get("direction", "in") == "in":
+            t["phone"] = t["phone"] or m.get("from")
+            if not m.get("read"):
+                t["unread"] += 1
+        t["booking_id"] = t["booking_id"] or m.get("booking_id")
+        t["customer_name"] = t["customer_name"] or m.get("customer_name")
+    return {"threads": list(threads.values()),
+            "unread_total": sum(t["unread"] for t in threads.values())}
+
+
+@router.get("/admin/guest-sms/thread/{phone_key}")
+async def admin_sms_thread(phone_key: str, _: str = Depends(_admin_dep)):
+    msgs = await _db.inbound_sms.find({"$or": [{"phone_key": phone_key}, {"from": {"$regex": f"{phone_key}$"}}]},
+                                      {"_id": 0}).sort("received_at", 1).to_list(500)
+    await _db.inbound_sms.update_many({"phone_key": phone_key, "read": False}, {"$set": {"read": True}})
+    return {"phone_key": phone_key, "messages": msgs}
+
+
+class SmsReply(BaseModel):
+    to: str
+    body: str
+
+
+@router.post("/admin/guest-sms/reply")
+async def admin_sms_reply(req: SmsReply, admin: str = Depends(_admin_dep)):
+    text = req.body.strip()
+    if not text:
+        raise HTTPException(400, "Message is empty")
+    from notifications import send_sms  # noqa: PLC0415
+    r = await asyncio.to_thread(send_sms, req.to.strip(), text[:1000])
+    if not r.get("sent"):
+        raise HTTPException(502, f"SMS failed: {r.get('error') or 'unknown'}")
+    key = _digits(req.to)
+    last = await _db.inbound_sms.find_one({"phone_key": key, "booking_id": {"$ne": None}}, sort=[("received_at", -1)]) or {}
+    doc = {"to": req.to.strip(), "body": text[:1000], "direction": "out", "phone_key": key, "read": True,
+           "booking_id": last.get("booking_id"), "customer_name": last.get("customer_name"),
+           "sent_by": admin, "received_at": _now_iso()}
+    await _db.inbound_sms.insert_one(dict(doc))
+    return {"sent": True, "message": doc}
