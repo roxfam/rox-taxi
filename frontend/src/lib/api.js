@@ -32,6 +32,26 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// FastAPI 422s return `detail` as an array of objects; flatten to a string so
+// `toast.error(detail)` / `{detail}` never crashes React (error #31).
+const detailToString = (d) => {
+  if (Array.isArray(d)) return d.map((x) => (x && x.msg) || JSON.stringify(x)).join("; ");
+  if (d && typeof d === "object") return d.msg || d.message || JSON.stringify(d);
+  return d;
+};
+
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const data = error?.response?.data;
+    if (data && typeof data === "object" && data.detail !== undefined && typeof data.detail !== "string") {
+      data.detail_raw = data.detail;
+      data.detail = String(detailToString(data.detail));
+    }
+    return Promise.reject(error);
+  },
+);
+
 // Pages use these helpers instead of poking at storage directly, so the
 // guard + logout contract stays in one place.
 export function isAdminAuthed() {

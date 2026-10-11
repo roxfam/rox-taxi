@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { lazy, Suspense, useEffect } from "react";
 
 import Layout from "./components/Layout";
+import AppErrorBoundary from "./components/AppErrorBoundary";
 // Home is the LCP page — keep it in the main bundle so first paint is fast.
 import Home from "./pages/Home";
 import BoardingPass from "./pages/BoardingPass";
@@ -96,6 +97,7 @@ function AppRouter() {
     <>
       <FacebookPixel />
       <SeoVerification />
+      <AppErrorBoundary key={location.pathname}>
       <Suspense fallback={<RouteSkeleton />}>
       <Routes>
       <Route path="/" element={<CustomerShell><Home /></CustomerShell>} />
@@ -151,6 +153,7 @@ function AppRouter() {
       <Route path="/admin/groups" element={<AdminGroups />} />
     </Routes>
     </Suspense>
+    </AppErrorBoundary>
     </>
   );
 }
