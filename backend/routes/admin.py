@@ -783,7 +783,7 @@ async def admin_send_payment_email(booking_id: str, req: SendPaymentEmailRequest
 
     paid = (booking.get("payment_status") or "").lower() == "paid"
     bid = booking["id"]
-    total = float(booking.get("total") or 0)
+    total = float(booking.get("total") or booking.get("total_price") or 0)
     guest_name = booking.get("customer_name") or "there"
     item_name = booking.get("item_name") or "your booking"
     owner_note = (req.message or "").strip()[:600]

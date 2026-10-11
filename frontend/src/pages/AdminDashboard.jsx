@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money, BACKEND_URL, isAdminAuthed, adminLogout, clearAdminAuth } from "../lib/api";
+import ResendPayLinkButton from "./admin/ResendPayLinkButton";
 import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart, Cell } from "recharts";
 import SignupCountriesCard from "./admin/SignupCountriesCard";
@@ -502,6 +503,9 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-1 rounded ${b.payment_status === "paid" ? "bg-[#D4A94A]/10 text-[#D4A94A]" : "bg-[#E86A3C]/10 text-[#E86A3C]"}`}>{b.payment_method} · {b.payment_status}</span>
+                        {!["paid", "refunded"].includes(b.payment_status) && !["cancelled", "completed"].includes(b.status) && (
+                          <div><ResendPayLinkButton booking={b} onSent={load} /></div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <NotifyCell booking={b} onRefresh={load} />

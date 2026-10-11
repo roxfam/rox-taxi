@@ -586,3 +586,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - **Payment retry link**: `send_payment_retry()` emails guest `/pay/{booking_id}` once per booking (`payment_retry_sent_at`), skips paid bookings, SMS owners (`payment_failed`). Triggered by Stripe `checkout.session.expired`, `checkout.session.async_payment_failed`, `payment_intent.payment_failed`, expired status polls, and Stripe checkout-creation errors (returns 502).
 - **"All booking alerts"** subscription (`all_bookings`) in Owner SMS panel — opt-in only; matches booking/payment/group/wedding/taxi/tour/rental/cable_beach kinds.
 - **Live admin blank page root cause (roxtaxi.com)**: VPS backend is stale (404 on `/api/public/cable-beach-package`, 422 on several admin GETs). The 422 `detail` arrays were rendered as React children → React error #31 → blank page. Fixed with axios response interceptor flattening `detail` to string (`lib/api.js`) + global `AppErrorBoundary` (auto-recovers ChunkLoadError, otherwise shows error text). User must still redeploy backend on VPS.
+
+## 2026-10-11 — Manual "Resend pay link" button
+- `ResendPayLinkButton.jsx` in the Pay column of every unpaid, non-cancelled/completed booking on `/admin`. Reuses `POST /api/admin/bookings/{id}/send-payment-email` (one-tap pay email + invoice PDF, 60s rate limit). Fixed that endpoint to fall back to `total_price` (Cable Beach bookings previously emailed $0.00).
+- Known (pre-existing, not changed): admin bookings table "Total" column shows $0.00 for Cable Beach bookings because it reads `total` only.
+
