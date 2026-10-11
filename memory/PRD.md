@@ -612,3 +612,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 
 
+## 2026-10-11 — Quick replies · Google review sync · CSRF origin fallback · Booking edit + manual confirm
+- Quick replies: `QuickReplies.jsx` chips above Guest Texts reply box (`{first}` placeholder), editable; `GET/PUT /api/admin/guest-sms/templates` (stored `site_config.sms_quick_replies`, empty → defaults).
+- Google reviews: in-app 30-min loop `cron.google_reviews_loop()` (self-hosted VPS has no platform cron, so reviews never auto-synced). Fixed silent crash: `update_one(sort=)` unsupported on pymongo 4.6. Added legacy Places "newest" pull — needs an API key WITHOUT HTTP-referrer restriction (currently REQUEST_DENIED; logged in `cron_runs` kind `google_reviews_newest`). 4–5★ auto-show, newest first.
+- CSRF: `require_admin` accepts the double-submit token OR an Origin/Referer host matching own site (Host, X-Forwarded-Host, PUBLIC_SITE_URL, roxtaxi.com, www/apex variants). Foreign origins still 403.
+- Router order: `dayof_module` router now included BEFORE `admin_module` (admin `/admin/{kind}/{item_id}` catch-all was swallowing `PUT /admin/guest-sms/templates`).
+- Booking edit: `PATCH /api/admin/bookings/{id}/details` (name, email, phone, date, pickup, drop-off, passengers, notes, total→total/total_price) with `edit_history`; date change resets day-of reminder. `POST /api/admin/bookings/{id}/guest-confirm {confirmed}`. UI: "Edit booking" + "Confirm guest" buttons in BookingDetailModal (`BookingEditForm.jsx`).
+- Tested: iteration_29 (8/8 after fix), iteration_30 15/15 backend + full frontend.
+
+

@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 30: End-to-end validation of booking edit (PATCH /api/admin/bookings/{id}/details), guest-confirm toggle, CSRF double-submit + same-site Origin fallback, admin catalog PUT regression (tours/taxi_services/rentals), and quick-reply templates UI. Backend: 15/15 pytest cases pass in new file test_iter30_booking_edit_csrf.py; iter29 regression file still 8/8 pass (quick-reply templates GET/PUT, caps-at-20, CSRF, reviews rating≥4, google reviews bg sync). Frontend: full /admin booking row -> BookingDetailModal -> Edit -> all 9 fields render with correct data-testids; save closes form, modal header + body updates immediately (TEST Edit UI persisted). Guest-confirm toggles 'Confirm guest' ↔ 'Guest confirmed ✓'; after modal close+reload the row shows admin-guest-confirmed-TESTEDIT9 badge. Guest Texts tab (/admin/manage?tab=guest_texts): sms-thread-2425550177 opens conversation; sms-quick-reply-0 chip ('Hi TEST, your driver is on the way!') fills sms-reply-input without sending; edit button opens textarea with current 5 defaults; saving custom 2 lines renders 2 chips with 'Quick replies saved' toast; restoring original defaults succeeds. All TEST seed docs (bookings TESTEDIT9/TESTCB9, inbound_sms TEST Guest) and sms_quick_replies site_config override cleaned up.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin dashboard", "issues": ["Recharts emits repeated 'The width(-1) and height(-1) of chart should be greater than 0' warnings during first paint before layout settles. Cosmetic console noise only; does not affect usage."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter30_booking_edit_csrf.py",
+    "/app/backend/tests/test_iter29_quick_replies_and_reviews.py",
+    "/app/test_reports/pytest/iter30.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:502-506 CSRF enforcement is correctly scoped to cookie-authenticated mutating methods and allows same-site Origin as fallback — matches OWASP double-submit guidance. Bearer flow (legacy) exempt, which is appropriate because an attacker cannot forge Authorization headers cross-origin.",
+    "_same_site_origin builds allowed-host set from Host header, X-Forwarded-Host, PUBLIC_SITE_URL, 'roxtaxi.com', and comma-split CORS_ORIGINS. Note CORS_ORIGINS='*' in backend/.env is skipped correctly (if raw == '*': continue). Would be slightly tighter to log the rejected Origin for CSRF-rejected calls (observability only — not a bug).",
+    "dayof_reminders.py:361 total->total_price mapping uses `'total_price' in b and 'total' not in b` which is correct and preserves field identity for Cable Beach bookings. Verified in test_total_maps_to_total_price_on_cablebeach.",
+    "dayof_reminders.py:366-367 unsets dayof_reminder_sent_at only when booking_date is in the diff — correct, avoids resending reminders for the old date.",
+    "admin.py router include order: dayof_module registered before admin_module (server.py 6569/6570) — this is the fix for iter29's 422; verified by passing PUT /admin/guest-sms/templates.",
+    "QuickReplies.jsx: textarea Save POSTs trimmed non-empty lines (api layer attaches X-CSRF-Token). Cancel resets. Reasonable; could add keyboard shortcut (Esc) for UX polish but not required.",
+    "BookingEditForm.jsx: no client-side validation of booking_date format — backend returns 400 which the component surfaces via toast; acceptable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter30_booking_edit_csrf.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15 new + 8/8 iter29 regression)", "frontend": "100% (edit + guest-confirm + quick-reply flows all green)"},
+  "test_credentials": "roxfam2509@gmail.com / admin123 (per /app/memory/test_credentials.md)",
+  "seed_data_creation": "Seeded TESTEDIT9 (confirmed/pending booking tomorrow $50) + TESTCB9 (Cable Beach style, total_price only) + inbound_sms TEST Guest (phone_key 2425550177). All cleaned in fixture teardown and post-UI cleanup script. site_config.sms_quick_replies also unset to restore defaults.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both test_iter29_quick_replies_and_reviews.py and test_iter30_booking_edit_csrf.py are reusable regression suites. The CSRF Origin fallback relies on request.headers['host'] matching the preview host; when hitting via REACT_APP_BACKEND_URL (preview host) same_site_origin returns True so Origin=preview-host passes without X-CSRF-Token. If the preview host rotates, same test will still work because the check uses request.headers.host at serve-time. For UI flows, note the admin booking row click uses data-testid=admin-booking-open-{id} (not booking-row), and admin-guest-confirmed-{id} appears conditionally when booking.guest_confirmed_at is set."
+}
