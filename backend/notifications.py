@@ -343,14 +343,23 @@ def _matches_subscription(recipient: dict, kind: Optional[str]) -> bool:
             "group_booking", "wedding_booking",
         ),
         "payment": ("checkout_paid", "payment_failed", "refund_issued",
-                    "payout_sent", "share_conversion"),
+                    "payout_sent", "share_conversion", "payment_digest"),
         "dispatch": ("driver_assigned", "driver_scan", "en_route"),
         "security": ("admin_login", "password_reset"),
     }
     for parent, kinds in aliases.items():
         if parent in subs and k in kinds:
             return True
+    if "all_bookings" in subs:
+        if k in ALL_BOOKING_KINDS or k in aliases["booking"] or k in aliases["payment"]:
+            return True
+        if "booking" in k or k.startswith(BOOKING_KIND_PREFIXES):
+            return True
     return False
+
+
+ALL_BOOKING_KINDS = ("booking", "payment", "group_inquiry", "tip_topup")
+BOOKING_KIND_PREFIXES = ("cable_beach", "taxi_", "tour_", "rental_", "group_", "wedding_")
 
 
 def _owner_sms_numbers() -> list:
@@ -1298,6 +1307,46 @@ def notify_checkout_abandonment(intent: dict, *, resume_url: str) -> dict:
     """
     result = send_email(email, subject, html, text, category="marketing")
     report.update(result)
+    return report
+
+
+def notify_payment_retry(booking: dict, *, retry_url: str, reason: str = "failed") -> dict:
+    """Email the guest a one-tap link to retry a failed/expired card payment."""
+    report = {"sent": False, "provider": "none", "error": None, "kind": "payment_retry"}
+    email = (booking.get("customer_email") or "").strip()
+    if not email:
+        report["error"] = "No email on booking"
+        return report
+    first = (booking.get("customer_name") or "there").split(" ")[0] or "there"
+    item = _html_escape(booking.get("item_name") or "your Rox booking")
+    total = float(booking.get("total_price") or booking.get("total") or 0.0)
+    why = "Your checkout session timed out" if reason == "expired" else "Your card payment didn't go through"
+    subject = f"Action needed: finish paying for booking {booking.get('id', '')}"
+    text = (
+        f"Hi {first},\n\n{why}, so booking {booking.get('id', '')} for {item} isn't confirmed yet.\n"
+        f"Retry in one tap: {retry_url}\n\n"
+        f"— Rox Taxi Service & Tours · WhatsApp +1 (242) 432-2587"
+    )
+    html = f"""<!DOCTYPE html><html><body style="margin:0;background:#F3F4F6;">
+    <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;background:#FAF9F6;">
+      <div style="background:linear-gradient(135deg,#0B3B5C,#132a4a);padding:32px;color:#fff;">
+        <div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Payment not completed</div>
+        <h1 style="font-family:Georgia,serif;color:#fff;margin:10px 0 4px;font-size:26px;">{_html_escape(first)}, let's try that again.</h1>
+        <p style="color:rgba(255,255,255,.75);font-size:14px;margin:0;">{why}. Your booking is saved — just retry the payment.</p>
+      </div>
+      <div style="padding:22px 32px;">
+        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;">
+          <div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Booking {booking.get('id', '')}</div>
+          <div style="color:#0B3B5C;font-size:17px;margin-top:4px;font-weight:700;">{item}</div>
+          <div style="margin-top:12px;font-family:Georgia,serif;font-size:24px;color:#E86A3C;font-weight:800;">{_fmt_money(total)}</div>
+        </div>
+      </div>
+      <div style="padding:0 32px 28px;">
+        <a href="{retry_url}" style="display:block;background:#E86A3C;color:#fff;text-decoration:none;text-align:center;font-weight:700;padding:14px 20px;border-radius:999px;font-size:14px;">Retry payment →</a>
+        <p style="color:#64748B;font-size:11px;margin:10px 0 0;text-align:center;">Questions? Reply here or WhatsApp +1 (242) 432-2587.</p>
+      </div>
+    </div></body></html>"""
+    report.update(send_email(email, subject, html, text, category="confirmation"))
     return report
 
 

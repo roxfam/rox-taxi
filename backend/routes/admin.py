@@ -2665,7 +2665,7 @@ class OwnerSmsRecipientsUpdate(BaseModel):
 
 
 OWNER_SMS_EVENT_KINDS = [
-    "booking", "payment", "contact_form", "tip_topup",
+    "all_bookings", "booking", "payment", "contact_form", "tip_topup",
     "group_inquiry", "gallery_submission", "customer_signup",
     "referral_conversion", "activity",
 ]

@@ -82,7 +82,24 @@ async def create_checkout(req: CheckoutRequest, request: Request):
         cancel_url=cancel_url,
         metadata={"booking_id": booking["id"], "customer_email": booking["customer_email"]},
     )
-    session = await stripe_checkout.create_checkout_session(checkout_req)
+    try:
+        session = await stripe_checkout.create_checkout_session(checkout_req)
+    except Exception as e:  # noqa: BLE001
+        logging.warning("stripe checkout create failed for %s: %s", booking["id"], e)
+        await _db.payment_transactions.insert_one({
+            "session_id": None,
+            "booking_id": booking["id"],
+            "amount": float(booking.get("total") or booking.get("total_price") or 0),
+            "currency": "usd",
+            "status": "error",
+            "payment_status": "failed",
+            "failure_reason": "checkout_error",
+            "created_at": _now_iso(),
+            "updated_at": _now_iso(),
+        })
+        from routes.payment_digest import send_payment_retry  # noqa: PLC0415
+        await send_payment_retry(booking["id"], reason="checkout_error")
+        raise HTTPException(502, "Card checkout is temporarily unavailable. We've emailed you a link to retry.") from e
 
     await _db.payment_transactions.insert_one({
         "session_id": session.session_id,
@@ -233,6 +250,10 @@ async def payment_status(session_id: str, request: Request):
             if status.payment_status == "paid" or status.status == "complete":
                 await _mark_paid(session_id, record["booking_id"])
                 record = await _db.payment_transactions.find_one({"session_id": session_id})
+            elif status.status == "expired":
+                from routes.payment_digest import send_payment_retry  # noqa: PLC0415
+                await send_payment_retry(record["booking_id"], session_id=session_id, reason="expired")
+                record = await _db.payment_transactions.find_one({"session_id": session_id})
         except Exception as e:  # noqa: BLE001
             logging.warning("stripe status err: %s", e)
 
@@ -304,6 +325,14 @@ async def _process_stripe_event(event: dict) -> None:
                         await _activate_gift_if_paid(session_id)
                     except Exception as e:  # noqa: BLE001
                         logging.warning("gift activation err: %s", e)
+        elif etype in ("checkout.session.expired", "checkout.session.async_payment_failed"):
+            from routes.payment_digest import send_payment_retry  # noqa: PLC0415
+            reason = "expired" if etype.endswith("expired") else "failed"
+            await send_payment_retry((data.get("metadata") or {}).get("booking_id"),
+                                     session_id=data.get("id"), reason=reason)
+        elif etype == "payment_intent.payment_failed":
+            from routes.payment_digest import send_payment_retry  # noqa: PLC0415
+            await send_payment_retry((data.get("metadata") or {}).get("booking_id"), reason="failed")
         elif etype == "payment_intent.succeeded":
             # Covers direct PaymentIntents (no Checkout — card-on-file charges).
             pi_id = data.get("id")

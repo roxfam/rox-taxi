@@ -84,6 +84,16 @@ export default function OwnerSmsPanel() {
     updateRow(idx, { subscriptions: next });
   };
 
+  const toggleAllBookings = (idx) => {
+    const subs = rows[idx].subscriptions || ["*"];
+    if (subs.includes("all_bookings")) {
+      const next = subs.filter((k) => k !== "all_bookings");
+      updateRow(idx, { subscriptions: next.length ? next : ["*"] });
+    } else {
+      updateRow(idx, { subscriptions: [...subs.filter((k) => k !== "*"), "all_bookings"] });
+    }
+  };
+
   const addRow = () => setRows((r) => [...r, { phone: "", label: "", subscriptions: ["*"], quiet_hours: true }]);
   const removeRow = (idx) => setRows((r) => r.filter((_, i) => i !== idx));
 
@@ -160,7 +170,7 @@ export default function OwnerSmsPanel() {
             These events <strong>always fan out live</strong> — they ignore quiet-hours and per-recipient preferences. Because money can wake you up 💰
           </p>
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {kinds.filter((k) => k !== "*").map((k) => {
+            {kinds.filter((k) => k !== "*" && k !== "all_bookings").map((k) => {
               const on = priority.includes(k);
               return (
                 <button
@@ -232,7 +242,16 @@ export default function OwnerSmsPanel() {
                 >
                   ⚡ Everything
                 </button>
-                {kinds.filter((k) => k !== "*").map((k) => {
+                <button
+                  type="button"
+                  onClick={() => toggleAllBookings(idx)}
+                  title="Every booking + payment alert (taxi, tours, rentals, Cable Beach, groups, weddings)"
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${(r.subscriptions || []).includes("all_bookings") ? "bg-[#E86A3C] text-white border-[#E86A3C]" : "bg-white text-[#64748B] border-[#E2E8F0] hover:border-[#E86A3C]"}`}
+                  data-testid={`owner-sms-sub-all-bookings-${idx}`}
+                >
+                  <ListChecks className="w-3 h-3" /> All booking alerts
+                </button>
+                {kinds.filter((k) => k !== "*" && k !== "all_bookings").map((k) => {
                   const on = (r.subscriptions || []).includes("*") || (r.subscriptions || []).includes(k);
                   return (
                     <button

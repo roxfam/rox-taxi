@@ -42,6 +42,7 @@ from routes import tip_topup as tip_topup_module
 from routes import seo as seo_module
 from routes import cable_beach as cable_beach_module
 from routes import team_sms as team_sms_module
+from routes import payment_digest as payment_digest_module
 import secrets_store
 
 ROOT_DIR = Path(__file__).parent
@@ -1600,6 +1601,7 @@ async def seed_db():
         asyncio.create_task(_dispatcher_digest_loop())
     except Exception as e:  # noqa: BLE001
         logging.warning("dispatcher digest loop start warn: %s", e)
+    asyncio.create_task(payment_digest_module.digest_loop())
     # ── Owner-SMS routing cache — refreshed every 60s from site_config ──
     # notifications.send_owner_sms() reads this cache on every call, so
     # subscription + quiet-hours edits go live within a minute of save.
@@ -6643,6 +6645,9 @@ _send_attendant_pass_to_guest = cable_beach_module.send_attendant_pass_to_guest
 # Team SMS roster — per-area notification recipients. Seeded on startup.
 team_sms_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
 api_router.include_router(team_sms_module.router)
+
+payment_digest_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
+api_router.include_router(payment_digest_module.router)
 
 
 @app.on_event("startup")
