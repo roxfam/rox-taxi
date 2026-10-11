@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, Request, HTTPException
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import secrets_store
 
@@ -333,6 +333,54 @@ async def admin_sms_thread(phone_key: str, _: str = Depends(_admin_dep)):
 class SmsReply(BaseModel):
     to: str
     body: str
+
+
+# ─── Admin booking edit + manual guest confirm ───────────────────────────────────────────────────────────
+class BookingEdit(BaseModel):
+    customer_name: Optional[str] = Field(None, max_length=120)
+    customer_email: Optional[str] = Field(None, max_length=200)
+    customer_phone: Optional[str] = Field(None, max_length=40)
+    booking_date: Optional[str] = Field(None, max_length=40)
+    pickup_location: Optional[str] = Field(None, max_length=300)
+    dropoff_location: Optional[str] = Field(None, max_length=300)
+    passengers: Optional[int] = Field(None, ge=1, le=60)
+    notes: Optional[str] = Field(None, max_length=2000)
+    total: Optional[float] = Field(None, ge=0, le=100000)
+
+
+@router.patch("/admin/bookings/{booking_id}/details")
+async def admin_edit_booking(booking_id: str, req: BookingEdit, admin: str = Depends(_admin_dep)):
+    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    changes = {k: v for k, v in req.model_dump(exclude_none=True).items()}
+    if "booking_date" in changes and not _local_dt(changes["booking_date"]):
+        raise HTTPException(400, "Invalid date/time")
+    if "total" in changes:
+        amount = round(changes.pop("total"), 2)
+        changes["total_price" if ("total_price" in b and "total" not in b) else "total"] = amount
+    diff = {k: {"from": b.get(k), "to": v} for k, v in changes.items() if b.get(k) != v}
+    if not diff:
+        return {"updated": False, "booking": b}
+    update = {"$set": changes, "$push": {"edit_history": {"at": _now_iso(), "by": admin, "changes": diff}}}
+    if "booking_date" in diff:
+        update["$unset"] = {"dayof_reminder_sent_at": ""}
+    await _db.bookings.update_one({"id": booking_id}, update)
+    return {"updated": True, "changed": list(diff), "booking": await _db.bookings.find_one({"id": booking_id}, {"_id": 0})}
+
+
+class GuestConfirm(BaseModel):
+    confirmed: bool = True
+
+
+@router.post("/admin/bookings/{booking_id}/guest-confirm")
+async def admin_guest_confirm(booking_id: str, req: GuestConfirm, admin: str = Depends(_admin_dep)):
+    upd = ({"$set": {"guest_confirmed_at": _now_iso(), "guest_confirmed_via": f"admin:{admin}"}}
+           if req.confirmed else {"$unset": {"guest_confirmed_at": "", "guest_confirmed_via": ""}})
+    r = await _db.bookings.update_one({"id": booking_id}, upd)
+    if not r.matched_count:
+        raise HTTPException(404, "Booking not found")
+    return {"confirmed": req.confirmed}
 
 
 DEFAULT_QUICK_REPLIES = [

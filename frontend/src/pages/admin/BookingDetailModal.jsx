@@ -9,6 +9,8 @@ import { api, money, BACKEND_URL } from "../../lib/api";
 import AdminChatPanel from "./AdminChatPanel";
 import SecondaryContactsPanel from "./SecondaryContactsPanel";
 import TimelineEditor from "./TimelineEditor";
+import BookingEditForm from "./BookingEditForm";
+import { Pencil, UserCheck } from "lucide-react";
 
 /**
  * BookingDetailModal — click any admin booking row to open this. Shows:
@@ -32,7 +34,11 @@ const STATUS_TONE = {
   no_show:   "bg-[#E86A3C]/15 text-[#B04524]",
 };
 
-export default function BookingDetailModal({ booking, onClose, onChanged, onOpenIncidental }) {
+export default function BookingDetailModal({ booking: bookingProp, onClose, onChanged, onOpenIncidental }) {
+  const [edited, setEdited] = useState(null);
+  const booking = edited || bookingProp;
+  const [editing, setEditing] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [payEmailOpen, setPayEmailOpen] = useState(false);
   const [completeBusy, setCompleteBusy] = useState(false);
@@ -75,6 +81,21 @@ export default function BookingDetailModal({ booking, onClose, onChanged, onOpen
   };
 
   const history = Array.isArray(booking.status_history) ? booking.status_history : [];
+
+  const toggleGuestConfirm = async () => {
+    const next = !booking.guest_confirmed_at;
+    setConfirmBusy(true);
+    try {
+      await api.post(`/admin/bookings/${bid}/guest-confirm`, { confirmed: next });
+      setEdited({ ...booking, guest_confirmed_at: next ? new Date().toISOString() : null });
+      toast.success(next ? "Guest marked confirmed" : "Guest confirmation cleared");
+      onChanged?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Update failed");
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
   const canReopen = ["completed", "cancelled", "no_show"].includes(booking.status);
   const canComplete = !["completed", "cancelled"].includes(booking.status);
   const hasEmail = !!booking.customer_email;
@@ -134,6 +155,22 @@ export default function BookingDetailModal({ booking, onClose, onChanged, onOpen
             >
               <Receipt className="w-3.5 h-3.5" /> Email for payment
             </button>
+            <button
+              onClick={() => setEditing((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#D4A94A] text-[#B47F26] bg-white px-4 py-2 text-xs font-black uppercase tracking-wider hover:bg-[#D4A94A] hover:text-white active:scale-95"
+              data-testid="booking-detail-edit"
+            >
+              <Pencil className="w-3.5 h-3.5" /> {editing ? "Close edit" : "Edit booking"}
+            </button>
+            <button
+              onClick={toggleGuestConfirm}
+              disabled={confirmBusy}
+              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-black uppercase tracking-wider active:scale-95 disabled:opacity-50 ${booking.guest_confirmed_at ? "bg-[#059669] text-white hover:bg-[#047857]" : "border border-[#059669] text-[#047857] bg-white hover:bg-[#059669] hover:text-white"}`}
+              title={booking.guest_confirmed_at ? `Confirmed ${new Date(booking.guest_confirmed_at).toLocaleString()} — click to clear` : "Mark that the guest confirmed (phone call, WhatsApp, in person)"}
+              data-testid="booking-detail-guest-confirm"
+            >
+              <UserCheck className="w-3.5 h-3.5" /> {booking.guest_confirmed_at ? "Guest confirmed ✓" : "Confirm guest"}
+            </button>
             {canComplete && (
               <button
                 onClick={completeNow}
@@ -155,6 +192,14 @@ export default function BookingDetailModal({ booking, onClose, onChanged, onOpen
               </button>
             )}
           </div>
+
+          {editing && (
+            <BookingEditForm
+              booking={booking}
+              onCancel={() => setEditing(false)}
+              onSaved={(b) => { setEdited(b); setEditing(false); onChanged?.(); }}
+            />
+          )}
 
           {/* Guest + Trip */}
           <div className="grid sm:grid-cols-2 gap-3">

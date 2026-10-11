@@ -435,6 +435,29 @@ def make_admin_token(email: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 
+def _same_site_origin(request: Request) -> bool:
+    """OWASP origin check fallback: browsers always send Origin on cross-site
+    POSTs, so a request whose Origin/Referer host is our own site (apex or www)
+    is not CSRF. Covers www↔apex cookie visibility and stale csrf cookies."""
+    from urllib.parse import urlparse
+    src = request.headers.get("origin") or request.headers.get("referer") or ""
+    host = (urlparse(src).hostname or "").lower()
+    if not host:
+        return False
+    allowed = set()
+    for raw in [request.headers.get("host", ""), request.headers.get("x-forwarded-host", ""),
+                secrets_store.get_secret("PUBLIC_SITE_URL", "") or "", "roxtaxi.com",
+                *(os.environ.get("CORS_ORIGINS", "") or "").split(",")]:
+        raw = raw.strip()
+        if not raw or raw == "*":
+            continue
+        h = (urlparse(raw if "//" in raw else f"//{raw}").hostname or "").lower()
+        if h:
+            allowed.add(h)
+            allowed.add(h[4:] if h.startswith("www.") else f"www.{h}")
+    return host in allowed
+
+
 async def require_admin(
     request: Request,
     authorization: Optional[str] = Header(None),
@@ -478,7 +501,8 @@ async def require_admin(
         raise HTTPException(403, "Admins only")
     if source == "cookie" and request.method in ("POST", "PUT", "PATCH", "DELETE"):
         cookie_csrf = request.cookies.get("admin_csrf") or ""
-        if not cookie_csrf or not x_csrf_token or not hmac.compare_digest(cookie_csrf, x_csrf_token):
+        double_submit_ok = bool(cookie_csrf and x_csrf_token and hmac.compare_digest(cookie_csrf, x_csrf_token))
+        if not double_submit_ok and not _same_site_origin(request):
             raise HTTPException(403, "CSRF validation failed")
     # ── Server-side revocation (kill-switch) ──────────────────────────
     # We hash the raw JWT so a leaked collection can't be used to
@@ -6541,6 +6565,8 @@ admin_module.configure(
     attempt_deposit_refund=payments_module.attempt_deposit_refund,
     upload_dir=UPLOAD_DIR,
 )
+dayof_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
+api_router.include_router(dayof_module.router)
 api_router.include_router(admin_module.router)
 
 # Wire up the public catalog router (tours, rentals, taxi-services, packages,
@@ -6652,8 +6678,6 @@ api_router.include_router(team_sms_module.router)
 payment_digest_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
 api_router.include_router(payment_digest_module.router)
 
-dayof_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
-api_router.include_router(dayof_module.router)
 
 
 @app.on_event("startup")
