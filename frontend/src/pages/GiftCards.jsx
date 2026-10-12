@@ -41,7 +41,7 @@ export default function GiftCards() {
           <span className="w-8 h-[1px] bg-[#D4A94A]" />
           <span className="text-[10px] tracking-[0.35em] uppercase font-black text-[#D4A94A]">Rox gift cards</span>
         </div>
-        <h1 className="serif text-5xl sm:text-6xl text-[#0B3B5C] font-bold leading-[0.95]">Give the <em className="italic text-[#D4A94A]">gift</em> of the Bahamas.</h1>
+        <h1 className="serif text-5xl sm:text-6xl text-[#0B3B5C] font-bold leading-[0.95]">Treat someone special to a little piece of <em className="italic text-[#D4A94A]">paradise</em>.</h1>
         {paidCode && (
           <div className="mt-6 rounded-2xl bg-white border border-[#059669]/30 p-4 flex items-start gap-3" data-testid="gift-success-banner">
             <CheckCircle2 className="w-5 h-5 text-[#059669] shrink-0 mt-0.5" />
@@ -53,7 +53,7 @@ export default function GiftCards() {
             <AlertCircle className="w-5 h-5 text-[#E86A3C] shrink-0" /> Checkout cancelled. No charge was made.
           </div>
         )}
-        <p className="text-[#64748B] mt-4 max-w-xl leading-relaxed">Instant email delivery. Redeemable on taxis, tours, car rentals, Cable Beach days and group bookings at checkout. Valid for 12 months from purchase. Non-refundable. Balance carries over across bookings.</p>
+        <p className="text-[#64748B] mt-4 max-w-xl leading-relaxed">Surprise a friend, partner or loved one visiting The Bahamas with a gift they'll never forget: a smooth island ride, an unforgettable tour, or a sun-soaked day on the beach with us. Sent instantly by email, good on any taxi, tour, car rental, Cable Beach day or group booking, and valid for 12 months. Any unused balance carries over to their next booking. Non-refundable.</p>
 
         <form onSubmit={submit} className="mt-10 grid lg:grid-cols-[1fr_360px] gap-8 items-start" data-testid="gift-purchase-form">
           <div className="space-y-6">
