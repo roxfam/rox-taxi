@@ -340,11 +340,11 @@ def _matches_subscription(recipient: dict, kind: Optional[str]) -> bool:
             "taxi_created", "taxi_paid", "taxi_booking",
             "tour_created", "tour_paid", "tour_booking",
             "rental_created", "rental_paid", "rental_booking",
-            "group_booking", "wedding_booking",
+            "group_booking", "wedding_booking", "flight_status",
         ),
         "payment": ("checkout_paid", "payment_failed", "refund_issued",
                     "payout_sent", "share_conversion", "payment_digest"),
-        "dispatch": ("driver_assigned", "driver_scan", "en_route"),
+        "dispatch": ("driver_assigned", "driver_scan", "en_route", "flight_status"),
         "security": ("admin_login", "password_reset"),
     }
     for parent, kinds in aliases.items():
@@ -359,7 +359,7 @@ def _matches_subscription(recipient: dict, kind: Optional[str]) -> bool:
 
 
 ALL_BOOKING_KINDS = ("booking", "payment", "group_inquiry", "tip_topup")
-BOOKING_KIND_PREFIXES = ("cable_beach", "taxi_", "tour_", "rental_", "group_", "wedding_")
+BOOKING_KIND_PREFIXES = ("cable_beach", "taxi_", "tour_", "rental_", "group_", "wedding_", "flight")
 
 
 def _owner_sms_numbers() -> list:

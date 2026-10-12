@@ -346,6 +346,51 @@ class BookingEdit(BaseModel):
     passengers: Optional[int] = Field(None, ge=1, le=60)
     notes: Optional[str] = Field(None, max_length=2000)
     total: Optional[float] = Field(None, ge=0, le=100000)
+    notify_guest: bool = True
+
+
+NOTIFY_FIELDS = {"booking_date": "Date & time", "pickup_location": "Pickup", "dropoff_location": "Drop-off"}
+
+
+def _change_notice(b: dict, changed: list) -> dict:
+    """Email + SMS the guest that their date/time/pickup changed."""
+    from notifications import send_email, send_sms  # noqa: PLC0415
+    first = (b.get("customer_name") or "there").split(" ")[0] or "there"
+    item = b.get("item_name") or "your Rox booking"
+    dt = _local_dt(b.get("booking_date"))
+    when = dt.strftime("%a %b %-d at %-I:%M %p") if dt else ""
+    pickup = b.get("pickup_location") or ""
+    dropoff = b.get("dropoff_location") or ""
+    what = ", ".join(NOTIFY_FIELDS[c].lower() for c in changed)
+    track = f"{_site_url()}/track?id={b['id']}"
+    report = {"email": {"sent": False}, "sms": {"sent": False}, "changed": changed}
+    if b.get("customer_email"):
+        e = _html.escape
+        rows = "".join(
+            f'<tr><td style="padding:6px 0;color:#64748B;font-size:12px;">{lbl}</td>'
+            f'<td style="padding:6px 0;color:#0B3B5C;font-weight:700;text-align:right;">{e(val)}</td></tr>'
+            for lbl, val in (("Date & time", when), ("Pickup", pickup), ("Drop-off", dropoff)) if val)
+        html = f"""<!DOCTYPE html><html><body style="margin:0;background:#F3F4F6;">
+<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;background:#FAF9F6;">
+<div style="background:linear-gradient(135deg,#0B3B5C,#132a4a);padding:30px;color:#fff;">
+<div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Booking updated</div>
+<h1 style="font-family:Georgia,serif;margin:10px 0 0;font-size:24px;">{e(first)}, we've updated your {e(what)}.</h1></div>
+<div style="padding:22px 30px;"><div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:20px;">
+<div style="font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Booking {b['id']}</div>
+<div style="color:#0B3B5C;font-size:17px;font-weight:700;margin:4px 0 10px;">{e(item)}</div>
+<table style="width:100%;border-collapse:collapse;">{rows}</table></div>
+<a href="{track}" style="display:block;margin-top:16px;background:#0B3B5C;color:#fff;text-decoration:none;text-align:center;font-weight:700;padding:12px;border-radius:999px;">View your booking →</a>
+<p style="color:#64748B;font-size:11px;text-align:center;margin-top:12px;">Something not right? WhatsApp +1 (242) 432-2587.</p></div></div></body></html>"""
+        text = (f"Hi {first}, we've updated your {what} for {item} (booking {b['id']}).\n"
+                f"{'When: ' + when + chr(10) if when else ''}{'Pickup: ' + pickup + chr(10) if pickup else ''}"
+                f"View: {track}")
+        report["email"] = send_email(b["customer_email"], f"Updated: your Rox booking {b['id']}", html, text,
+                                     category="confirmation")
+    if b.get("customer_phone"):
+        sms = (f"Rox: Hi {first}, your booking {b['id']} was updated — "
+               f"{when}{' from ' + pickup if pickup else ''}. Reply YES to confirm. {track}")
+        report["sms"] = send_sms(b["customer_phone"], sms[:600])
+    return report
 
 
 @router.patch("/admin/bookings/{booking_id}/details")
@@ -353,7 +398,7 @@ async def admin_edit_booking(booking_id: str, req: BookingEdit, admin: str = Dep
     b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
     if not b:
         raise HTTPException(404, "Booking not found")
-    changes = {k: v for k, v in req.model_dump(exclude_none=True).items()}
+    changes = {k: v for k, v in req.model_dump(exclude_none=True).items() if k != "notify_guest"}
     if "booking_date" in changes and not _local_dt(changes["booking_date"]):
         raise HTTPException(400, "Invalid date/time")
     if "total" in changes:
@@ -366,7 +411,14 @@ async def admin_edit_booking(booking_id: str, req: BookingEdit, admin: str = Dep
     if "booking_date" in diff:
         update["$unset"] = {"dayof_reminder_sent_at": ""}
     await _db.bookings.update_one({"id": booking_id}, update)
-    return {"updated": True, "changed": list(diff), "booking": await _db.bookings.find_one({"id": booking_id}, {"_id": 0})}
+    fresh = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    notice = None
+    notify_changed = [k for k in NOTIFY_FIELDS if k in diff]
+    if req.notify_guest and notify_changed and fresh.get("status") not in INACTIVE:
+        notice = await asyncio.to_thread(_change_notice, fresh, notify_changed)
+        await _db.bookings.update_one({"id": booking_id}, {"$set": {"change_notice_last": {"at": _now_iso(), **notice}}})
+    return {"updated": True, "changed": list(diff), "booking": fresh,
+            "guest_notified": bool(notice and (notice["email"].get("sent") or notice["sms"].get("sent")))}
 
 
 class GuestConfirm(BaseModel):

@@ -620,4 +620,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Booking edit: `PATCH /api/admin/bookings/{id}/details` (name, email, phone, date, pickup, drop-off, passengers, notes, total→total/total_price) with `edit_history`; date change resets day-of reminder. `POST /api/admin/bookings/{id}/guest-confirm {confirmed}`. UI: "Edit booking" + "Confirm guest" buttons in BookingDetailModal (`BookingEditForm.jsx`).
 - Tested: iteration_29 (8/8 after fix), iteration_30 15/15 backend + full frontend.
 
+## 2026-10-11 — Booking change notice · Flight arrival alerts to owners
+- `PATCH /admin/bookings/{id}/details` now emails + texts the guest when date/time, pickup or drop-off changes (`notify_guest` default true; checkbox `booking-edit-notify-guest`). Result stored in `change_notice_last`. SMS includes "Reply YES to confirm".
+- Flight tracker (AviationStack): key now read via secrets_store (Admin Secrets panel works). Owner SMS kind changed `dispatch` → `flight_status`, matched by `booking`, `dispatch`, `all_bookings` and `*` subscriptions. New `arriving_soon` event (ETA ≤45 min) alongside departed / landed / delay ≥30m. Times formatted in Nassau local. Applies to every active booking with a `flight_number` within −6h/+24h, polled every 20 min.
+
+
 

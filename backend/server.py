@@ -4794,7 +4794,7 @@ async def _fetch_flight_full(flight_number: str) -> Optional[Dict[str, Any]]:
     with departure/arrival timestamps + statuses + delays, or None on
     any failure. Honors the same cache as `_fetch_flight_delay_minutes`.
     """
-    key = os.environ.get("AVIATIONSTACK_API_KEY", "").strip()
+    key = (secrets_store.get_secret("AVIATIONSTACK_API_KEY", "") or "").strip()
     if not key or not flight_number:
         return None
     fn = flight_number.strip().upper().replace(" ", "")
@@ -4865,6 +4865,15 @@ async def _run_flight_status_tick() -> int:
     """Fan-out day-of flight status updates (departure, landed, significant
     delay) to admin + employee SMS recipients. Idempotent per-event via
     `booking.flight_events`."""
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    nassau = ZoneInfo("America/Nassau")
+
+    def _t(raw) -> str:
+        try:
+            return datetime.fromisoformat(str(raw).replace("Z", "+00:00")).astimezone(nassau).strftime("%-I:%M %p")
+        except (ValueError, TypeError):
+            return "TBA"
+
     log = logging.getLogger("rox.flight_status")
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(hours=6)
@@ -4903,13 +4912,24 @@ async def _run_flight_status_tick() -> int:
         if status == "active" and "departed" not in events_fired:
             new_events.append(("departed",
                 f"✈ {fn} departed {dep.get('iata') or ''} → {arr.get('iata') or ''} "
-                f"({guest_name}, booking {b['id']}, pickup {dt:%I:%M%p %b %d}). "
-                f"ETA {arr.get('estimated') or arr.get('scheduled') or 'TBA'}."
+                f"({guest_name}, booking {b['id']}, pickup {dt.astimezone(nassau):%-I:%M %p %b %d}). "
+                f"ETA {_t(arr.get('estimated') or arr.get('scheduled'))}."
             ))
         if status == "landed" and "landed" not in events_fired:
             new_events.append(("landed",
                 f"🛬 {fn} LANDED at {arr.get('iata') or 'destination'}. "
                 f"{guest_name} (booking {b['id']}) — head to pickup for {trip}."
+            ))
+        eta_raw = arr.get("estimated") or arr.get("scheduled")
+        try:
+            eta = datetime.fromisoformat(str(eta_raw).replace("Z", "+00:00")) if eta_raw else None
+        except ValueError:
+            eta = None
+        if (eta and status in ("active", "scheduled") and "arriving_soon" not in events_fired
+                and "landed" not in events_fired and 0 <= (eta - now).total_seconds() <= 45 * 60):
+            new_events.append(("arriving_soon",
+                f"✈ {fn} arriving {arr.get('iata') or ''} in ~{max(1, int((eta - now).total_seconds() // 60))} min. "
+                f"{guest_name} (booking {b['id']}) — {trip}."
             ))
         if dep_delay >= 30 and f"dep_delay_{dep_delay//30*30}" not in events_fired:
             new_events.append((f"dep_delay_{dep_delay//30*30}",
@@ -4919,7 +4939,7 @@ async def _run_flight_status_tick() -> int:
         if arr_delay >= 30 and f"arr_delay_{arr_delay//30*30}" not in events_fired:
             new_events.append((f"arr_delay_{arr_delay//30*30}",
                 f"⏱ {fn} arrival delayed +{arr_delay} min. "
-                f"{guest_name} (booking {b['id']}) ETA now {arr.get('estimated') or 'TBA'}."
+                f"{guest_name} (booking {b['id']}) ETA now {_t(arr.get('estimated'))}."
             ))
 
         if not new_events:
@@ -4929,7 +4949,7 @@ async def _run_flight_status_tick() -> int:
         from notifications import send_owner_sms  # noqa: PLC0415
         for tag, msg in new_events:
             try:
-                send_owner_sms(body=msg, kind="dispatch", force_priority=True)
+                send_owner_sms(body=msg, kind="flight_status", force_priority=True)
                 events_fired.append(tag)
                 fired += 1
             except Exception as e:  # noqa: BLE001
@@ -5163,7 +5183,7 @@ async def _fetch_flight_delay_minutes(flight_number: str) -> Optional[int]:
     Returns None on any failure (no key, network error, no rows, etc.).
     Cached via the existing `_FLIGHT_CACHE` so we don't blow the
     AviationStack quota on the reminder tick."""
-    key = os.environ.get("AVIATIONSTACK_API_KEY", "").strip()
+    key = (secrets_store.get_secret("AVIATIONSTACK_API_KEY", "") or "").strip()
     if not key or not flight_number:
         return None
     fn = flight_number.strip().upper().replace(" ", "")
@@ -6294,7 +6314,7 @@ async def driver_leaderboard(_: str = Depends(require_admin)):
 
 @api_router.get("/flight/{flight_number}")
 async def lookup_flight(flight_number: str):
-    key = os.environ.get("AVIATIONSTACK_API_KEY", "").strip()
+    key = (secrets_store.get_secret("AVIATIONSTACK_API_KEY", "") or "").strip()
     if not key:
         raise HTTPException(503, "Flight tracking not configured on this server")
 

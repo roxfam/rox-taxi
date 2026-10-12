@@ -27,6 +27,7 @@ export default function BookingEditForm({ booking, onSaved, onCancel }) {
     passengers: booking.passengers ?? "",
     total: booking.total || booking.total_price || "",
     notes: booking.notes || "",
+    notify_guest: true,
   });
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -39,7 +40,7 @@ export default function BookingEditForm({ booking, onSaved, onCancel }) {
       body.passengers = body.passengers === "" ? null : Number(body.passengers);
       body.total = body.total === "" ? null : Number(body.total);
       const { data } = await api.patch(`/admin/bookings/${booking.id}/details`, body);
-      toast.success(data.updated ? `Saved: ${data.changed.join(", ")}` : "No changes");
+      toast.success(data.updated ? `Saved: ${data.changed.join(", ")}${data.guest_notified ? " · guest notified" : ""}` : "No changes");
       onSaved?.(data.booking);
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Save failed");
@@ -71,13 +72,24 @@ export default function BookingEditForm({ booking, onSaved, onCancel }) {
         Notes
         <textarea value={form.notes} onChange={set("notes")} rows={2} className={`${input} mt-1`} data-testid="booking-edit-notes" />
       </label>
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="inline-flex items-center gap-2 text-xs text-[#0B3B5C] font-semibold">
+          <input
+            type="checkbox"
+            checked={form.notify_guest}
+            onChange={(e) => setForm((f) => ({ ...f, notify_guest: e.target.checked }))}
+            data-testid="booking-edit-notify-guest"
+          />
+          Text + email the guest if date, time or pickup changes
+        </label>
+        <div className="flex gap-2">
         <button type="button" onClick={onCancel} className="inline-flex items-center gap-1 rounded-full border border-[#E2E8F0] px-4 py-2 text-xs font-bold text-[#64748B]" data-testid="booking-edit-cancel">
           <X className="w-3.5 h-3.5" /> Cancel
         </button>
         <button type="submit" disabled={busy} className="inline-flex items-center gap-1 rounded-full bg-[#0B3B5C] text-white px-4 py-2 text-xs font-black uppercase tracking-wider disabled:opacity-60" data-testid="booking-edit-save">
           <Save className="w-3.5 h-3.5" /> {busy ? "Saving…" : "Save changes"}
         </button>
+        </div>
       </div>
     </form>
   );
