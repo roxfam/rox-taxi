@@ -638,6 +638,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Endpoints (routes/dayof_reminders.py): `POST /api/admin/bookings/{id}/cancel {reason, notify_guest}` (idempotent, status_history, cancel_notice), `DELETE /api/admin/bookings/{id}`.
 - Tested: iteration_31 7/7 backend + frontend flows passed.
 
+## 2026-10-12 — Refund on Cancel · Recently deleted / Restore
+- Cancel now opens `CancelBookingDialog.jsx` (reason, notify guest, refund checkbox shown only when `GET /api/admin/bookings/{id}/refundable` finds a paid card tx). `POST /cancel` with `refund:true` reuses `routes/admin.refund_payment` (Stripe/PayPal, refund email to guest, refund_history); errors surfaced, booking still cancelled.
+- `RecentlyDeletedPanel.jsx` under the bookings table: `GET /api/admin/bookings-deleted`, `POST /api/admin/bookings-deleted/{id}/restore` (409 if ID active, 404 if not archived; stamps restored_at/by).
+- Tested: iteration_32 — 7/7 backend + 7/7 UI.
+
+
 
 
 

@@ -1,0 +1,28 @@
+{
+  "summary": "Tested one-tap refund-on-cancel and recently-deleted/restore flows. Backend 7/7 pytest passing: refundable=false on unpaid, refundable=true with amount=60/provider=stripe on paid card tx, 404 on unknown booking, zelle provider excluded, cancel with refund:true on unpaid surfaces {ok:false,error:'No card payment found to refund'} with HTTP 200 and still cancels, GET /bookings-deleted lists newest-first, restore returns booking to /admin/bookings and removes archive, second restore 404, restore when active booking exists returns 409. UI 7/7 passing on live admin: CancelBookingDialog opens from admin-row-cancel-{id} with cancel-dialog-reason/notify/close/submit, shows cancel-dialog-no-refund on unpaid TESTRF1 (no refund row), shows cancel-dialog-refund-row with correct '$60.00 to the guest's card (stripe)' on paid TESTRF2; close button dismisses without side-effect; submit cancels booking and hides the Cancel action; RecentlyDeletedPanel toggle expands list, delete via admin-row-delete-{id} (window.confirm) removes row and populates deleted-row-{id}; deleted-restore-{id} restores back into table (success toast 'Restored TESTRF1' visible) and removes it from the deleted list.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter32_refund_restore.py",
+    "/app/backend/tests/_iter32_seed.py",
+    "/app/test_reports/pytest/iter32.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CancelBookingDialog: 'refund' state defaults to true even before refundInfo loads; combined with canRefund gate the submit still sends refund:false until data arrives, so no real bug — but consider defaulting refund = refundInfo.refundable to avoid confusion.",
+    "CancelBookingDialog.submit interprets response as data.refund.refund?.refunded — this triple-nested path depends on how refund_payment returns; current path shows error toast when ok is false but doesn't surface the actual refund.payment_status change (e.g., 'refunded'). Minor UX nit.",
+    "admin_restore_booking inserts the archived doc back as-is including the Mongo _id if present (it is popped) — the code already pops _id, deleted_at, deleted_by; good. However the archive stored by admin_delete_booking does `b.pop('_id', None)` BEFORE inserting into bookings_deleted, so the archived doc gets a fresh _id from Mongo — restore then pops that fresh _id. Works, but worth a brief comment.",
+    "RecentlyDeletedPanel refresh is driven by `refreshKey` prop; make sure AdminDashboard bumps that key on every onChanged (delete + restore) so list is always current without toggling.",
+    "Backend admin_cancel_booking performs refund only when b.payment_status == 'paid' AND _paid_card_tx exists. If payment_status is paid but tx missing (edge: zelle marked paid), error 'No card payment found to refund' surfaces correctly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter32_refund_restore.py (new)",
+    "/app/backend/tests/_iter32_seed.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin roxfam2509@gmail.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Seeded TESTRF1 (unpaid, total=40, email test.rf@example.com, no phone) and TESTRF2 (paid, total=60) + payment_transactions {session_id:'cs_TEST_rf2', provider:'stripe', amount:60}. All TEST data (bookings, bookings_deleted, payment_transactions) cleaned up after run. Pytest tests use per-test unique IDs (TESTRF1_<name>, TESTRF2_<name>, TESTRF_ZELLE_<name>) and auto-cleanup via fixtures.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Row cancel flow is now a styled dialog (CancelBookingDialog.jsx) replacing window.prompt. In Playwright DO NOT register page.on('dialog') for cancel — only for delete (which still uses window.confirm). The refund checkbox defaults to true but only takes effect when the server reports refundable=true. RecentlyDeletedPanel is below the bookings table and starts collapsed; toggle it before asserting on deleted-row-{id}. Backend reuses routes.admin.refund_payment via in-process call — testing with real Stripe would need a real session_id; the TEST path with no tx is sufficient to prove error surfacing without 500s."
+}
