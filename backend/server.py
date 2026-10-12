@@ -1629,6 +1629,7 @@ async def seed_db():
     asyncio.create_task(payment_digest_module.digest_loop())
     asyncio.create_task(dayof_module.dayof_loop())
     asyncio.create_task(cron_module.google_reviews_loop())
+    asyncio.create_task(payments_module.reconcile_loop())
     # ── Owner-SMS routing cache — refreshed every 60s from site_config ──
     # notifications.send_owner_sms() reads this cache on every call, so
     # subscription + quiet-hours edits go live within a minute of save.

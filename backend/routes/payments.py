@@ -398,13 +398,17 @@ async def stripe_webhook_v2(request: Request, background: BackgroundTasks):
     """
     import secrets_store  # noqa: PLC0415
     webhook_secret = (secrets_store.get_secret("STRIPE_WEBHOOK_SECRET", "") or "").strip()
-    if not webhook_secret:
-        logging.error("STRIPE_WEBHOOK_SECRET missing — refusing webhook")
-        raise HTTPException(503, "Webhook secret not configured")
 
     # Raw bytes — DO NOT decode-and-re-encode; signature is over the exact bytes.
     payload = await request.body()
     sig_header = request.headers.get("Stripe-Signature") or request.headers.get("stripe-signature") or ""
+
+    if not webhook_secret:
+        # No signing secret: trust only the copy of the event fetched back from Stripe with our API key.
+        event = await _fetch_verified_event(payload)
+        if not event:
+            raise HTTPException(400, "Unverifiable event")
+        return await _ack_event(event, background)
 
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
@@ -416,7 +420,26 @@ async def stripe_webhook_v2(request: Request, background: BackgroundTasks):
         # Signature didn't match — reject so a bad actor can't poison state.
         logging.warning("stripe webhook signature mismatch: %s", e)
         raise HTTPException(400, "Invalid signature") from e
+    return await _ack_event(event, background)
 
+
+async def _fetch_verified_event(payload: bytes) -> Optional[dict]:
+    import json  # noqa: PLC0415
+    try:
+        event_id = (json.loads(payload or b"{}") or {}).get("id") or ""
+    except ValueError:
+        return None
+    if not event_id.startswith("evt_") or not _key():
+        return None
+    async with httpx.AsyncClient(timeout=15.0) as c:
+        r = await c.get(f"https://api.stripe.com/v1/events/{event_id}", auth=(_key(), ""))
+    if r.status_code != 200:
+        logging.warning("stripe event verify failed %s: %s", event_id, r.status_code)
+        return None
+    return r.json()
+
+
+async def _ack_event(event, background: BackgroundTasks):
     # Idempotent record — a unique index on event_id makes replays no-ops.
     try:
         await _db.stripe_webhook_events.insert_one({
@@ -436,6 +459,56 @@ async def stripe_webhook_v2(request: Request, background: BackgroundTasks):
     # ack; everything slow goes into the background task queue.
     background.add_task(_process_stripe_event, event)
     return {"received": True}
+
+
+# -- Reconciler: catch paid sessions the webhook missed ---------------------
+RECONCILE_SECONDS = 600
+
+
+async def reconcile_pending_sessions() -> int:
+    """Ask Stripe about every pending checkout from the last 48h; mark paid / send retry."""
+    key = _key()
+    if not key or key == "sk_test_emergent":
+        return 0
+    from datetime import datetime, timezone, timedelta  # noqa: PLC0415
+    since = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+    fixed = 0
+    cur = _db.payment_transactions.find({
+        "payment_status": {"$nin": ["paid", "failed", "refunded", "partially_refunded"]},
+        "session_id": {"$regex": "^cs_"}, "created_at": {"$gte": since},
+    })
+    async with httpx.AsyncClient(timeout=20.0) as c:
+        async for tx in cur:
+            try:
+                r = await c.get(f"https://api.stripe.com/v1/checkout/sessions/{tx['session_id']}", auth=(key, ""))
+                if r.status_code != 200:
+                    continue
+                s = r.json()
+                if s.get("payment_status") == "paid":
+                    if s.get("payment_intent"):
+                        await _db.payment_transactions.update_one(
+                            {"session_id": tx["session_id"]}, {"$set": {"stripe_payment_intent": s["payment_intent"]}})
+                    await _mark_paid(tx["session_id"], tx.get("booking_id"))
+                    fixed += 1
+                elif s.get("status") == "expired":
+                    from routes.payment_digest import send_payment_retry  # noqa: PLC0415
+                    await send_payment_retry(tx.get("booking_id"), session_id=tx["session_id"], reason="expired")
+            except Exception as e:  # noqa: BLE001
+                logging.warning("reconcile %s err: %s", tx.get("session_id"), e)
+    if fixed:
+        logging.info("stripe reconcile: marked %s session(s) paid", fixed)
+    return fixed
+
+
+async def reconcile_loop() -> None:
+    import asyncio  # noqa: PLC0415
+    await asyncio.sleep(90)
+    while True:
+        try:
+            await reconcile_pending_sessions()
+        except Exception as e:  # noqa: BLE001
+            logging.warning("reconcile loop err: %s", e)
+        await asyncio.sleep(RECONCILE_SECONDS)
 
 
 # -- PayPal Checkout (Smart Buttons) -----------------------------------------

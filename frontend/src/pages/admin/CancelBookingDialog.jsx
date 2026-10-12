@@ -8,21 +8,31 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
   const [notify, setNotify] = useState(true);
   const [refundInfo, setRefundInfo] = useState(null);
   const [refund, setRefund] = useState(true);
+  const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api.get(`/admin/bookings/${booking.id}/refundable`)
-      .then(({ data }) => setRefundInfo(data))
+      .then(({ data }) => { setRefundInfo(data); setAmount(data.amount ? String(data.amount) : ""); })
       .catch(() => setRefundInfo({ refundable: false }));
   }, [booking.id]);
 
   const canRefund = !!refundInfo?.refundable;
 
+  const amt = Number(amount);
+  const amountBad = canRefund && refund && (!(amt > 0) || amt > (refundInfo?.amount || 0) + 0.001);
+  const fee = canRefund && refund && amt > 0 ? Math.max(0, (refundInfo.amount || 0) - amt) : 0;
+
   const submit = async () => {
+    if (amountBad) {
+      toast.error(`Refund must be between $0.01 and ${money(refundInfo.amount)}`);
+      return;
+    }
     setBusy(true);
     try {
       const { data } = await api.post(`/admin/bookings/${booking.id}/cancel`, {
         reason, notify_guest: notify, refund: canRefund && refund,
+        refund_amount: canRefund && refund ? Math.round(amt * 100) / 100 : null,
       });
       const parts = [`Cancelled ${booking.id}`];
       if (data.guest_notified) parts.push("guest notified");
@@ -61,17 +71,30 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
         {refundInfo === null ? (
           <div className="text-xs text-[#94a3b8]">Checking payment…</div>
         ) : canRefund ? (
-          <label className="flex items-center gap-2 text-sm text-[#0B3B5C] bg-[#059669]/5 border border-[#059669]/30 rounded-lg p-3" data-testid="cancel-dialog-refund-row">
-            <input type="checkbox" checked={refund} onChange={(e) => setRefund(e.target.checked)} data-testid="cancel-dialog-refund" />
-            Refund <strong>{money(refundInfo.amount)}</strong> to the guest's card ({refundInfo.provider})
-          </label>
+          <div className="text-sm text-[#0B3B5C] bg-[#059669]/5 border border-[#059669]/30 rounded-lg p-3 space-y-2" data-testid="cancel-dialog-refund-row">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={refund} onChange={(e) => setRefund(e.target.checked)} data-testid="cancel-dialog-refund" />
+              Refund to the guest's card ({refundInfo.provider}) · paid {money(refundInfo.amount)}
+            </label>
+            {refund && (
+              <div className="flex flex-wrap items-center gap-2 pl-6">
+                <span className="text-xs text-[#64748B]">Refund $</span>
+                <input type="number" step="0.01" min="0.01" max={refundInfo.amount} value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className={`w-28 px-2 py-1 border rounded text-sm ${amountBad ? "border-red-400" : "border-[#E2E8F0]"}`}
+                  data-testid="cancel-dialog-refund-amount" />
+                <button type="button" onClick={() => setAmount(String(refundInfo.amount))} className="text-xs underline text-[#047857]" data-testid="cancel-dialog-refund-full">Full</button>
+                {fee > 0.004 && <span className="text-xs text-[#B47F26] font-semibold" data-testid="cancel-dialog-fee">You keep {money(fee)} as cancellation fee</span>}
+              </div>
+            )}
+          </div>
         ) : (
           <div className="text-xs text-[#94a3b8]" data-testid="cancel-dialog-no-refund">No card payment to refund on this booking.</div>
         )}
         <button type="button" onClick={submit} disabled={busy}
           className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] text-white py-2.5 text-sm font-bold disabled:opacity-60"
           data-testid="cancel-dialog-submit">
-          <Ban className="w-4 h-4" /> {busy ? "Working…" : canRefund && refund ? "Cancel & refund" : "Cancel booking"}
+          <Ban className="w-4 h-4" /> {busy ? "Working…" : canRefund && refund ? `Cancel & refund ${amt > 0 ? money(amt) : ""}` : "Cancel booking"}
         </button>
       </div>
     </div>

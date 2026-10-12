@@ -429,6 +429,7 @@ class BookingCancel(BaseModel):
     reason: Optional[str] = Field(None, max_length=500)
     notify_guest: bool = True
     refund: bool = False
+    refund_amount: Optional[float] = Field(None, gt=0, le=100000)
 
 
 async def _paid_card_tx(booking_id: str) -> Optional[dict]:
@@ -499,7 +500,10 @@ async def admin_cancel_booking(booking_id: str, req: BookingCancel, admin: str =
         else:
             from routes.admin import refund_payment  # noqa: PLC0415
             try:
-                refund = await refund_payment(tx["session_id"], {"reason": reason or "Booking cancelled"}, admin=admin)
+                body = {"reason": reason or "Booking cancelled"}
+                if req.refund_amount:
+                    body["amount"] = round(req.refund_amount, 2)
+                refund = await refund_payment(tx["session_id"], body, admin=admin)
             except HTTPException as he:
                 refund = {"ok": False, "error": he.detail}
     return {"cancelled": True,
