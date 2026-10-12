@@ -361,13 +361,14 @@ async def _process_stripe_event(event: dict) -> None:
             # the Stripe dashboard) back onto our booking + tx ledger.
             charge = data
             amt_refunded = float(charge.get("amount_refunded", 0) or 0) / 100.0
+            refund_state = "refunded" if charge.get("refunded") else "partially_refunded"
             pi_id = charge.get("payment_intent")
             if pi_id:
                 tx = await _db.payment_transactions.find_one({"stripe_payment_intent": pi_id})
                 if tx:
                     await _db.payment_transactions.update_one(
                         {"_id": tx["_id"]},
-                        {"$set": {"status": "refunded", "payment_status": "refunded",
+                        {"$set": {"status": refund_state, "payment_status": refund_state,
                                   "refund_amount": amt_refunded,
                                   "updated_at": _now_iso()}},
                     )
@@ -375,7 +376,7 @@ async def _process_stripe_event(event: dict) -> None:
                         {"id": tx["booking_id"]},
                         {"$set": {"refunded_amount": amt_refunded,
                                   "refunded_at": _now_iso(),
-                                  "payment_status": "refunded",
+                                  "payment_status": refund_state,
                                   "updated_at": _now_iso()}},
                     )
         # Any other event type — just acked and recorded. Add branches as
