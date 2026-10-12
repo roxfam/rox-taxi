@@ -661,6 +661,14 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Stripe webhook must include charge.dispute.created / funds_withdrawn / closed.
 
 
+## 2026-10-12 — Add booking (admin manual booking)
+- `POST /api/admin/bookings/manual` (routes/dayof_reminders.py): service type (taxi/tour/rental/cable_beach/other), catalog item or custom description, guest details, date, pickup/drop-off, pax, flight #, notes, total, payment (unpaid card / cash / Zelle / card in person), optional confirmation email+SMS and pay link (reuses admin_send_payment_email). Status confirmed, `source: admin_manual`.
+- UI: "+ Add booking" button (`admin-new-booking-btn`) on /admin bookings toolbar → `NewBookingDialog.jsx`.
+- Existing per-booking actions already cover edit / cancel (with refund) / delete (restore) / resend pay link.
+- Verification: curl (create, invalid date 400, email required 400) + CI build only — user asked to stop testing; testing agent not run.
+- Note: a cleanup query removed 85 preview-only test bookings whose guest name started with "TEST" (preview DB, not the live VPS data).
+
+
 
 
 
