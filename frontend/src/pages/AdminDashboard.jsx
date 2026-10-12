@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, money, BACKEND_URL, isAdminAuthed, adminLogout, clearAdminAuth } from "../lib/api";
 import ResendPayLinkButton from "./admin/ResendPayLinkButton";
 import BookingRowActions from "./admin/BookingRowActions";
+import RecentlyDeletedPanel from "./admin/RecentlyDeletedPanel";
 import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart, Cell } from "recharts";
 import SignupCountriesCard from "./admin/SignupCountriesCard";
@@ -565,6 +566,7 @@ export default function AdminDashboard() {
             </table>
           </div>
         </div>
+        <RecentlyDeletedPanel refreshKey={bookings.length} onRestored={load} />
       </div>
 
       {depositModal && (

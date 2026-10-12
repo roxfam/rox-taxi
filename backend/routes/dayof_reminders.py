@@ -428,6 +428,27 @@ class GuestConfirm(BaseModel):
 class BookingCancel(BaseModel):
     reason: Optional[str] = Field(None, max_length=500)
     notify_guest: bool = True
+    refund: bool = False
+
+
+async def _paid_card_tx(booking_id: str) -> Optional[dict]:
+    return await _db.payment_transactions.find_one(
+        {"booking_id": booking_id, "payment_status": "paid", "session_id": {"$nin": [None, ""]},
+         "provider": {"$nin": ["zelle", "cash"]}},
+        sort=[("updated_at", -1)],
+    )
+
+
+@router.get("/admin/bookings/{booking_id}/refundable")
+async def admin_booking_refundable(booking_id: str, _: str = Depends(_admin_dep)):
+    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    tx = await _paid_card_tx(booking_id) if b.get("payment_status") == "paid" else None
+    total = float(b.get("total") or b.get("total_price") or (tx or {}).get("amount") or 0)
+    remaining = round(max(0.0, total - float(b.get("refunded_amount") or 0)), 2)
+    return {"refundable": bool(tx) and remaining >= 0.01, "amount": remaining,
+            "provider": (tx or {}).get("provider") or ("stripe" if tx else None)}
 
 
 def _cancel_notice(b: dict, reason: str) -> dict:
@@ -470,7 +491,20 @@ async def admin_cancel_booking(booking_id: str, req: BookingCancel, admin: str =
     if req.notify_guest:
         notice = await asyncio.to_thread(_cancel_notice, b, reason)
         await _db.bookings.update_one({"id": booking_id}, {"$set": {"cancel_notice": notice}})
-    return {"cancelled": True, "guest_notified": bool(notice and (notice["email"].get("sent") or notice["sms"].get("sent")))}
+    refund = None
+    if req.refund:
+        tx = await _paid_card_tx(booking_id) if b.get("payment_status") == "paid" else None
+        if not tx:
+            refund = {"ok": False, "error": "No card payment found to refund"}
+        else:
+            from routes.admin import refund_payment  # noqa: PLC0415
+            try:
+                refund = await refund_payment(tx["session_id"], {"reason": reason or "Booking cancelled"}, admin=admin)
+            except HTTPException as he:
+                refund = {"ok": False, "error": he.detail}
+    return {"cancelled": True,
+            "guest_notified": bool(notice and (notice["email"].get("sent") or notice["sms"].get("sent"))),
+            "refund": refund}
 
 
 @router.delete("/admin/bookings/{booking_id}")
@@ -483,6 +517,30 @@ async def admin_delete_booking(booking_id: str, admin: str = Depends(_admin_dep)
     await _db.bookings_deleted.insert_one({**b, "deleted_at": _now_iso(), "deleted_by": admin})
     await _db.bookings.delete_one({"id": booking_id})
     return {"deleted": True, "id": booking_id}
+
+
+@router.get("/admin/bookings-deleted")
+async def admin_deleted_bookings(_: str = Depends(_admin_dep)):
+    docs = await _db.bookings_deleted.find({}, {"_id": 0}).sort("deleted_at", -1).to_list(200)
+    return [{k: d.get(k) for k in ("id", "customer_name", "item_name", "booking_date", "total", "total_price",
+                                  "status", "payment_status", "deleted_at", "deleted_by")} for d in docs]
+
+
+@router.post("/admin/bookings-deleted/{booking_id}/restore")
+async def admin_restore_booking(booking_id: str, admin: str = Depends(_admin_dep)):
+    d = await _db.bookings_deleted.find_one({"id": booking_id}, sort=[("deleted_at", -1)])
+    if not d:
+        raise HTTPException(404, "Not in recently deleted")
+    if await _db.bookings.find_one({"id": booking_id}, {"_id": 1}):
+        raise HTTPException(409, "A booking with this ID already exists")
+    archive_id = d.pop("_id")
+    d.pop("deleted_at", None)
+    d.pop("deleted_by", None)
+    d["restored_at"] = _now_iso()
+    d["restored_by"] = admin
+    await _db.bookings.insert_one(d)
+    await _db.bookings_deleted.delete_one({"_id": archive_id})
+    return {"restored": True, "id": booking_id}
 
 
 @router.post("/admin/bookings/{booking_id}/guest-confirm")

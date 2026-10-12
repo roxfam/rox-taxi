@@ -2,28 +2,16 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Pencil, Ban, Trash2 } from "lucide-react";
 import { api } from "../../lib/api";
+import CancelBookingDialog from "./CancelBookingDialog";
 
 const btn = "inline-flex items-center gap-1 whitespace-nowrap text-[10px] font-semibold px-2 py-1 rounded transition-colors disabled:opacity-50";
 
 export default function BookingRowActions({ booking, onEdit, onChanged }) {
   const [busy, setBusy] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const cancelled = booking.status === "cancelled";
 
-  const cancel = async () => {
-    const reason = window.prompt(`Cancel booking ${booking.id}? Optional reason for the guest:`, "");
-    if (reason === null) return;
-    const notify = window.confirm("Send the guest a cancellation email + text?");
-    setBusy(true);
-    try {
-      const { data } = await api.post(`/admin/bookings/${booking.id}/cancel`, { reason, notify_guest: notify });
-      toast.success(`Cancelled ${booking.id}${data.guest_notified ? " · guest notified" : ""}`);
-      onChanged();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Cancel failed");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const cancel = () => setCancelOpen(true);
 
   const remove = async () => {
     if (!window.confirm(`Delete booking ${booking.id} for ${booking.customer_name || "guest"}? It will be removed from the list (an archive copy is kept).`)) return;
@@ -58,6 +46,13 @@ export default function BookingRowActions({ booking, onEdit, onChanged }) {
         data-testid={`admin-row-delete-${booking.id}`}>
         <Trash2 className="w-3 h-3" /> Delete
       </button>
+      {cancelOpen && (
+        <CancelBookingDialog
+          booking={booking}
+          onClose={() => setCancelOpen(false)}
+          onDone={() => { setCancelOpen(false); onChanged(); }}
+        />
+      )}
     </div>
   );
 }
