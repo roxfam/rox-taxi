@@ -444,6 +444,26 @@ class ManualBooking(BaseModel):
     send_pay_link: bool = False
 
 
+@router.post("/admin/bookings/{booking_id}/send-confirmation")
+async def admin_send_confirmation(booking_id: str, admin: str = Depends(_admin_dep)):
+    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    if not (b.get("customer_email") or b.get("customer_phone")):
+        raise HTTPException(400, "No guest email or phone on this booking")
+    from notifications import notify_booking_confirmed  # noqa: PLC0415
+    r = await asyncio.to_thread(notify_booking_confirmed, dict(b), {})
+    email_sent = bool((r.get("email") or {}).get("sent"))
+    sms_sent = bool((r.get("sms") or {}).get("sent"))
+    await _db.bookings.update_one({"id": booking_id}, {
+        "$set": {"confirmation_last_sent_at": _now_iso()},
+        "$push": {"status_history": {"status": b.get("status"), "at": _now_iso(), "by": admin,
+                                     "note": f"Confirmation resent ({'email' if email_sent else ''}{' + ' if email_sent and sms_sent else ''}{'text' if sms_sent else ''})"}},
+    })
+    err = (r.get("email") or {}).get("error") or (r.get("sms") or {}).get("error")
+    return {"email_sent": email_sent, "sms_sent": sms_sent, "error": None if (email_sent or sms_sent) else err}
+
+
 @router.post("/admin/bookings/manual")
 async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_dep)):
     import uuid  # noqa: PLC0415

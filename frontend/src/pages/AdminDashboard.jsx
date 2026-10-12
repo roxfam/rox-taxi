@@ -56,6 +56,8 @@ export default function AdminDashboard() {
   const [detailBooking, setDetailBooking] = useState(null); // booking row for full-detail modal
   const [detailEdit, setDetailEdit] = useState(false);
   const [newBookingOpen, setNewBookingOpen] = useState(false);
+  const [repeatFrom, setRepeatFrom] = useState(null);
+  const [search, setSearch] = useState("");
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [authMethods, setAuthMethods] = useState(null);
   const [nudgeStats, setNudgeStats] = useState(null);
@@ -184,6 +186,15 @@ export default function AdminDashboard() {
   };
 
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, "");
+    const pool = !q ? bookings : bookings.filter((b) =>
+      [b.id, b.customer_name, b.customer_email].some((v) => String(v || "").toLowerCase().includes(q))
+      || (qDigits.length >= 3 && String(b.customer_phone || "").replace(/\D/g, "").includes(qDigits)));
+    return applyFilter(pool);
+  }, [bookings, filter, search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function applyFilter(bookings) {
     if (filter === "all") return bookings;
     if (filter === "upcoming" || filter === "past") {
       const now = Date.now();
@@ -197,7 +208,8 @@ export default function AdminDashboard() {
     if (filter === "deposits_held") return bookings.filter((b) => (b.deposit_amount || 0) > 0 && b.deposit_status === "held");
     if (filter === "deposits") return bookings.filter((b) => (b.deposit_amount || 0) > 0);
     return bookings.filter((b) => b.status === filter);
-  }, [bookings, filter]);
+  }
+
 
   if (!authed) return null;
 
@@ -385,7 +397,16 @@ export default function AdminDashboard() {
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">
-            <button onClick={() => setNewBookingOpen(true)} className="text-xs px-3 py-1.5 rounded-md bg-[#E86A3C] text-white font-semibold inline-flex items-center gap-1 hover:bg-[#d65a2c] transition-colors" data-testid="admin-new-booking-btn">+ Add booking</button>
+            <button onClick={() => { setRepeatFrom(null); setNewBookingOpen(true); }} className="text-xs px-3 py-1.5 rounded-md bg-[#E86A3C] text-white font-semibold inline-flex items-center gap-1 hover:bg-[#d65a2c] transition-colors" data-testid="admin-new-booking-btn">+ Add booking</button>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, phone, email or booking #"
+              className="text-xs px-3 py-1.5 rounded-md border border-[#E2E8F0] w-64 max-w-full focus:outline-none focus:border-[#0B3B5C]"
+              data-testid="admin-booking-search"
+            />
+            {search && <span className="text-xs text-[#64748B]" data-testid="admin-booking-search-count">{filtered.length} match{filtered.length === 1 ? "" : "es"}</span>}
             <span className="w-px h-5 bg-[#E2E8F0] mx-1" />
             <button onClick={() => setFilter("all")} className={`text-xs px-3 py-1.5 rounded-md ${filter === "all" ? "bg-[#0B3B5C] text-white" : "hover:bg-[#F1F5F9]"}`} data-testid="filter-all">All</button>
             <button onClick={() => setFilter("upcoming")} className={`text-xs px-3 py-1.5 rounded-md ${filter === "upcoming" ? "bg-[#059669] text-white" : "hover:bg-[#F1F5F9] text-[#059669]"}`} data-testid="filter-upcoming">Upcoming</button>
@@ -562,6 +583,7 @@ export default function AdminDashboard() {
                         <BookingRowActions
                           booking={b}
                           onEdit={(bk) => { setDetailEdit(true); setDetailBooking(bk); }}
+                          onRepeat={(bk) => { setRepeatFrom(bk); setNewBookingOpen(true); }}
                           onChanged={load}
                         />
                       </td>
@@ -577,7 +599,7 @@ export default function AdminDashboard() {
         </div>
         <RecentlyDeletedPanel refreshKey={bookings.length} onRestored={load} />
         {newBookingOpen && (
-          <NewBookingDialog onClose={() => setNewBookingOpen(false)} onCreated={() => { setNewBookingOpen(false); load(); }} />
+          <NewBookingDialog initial={repeatFrom} onClose={() => { setNewBookingOpen(false); setRepeatFrom(null); }} onCreated={() => { setNewBookingOpen(false); setRepeatFrom(null); load(); }} />
         )}
       </div>
 

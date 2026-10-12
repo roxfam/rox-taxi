@@ -23,8 +23,25 @@ function Field({ label, children }) {
   return <label className="block text-xs text-[#64748B] font-semibold">{label}<div className="mt-1">{children}</div></label>;
 }
 
-export default function NewBookingDialog({ onClose, onCreated }) {
-  const [f, setF] = useState(EMPTY);
+const SERVICE_KEYS = SERVICES.map((s) => s.key);
+
+const fromBooking = (b) => ({
+  ...EMPTY,
+  service_type: SERVICE_KEYS.includes(b.service_type) ? b.service_type : "other",
+  item_id: b.item_id || "",
+  item_name: b.item_name || "",
+  customer_name: b.customer_name || "",
+  customer_email: b.customer_email || "",
+  customer_phone: b.customer_phone || "",
+  pickup_location: b.pickup_location || "",
+  dropoff_location: b.dropoff_location || "",
+  passengers: b.passengers || 1,
+  notes: b.notes || "",
+  total: b.total || b.total_price || "",
+});
+
+export default function NewBookingDialog({ initial, onClose, onCreated }) {
+  const [f, setF] = useState(() => (initial ? fromBooking(initial) : EMPTY));
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
@@ -32,7 +49,11 @@ export default function NewBookingDialog({ onClose, onCreated }) {
   useEffect(() => {
     const svc = SERVICES.find((s) => s.key === f.service_type);
     if (!svc?.path) { setItems([]); return; }
-    api.get(svc.path).then(({ data }) => setItems(Array.isArray(data) ? data : data?.items || [])).catch(() => setItems([]));
+    api.get(svc.path).then(({ data }) => {
+      const list = Array.isArray(data) ? data : data?.items || [];
+      setItems(list);
+      setF((x) => (x.item_id && !list.some((it) => it.id === x.item_id) ? { ...x, item_id: "" } : x));
+    }).catch(() => setItems([]));
   }, [f.service_type]);
 
   const pickItem = (e) => {
@@ -65,8 +86,8 @@ export default function NewBookingDialog({ onClose, onCreated }) {
       <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
         <div className="flex items-start justify-between">
           <div>
-            <div className="text-[10px] tracking-[0.25em] uppercase text-[#D4A94A] font-black">Add booking</div>
-            <h3 className="font-[Georgia] text-xl text-[#0B3B5C] mt-1">New booking (phone, WhatsApp, walk-in)</h3>
+            <div className="text-[10px] tracking-[0.25em] uppercase text-[#D4A94A] font-black">{initial ? `Repeat booking ${initial.id}` : "Add booking"}</div>
+            <h3 className="font-[Georgia] text-xl text-[#0B3B5C] mt-1">{initial ? "Pick the new date — everything else is copied" : "New booking (phone, WhatsApp, walk-in)"}</h3>
           </div>
           <button type="button" onClick={onClose} className="text-[#64748B]" data-testid="new-booking-close"><X className="w-5 h-5" /></button>
         </div>

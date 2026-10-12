@@ -668,6 +668,13 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Verification: curl (create, invalid date 400, email required 400) + CI build only — user asked to stop testing; testing agent not run.
 - Note: a cleanup query removed 85 preview-only test bookings whose guest name started with "TEST" (preview DB, not the live VPS data).
 
+## 2026-10-12 — Booking search · Repeat booking · Send confirmation
+- Search box `admin-booking-search` on /admin bookings toolbar: matches booking #, guest name, email (case-insensitive) and phone (digits, ≥3); works together with the status/Upcoming/Past filters; shows match count.
+- Row action "Repeat" (`admin-row-repeat-{id}`) opens NewBookingDialog prefilled from the booking (service, item, guest, pickup/drop-off, pax, notes, total) with date left blank.
+- Row action "Send confirm" (`admin-row-confirm-{id}`) → `POST /api/admin/bookings/{id}/send-confirmation` → `notify_booking_confirmed` (guest email + SMS, owner text), logged in status_history + `confirmation_last_sent_at`.
+- Verification: CI build, 404 curl, one screenshot (search match + repeat prefill). Testing agent not run (user asked to keep testing light).
+
+
 
 
 
