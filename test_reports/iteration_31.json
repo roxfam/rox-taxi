@@ -1,0 +1,27 @@
+{
+  "summary": "Tested new admin booking row actions (Edit / Cancel / Delete) + resend-paylink + regression on status select and detail modal. Backend 7/7 passing on /api/admin/bookings/{id}/cancel (idempotent, status_history, notify_guest flag) and DELETE /api/admin/bookings/{id} (archive + 404 on re-delete + 403 on foreign Origin without CSRF). Frontend UI confirms all row-action data-testids render, Edit opens booking-detail-modal with booking-edit-form, Cancel flow handles prompt+confirm via window dialogs (accepted reason='TEST reason', dismissed notify) and flips status to cancelled (cancel button hidden after), Delete flow handles confirm and the row + resend-paylink button disappear with success toast. Resend-paylink button is visible for both unpaid test bookings.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter31_booking_cancel_delete.py",
+    "/app/backend/tests/_iter31_seed.py",
+    "/app/test_reports/pytest/iter31.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BookingRowActions uses window.prompt / window.confirm which blocks the thread and can't be styled; consider swapping to a shadcn Dialog for consistency and testability (currently works but is UX-rough).",
+    "On the Cancel endpoint, cancelled_by stores the admin identifier from _admin_dep — verify it's a stable id (email vs sub) across cookie/Bearer flows; current test only checks truthy.",
+    "In admin_delete_booking the archive write happens before delete without a transaction; if delete fails mid-way the archive is orphaned (very unlikely with Mongo, but worth noting). Consider wrapping in a session transaction or deleting first then archiving on success.",
+    "Cancel sends notification synchronously (asyncio.to_thread) — if SMTP/SMS is slow the request can hang. Consider enqueueing to a background task."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter31_booking_cancel_delete.py (new)",
+    "/app/backend/tests/_iter31_seed.py (new seed/cleanup helper)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin roxfam2509@gmail.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Seeded two bookings TESTROW_UI_1 / TESTROW_UI_2 (status=confirmed, payment_status=pending, no phone) for Playwright. Pytest tests seed their own TESTROW1_*/TESTROW2_* with per-test unique IDs. All test data (incl. bookings_deleted archives) cleaned up on teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Row actions live in /app/frontend/src/pages/admin/BookingRowActions.jsx and are wired in AdminDashboard.jsx row cells next to admin-status-select-{id}. Cancel/Delete use native window.prompt/confirm — in Playwright register page.on('dialog', handler) BEFORE clicking. For pytest, this module uses xdist_group + per-test unique bids to avoid cross-worker collisions since loadscope-based xdist is enabled in pytest.ini."
+}

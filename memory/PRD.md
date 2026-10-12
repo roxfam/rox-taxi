@@ -633,6 +633,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Removed the silent fallback: `server.py` STRIPE_API_KEY default now `''`; group + balance checkouts raise if no key; `POST /api/payments/checkout` returns 503 "Card payments are not set up yet…" when no key. Preview still uses its env sandbox key.
 - User action: put `STRIPE_API_KEY=sk_live_…` and `STRIPE_WEBHOOK_SECRET=whsec_…` in VPS `backend/.env` (or Admin → Secrets after deploying), Stripe webhook endpoint `https://roxtaxi.com/api/webhooks/stripe` (events: checkout.session.completed, checkout.session.expired, checkout.session.async_payment_failed, payment_intent.payment_failed, charge.refunded).
 
+## 2026-10-12 — Booking row actions: Edit · Cancel · Delete · Request payment
+- `BookingRowActions.jsx` under each row's status dropdown on `/admin`: Edit (opens BookingDetailModal with edit form open via `initialEdit`), Cancel (optional reason + choose to email/text guest), Delete (confirm; archived to `bookings_deleted`). "Resend pay link" stays in Pay column for unpaid bookings.
+- Endpoints (routes/dayof_reminders.py): `POST /api/admin/bookings/{id}/cancel {reason, notify_guest}` (idempotent, status_history, cancel_notice), `DELETE /api/admin/bookings/{id}`.
+- Tested: iteration_31 7/7 backend + frontend flows passed.
+
+
 
 
 
