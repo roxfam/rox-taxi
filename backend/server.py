@@ -198,6 +198,7 @@ class BookingCreate(BaseModel):
     # guest ticked. Server re-hydrates each id against the taxi service's
     # `addons` catalog so the fee/label can't be spoofed.
     selected_addon_ids: Optional[List[str]] = None
+    wait_minutes: int = Field(0, ge=0, le=240)
     # Guest can request a specific driver on the booking (e.g. "Reagan").
     # Free-text so anyone can be requested even if they're not in the
     # backup roster; server-side dispatch honours it best-effort and
@@ -209,6 +210,8 @@ LUGGAGE_FEE_USD = 3.0
 LUGGAGE_MAX = 10
 EXTRA_PASSENGER_FEE_USD = 5.0
 EXTRA_PASSENGER_INCLUDED = 2  # first 2 passengers included in the flat fare; each additional adds the fee
+TAXI_WAIT_FREE_MIN = 5
+TAXI_WAIT_PER_MIN_USD = 1.0
 RENTAL_DEPOSIT_USD = 150.0  # refundable security deposit applied automatically to every car rental booking
 RENTAL_AIRPORT_DROPOFF_FEE_USD = 25.0  # flat surcharge when the guest opts to drop the rental back at LPIA
 ADDITIONAL_DRIVER_FEE_USD = 25.0  # flat fee per extra registered driver on a car rental
@@ -2815,6 +2818,12 @@ async def create_booking(req: BookingCreate, request: Request):
             if picked:
                 booking["addons_selected"] = picked
                 booking["addons_fee"] = round(taxi_extras_fee, 2)
+        # Optional driver wait: first TAXI_WAIT_FREE_MIN free, then $1/min (charged once, not per leg).
+        if req.wait_minutes and req.wait_minutes > 0:
+            _wait_fee = round(max(0, int(req.wait_minutes) - TAXI_WAIT_FREE_MIN) * TAXI_WAIT_PER_MIN_USD, 2)
+            booking["wait_minutes"] = int(req.wait_minutes)
+            booking["wait_fee"] = _wait_fee
+            taxi_extras_fee += _wait_fee
     # ── Guest driver request ──────────────────────────────────────
     # Stamped on the booking so dispatch can honour it, and surfaced
     # inside the admin card + driver dispatch SMS so the requested

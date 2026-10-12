@@ -123,6 +123,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     baby_seats: 0,
     round_trip: false,
     return_time: "",
+    wait_minutes: 0,
     return_date: "",
     flight_number: "",
     notes: "",
@@ -343,8 +344,10 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   // Everything the guest is actually being charged for, EXCLUDING the
   // refundable deposit and the driver tip (deposit is a hold, tip is a
   // gratuity — neither is VAT-taxable).
+  const waitMinutes = serviceType === "taxi" ? Number(form.wait_minutes || 0) : 0;
+  const waitFee = Math.max(0, waitMinutes - 5);
   const rawSubtotal = base + luggageFee + passengerFee + additionalDriverFee
-    + babySeatFee + taxiAddonFee + taxiExtrasFee + rentalAirportDropoffFee;
+    + babySeatFee + taxiAddonFee + taxiExtrasFee + rentalAirportDropoffFee + waitFee;
 
   // ── Friend-of-friend referral discount ──────────────────────────────
   // Captured by <ReferralCatcher> in Layout when the guest lands via
@@ -470,6 +473,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         return_date: form.round_trip ? (form.return_date || "") : "",
         flight_number: form.flight_number ? form.flight_number.trim().toUpperCase().replace(/\s+/g, "") : null,
         selected_addon_ids: serviceType === "taxi" ? selectedAddonIds : undefined,
+        wait_minutes: waitMinutes || 0,
         requested_driver: serviceType === "taxi" && form.requested_driver ? form.requested_driver.trim() : undefined,
         tip_amount: tipAmount > 0 ? Number(tipAmount.toFixed(2)) : 0,
         referral_code: referral?.code || undefined,
@@ -1148,6 +1152,22 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                       />
                     </div>
                   )}
+                </div>
+              )}
+
+              {serviceType === "taxi" && (
+                <div className="rounded-xl border border-[#E2E8F0] p-4" data-testid="taxi-wait-time">
+                  <div className="text-xs tracking-[0.2em] uppercase text-[#64748B] mb-1">Driver wait time (optional)</div>
+                  <div className="text-[11px] text-[#64748B] mb-3">Need the driver to wait at your stop? First 5 minutes are free, then $1 per minute.</div>
+                  <div className="flex flex-wrap gap-2">
+                    {[0, 15, 30, 45, 60, 90].map((m) => (
+                      <button key={m} type="button" onClick={() => setForm({ ...form, wait_minutes: m })} data-testid={`taxi-wait-${m}`}
+                        className={`rounded-full px-3.5 py-1.5 text-xs font-semibold border transition-colors ${Number(form.wait_minutes || 0) === m ? "bg-[#0B3B5C] text-white border-[#0B3B5C]" : "border-[#E2E8F0] text-[#0B3B5C] hover:border-[#D4A94A]"}`}>
+                        {m === 0 ? "No wait" : `${m} min · $${m - 5}`}
+                      </button>
+                    ))}
+                  </div>
+                  {waitFee > 0 && <div className="text-[11px] text-[#0B3B5C] mt-2" data-testid="taxi-wait-fee">Wait {waitMinutes} min: 5 free + {waitMinutes - 5} × $1 = <b>${waitFee.toFixed(2)}</b></div>}
                 </div>
               )}
 

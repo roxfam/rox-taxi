@@ -89,7 +89,7 @@ export default function RouteQuoteWidget({ services, onBook }) {
         <div className="p-7 lg:p-10">
           <div className="flex items-center gap-3">
             <span className="w-8 h-[1px] bg-[#D4A94A]" />
-            <span className="text-[10px] tracking-[0.35em] uppercase font-black text-[#D4A94A]">Instant quote</span>
+            <span className="text-[10px] tracking-[0.35em] uppercase font-black text-[#D4A94A]">Fare check</span>
           </div>
           <h2 className="serif text-4xl sm:text-5xl text-[#0B3B5C] font-bold leading-[1.02] mt-3">
             Pick your <em className="italic text-[#D4A94A]">destination</em>.

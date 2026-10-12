@@ -259,6 +259,10 @@ TAXI_SERVICES: List[Dict] = [
      "pricing_mode": "per_person",
      "description": f"{_TARIFF_NOTE} Fastest run from Bay Street to Junkanoo Beach — the free public beach a 5-minute drive from the cruise port. $20 per person one-way · $40 per person round-trip.",
      "image_url": _TAXI_IMG, "addons": _ADDON_BEACH + _ADDON_CRUISE},
+    {"id": "downtown-marathon-mall", "name": "Downtown Nassau ↔ Marathon Mall", "price": 35.0,
+     "route": "Downtown Nassau ↔ Marathon Mall", "featured": True,
+     "description": f"{_TARIFF_NOTE} Shopping run from Downtown Nassau to Marathon Mall. $35 for the first 2 passengers · +$5 each additional passenger. Round trip saves 10%.",
+     "image_url": _TAXI_IMG, "addons": []},
     # ── Queen's Staircase flat fare with custom round-trip override ────
     # Flat $15 covers the first 2 passengers ($5 each additional). Round
     # trip is a fixed $30 for 2 (no auto 10% off) because the extra-hour

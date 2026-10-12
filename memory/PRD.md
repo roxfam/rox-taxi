@@ -750,5 +750,13 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 
 
+## 2026-10-12 — Quotes · SEO · Referral guard · Marathon Mall route · Taxi wait time · Round-trip suggestion
+- Quotes: footer "Get a quote" → /quote (taxi / tour / rental). It turns on quote mode (sessionStorage `rox_quote_mode`, QuoteModeBanner), so the normal booking modal (full details) shows "Get my quote" → `POST /api/quotes` (create_booking with `quote_only` = dry-run pricing before any side effects) → /quote/:id (professional view, PDF `/api/quotes/{id}/pdf`, print, 48h expiry, "Book this quote" → `POST /quotes/{id}/book` → /pay/{booking_id}). Guest gets an email with the PDF; owner gets an alert via notify_owner_activity. Admin QuotesPanel. Tested in iteration_38.
+- SEO: Seo tags on Home/About/Contact/Gallery/Groups/GiftCards/Quote; sitemap adds /quote and /tours/cable-beach-day; robots disallows /quote/.
+- Referral: `_apply_referral_conversion_if_paid` skips total<=0 and gift_card-paid bookings; prior_paid only counts charged bookings.
+- Taxi: new seed route `downtown-marathon-mall` ($35 first 2 pax, +$5 each extra; seeded via startup upsert, so it reaches the VPS DB on deploy). `wait_minutes` (0–240) on all taxi bookings: first 5 min free, then $1/min (`TAXI_WAIT_FREE_MIN`, `TAXI_WAIT_PER_MIN_USD`), charged once. Round-trip suggestion card on one-way taxi picks (skipped for override routes); 10% round-trip discount unchanged and still automatic; override routes keep their special prices.
+- KNOWN MISMATCH (pre-existing, not changed): backend adds 10% VAT to taxi fares, but the BookingFlow display treats taxis as VAT-exempt, so the shown taxi total is lower than the charged total. Waiting on the owner's decision.
+
+
 
 

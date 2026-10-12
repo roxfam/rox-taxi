@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 38 — Quote feature (end-to-end) + SEO + referral guard regression. Both backend (10/10 pytest) and frontend (full UI flow: footer-quote-btn → /quote → tour modal → Get my quote → /quote/Q-XXXXXX → quote-book-btn → /pay/{booking_id}) pass. Admin panel lists quotes with auth, 401 without. Quote mode exit restores 'Continue to Payment'. Sitemap/robots correct. Referral conversion guard verified at unit level (zero-total + gift_card skip).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter38_quotes.py",
+    "/app/test_reports/pytest/iter38.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "quotes.py line 104: asyncio.get_running_loop().run_in_executor(..., _notify, q) — the returned Future is not awaited and the loop reference is captured eagerly; works today but any send_email failure is only logged inside _notify. Consider asyncio.create_task(asyncio.to_thread(_notify, q)) for cleaner semantics.",
+    "server.py line 726-734: referral guard now filters total<=0 and payment_method=='gift_card' both at the single-booking check AND inside prior_paid count_documents — matches spec. Note: `total: {'$gt': 0}` assumes stored value is numeric; if any legacy booking stored string total, it won't match (benign — would under-count prior paids).",
+    "Frontend DateTimePicker: data-testid='booking-date-time-input' is attached to the TIME input only; the DATE field has no stable testid (uses button:has-text('Select date & time')). Adding data-testid='booking-date-input' to the date trigger would simplify automation."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter38_quotes.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% of listed quote flows"},
+  "test_credentials": "admin: roxfam2509@gmail.com / admin123 — login OK via /admin/login",
+  "seed_data_creation": "Transient test_quote_* quotes + 1 converted booking were created and then cleaned up (quotes_deleted=1, bookings_deleted=1). Pre-existing Q-0154DA also removed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Quote flow is stable end-to-end. All data-testids used by the spec exist. For future UI tests of the booking modal date picker, click the 'Select date & time' button then click a button[name='day']:not([disabled]) in the shadcn calendar. The time field has data-testid='booking-date-time-input' (type=time). The pay URL after conversion is /pay/{booking_id} (plain uppercase hex, 8 chars).",
+  "rca of the issue": "N/A — no issues found. Validated: (1) POST /api/quotes short-circuits before welcome-discount block via BookingCreate.quote_only; (2) GET quote returns public shape; (3) PDF endpoint returns application/pdf with %PDF header; (4) POST /quotes/{id}/book is atomic (status→booking claim) and idempotent (returns same booking_id on 2nd call); (5) expired quote → status=expired, book→400; (6) /api/admin/quotes requires auth (401 without, 200 with Bearer); (7) referral conversion skips zero-total and gift-card payments; prior_paid filter also excludes those; (8) SEO document.title + meta description update per route; sitemap includes /quote and /tours/cable-beach-day; robots.txt has 'Disallow: /quote/' followed by 'Allow: /quote'."
+}

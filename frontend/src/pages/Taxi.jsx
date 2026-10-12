@@ -343,6 +343,25 @@ export default function Taxi() {
                 />
               </div>
 
+              {!form.round_trip && !selected?.round_trip_price_override && !selected?.round_trip_price_per_pax && (() => {
+                const pax = Math.max(1, Number(form.passengers || 1));
+                const perPerson = (selected?.pricing_mode || "") === "per_person";
+                const leg = perPerson ? Number(selected?.price || 0) * pax : Number(selected?.price || 0);
+                const save = Math.round(leg * 2 * 0.10 * 100) / 100;
+                return (
+                  <button type="button" onClick={() => setForm({ ...form, round_trip: true })}
+                    className="w-full text-left flex items-center gap-3 rounded-xl border border-dashed border-[#059669]/50 bg-[#ECFDF5] p-3.5 hover:bg-[#D1FAE5] transition-colors"
+                    data-testid="taxi-round-trip-suggestion">
+                    <span className="w-8 h-8 rounded-full bg-[#059669] text-white flex items-center justify-center text-sm font-black shrink-0">%</span>
+                    <span className="flex-1 text-xs text-[#065F46]">
+                      <b className="block text-sm">Coming back too? Make it a round trip and save 10%</b>
+                      Add the return ride{save > 0 ? ` and save about $${save.toFixed(2)}` : ""}. The discount is applied automatically.
+                    </span>
+                    <span className="rounded-full bg-[#059669] text-white px-3 py-1.5 text-[11px] font-bold shrink-0">Add return</span>
+                  </button>
+                );
+              })()}
+
               <label
                 className={`flex items-center gap-3 rounded-xl border p-4 cursor-pointer transition-colors ${
                   form.round_trip
