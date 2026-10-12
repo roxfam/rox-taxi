@@ -425,6 +425,66 @@ class GuestConfirm(BaseModel):
     confirmed: bool = True
 
 
+class BookingCancel(BaseModel):
+    reason: Optional[str] = Field(None, max_length=500)
+    notify_guest: bool = True
+
+
+def _cancel_notice(b: dict, reason: str) -> dict:
+    from notifications import send_email, send_sms  # noqa: PLC0415
+    first = (b.get("customer_name") or "there").split(" ")[0] or "there"
+    item = b.get("item_name") or "your Rox booking"
+    why = f" Reason: {reason}." if reason else ""
+    report = {"email": {"sent": False}, "sms": {"sent": False}}
+    if b.get("customer_email"):
+        e = _html.escape
+        html = (f'<div style="font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;background:#FAF9F6;">'
+                f'<div style="background:#0B3B5C;color:#fff;padding:28px;"><div style="font-size:10px;letter-spacing:.3em;'
+                f'text-transform:uppercase;color:#D4A94A;font-weight:800;">Booking cancelled</div>'
+                f'<h1 style="font-family:Georgia,serif;margin:10px 0 0;font-size:24px;">{e(first)}, your booking {b["id"]} was cancelled.</h1></div>'
+                f'<div style="padding:22px 28px;color:#0B3B5C;font-size:14px;"><p><strong>{e(item)}</strong></p>'
+                f'{"<p>" + e(reason) + "</p>" if reason else ""}'
+                f'<p style="color:#64748B;font-size:12px;">Questions or want to rebook? WhatsApp +1 (242) 432-2587 or reply to this email.</p></div></div>')
+        text = f"Hi {first}, your Rox booking {b['id']} ({item}) was cancelled.{why} Questions? WhatsApp +1 (242) 432-2587."
+        report["email"] = send_email(b["customer_email"], f"Cancelled: Rox booking {b['id']}", html, text, category="confirmation")
+    if b.get("customer_phone"):
+        report["sms"] = send_sms(b["customer_phone"],
+                                 f"Rox: Hi {first}, booking {b['id']} ({item}) was cancelled.{why} Questions? WhatsApp +1 (242) 432-2587"[:600])
+    return report
+
+
+@router.post("/admin/bookings/{booking_id}/cancel")
+async def admin_cancel_booking(booking_id: str, req: BookingCancel, admin: str = Depends(_admin_dep)):
+    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    if b.get("status") == "cancelled":
+        return {"cancelled": True, "already": True, "guest_notified": False}
+    reason = (req.reason or "").strip()
+    await _db.bookings.update_one({"id": booking_id}, {
+        "$set": {"status": "cancelled", "cancelled_at": _now_iso(), "cancelled_by": admin,
+                 "cancel_reason": reason, "updated_at": _now_iso()},
+        "$push": {"status_history": {"status": "cancelled", "at": _now_iso(), "by": admin, "note": reason}},
+    })
+    notice = None
+    if req.notify_guest:
+        notice = await asyncio.to_thread(_cancel_notice, b, reason)
+        await _db.bookings.update_one({"id": booking_id}, {"$set": {"cancel_notice": notice}})
+    return {"cancelled": True, "guest_notified": bool(notice and (notice["email"].get("sent") or notice["sms"].get("sent")))}
+
+
+@router.delete("/admin/bookings/{booking_id}")
+async def admin_delete_booking(booking_id: str, admin: str = Depends(_admin_dep)):
+    """Removes the booking from the list; a copy is archived in `bookings_deleted`."""
+    b = await _db.bookings.find_one({"id": booking_id})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    b.pop("_id", None)
+    await _db.bookings_deleted.insert_one({**b, "deleted_at": _now_iso(), "deleted_by": admin})
+    await _db.bookings.delete_one({"id": booking_id})
+    return {"deleted": True, "id": booking_id}
+
+
 @router.post("/admin/bookings/{booking_id}/guest-confirm")
 async def admin_guest_confirm(booking_id: str, req: GuestConfirm, admin: str = Depends(_admin_dep)):
     upd = ({"$set": {"guest_confirmed_at": _now_iso(), "guest_confirmed_via": f"admin:{admin}"}}

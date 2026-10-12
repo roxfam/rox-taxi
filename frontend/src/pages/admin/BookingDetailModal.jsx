@@ -34,10 +34,10 @@ const STATUS_TONE = {
   no_show:   "bg-[#E86A3C]/15 text-[#B04524]",
 };
 
-export default function BookingDetailModal({ booking: bookingProp, onClose, onChanged, onOpenIncidental }) {
+export default function BookingDetailModal({ booking: bookingProp, initialEdit = false, onClose, onChanged, onOpenIncidental }) {
   const [edited, setEdited] = useState(null);
   const booking = edited || bookingProp;
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(initialEdit);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [payEmailOpen, setPayEmailOpen] = useState(false);

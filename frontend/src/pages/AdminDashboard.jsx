@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, money, BACKEND_URL, isAdminAuthed, adminLogout, clearAdminAuth } from "../lib/api";
 import ResendPayLinkButton from "./admin/ResendPayLinkButton";
+import BookingRowActions from "./admin/BookingRowActions";
 import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart, Cell } from "recharts";
 import SignupCountriesCard from "./admin/SignupCountriesCard";
@@ -51,6 +52,7 @@ export default function AdminDashboard() {
   const [incidentalBooking, setIncidentalBooking] = useState(null); // booking row for card-hold / zelle modal
   const [flightBooking, setFlightBooking] = useState(null); // booking row for flight events timeline
   const [detailBooking, setDetailBooking] = useState(null); // booking row for full-detail modal
+  const [detailEdit, setDetailEdit] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [authMethods, setAuthMethods] = useState(null);
   const [nudgeStats, setNudgeStats] = useState(null);
@@ -547,6 +549,11 @@ export default function AdminDashboard() {
                         >
                           {STATUSES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
                         </select>
+                        <BookingRowActions
+                          booking={b}
+                          onEdit={(bk) => { setDetailEdit(true); setDetailBooking(bk); }}
+                          onChanged={load}
+                        />
                       </td>
                     </tr>
                   );
@@ -587,7 +594,8 @@ export default function AdminDashboard() {
       {detailBooking && (
         <BookingDetailModal
           booking={detailBooking}
-          onClose={() => setDetailBooking(null)}
+          initialEdit={detailEdit}
+          onClose={() => { setDetailBooking(null); setDetailEdit(false); }}
           onChanged={() => load()}
           onOpenIncidental={(b) => setIncidentalBooking(b)}
         />

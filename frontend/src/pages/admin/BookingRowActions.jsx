@@ -1,0 +1,63 @@
+import { useState } from "react";
+import { toast } from "sonner";
+import { Pencil, Ban, Trash2 } from "lucide-react";
+import { api } from "../../lib/api";
+
+const btn = "inline-flex items-center gap-1 whitespace-nowrap text-[10px] font-semibold px-2 py-1 rounded transition-colors disabled:opacity-50";
+
+export default function BookingRowActions({ booking, onEdit, onChanged }) {
+  const [busy, setBusy] = useState(false);
+  const cancelled = booking.status === "cancelled";
+
+  const cancel = async () => {
+    const reason = window.prompt(`Cancel booking ${booking.id}? Optional reason for the guest:`, "");
+    if (reason === null) return;
+    const notify = window.confirm("Send the guest a cancellation email + text?");
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/admin/bookings/${booking.id}/cancel`, { reason, notify_guest: notify });
+      toast.success(`Cancelled ${booking.id}${data.guest_notified ? " · guest notified" : ""}`);
+      onChanged();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Cancel failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!window.confirm(`Delete booking ${booking.id} for ${booking.customer_name || "guest"}? It will be removed from the list (an archive copy is kept).`)) return;
+    setBusy(true);
+    try {
+      await api.delete(`/admin/bookings/${booking.id}`);
+      toast.success(`Deleted ${booking.id}`);
+      onChanged();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Delete failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1" data-testid={`admin-row-actions-${booking.id}`}>
+      <button type="button" onClick={() => onEdit(booking)} disabled={busy}
+        className={`${btn} bg-[#D4A94A]/10 text-[#B47F26] hover:bg-[#D4A94A] hover:text-white`}
+        data-testid={`admin-row-edit-${booking.id}`}>
+        <Pencil className="w-3 h-3" /> Edit
+      </button>
+      {!cancelled && (
+        <button type="button" onClick={cancel} disabled={busy}
+          className={`${btn} bg-[#E86A3C]/10 text-[#E86A3C] hover:bg-[#E86A3C] hover:text-white`}
+          data-testid={`admin-row-cancel-${booking.id}`}>
+          <Ban className="w-3 h-3" /> Cancel
+        </button>
+      )}
+      <button type="button" onClick={remove} disabled={busy}
+        className={`${btn} bg-[#DC2626]/10 text-[#B91C1C] hover:bg-[#DC2626] hover:text-white`}
+        data-testid={`admin-row-delete-${booking.id}`}>
+        <Trash2 className="w-3 h-3" /> Delete
+      </button>
+    </div>
+  );
+}
