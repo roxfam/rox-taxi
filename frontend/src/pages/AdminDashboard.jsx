@@ -5,6 +5,7 @@ import { api, money, BACKEND_URL, isAdminAuthed, adminLogout, clearAdminAuth } f
 import ResendPayLinkButton from "./admin/ResendPayLinkButton";
 import BookingRowActions from "./admin/BookingRowActions";
 import RecentlyDeletedPanel from "./admin/RecentlyDeletedPanel";
+import NewBookingDialog from "./admin/NewBookingDialog";
 import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, LineChart, Cell } from "recharts";
 import SignupCountriesCard from "./admin/SignupCountriesCard";
@@ -54,6 +55,7 @@ export default function AdminDashboard() {
   const [flightBooking, setFlightBooking] = useState(null); // booking row for flight events timeline
   const [detailBooking, setDetailBooking] = useState(null); // booking row for full-detail modal
   const [detailEdit, setDetailEdit] = useState(false);
+  const [newBookingOpen, setNewBookingOpen] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [authMethods, setAuthMethods] = useState(null);
   const [nudgeStats, setNudgeStats] = useState(null);
@@ -383,6 +385,8 @@ export default function AdminDashboard() {
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">
+            <button onClick={() => setNewBookingOpen(true)} className="text-xs px-3 py-1.5 rounded-md bg-[#E86A3C] text-white font-semibold inline-flex items-center gap-1 hover:bg-[#d65a2c] transition-colors" data-testid="admin-new-booking-btn">+ Add booking</button>
+            <span className="w-px h-5 bg-[#E2E8F0] mx-1" />
             <button onClick={() => setFilter("all")} className={`text-xs px-3 py-1.5 rounded-md ${filter === "all" ? "bg-[#0B3B5C] text-white" : "hover:bg-[#F1F5F9]"}`} data-testid="filter-all">All</button>
             <button onClick={() => setFilter("upcoming")} className={`text-xs px-3 py-1.5 rounded-md ${filter === "upcoming" ? "bg-[#059669] text-white" : "hover:bg-[#F1F5F9] text-[#059669]"}`} data-testid="filter-upcoming">Upcoming</button>
             <button onClick={() => setFilter("past")} className={`text-xs px-3 py-1.5 rounded-md ${filter === "past" ? "bg-[#64748B] text-white" : "hover:bg-[#F1F5F9] text-[#64748B]"}`} data-testid="filter-past">Past</button>
@@ -572,6 +576,9 @@ export default function AdminDashboard() {
           </div>
         </div>
         <RecentlyDeletedPanel refreshKey={bookings.length} onRestored={load} />
+        {newBookingOpen && (
+          <NewBookingDialog onClose={() => setNewBookingOpen(false)} onCreated={() => { setNewBookingOpen(false); load(); }} />
+        )}
       </div>
 
       {depositModal && (

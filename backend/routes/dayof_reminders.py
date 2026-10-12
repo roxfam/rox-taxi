@@ -425,6 +425,63 @@ class GuestConfirm(BaseModel):
     confirmed: bool = True
 
 
+class ManualBooking(BaseModel):
+    service_type: str = Field(..., pattern="^(taxi|tour|rental|cable_beach|other)$")
+    item_id: Optional[str] = Field(None, max_length=80)
+    item_name: str = Field(..., min_length=1, max_length=200)
+    customer_name: str = Field(..., min_length=1, max_length=120)
+    customer_email: Optional[str] = Field(None, max_length=200)
+    customer_phone: Optional[str] = Field(None, max_length=40)
+    booking_date: str = Field(..., max_length=40)
+    pickup_location: Optional[str] = Field(None, max_length=300)
+    dropoff_location: Optional[str] = Field(None, max_length=300)
+    passengers: int = Field(1, ge=1, le=60)
+    flight_number: Optional[str] = Field(None, max_length=12)
+    notes: Optional[str] = Field(None, max_length=2000)
+    total: float = Field(..., ge=0, le=100000)
+    payment: str = Field("unpaid", pattern="^(unpaid|cash|zelle|card_offline)$")
+    send_confirmation: bool = True
+    send_pay_link: bool = False
+
+
+@router.post("/admin/bookings/manual")
+async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_dep)):
+    import uuid  # noqa: PLC0415
+    if not _local_dt(req.booking_date):
+        raise HTTPException(400, "Invalid date/time")
+    if (req.send_confirmation or req.send_pay_link) and not (req.customer_email or "").strip():
+        raise HTTPException(400, "Guest email is required to send a confirmation or pay link")
+    paid = req.payment != "unpaid"
+    doc = {k: v for k, v in req.model_dump().items() if k not in ("payment", "send_confirmation", "send_pay_link")}
+    doc.update({
+        "id": str(uuid.uuid4())[:8].upper(),
+        "item_id": req.item_id or "",
+        "price": req.total,
+        "status": "confirmed",
+        "payment_method": "stripe" if req.payment == "unpaid" else req.payment,
+        "payment_status": "paid" if paid else "pending",
+        "paid_at": _now_iso() if paid else None,
+        "source": "admin_manual",
+        "created_by": admin,
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
+        "status_history": [{"status": "confirmed", "at": _now_iso(), "by": admin, "note": "Created by admin"}],
+    })
+    await _db.bookings.insert_one(dict(doc))
+    doc.pop("_id", None)
+    report = {}
+    from notifications import notify_booking_confirmed  # noqa: PLC0415
+    if req.send_confirmation:
+        report["confirmation"] = await asyncio.to_thread(notify_booking_confirmed, dict(doc), {})
+    if req.send_pay_link and not paid:
+        from routes.admin import admin_send_payment_email, SendPaymentEmailRequest  # noqa: PLC0415
+        try:
+            report["pay_link"] = await admin_send_payment_email(doc["id"], SendPaymentEmailRequest(), admin)
+        except HTTPException as he:
+            report["pay_link"] = {"sent": False, "error": he.detail}
+    return {"created": True, "booking": doc, "report": report}
+
+
 class BookingCancel(BaseModel):
     reason: Optional[str] = Field(None, max_length=500)
     notify_guest: bool = True
