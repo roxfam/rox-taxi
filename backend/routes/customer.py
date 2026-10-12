@@ -71,6 +71,28 @@ async def my_bookings(user: dict = _current_user()):
     return [_clean(d) for d in docs]
 
 
+class ProfileUpdate(BaseModel):
+    phone: str = Field(..., min_length=7, max_length=40)
+    address: str = Field(..., min_length=3, max_length=300)
+    city: str = Field(..., min_length=2, max_length=100)
+    country: str = Field(..., min_length=2, max_length=100)
+    hotel: Optional[str] = Field(None, max_length=200)
+    travel_from: Optional[str] = Field(None, max_length=20)
+    travel_to: Optional[str] = Field(None, max_length=20)
+    heard_from: Optional[str] = Field(None, max_length=100)
+    marketing_opt_in: bool = False
+
+
+@router.put("/my/profile")
+async def update_profile(req: ProfileUpdate, user: dict = _current_user()):
+    prof = {k: (v.strip() if isinstance(v, str) else v) for k, v in req.model_dump().items()}
+    await _db.users.update_one({"user_id": user["user_id"]}, {"$set": {
+        "profile": prof, "phone": prof["phone"], "profile_completed": True, "updated_at": _now_iso()}})
+    fresh = await _db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "password_hash": 0})
+    return fresh
+
+
+
 @router.get("/my/gift-cards")
 async def my_gift_cards(user: dict = _current_user()):
     email = (user.get("email") or "").lower()

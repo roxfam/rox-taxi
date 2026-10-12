@@ -73,7 +73,7 @@ export default function GiftCards() {
             <AlertCircle className="w-5 h-5 text-[#E86A3C] shrink-0" /> Checkout cancelled. No charge was made.
           </div>
         )}
-        <p className="text-[#64748B] mt-4 max-w-xl leading-relaxed">Surprise a friend, partner or loved one visiting The Bahamas with a gift they'll never forget: a smooth island ride, an unforgettable tour, or a sun-soaked day on the beach with us. Sent instantly by email, good on any taxi, tour, car rental, Cable Beach day or group booking, and valid for 12 months. Any unused balance carries over to their next booking. Non-refundable.</p>
+        <p className="text-[#64748B] mt-4 max-w-xl leading-relaxed">Surprise a friend, partner or loved one visiting The Bahamas with a gift they&apos;ll never forget: a smooth island ride, an unforgettable tour, or a sun-soaked day on the beach with us. Sent instantly by email, good on any taxi, tour, car rental, Cable Beach day or group booking, and valid for 12 months. Any unused balance carries over to their next booking. Non-refundable.</p>
 
         <form onSubmit={submit} className="mt-10 grid lg:grid-cols-[1fr_360px] gap-8 items-start" data-testid="gift-purchase-form">
           <div className="space-y-6">
@@ -126,7 +126,7 @@ export default function GiftCards() {
             <label className="block">
               <span className="text-[10px] tracking-[0.28em] uppercase text-[#64748B] font-black mb-1.5 block">Recipient mobile number (optional)</span>
               <input type="tel" value={form.recipient_phone} onChange={(e) => setForm({ ...form, recipient_phone: e.target.value })} placeholder="+1 242 555 0123" data-testid="gift-recipient-phone" className="w-full rounded-xl border border-[#EFE7D5] bg-white px-3.5 py-2.5 text-sm focus:border-[#D4A94A] focus:outline-none" />
-              <span className="text-[11px] text-[#94a3b8] mt-1 block">We'll also text them their gift code.</span>
+              <span className="text-[11px] text-[#94a3b8] mt-1 block">We&apos;ll also text them their gift code.</span>
             </label>
             <label className="block">
               <span className="text-[10px] tracking-[0.28em] uppercase text-[#64748B] font-black mb-1.5 block">Delivery date (optional)</span>
@@ -152,7 +152,7 @@ export default function GiftCards() {
             </div>
             <p className="text-[11px] text-[#94a3b8] mt-4 leading-relaxed">Delivered by email (and text, if you add a number) right after payment or on your chosen date. Balance carries over across bookings. Expires 12 months after purchase.</p>
             <div className="mt-3 rounded-xl bg-[#FFF4EE] border border-[#E86A3C]/30 px-3 py-2.5 text-[11px] text-[#7c3a20]" data-testid="gift-nonrefundable-notice">
-              <b>All gift cards are non-refundable</b> and can't be exchanged for cash.
+              <b>All gift cards are non-refundable</b> and can&apos;t be exchanged for cash.
             </div>
             <label className="mt-3 flex items-start gap-2 text-[11px] text-[#0B3B5C] cursor-pointer">
               <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5" data-testid="gift-nonrefundable-agree" />

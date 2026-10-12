@@ -1,9 +1,35 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Gift, Sparkles, ArrowRight, Copy } from "lucide-react";
+import { Gift, Sparkles, ArrowRight, Copy, UserRound, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { API, money } from "../lib/api";
 import { cdn } from "../lib/img";
+import { useAuth } from "../lib/auth";
+import CompleteProfileModal from "../components/CompleteProfileModal";
+
+export function ProfileCard() {
+  const { user } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const p = user?.profile || {};
+  const rows = [["Phone", p.phone || user?.phone], ["Address", [p.address, p.city, p.country].filter(Boolean).join(", ")],
+    ["Hotel / ship", p.hotel], ["Travel dates", p.travel_from ? `${p.travel_from}${p.travel_to ? ` → ${p.travel_to}` : ""}` : ""]];
+  return (
+    <div className="mt-6 rounded-2xl border border-[#E2E8F0] bg-white p-5" data-testid="account-profile-card">
+      <div className="flex items-center justify-between">
+        <h3 className="serif text-xl text-[#0B3B5C] inline-flex items-center gap-2"><UserRound className="w-5 h-5 text-[#D4A94A]" /> Your details</h3>
+        <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1 text-xs font-semibold text-[#0B3B5C] hover:text-[#D4A94A] transition-colors" data-testid="account-profile-edit"><Pencil className="w-3.5 h-3.5" /> Edit</button>
+      </div>
+      <dl className="mt-3 grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex justify-between gap-3 border-b border-[#F1F5F9] py-1.5">
+            <dt className="text-xs text-[#64748B]">{k}</dt><dd className="text-[#0B3B5C] font-medium text-right">{v || "—"}</dd>
+          </div>
+        ))}
+      </dl>
+      {editing && <CompleteProfileModal open onClose={() => setEditing(false)} />}
+    </div>
+  );
+}
 
 const useMine = (path) => {
   const [data, setData] = useState(null);

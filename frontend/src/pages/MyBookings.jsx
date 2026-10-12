@@ -8,7 +8,7 @@ import ExtendRentalModal from "./ExtendRentalModal";
 import WalletCard from "./WalletCard";
 import TripWalletCard from "./TripWalletCard";
 import PayWithWalletButton from "./PayWithWalletButton";
-import { TripSummary, MyGiftCards, RecommendedForYou, bookAgainLink } from "./AccountExtras";
+import { TripSummary, MyGiftCards, RecommendedForYou, bookAgainLink, ProfileCard } from "./AccountExtras";
 
 export default function MyBookings() {
   const { user, loading, logout } = useAuth();
@@ -353,6 +353,7 @@ export default function MyBookings() {
 
       <h2 className="serif text-3xl text-[#0B3B5C] mt-12">Your bookings</h2>
       <TripSummary bookings={bookings} />
+      <ProfileCard />
 
       {/* ── Trip wallet · saved Stripe cards for one-tap re-booking ── */}
       <TripWalletCard />

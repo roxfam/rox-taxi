@@ -1,39 +1,52 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { UserPlus, Mail, Lock, User as UserIcon, AlertCircle, Sparkles, ShieldCheck, Gift } from "lucide-react";
+import { UserPlus, Mail, Lock, User as UserIcon, AlertCircle, Sparkles, ShieldCheck, Gift, ArrowLeft, ArrowRight } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import { api } from "../lib/api";
+import ProfileFields, { EMPTY_PROFILE, profileMissing } from "../components/ProfileFields";
 import PasswordStrengthMeter, { scorePassword } from "../components/PasswordStrengthMeter";
 import TurnstileWidget from "../components/TurnstileWidget";
 
 export default function Signup() {
-  const { user, loading, login: googleLogin, register } = useAuth();
+  const { user, loading, login: googleLogin, register, refresh } = useAuth();
   const nav = useNavigate();
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", referral_code: "" });
+  const [profile, setProfile] = useState(EMPTY_PROFILE);
+  const [step, setStep] = useState(1);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [captchaToken, setCaptchaToken] = useState("");
   const captchaRequired = !!process.env.REACT_APP_TURNSTILE_SITE_KEY;
   const strength = useMemo(() => scorePassword(form.password), [form.password]);
 
-  useEffect(() => { if (!loading && user) nav("/my-bookings", { replace: true }); }, [user, loading, nav]);
+  useEffect(() => { if (!loading && user && !busy) nav("/my-bookings", { replace: true }); }, [user, loading, nav, busy]);
 
   const update = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
-  const submit = async (e) => {
+  const next = (e) => {
     e.preventDefault();
     setErr("");
     if (form.password.length < 6) return setErr("Password must be at least 6 characters.");
     if (!strength.strong) return setErr("Password is too weak. Mix letters, numbers, and symbols.");
     if (form.password !== form.confirm) return setErr("Passwords don't match.");
+    setStep(2);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr("");
+    if (profileMissing(profile).length) return setErr("Please add your phone, address, city and country.");
     if (captchaRequired && !captchaToken) return setErr("Please complete the CAPTCHA challenge.");
     setBusy(true);
     try {
       await register(form.name.trim(), form.email.trim().toLowerCase(), form.password, (form.referral_code || "").trim().toUpperCase() || null, captchaToken || null);
+      try { await api.put("/my/profile", profile); await refresh(); } catch { /* modal will ask again */ }
       nav("/my-bookings", { replace: true });
     } catch (ex) {
       setErr(ex.message || "Signup failed");
-    } finally { setBusy(false); }
+      setBusy(false);
+    }
   };
 
   return (
@@ -45,7 +58,7 @@ export default function Signup() {
       <div className="absolute top-24 -left-32 w-96 h-96 rounded-full bg-[#D4A94A]/25 blur-[120px] -z-10" />
       <div className="absolute bottom-16 -right-40 w-[520px] h-[520px] rounded-full bg-[#0B3B5C]/18 blur-[140px] -z-10" />
 
-      <div className="max-w-md mx-auto px-6 w-full">
+      <div className="max-w-lg mx-auto px-6 w-full">
         <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}>
           {/* Brand tab — official gold-R monogram floats above the card */}
           <div className="relative flex justify-center mb-[-38px] z-10" data-testid="signup-brand-tab">
@@ -86,7 +99,18 @@ export default function Signup() {
               </div>
             </div>
 
-            <form onSubmit={submit} className="mt-7 space-y-5" data-testid="signup-form">
+            <div className="mt-6 flex items-center justify-center gap-3" data-testid="signup-steps">
+              {["Account", "Your details"].map((l, i) => (
+                <div key={l} className="flex items-center gap-2">
+                  <span className={`w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center transition-colors ${step >= i + 1 ? "bg-[#0B3B5C] text-white" : "bg-[#F1F5F9] text-[#94a3b8]"}`}>{i + 1}</span>
+                  <span className={`text-[11px] tracking-[0.15em] uppercase font-semibold ${step === i + 1 ? "text-[#0B3B5C]" : "text-[#94a3b8]"}`}>{l}</span>
+                  {i === 0 && <span className="w-8 h-px bg-[#E2E8F0]" />}
+                </div>
+              ))}
+            </div>
+
+            {step === 1 ? (
+            <form onSubmit={next} className="mt-7 space-y-5" data-testid="signup-form">
               <Field icon={<UserIcon className="w-4 h-4" />} label="Full name">
                 <input required autoComplete="name" value={form.name} onChange={update("name")} placeholder="Your name" data-testid="signup-name" className="input-line" />
               </Field>
@@ -118,6 +142,21 @@ export default function Signup() {
                 </div>
               )}
 
+              <button type="submit" data-testid="signup-next"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#0B3B5C] text-white px-6 py-3.5 text-sm font-bold tracking-wide hover:bg-[#0B192C] transition-colors">
+                Continue <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+            ) : (
+            <form onSubmit={submit} className="mt-7 space-y-5" data-testid="signup-details-form">
+              <ProfileFields value={profile} onChange={setProfile} />
+
+              {err && (
+                <div className="flex items-start gap-2 text-sm text-[#B91C1C] bg-[#FEF2F2] border border-[#FECACA] rounded-xl px-3 py-2" data-testid="signup-error">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> <span>{err}</span>
+                </div>
+              )}
+
               <TurnstileWidget onToken={setCaptchaToken} action="signup" testid="signup-turnstile" />
 
               <button
@@ -131,7 +170,11 @@ export default function Signup() {
                 <span className="relative">{busy ? "Creating your account…" : "Create account"}</span>
                 <Sparkles className="relative w-3.5 h-3.5 opacity-80" />
               </button>
+              <button type="button" onClick={() => { setErr(""); setStep(1); }} className="w-full inline-flex items-center justify-center gap-1.5 text-xs text-[#64748B] hover:text-[#0B3B5C] transition-colors" data-testid="signup-back">
+                <ArrowLeft className="w-3.5 h-3.5" /> Back
+              </button>
             </form>
+            )}
 
             <div className="my-6 flex items-center gap-4">
               <span className="flex-1 h-px bg-gradient-to-r from-transparent to-[#E2E8F0]" />

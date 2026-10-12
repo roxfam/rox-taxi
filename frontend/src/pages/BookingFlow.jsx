@@ -7,6 +7,7 @@ import { api, money, BACKEND_URL } from "../lib/api";
 import { DateTimePicker } from "../components/DateTimePicker";
 import { PaymentBrandRow } from "../components/PaymentBrands";
 import { GiftCodeBox } from "../components/GiftCodeBox";
+import { useAuth } from "../lib/auth";
 import { trackLead, trackPurchase, trackInitiateCheckout } from "../lib/fbpixel";
 
 // Rental 2-day minimum — module-scoped so linters see it inside submit()
@@ -145,6 +146,17 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const [loading, setLoading] = useState(false);
   const [booking, setBooking] = useState(null);
   const [gift, setGift] = useState(null);
+  const { user: authUser } = useAuth();
+  useEffect(() => {
+    if (!authUser) return;
+    setForm((f) => ({
+      ...f,
+      customer_name: f.customer_name || authUser.name || "",
+      customer_email: f.customer_email || authUser.email || "",
+      customer_phone: f.customer_phone || authUser.profile?.phone || authUser.phone || "",
+      pickup_location: f.pickup_location || authUser.profile?.hotel || "",
+    }));
+  }, [authUser]);
   const [siteCfg, setSiteCfg] = useState({ zelle_email: "payments@roxtaxi.com", zelle_phone: "+1-242-000-0000", taxi_addon_master_enabled: true });
   const [paypalCfg, setPaypalCfg] = useState({ client_id: "", configured: false, mode: "sandbox" });
 

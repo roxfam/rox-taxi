@@ -2,6 +2,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import WelcomeOfferBanner from "./WelcomeOfferBanner";
+import CompleteProfileModal from "./CompleteProfileModal";
 import { Menu, X, Facebook, Phone, MapPin, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart, ChevronDown, User as UserIcon, Images, Users, History, Gift } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
@@ -654,6 +655,7 @@ export default function Layout({ children }) {
       </AnimatePresence>
 
       <WelcomeOfferBanner />
+      <CompleteProfileModal />
       <main className="flex-1">{children}</main>
       <ReferralCatcher />
 

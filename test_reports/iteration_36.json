@@ -1,0 +1,28 @@
+{
+  "summary": "iter36 — Gift card enhancements (10 themes, recipient_phone, scheduled_send_at, non-refundable gate, admin resend, scheduled delivery drain). Backend 11/11 pytest PASS. Frontend /gift-cards: all 10 theme buttons present + preview text/colours update on click; recipient phone input present; send-date note updates with chosen date; past date rejected with toast 'Pick a delivery date in the future…'; non-refundable notice visible; submit button correctly disabled until agree checkbox is ticked. Admin /admin flow: login → admin-gift-card-report → gc-recent-row-TEST-GC-UI-RESEND-A1 present → gc-resend click → toast 'Voucher resent to test_resend@example.com' AND row updated with 'Resent 10/12/2026…'. Fixed 3 ESLint react/no-unescaped-entities errors in GiftCards.jsx (lines 76/129/155) that would have broken the user's VPS CI build.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter36_gift_themes_resend.py",
+    "/app/test_reports/pytest/iter36.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GiftCardPurchaseRequest.theme uses a Pydantic regex pattern listing all 10 themes verbatim — if the GIFT_THEMES dict in routes/gift_redeem.py ever diverges from this pattern, the two will silently drift. Suggestion: build the pattern from GIFT_THEMES.keys() at import time (or add a startup assertion).",
+    "resend_gift_card: on a successful resend of a card that has never been delivered, we set delivered_at = now_iso() as well. This is correct for the admin workflow but note that if the voucher was already queued by _drain_scheduled_gifts and failed silently, this will double-fire. Low risk because the drain also sets delivered_at.",
+    "_drain_scheduled_gifts has NO claim-first guard (atomic $set delivered_at before send). If two workers ever ran concurrently, the voucher could be emailed twice. Current server runs single-worker so OK, but worth hardening before scaling.",
+    "GiftCards.jsx had 3 react/no-unescaped-entities errors that would fail a strict CI build (user explicitly flagged this in the request). Fixed in this iteration.",
+    "Pydantic field recipient_phone has no format validation — any 40-char string is accepted. Fine for now (we normalise to .strip()), but Twilio will reject at send-time and the error only surfaces in _send_gift_voucher_email logs."
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/GiftCards.jsx (ESLint fixes: 3 apostrophes → &apos;)",
+    "/app/backend/tests/test_iter36_gift_themes_resend.py (new, 11 tests)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (all iter36 flows verified)"},
+  "test_credentials": "admin roxfam2509@gmail.com / admin123 (verified via /admin/login)",
+  "seed_data_creation": "Backend pytest fixture: 3 TEST-GC-ITER36-* gift cards (active/pending/scheduled-past) seeded + cleaned on module teardown. Admin UI test: 1 gift card TEST-GC-UI-RESEND-A1 (manually cleaned post-run). /gift-cards/purchase live-purchase test created 2 Stripe pending cards which were deleted before Stripe could webhook-activate them.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter36 is self-cleaning via pytest fixture. If re-running the admin UI flow, re-seed TEST-GC-UI-RESEND-A1 with status=active, recipient_email=test_resend@example.com, NO recipient_phone (to avoid live Twilio SMS), then login as admin and click the resend button. The /admin/gift-cards/{code}/resend endpoint will dispatch a real email via SMTP (confirmed in backend logs during this run: 'SMTP email sent to test_resend@example.com'). To avoid real emails on repeat testing, point recipient_email at a disposable mailbox.",
+  "rca of the issue": "N/A — no bugs found. One minor DX observation: running test_iter36 twice in rapid succession can trip Stripe's shared sandbox 429 rate-limiter on the live /gift-cards/purchase call. Mitigated the parameterised 10-theme test by validating the Pydantic schema directly instead of hammering Stripe 10x; only one real Stripe session is created per test run now."
+}
