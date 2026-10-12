@@ -628,5 +628,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - `notify_booking_confirmed` now sends owner SMS (kind `booking_confirmed`, matched by `booking`, `all_bookings`, `*`) whenever the guest confirmation email is sent successfully: ID, guest, item, date, pax, total (total||total_price), paid flag, guest phone. Covers all callers (Stripe/PayPal webhook confirm, admin status → confirmed, admin resend invoice). Guest SMS total also fixed to fall back to `total_price`.
 
 
+## 2026-10-12 — Stripe funds not reaching account (live)
+- Live check on roxtaxi.com: `key_prefix` empty, sessions `cs_test_` → VPS backend has NO STRIPE_API_KEY, so checkout silently fell back to the shared `sk_test_emergent` sandbox (no real funds).
+- Removed the silent fallback: `server.py` STRIPE_API_KEY default now `''`; group + balance checkouts raise if no key; `POST /api/payments/checkout` returns 503 "Card payments are not set up yet…" when no key. Preview still uses its env sandbox key.
+- User action: put `STRIPE_API_KEY=sk_live_…` and `STRIPE_WEBHOOK_SECRET=whsec_…` in VPS `backend/.env` (or Admin → Secrets after deploying), Stripe webhook endpoint `https://roxtaxi.com/api/webhooks/stripe` (events: checkout.session.completed, checkout.session.expired, checkout.session.async_payment_failed, payment_intent.payment_failed, charge.refunded).
+
+
 
 

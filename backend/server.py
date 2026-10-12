@@ -60,7 +60,7 @@ secrets_store.configure(db)
 JWT_SECRET = os.environ['JWT_SECRET']
 ADMIN_EMAIL = os.environ['ADMIN_EMAIL']
 ADMIN_PASSWORD_HASH = os.environ['ADMIN_PASSWORD_HASH']
-STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
+STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', '')
 ZELLE_EMAIL = os.environ.get('ZELLE_EMAIL', '')
 ZELLE_PHONE = os.environ.get('ZELLE_PHONE', '')
 FACEBOOK_URL = os.environ.get('FACEBOOK_URL', '')
@@ -4046,7 +4046,9 @@ async def group_booking_checkout(req: GroupBookingCheckout):
     # Build Stripe Checkout session for the deposit (or full) amount.
     try:
         from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
-        api_key = (secrets_store.get_secret("STRIPE_API_KEY", "") or "sk_test_emergent").strip()
+        api_key = (secrets_store.get_secret("STRIPE_API_KEY", "") or "").strip()
+        if not api_key:
+            raise RuntimeError("STRIPE_API_KEY not configured")
         base_url = os.environ.get("SITE_BASE_URL", "https://roxtaxi.com").rstrip("/")
         checkout = StripeCheckout(api_key=api_key, webhook_url=f"{base_url}/api/webhooks/stripe")
         session = await checkout.create_checkout_session(CheckoutSessionRequest(
@@ -4240,7 +4242,9 @@ async def pay_balance(booking_id: str, t: str = Query(...)):
 
     try:
         from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
-        api_key = (secrets_store.get_secret("STRIPE_API_KEY", "") or "sk_test_emergent").strip()
+        api_key = (secrets_store.get_secret("STRIPE_API_KEY", "") or "").strip()
+        if not api_key:
+            raise RuntimeError("STRIPE_API_KEY not configured")
         base_url = os.environ.get("SITE_BASE_URL", "https://roxtaxi.com").rstrip("/")
         checkout = StripeCheckout(api_key=api_key, webhook_url=f"{base_url}/api/webhooks/stripe")
         session = await checkout.create_checkout_session(CheckoutSessionRequest(

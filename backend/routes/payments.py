@@ -73,6 +73,9 @@ async def create_checkout(req: CheckoutRequest, request: Request):
     booking = await _db.bookings.find_one({"id": req.booking_id.upper()})
     if not booking:
         raise HTTPException(404, "Booking not found")
+    if not _key():
+        logging.error("Stripe checkout blocked: STRIPE_API_KEY is not configured")
+        raise HTTPException(503, "Card payments are not set up yet. Please contact us on WhatsApp +1 (242) 432-2587 or pay by Zelle.")
 
     host_url = str(request.base_url)
     webhook_url = f"{host_url.rstrip('/')}/api/webhook/stripe"
