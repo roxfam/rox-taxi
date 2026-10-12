@@ -1,6 +1,8 @@
 """Gift-card redemption: validate (expiry), apply to a booking, restore on cancel."""
+import asyncio
+import html as _html
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -89,6 +91,72 @@ async def settle_if_zero(booking_id: str) -> bool:
         await _mark_paid(f"gift_{booking_id}", booking_id)
         return True
     return False
+
+
+EXPIRY_REMINDER_DAYS = 30
+
+
+def _expiry_email(gc: dict) -> tuple:
+    from routes.payment_digest import _site_url  # noqa: PLC0415
+    name = _html.escape((gc.get("recipient_name") or "").split(" ")[0] or "there")
+    bal = float(gc.get("balance") or 0)
+    when = expiry_label(gc).replace("Valid until ", "")
+    url = f"{_site_url()}/tours"
+    subject = f"Your ${bal:.0f} Rox gift card expires {when}"
+    html = f"""<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#0F172A">
+  <div style="background:#0B3B5C;color:#fff;padding:24px;border-radius:12px 12px 0 0">
+    <h1 style="margin:0;font-size:22px">Don't let your gift card expire</h1>
+  </div>
+  <div style="border:1px solid #E2E8F0;border-top:0;padding:24px;border-radius:0 0 12px 12px">
+    <p>Hi {name},</p>
+    <p>Your Rox gift card still has <b>${bal:.2f}</b> left and expires on <b>{when}</b>.</p>
+    <p style="font-family:Menlo,monospace;font-size:20px;letter-spacing:2px;background:#FBF7EF;padding:12px;text-align:center;border-radius:8px">{_html.escape(gc['code'])}</p>
+    <p>Use it on any taxi, tour, car rental, Cable Beach day or group booking. Just enter the code at checkout.</p>
+    <p style="text-align:center;margin:28px 0">
+      <a href="{url}" style="background:#E86A3C;color:#fff;text-decoration:none;padding:14px 28px;border-radius:999px;font-weight:bold">Book Now</a>
+    </p>
+    <p style="color:#64748B;font-size:12px">Gift cards are non-refundable and can't be used after the expiry date.</p>
+  </div>
+</div>"""
+    text = f"Your Rox gift card {gc['code']} has ${bal:.2f} left and expires {when}. Book now: {url}"
+    return subject, html, text
+
+
+async def run_expiry_reminders() -> int:
+    """Email holders of active cards with balance that expire within 30 days. Once per card."""
+    from notifications import send_email  # noqa: PLC0415
+    now = datetime.now(timezone.utc)
+    q = {"status": "active", "balance": {"$gt": 0}, "expiry_reminder_sent_at": {"$exists": False},
+         "expires_at": {"$gt": now.isoformat(), "$lte": (now + timedelta(days=EXPIRY_REMINDER_DAYS)).isoformat()}}
+    sent = 0
+    async for gc in _db.gift_cards.find(q).limit(50):
+        to = gc.get("recipient_email") or gc.get("buyer_email")
+        if not to:
+            continue
+        claim = await _db.gift_cards.update_one(
+            {"code": gc["code"], "expiry_reminder_sent_at": {"$exists": False}},
+            {"$set": {"expiry_reminder_sent_at": _now_iso()}})
+        if not claim.modified_count:
+            continue
+        subject, html, text = _expiry_email(gc)
+        try:
+            res = await asyncio.to_thread(send_email, to, subject, html, text, "info")
+            ok = bool((res or {}).get("sent"))
+        except Exception as e:  # noqa: BLE001
+            logging.warning("gift expiry email err: %s", e)
+            ok = False
+        await _db.gift_cards.update_one({"code": gc["code"]}, {"$set": {"expiry_reminder_ok": ok}})
+        sent += int(ok)
+    return sent
+
+
+async def expiry_reminder_loop() -> None:
+    while True:
+        try:
+            await run_expiry_reminders()
+        except Exception as e:  # noqa: BLE001
+            logging.warning("gift expiry tick err: %s", e)
+        await asyncio.sleep(3600)
 
 
 class ApplyGiftRequest(BaseModel):

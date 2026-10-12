@@ -705,3 +705,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - PayPal: verified LIVE (api-m.paypal.com, token OK, live order created). Pay page now has PayPal Smart Buttons (`components/PayPalPayButtons.jsx`).
 - Tested: iteration_35 (backend 15/15; frontend 29/31, the 2 failures were the missing /gift-cards route, now fixed).
 
+## 2026-10-12 — Gift card expiry reminders
+- `gift_redeem.run_expiry_reminders()` + hourly in-app `expiry_reminder_loop` (started in server.py): emails the recipient (or the buyer if there's no recipient) once when an active card with balance > 0 is within 30 days of `expires_at`. Includes code, balance, expiry date and a Book Now button. Idempotent via `expiry_reminder_sent_at` and `expiry_reminder_ok`. Cards with no expiry or no balance are skipped.
+- Verified with test cards: 1 email sent for the card due soon, 0 on the second run, cards expiring later and empty cards skipped. Test data deleted.
+
+

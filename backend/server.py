@@ -1631,6 +1631,7 @@ async def seed_db():
     asyncio.create_task(payment_digest_module.digest_loop())
     asyncio.create_task(dayof_module.dayof_loop())
     asyncio.create_task(welcome_email_module.reminder_loop())
+    asyncio.create_task(gift_redeem_module.expiry_reminder_loop())
     asyncio.create_task(cron_module.google_reviews_loop())
     asyncio.create_task(payments_module.reconcile_loop())
     # ── Owner-SMS routing cache — refreshed every 60s from site_config ──
