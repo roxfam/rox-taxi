@@ -480,6 +480,11 @@ export default function AdminDashboard() {
                             ✓ Guest confirmed
                           </span>
                         )}
+                        {b.dispute && (
+                          <span className={`block mt-1 text-[10px] font-sans font-bold ${b.dispute.status === "won" ? "text-[#059669]" : "text-[#DC2626]"}`} data-testid={`admin-dispute-${b.id}`} title={`Reason: ${b.dispute.reason} · respond by ${b.dispute.evidence_due}`}>
+                            ⚠ Dispute · {b.dispute.status === "won" ? "won" : b.dispute.status === "lost" ? "lost" : `due ${b.dispute.evidence_due}`}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {hasDeposit ? (

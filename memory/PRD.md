@@ -655,6 +655,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - `charge.refunded` webhook now sets `partially_refunded` vs `refunded` from Stripe's `charge.refunded` flag (was always `refunded`).
 - Recommended Stripe webhook events: checkout.session.completed, checkout.session.expired, checkout.session.async_payment_failed, payment_intent.succeeded, payment_intent.payment_failed, charge.refunded. Optional (not handled yet): setup_intent.succeeded (card holds are saved via success page), charge.dispute.created.
 
+## 2026-10-12 — Card dispute alerts
+- `_handle_dispute` in routes/payments.py for `charge.dispute.created`, `charge.dispute.funds_withdrawn`, `charge.dispute.closed`: finds booking via payment_intent → tx, stores `booking.dispute` {dispute_id, amount, reason, status, evidence_due (Nassau)}, sends force-priority owner SMS (kind `payment_dispute`, matched by payment / all_bookings / *) with Stripe dispute link + email to ADMIN_EMAIL.
+- Admin table shows red "⚠ Dispute · due …" (green when won) under Total (`admin-dispute-{id}`).
+- Stripe webhook must include charge.dispute.created / funds_withdrawn / closed.
+
+
 
 
 

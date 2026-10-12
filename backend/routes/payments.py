@@ -356,6 +356,8 @@ async def _process_stripe_event(event: dict) -> None:
                     {"id": booking_id},
                     {"$set": {"payment_status": "paid", "updated_at": _now_iso()}},
                 )
+        elif etype.startswith("charge.dispute."):
+            await _handle_dispute(etype, data)
         elif etype == "charge.refunded":
             # Mirror Stripe-side refunds (eg. refunds issued directly in
             # the Stripe dashboard) back onto our booking + tx ledger.
@@ -460,6 +462,43 @@ async def _ack_event(event, background: BackgroundTasks):
     # ack; everything slow goes into the background task queue.
     background.add_task(_process_stripe_event, event)
     return {"received": True}
+
+
+async def _handle_dispute(etype: str, d: dict) -> None:
+    """Disputes: store on booking + urgent owner SMS/email with the evidence deadline."""
+    import asyncio  # noqa: PLC0415
+    from datetime import datetime, timezone  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    pi_id = d.get("payment_intent")
+    tx = await _db.payment_transactions.find_one({"stripe_payment_intent": pi_id}) if pi_id else None
+    booking_id = (tx or {}).get("booking_id") or (d.get("metadata") or {}).get("booking_id")
+    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0}) if booking_id else None
+    amount = float(d.get("amount") or 0) / 100.0
+    due_ts = (d.get("evidence_details") or {}).get("due_by")
+    due = (datetime.fromtimestamp(due_ts, timezone.utc).astimezone(ZoneInfo("America/Nassau")).strftime("%a %b %-d %-I:%M %p")
+           if due_ts else "see Stripe")
+    status = d.get("status") or ""
+    reason = (d.get("reason") or "general").replace("_", " ")
+    record = {"dispute_id": d.get("id"), "amount": amount, "reason": reason, "status": status,
+              "evidence_due": due, "event": etype, "at": _now_iso()}
+    if b:
+        await _db.bookings.update_one({"id": booking_id}, {"$set": {"dispute": record, "updated_at": _now_iso()}})
+    guest = f"{(b or {}).get('customer_name') or 'Guest'} · booking {booking_id}" if booking_id else "unknown booking"
+    link = f"https://dashboard.stripe.com/disputes/{d.get('id')}"
+    if etype == "charge.dispute.created":
+        sms = f"Rox ⚠ CARD DISPUTE ${amount:.2f} — {guest}. Reason: {reason}. Respond by {due}: {link}"
+    elif etype == "charge.dispute.closed":
+        sms = f"Rox: dispute on {guest} closed — {'WON' if status == 'won' else status.upper()} (${amount:.2f})."
+    elif etype == "charge.dispute.funds_withdrawn":
+        sms = f"Rox: Stripe withdrew ${amount:.2f} for the dispute on {guest}. Respond by {due}: {link}"
+    else:
+        return
+    from notifications import send_owner_sms, send_email  # noqa: PLC0415
+    await asyncio.to_thread(send_owner_sms, sms, "payment_dispute", True)
+    from routes.payment_digest import _admin_emails  # noqa: PLC0415
+    for e in _admin_emails():
+        await asyncio.to_thread(send_email, e, f"Card dispute — {booking_id or d.get('id')}",
+                                f"<p>{sms}</p><p><a href='{link}'>Open in Stripe</a></p>", sms, category="admin")
 
 
 # -- Reconciler: catch paid sessions the webhook missed ---------------------

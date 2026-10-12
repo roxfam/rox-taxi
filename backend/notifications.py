@@ -343,7 +343,7 @@ def _matches_subscription(recipient: dict, kind: Optional[str]) -> bool:
             "group_booking", "wedding_booking", "flight_status", "booking_confirmed",
         ),
         "payment": ("checkout_paid", "payment_failed", "refund_issued",
-                    "payout_sent", "share_conversion", "payment_digest"),
+                    "payout_sent", "share_conversion", "payment_digest", "payment_dispute"),
         "dispatch": ("driver_assigned", "driver_scan", "en_route", "flight_status"),
         "security": ("admin_login", "password_reset"),
     }
