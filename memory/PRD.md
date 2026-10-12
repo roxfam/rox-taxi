@@ -744,6 +744,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Verified in the browser with a TEST user + session (both badges render); test data deleted; CI=true build is clean.
 
 
+## 2026-10-12 — Savings shown in booking window
+- BookingFlow computes `discountAmt` with the same formula as the backend: pct × (total − rental deposit − tip), shown only for a signed-in user with an active `welcome_discount`. Then `giftAmt` = min(balance, remainder), `payTotal`, `savings`. The total block shows the original total struck through, "10% off: −$X", "Gift card: −$Y", "You save $Z" and "You pay" (testids booking-total-original, booking-savings-discount, booking-total-after-gift, booking-savings-total, booking-total).
+- Verified in the browser: $132.17 → 10% −$11.43 → gift −$20 → pay $100.73, save $31.43. Test data deleted; CI build is clean.
+
+
 
 
 

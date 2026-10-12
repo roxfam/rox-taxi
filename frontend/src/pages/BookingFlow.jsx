@@ -7,7 +7,7 @@ import { api, money, BACKEND_URL } from "../lib/api";
 import { DateTimePicker } from "../components/DateTimePicker";
 import { PaymentBrandRow } from "../components/PaymentBrands";
 import { GiftCodeBox } from "../components/GiftCodeBox";
-import { DiscountBadge } from "../components/DiscountBadge";
+import { DiscountBadge, activeDiscount } from "../components/DiscountBadge";
 import { useAuth } from "../lib/auth";
 import { trackLead, trackPurchase, trackInitiateCheckout } from "../lib/fbpixel";
 
@@ -404,6 +404,12 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
 
   // Deposit + tip layer on AFTER VAT/processing so they aren't taxed.
   const total = subtotal + vatAmount + processingFee + rentalDeposit + tipAmount;
+  const acctDiscount = activeDiscount(authUser);
+  const discountPct = acctDiscount ? Number(acctDiscount.pct || 10) : 0;
+  const discountAmt = acctDiscount ? Math.round(Math.max(0, total - rentalDeposit - tipAmount) * discountPct) / 100 : 0;
+  const giftAmt = gift ? Math.min(gift.balance, Math.max(0, total - discountAmt)) : 0;
+  const payTotal = Math.max(0, total - discountAmt - giftAmt);
+  const savings = discountAmt + giftAmt;
 
   const submit = async () => {
     if (!form.customer_name || !form.customer_email || !form.customer_phone || !form.booking_date) {
@@ -1150,14 +1156,21 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
 
               <DiscountBadge variant="checkout" />
 
-              <GiftCodeBox applied={gift ? { code: gift.code, amount: Math.min(gift.balance, total) } : null} onChange={setGift} />
+              <GiftCodeBox applied={gift ? { code: gift.code, amount: giftAmt } : null} onChange={setGift} />
 
               <div className="pt-4 border-t border-[#E2E8F0] flex items-center justify-between">
                 <div>
-                  <div className="text-xs text-[#64748B]">Total</div>
-                  <div className="serif text-2xl text-[#0B3B5C]" data-testid="booking-total">{money(total)}</div>
-                  {gift && (
-                    <div className="text-[11px] text-[#059669] font-semibold mt-0.5" data-testid="booking-total-after-gift">Due after gift card: {money(Math.max(0, total - gift.balance))}</div>
+                  <div className="text-xs text-[#64748B]">{savings > 0 ? "You pay" : "Total"}</div>
+                  {savings > 0 && <div className="mono text-xs text-[#94a3b8] line-through" data-testid="booking-total-original">{money(total)}</div>}
+                  <div className="serif text-2xl text-[#0B3B5C]" data-testid="booking-total">{money(payTotal)}</div>
+                  {discountAmt > 0 && (
+                    <div className="text-[11px] text-[#059669] font-semibold mt-0.5" data-testid="booking-savings-discount">{discountPct}% off: −{money(discountAmt)}</div>
+                  )}
+                  {giftAmt > 0 && (
+                    <div className="text-[11px] text-[#059669] font-semibold mt-0.5" data-testid="booking-total-after-gift">Gift card: −{money(giftAmt)}</div>
+                  )}
+                  {savings > 0 && (
+                    <div className="text-[11px] text-[#065F46] mt-0.5" data-testid="booking-savings-total">You save {money(savings)}</div>
                   )}
                   {serviceType === "rental" && (
                     <div className="text-[11px] text-[#64748B] mt-0.5" data-testid="booking-total-deposit-note">Includes ${RENTAL_DEPOSIT} refundable deposit</div>
