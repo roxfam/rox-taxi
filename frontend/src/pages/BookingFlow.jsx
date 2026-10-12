@@ -7,6 +7,7 @@ import { api, money, BACKEND_URL } from "../lib/api";
 import { DateTimePicker } from "../components/DateTimePicker";
 import { PaymentBrandRow } from "../components/PaymentBrands";
 import { GiftCodeBox } from "../components/GiftCodeBox";
+import { DiscountBadge } from "../components/DiscountBadge";
 import { useAuth } from "../lib/auth";
 import { trackLead, trackPurchase, trackInitiateCheckout } from "../lib/fbpixel";
 
@@ -1146,6 +1147,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   data-testid="booking-notes"
                 />
               </div>
+
+              <DiscountBadge variant="checkout" />
 
               <GiftCodeBox applied={gift ? { code: gift.code, amount: Math.min(gift.balance, total) } : null} onChange={setGift} />
 

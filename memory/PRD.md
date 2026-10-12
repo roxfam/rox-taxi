@@ -739,6 +739,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - The discount reuses `users.welcome_discount` = {pct 10, status available, source "return_visit", expires_at +365d}. It's applied automatically at checkout (create_booking welcome query now skips expired discounts). An unused, still-valid discount is kept, not replaced. Welcome-reminder emails skip return_visit grants.
 - Verified with stubbed SMS: nothing before 10 AM, 2 texts at 10 AM, no repeats; discount granted or kept correctly; expired discount not matched. Test users deleted.
 
+## 2026-10-12 — Discount badge
+- `components/DiscountBadge.jsx` (+ `activeDiscount(user)`): shows when `user.welcome_discount.status == "available"` and not expired. Account variant (green banner on /my-bookings under the trip summary: welcome vs. thank-you wording, valid-until date) and checkout variant (in the booking modal above the gift card box: "10% off is waiting! It comes off automatically when you confirm").
+- Verified in the browser with a TEST user + session (both badges render); test data deleted; CI=true build is clean.
+
+
 
 
 
