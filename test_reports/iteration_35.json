@@ -1,0 +1,35 @@
+{
+  "summary": "iter35 verified gift card lifecycle (redeem-check expiry, apply-gift partial/full/dup/paid/cancelled, cancel-restore idempotency, /gift-cards/purchase 365d expiry + non_refundable), customer /my/gift-cards + /my/recommendations with injected session cookie, QR PNG + receipt PDF — all 15 backend tests PASS. Frontend 29/31 PASS: welcome marquee 'limited-time offer', home gift-card promo + CTA, nav/footer gift-cards links, /pay/{id} gift-code-box + input + apply + PayPal buttons container + partial-apply updates total to $150, /taxi BookingFlow modal gift-code-box, /groups/book sidebar gift-code-box, admin /admin booking calendar with all cal-view-day/week/month + cal-prev/next/today + cal-show-cancelled toggle + 5 cal-booking-* chips, /my-bookings signed-in via session cookie shows trip summary, both tabs, gift-cards section, recommendations, book-again on past; mobile 390px renders. ONE CRITICAL BUG: /gift-cards page is BLANK (no React content) — the GiftCards page component is lazy-imported in /app/frontend/src/App.js:52 but NO Route path='/gift-cards' is registered. Nav link, footer link, GiftCodeBox 'Buy a gift card' link, and GiftCardPromo CTA all point to /gift-cards and dead-end on an empty <Suspense> fallback.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js router", "issue": "GiftCards lazy import exists at line 52 but no <Route path=\"/gift-cards\" .../> is registered → /gift-cards renders a blank page. All advertised gift-card links (nav, footer, promo CTA, GiftCodeBox 'Buy a gift card') dead-end.", "selector": "route /gift-cards", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter35_gift_cards.py",
+    "/app/backend/tests/_iter35_ui_seed.py",
+    "/app/test_reports/pytest/iter35.xml"
+  ],
+  "action_items": [
+    "MAIN AGENT: Add <Route path=\"/gift-cards\" element={<CustomerShell><GiftCards /></CustomerShell>} /> (and probably /gift-cards/success for the purchase success_url) in /app/frontend/src/App.js. Without this, the entire gift-card advertising surface is broken for users even though all backend endpoints work."
+  ],
+  "critical_code_review_comments": [
+    "routes/gift_redeem.py: restore_for_booking is atomic (claim via $exists guard) — good idempotency. apply_gift's duplicate-code check only runs when gift_code is already set, correct.",
+    "server.py gift_card_purchase sets expires_at = +365 days and non_refundable=True. Legacy gift_cards without expires_at are treated as 'never expires' by is_expired — matches spec.",
+    "App.js is 200+ lines with many lazy imports; the orphan `GiftCards` lazy import without a route is a tree-shaking miss — recommend an ESLint rule for unused imports in App.js specifically to prevent silent drops like this. ESLint currently reports no issues because the import IS used by naming reference even if the <Route> is absent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter35_gift_cards.py (new)",
+    "/app/backend/tests/_iter35_ui_seed.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "93.5% (29/31) — 2 fails both caused by the missing /gift-cards route"},
+  "test_credentials": "admin roxfam2509@gmail.com / admin123 verified via /admin/login. For customer flows a session was seeded directly into db.user_sessions keyed to user_id=TEST_UI_user, email=test.ui.gift@example.com — then cleaned up.",
+  "seed_data_creation": "backend_test: gift_cards TEST-GC-ACTIVE1/EXPIRED/LEGACY1/SECOND1 + bookings TESTGIFTPART/FULL/CANC/LEG/PAID + user TEST_GIFT_user + a /purchase doc (auto-deleted). All cleaned on teardown. UI seed: TEST-GC-UI-ACTIVE, TESTUIPAY, TESTUIUP, TESTUIPAST, TEST_UI_user — cleaned via `python tests/_iter35_ui_seed.py cleanup`.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To re-run UI tests after the /gift-cards route fix: `python /app/backend/tests/_iter35_ui_seed.py` to re-seed; grab the printed session_token; set cookie session_token on bahamas-taxi-tours.preview.emergentagent.com with secure+SameSite=None; navigate to /my-bookings. Cleanup with `python /app/backend/tests/_iter35_ui_seed.py cleanup`. Pytest suite is in test_iter35_gift_cards.py — self-cleaning via module fixture.",
+  "rca of the issue": "RCA — /gift-cards blank page: in /app/frontend/src/App.js line 52 `const GiftCards = lazy(() => import('./pages/GiftCards'));` the lazy-loaded component is NEVER rendered — grep for 'GiftCards' and '/gift-cards' returns only this import. The <Routes> block (lines 103–153+) is missing `<Route path=\"/gift-cards\" element={<CustomerShell><GiftCards /></CustomerShell>} />`. React Router falls through to the catch-all (or none), yielding an empty #root. Fix: add the Route (and probably `/gift-cards/success` to catch the Stripe success_url in server.py:1884). Reproduction: visit https://bahamas-taxi-tours.preview.emergentagent.com/gift-cards — body renders but <div id='root'> is empty."
+}

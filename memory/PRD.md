@@ -696,3 +696,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - WelcomeOfferBanner now scrolls slowly (60s marquee, pauses on hover); "one-time offer" → "limited-time offer" (banner + Signup page).
 - Backlog: Cancellation report, Guest flight texts, Flight board, split server.py / AdminDashboard.jsx.
 
+
+## 2026-10-12 — Gift cards everywhere · QR fix · User panel · PayPal live
+- Gift cards: new cards expire 365 days after purchase (`expires_at`) and are non-refundable; older cards without `expires_at` never expire. `routes/gift_redeem.py`: validate/redeem (atomic), `POST /bookings/{id}/apply-gift`, `settle_if_zero` (full coverage → confirmed via `_mark_paid("gift_<id>")`), `restore_for_booking` on customer and admin cancel (balance goes back to the card, no cash refund).
+- Gift code box (`components/GiftCodeBox.jsx`) on BookingFlow (taxi/tours/rentals), Pay page (covers Cable Beach), Groups book. Ads: home `GiftCardPromo`, nav "Gift Cards", footer link. Added the missing `/gift-cards` + `/gift-cards/success` routes.
+- QR: `backend/qr_utils.py` (ECC M, 4-module quiet zone, black on white) used by booking + Cable Beach QR PNGs and the receipt PDF (now 1.25in, uses PUBLIC_SITE_URL). PaymentReturn no longer uses external qrserver.
+- User panel `/my-bookings`: trip summary, Upcoming/Past tabs, Book again, Gift cards (`GET /my/gift-cards`), Recommended for you (`GET /my/recommendations`, rules + popular tours). Saved-card Trip Wallet already existed.
+- PayPal: verified LIVE (api-m.paypal.com, token OK, live order created). Pay page now has PayPal Smart Buttons (`components/PayPalPayButtons.jsx`).
+- Tested: iteration_35 (backend 15/15; frontend 29/31, the 2 failures were the missing /gift-cards route, now fixed).
+

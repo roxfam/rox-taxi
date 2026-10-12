@@ -199,6 +199,7 @@ function GoogleReviewsCard({ url }) {
     if (pool.length <= 1) return;
     const id = setInterval(() => setIdx((i) => (i + 1) % pool.length), 9000);
     return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.reviews?.length]);
 
   const rating = data?.rating || 0;

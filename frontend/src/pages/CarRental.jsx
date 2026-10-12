@@ -43,6 +43,7 @@ export default function CarRental() {
         setParams(params, { replace: true });
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Client-side sort keeps the network trip to a single /rentals call.

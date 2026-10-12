@@ -24,6 +24,7 @@ export default function AdminGroups() {
   useEffect(() => {
     if (!isAdminAuthed()) { nav("/admin/login"); return; }
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nav]);
 
   const changeStatus = async (id, status) => {

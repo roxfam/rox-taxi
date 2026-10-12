@@ -55,7 +55,8 @@ export default function RouteQuoteWidget({ services, onBook }) {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { if (canQuote) runQuote(); /* eslint-disable-next-line */ }, [from, to]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (canQuote) runQuote(); }, [from, to]);
 
   const swap = () => { const a = from; setFrom(to); setTo(a); };
 

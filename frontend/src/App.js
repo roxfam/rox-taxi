@@ -123,6 +123,8 @@ function AppRouter() {
       <Route path="/drivers/:slug" element={<CustomerShell><DriverSpotlight /></CustomerShell>} />
       <Route path="/nassau-with-reagan" element={<CustomerShell><NassauWithReagan /></CustomerShell>} />
       <Route path="/refer" element={<CustomerShell><ReferFriend /></CustomerShell>} />
+      <Route path="/gift-cards" element={<CustomerShell><GiftCards /></CustomerShell>} />
+      <Route path="/gift-cards/success" element={<CustomerShell><GiftCards /></CustomerShell>} />
       <Route path="/tip-topup" element={<CustomerShell><TipTopUp /></CustomerShell>} />
       <Route path="/tip" element={<CustomerShell><TipLookup /></CustomerShell>} />
       <Route path="/my-booking" element={<CustomerShell><MyBookingLookup /></CustomerShell>} />
