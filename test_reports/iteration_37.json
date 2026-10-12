@@ -1,0 +1,34 @@
+{
+  "summary": "iter37 — Pro signup with 2-step form + CompleteProfileModal + profile prefill. Backend PUT /api/my/profile: 4/4 pytest PASS (401 no-session, 422 missing fields, 200 saves+returns, GET /auth/me reflects). Frontend /signup step indicator (signup-steps) + step1 form validation (mismatch→'Passwords don't match', weak→'Password is too weak', strong→step2) verified. Step 2 (signup-details-form) renders ProfileFields: phone/address/city/country required, optional block with hotel/travel-from/travel-to/heard-from/optin all present with correct testids; signup-back returns to step1 and preserves name. Turnstile is configured in preview → signup-submit stays disabled until a token exists (as expected per task). CompleteProfileModal auto-opens on / and /my-bookings for a signed-in no-profile user, does NOT open on /signup; complete-profile-close dismisses it for the session (survives reload via sessionStorage); complete-profile-save with required fields saves + modal closes + toast 'Profile saved'. ProfileCard on /my-bookings shows phone/address/hotel/travel-dates; account-profile-edit opens pre-filled modal and saves successfully (card updated to Freeport). Booking modal on /taxi prefills Full name, Email, Phone for a signed-in customer with a profile. Mobile 390px: /signup step 2 and the modal render well. ESLint on all 5 changed files: no issues.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "BookingFlow prefill", "issue": "pickup_location is prefilled in form state from authUser.profile.hotel, but on routes where pickup is a <select> of predefined locations (e.g. LPIA Airport→Downtown Nassau), 'Baha Mar' doesn't exist as an option so the select visibly shows 'Select pickup…'. Name/email/phone prefills work correctly. Low priority — expected on fixed-route legs but worth validating against the hotel options list or only prefilling for free-text pickup legs.", "affected_selectors": ["booking-modal"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter37_profile.py",
+    "/app/test_reports/pytest/iter37.xml"
+  ],
+  "action_items": [
+    "Optional: Pickup prefill from profile.hotel only visibly populates when the booking leg uses a free-text pickup (not a <select> list). Consider either matching hotel string to the select's options when possible, or only applying the prefill on free-text legs."
+  ],
+  "critical_code_review_comments": [
+    "Signup.jsx line 44: `await api.put('/my/profile', profile)` after register — if this throws (network, 422), the catch block silently swallows it. User still lands on /my-bookings and the CompleteProfileModal re-asks. Current behaviour is fine for UX but a `console.warn` would help future debugging. Low priority.",
+    "ProfileFields validates on the client via profileMissing(); backend also validates via Pydantic (min_length 7 for phone, 3 for address, 2 for city/country). No E.164 or phone-format regex — any 7+-char string is accepted. Twilio will reject malformed phones at send-time; consider a lightweight regex or using libphonenumber on the client before submit.",
+    "CompleteProfileModal auto-open uses `!pathname.startsWith('/signup') && !pathname.startsWith('/admin')`. If a future route like `/signupxyz` or `/admin-public` appears, the startsWith will also match and silently hide the modal. Use exact `pathname === '/signup' || pathname.startsWith('/admin/')` for safer matching.",
+    "sessionStorage 'rox_profile_later' is set globally — if the same browser signs out and a different user signs in during the same tab session, the new user won't see the modal until the tab is closed. Edge case, low priority. Consider scoping by user_id.",
+    "PasswordStrengthMeter.scorePassword penalises passwords that START with 'password'/'qwerty'/'admin'/etc., which can be surprising ('Password!23' is flagged weak). Working as designed but a dedicated hint ('don't start with common words') under the input would help users."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter37_profile.py (new, 4 tests)"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% of iter37 flows (step1 validation, step2 UI, modal auto-open/close/dismiss, modal save, ProfileCard, edit, booking prefill, mobile)"},
+  "test_credentials": "Admin credentials from /app/memory/test_credentials.md unchanged. Customer flows used two seeded TEST_ users (session cookies on preview domain) — both cleaned up on completion.",
+  "seed_data_creation": "Backend pytest fixture: 1 TEST_u_* user + session seeded then cleaned on module teardown. Frontend UI tests: 1 TEST_u_no_* (no profile_completed) and 1 TEST_u_yes_* (profile_completed with Baha Mar/Nassau profile). Both users + their user_sessions deleted at end of run (verified: users deleted 2, sessions deleted 2).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To replay the UI flows, re-seed with the snippet in test_iter37_profile.py (adapted) and set the session_token cookie on the preview domain with secure=True, samesite=None, httpOnly=True. Note: once a no-profile user clicks complete-profile-save, their DB row flips to profile_completed=true permanently, so for repeat runs reset or seed a fresh TEST_u_ user. Turnstile sitekey is configured in preview, so the signup submit button stays disabled until a real token comes in; UI validation of required-field missing message cannot be triggered via the submit button in that preview — tested via Back-preserves-name + testid presence instead."
+}

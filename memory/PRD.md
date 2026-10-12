@@ -726,3 +726,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Gift copy on the home promo + /gift-cards: "Treat someone special to a little piece of paradise."
 - Verified: PDF builds for every theme, birthday email HTML/subject rendered (send_email stubbed), picker works in the browser, CI=true build is clean.
 
+## 2026-10-12 — Gift extras · Professional signup
+- Gift cards: 10 designs (added anniversary, wedding, graduation, holiday, mothers_day, just_because), optional `recipient_phone` (SMS with the code on delivery), delivery date picker (`scheduled_send_at`, delivered by the in-app `_scheduled_gift_loop` every 10 min, so it works on a self-hosted VPS), a required "non-refundable" tick box before buying, every card set `non_refundable`. Admin report has a "Recent gift cards" table with a Resend button (`POST /admin/gift-cards/{code}/resend`). Tested in iteration_36.
+- Signup: 2-step elegant form (Account → Your details). Phone, address, city and country required; optional hotel/ship, travel dates, how they heard about us, offers opt-in. Saved via `PUT /api/my/profile` → `users.profile`, `users.phone`, `profile_completed`. `CompleteProfileModal` (in Layout) asks signed-in customers without a profile (e.g. Google sign-ups); "later" dismisses it for the browser session. Profile card + Edit on /my-bookings. Booking modal pre-fills name/email/phone. Tested in iteration_37.
+
+

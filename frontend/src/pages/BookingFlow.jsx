@@ -154,7 +154,6 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
       customer_name: f.customer_name || authUser.name || "",
       customer_email: f.customer_email || authUser.email || "",
       customer_phone: f.customer_phone || authUser.profile?.phone || authUser.phone || "",
-      pickup_location: f.pickup_location || authUser.profile?.hotel || "",
     }));
   }, [authUser]);
   const [siteCfg, setSiteCfg] = useState({ zelle_email: "payments@roxtaxi.com", zelle_phone: "+1-242-000-0000", taxi_addon_master_enabled: true });
