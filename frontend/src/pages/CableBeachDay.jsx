@@ -28,6 +28,7 @@ export default function CableBeachDay() {
   const [hotelId, setHotelId] = useState("");
   const [lunchIds, setLunchIds] = useState(new Set());
   const [drinkIds, setDrinkIds] = useState(new Set());
+  const [drinkChoices, setDrinkChoices] = useState({});
   const [comboId, setComboId] = useState(null);                 // Chef's-choice bundle
   const [dietFilters, setDietFilters] = useState(new Set());    // GF / pescatarian / DF filters
   const [allergies, setAllergies] = useState(new Set());        // Confirmed allergies for dispatch
@@ -81,6 +82,7 @@ export default function CableBeachDay() {
       hotel_id: transferKind === "hotel" ? (hotelId || null) : null,
       lunch_item_ids: Array.from(lunchIds),
       drink_item_ids: Array.from(drinkIds),
+      drink_choices: Object.fromEntries(Object.entries(drinkChoices).filter(([id]) => drinkIds.has(id))),
       combo_id: comboId,
       side_selections: sideBody,
       water_sport_qty: Object.fromEntries(
@@ -88,7 +90,7 @@ export default function CableBeachDay() {
       ),
       parasail_spectators: Number(waterSportQty.parasailing || 0) > 0 ? parasailSpectators : 0,
     };
-  }, [pax, extraSeats, transferKind, hotelId, lunchIds, drinkIds, comboId, sideSelections, waterSportQty, parasailSpectators]);
+  }, [pax, extraSeats, transferKind, hotelId, lunchIds, drinkIds, drinkChoices, comboId, sideSelections, waterSportQty, parasailSpectators]);
 
   useEffect(() => {
     if (!cfg?.active) return;
@@ -211,6 +213,7 @@ export default function CableBeachDay() {
       hotel_id: transferKind === "hotel" ? hotelId : null,
       lunch_item_ids: Array.from(lunchIds),
       drink_item_ids: Array.from(drinkIds),
+      drink_choices: Object.fromEntries(Object.entries(drinkChoices).filter(([id]) => drinkIds.has(id))),
       combo_id: comboId,
       side_selections: Object.fromEntries(
         Object.entries(sideSelections)
@@ -331,7 +334,23 @@ export default function CableBeachDay() {
             ) : (
               <div className="grid sm:grid-cols-2 gap-2.5">
                 {cfg.drink_items.map((it) => (
-                  <MenuTile key={it.id} it={it} active={drinkIds.has(it.id)} onClick={() => toggleItem(setDrinkIds, it.id)} testId={`cable-drink-${it.id}`} />
+                  <div key={it.id}>
+                    <MenuTile it={it} active={drinkIds.has(it.id)} onClick={() => toggleItem(setDrinkIds, it.id)} testId={`cable-drink-${it.id}`} />
+                    {Array.isArray(it.choices) && it.choices.length > 0 && drinkIds.has(it.id) && (
+                      <select
+                        value={drinkChoices[it.id] || ""}
+                        onChange={(e) => setDrinkChoices((c) => ({ ...c, [it.id]: e.target.value }))}
+                        className="mt-1.5 w-full px-3 py-2 rounded-lg border border-[#D4A94A]/60 bg-[#FBF7EF] text-sm text-[#0B3B5C]"
+                        data-testid={`cable-drink-choice-${it.id}`}
+                      >
+                        <option value="">Choose your cocktail…</option>
+                        {it.choices.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    )}
+                    {it.description && !drinkIds.has(it.id) && (
+                      <p className="mt-1 text-[11px] text-[#64748B] px-1">{it.description}</p>
+                    )}
+                  </div>
                 ))}
               </div>
             )}

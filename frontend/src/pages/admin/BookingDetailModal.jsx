@@ -10,6 +10,7 @@ import AdminChatPanel from "./AdminChatPanel";
 import SecondaryContactsPanel from "./SecondaryContactsPanel";
 import TimelineEditor from "./TimelineEditor";
 import BookingEditForm from "./BookingEditForm";
+import GuestHistory from "./GuestHistory";
 import { Pencil, UserCheck } from "lucide-react";
 
 /**
@@ -200,6 +201,8 @@ export default function BookingDetailModal({ booking: bookingProp, initialEdit =
               onSaved={(b) => { setEdited(b); setEditing(false); onChanged?.(); }}
             />
           )}
+
+          <GuestHistory bookingId={bid} />
 
           {/* Guest + Trip */}
           <div className="grid sm:grid-cols-2 gap-3">

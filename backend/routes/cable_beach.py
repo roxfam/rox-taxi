@@ -331,9 +331,30 @@ def _hydrate_side(row: dict) -> dict:
     return out
 
 
+COCKTAIL_CHOICES = ["Bahama Mama", "Pina Colada", "Yellow Bird", "Sex on the Beach",
+                    "Miami Vice", "100 Stabs", "1000 Juke"]
+COCKTAIL_PLANS = [
+    {"id": "cocktail_1_refill", "name": "Cocktail + 1 free refill", "price": 35.0, "tags": [],
+     "choices": COCKTAIL_CHOICES, "description": "Pick your cocktail — includes 1 free refill"},
+    {"id": "cocktail_5_refills", "name": "Cocktail + 5 refills", "price": 50.0, "tags": [],
+     "choices": COCKTAIL_CHOICES, "description": "Pick your cocktail — 1 drink + 5 refills"},
+]
+
+
+async def _seed_cocktail_plans_once(pkg: dict) -> dict:
+    if pkg.get("cocktail_plans_v1"):
+        return pkg
+    existing = {d.get("id") for d in pkg.get("drink_items") or []}
+    drinks = [p for p in COCKTAIL_PLANS if p["id"] not in existing] + list(pkg.get("drink_items") or [])
+    await _db.site_config.update_one({"_id": "main"}, {"$set": {"cable_beach_pkg.drink_items": drinks,
+                                                                 "cable_beach_pkg.cocktail_plans_v1": True}},
+                                     upsert=True)
+    return {**pkg, "drink_items": drinks, "cocktail_plans_v1": True}
+
+
 async def _cable_beach_cfg() -> dict:
     cfg = await _db.site_config.find_one({"_id": "main"}) or {}
-    pkg = cfg.get("cable_beach_pkg") or {}
+    pkg = await _seed_cocktail_plans_once(cfg.get("cable_beach_pkg") or {})
     merged = {**CABLE_BEACH_DEFAULTS, **pkg}
     # Menus are admin-controlled only — no auto-fallback to the seed list.
     # Empty means empty (deliberate; admin asked for a clean slate).
@@ -415,6 +436,10 @@ async def admin_update_cable_beach_pkg(
                         out["category"] = str(row["category"])[:30]
                     if "include_sides" in row:
                         out["include_sides"] = bool(row["include_sides"])
+                    if row.get("choices"):
+                        out["choices"] = [str(c).strip()[:40] for c in row["choices"] if str(c).strip()][:20]
+                    if row.get("description"):
+                        out["description"] = str(row["description"]).strip()[:200]
                     cleaned.append(out)
                 except Exception:  # noqa: BLE001
                     continue
@@ -513,6 +538,7 @@ class CableBeachQuoteRequest(BaseModel):
     extra_seats: int = Field(0, ge=0, le=50)
     lunch_item_ids: list[str] = Field(default_factory=list)
     drink_item_ids: list[str] = Field(default_factory=list)
+    drink_choices: dict[str, str] = Field(default_factory=dict)
     combo_id: Optional[str] = Field(None, max_length=40)
     side_selections: dict[str, list[str]] = Field(default_factory=dict)
     # Water sports qty by item id, e.g. {"parasailing": 2, "snorkeling": 4}.
@@ -556,7 +582,11 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
             continue
         price = round(float(it.get("price") or 0.0), 2)
         menu_total += price
-        menu_lines.append({"id": mid, "name": it.get("name"), "price": price})
+        name = it.get("name")
+        pick = (req.drink_choices or {}).get(mid)
+        if it.get("choices") and pick in it["choices"]:
+            name = f"{name} ({pick})"
+        menu_lines.append({"id": mid, "name": name, "price": price})
     menu_total = round(menu_total, 2)
 
     # Dinner side-dish totals. Guests get N free sides per dinner; each
@@ -732,6 +762,7 @@ class CableBeachBookRequest(BaseModel):
     extra_seats: int = Field(0, ge=0, le=50)
     lunch_item_ids: list[str] = Field(default_factory=list)
     drink_item_ids: list[str] = Field(default_factory=list)
+    drink_choices: dict[str, str] = Field(default_factory=dict)
     combo_id: Optional[str] = Field(None, max_length=40)
     side_selections: dict[str, list[str]] = Field(default_factory=dict)
     water_sport_qty: dict[str, int] = Field(default_factory=dict)
@@ -781,6 +812,7 @@ async def cable_beach_book(req: CableBeachBookRequest):
         pax=req.pax, transfer_kind=req.transfer_kind, hotel_id=req.hotel_id,
         extra_seats=req.extra_seats,
         lunch_item_ids=req.lunch_item_ids, drink_item_ids=req.drink_item_ids,
+        drink_choices=req.drink_choices,
         combo_id=req.combo_id,
         side_selections=req.side_selections,
         water_sport_qty=req.water_sport_qty,

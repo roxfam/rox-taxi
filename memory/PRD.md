@@ -674,6 +674,13 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Row action "Send confirm" (`admin-row-confirm-{id}`) → `POST /api/admin/bookings/{id}/send-confirmation` → `notify_booking_confirmed` (guest email + SMS, owner text), logged in status_history + `confirmation_last_sent_at`.
 - Verification: CI build, 404 curl, one screenshot (search match + repeat prefill). Testing agent not run (user asked to keep testing light).
 
+## 2026-10-12 — Cocktail plans · Guest history · 10% signup welcome offer
+- Cable Beach cocktails: drink items support `choices` + `description` (kept by admin save). One-time seed (`cable_beach_pkg.cocktail_plans_v1`) adds "Cocktail + 1 free refill" $35 and "Cocktail + 5 refills" $50, choices: Bahama Mama, Pina Colada, Yellow Bird, Sex on the Beach, Miami Vice, 100 Stabs, 1000 Juke. Guest picks cocktail in a select under the tile; `drink_choices` sent with quote/booking → menu line "Cocktail + 1 free refill (Yellow Bird)".
+- Guest history: `GET /api/admin/bookings/{id}/guest-history` (same email or exact phone digits) → other trips + total spent (paid/partially refunded, minus refunds). `GuestHistory.jsx` at top of BookingDetailModal.
+- Welcome offer: new email signups get `users.welcome_discount {pct:10,status:available}`; first booking with that email (or signed-in user) takes 10% off the discountable total (after promo, excl. deposit/tip), consumed atomically → `booking.welcome_discount`. Banner `WelcomeOfferBanner.jsx` (logged-out, dismissible) + badge on /signup.
+- Verification: curl (quote line, guest history, welcome 10% applied once then full price) + screenshots; testing agent not run (user prefers light testing).
+
+
 
 
 

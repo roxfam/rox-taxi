@@ -81,6 +81,9 @@ export default function Signup() {
               <p className="text-sm text-[#64748B] mt-2 max-w-sm mx-auto">
                 Save your trips, track rides live and earn <strong className="text-[#0B3B5C]">$25 credits</strong> for every friend you refer.
               </p>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#E86A3C]/10 border border-[#E86A3C]/30 px-4 py-1.5 text-xs font-bold text-[#C2542A]" data-testid="signup-welcome-offer">
+                <Gift className="w-3.5 h-3.5" /> Sign up today: save 10% on your next ride (one-time offer)
+              </div>
             </div>
 
             <form onSubmit={submit} className="mt-7 space-y-5" data-testid="signup-form">

@@ -2937,6 +2937,26 @@ async def create_booking(req: BookingCreate, request: Request):
             booking["promotion_discount"] = promo_discount
             computed_total = round(computed_total - promo_discount, 2)
 
+    # ── One-time 10% signup welcome discount ────────────────────────────
+    # Granted at /auth/register; consumed atomically on the first booking
+    # made with that account email (or while signed in to it).
+    _welcome_q = {"welcome_discount.status": "available"}
+    _welcome_q.update({"user_id": _customer_user_id} if _customer_user_id else {"email": (req.customer_email or "").lower()})
+    _welcome_user = await db.users.find_one(_welcome_q, {"welcome_discount": 1, "user_id": 1})
+    if _welcome_user:
+        discountable = round(max(0.0, computed_total - deposit_amount - tip_amount), 2)
+        pct = float((_welcome_user.get("welcome_discount") or {}).get("pct") or 10)
+        welcome_amt = round(discountable * pct / 100.0, 2)
+        claimed = await db.users.update_one(
+            {"_id": _welcome_user["_id"], "welcome_discount.status": "available"},
+            {"$set": {"welcome_discount.status": "used", "welcome_discount.used_at": now_iso(),
+                      "welcome_discount.booking_id": booking["id"]}},
+        )
+        if claimed.modified_count and welcome_amt > 0:
+            booking["welcome_discount"] = welcome_amt
+            booking["welcome_discount_pct"] = pct
+            computed_total = round(computed_total - welcome_amt, 2)
+
     # ── Gift-card redemption ────────────────────────────────────────────
     gift_credit = 0.0
     if req.gift_code:

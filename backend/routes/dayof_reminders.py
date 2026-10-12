@@ -4,6 +4,7 @@ from typing import Optional
 import asyncio
 import html as _html
 import logging
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, Request, HTTPException
@@ -442,6 +443,30 @@ class ManualBooking(BaseModel):
     payment: str = Field("unpaid", pattern="^(unpaid|cash|zelle|card_offline)$")
     send_confirmation: bool = True
     send_pay_link: bool = False
+
+
+@router.get("/admin/bookings/{booking_id}/guest-history")
+async def admin_guest_history(booking_id: str, _: str = Depends(_admin_dep)):
+    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0, "customer_email": 1, "customer_phone": 1})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    email = (b.get("customer_email") or "").strip().lower()
+    phone = _digits(b.get("customer_phone"))
+    ors = []
+    if email:
+        ors.append({"customer_email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
+    if len(phone) >= 7:
+        ors.append({"customer_phone": {"$regex": f"{phone[-7:]}$"}})
+    if not ors:
+        return {"trips": [], "count": 0, "total_spent": 0.0}
+    rows = await _db.bookings.find({"$or": ors, "id": {"$ne": booking_id}}, {"_id": 0}).sort("booking_date", -1).to_list(100)
+    rows = [r for r in rows if (email and (r.get("customer_email") or "").lower() == email)
+            or (len(phone) >= 7 and _digits(r.get("customer_phone")) == phone)]
+    spent = sum(float(r.get("total") or r.get("total_price") or 0) - float(r.get("refunded_amount") or 0)
+                for r in rows if r.get("payment_status") in ("paid", "partially_refunded"))
+    trips = [{k: r.get(k) for k in ("id", "item_name", "booking_date", "status", "payment_status")}
+             | {"total": r.get("total") or r.get("total_price") or 0} for r in rows]
+    return {"trips": trips, "count": len(trips), "total_spent": round(spent, 2)}
 
 
 @router.post("/admin/bookings/{booking_id}/send-confirmation")

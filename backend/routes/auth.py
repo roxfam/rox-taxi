@@ -960,6 +960,7 @@ async def customer_register(req: CustomerRegisterRequest, request: Request, resp
             "password_hash": _hash_password(req.password), "provider": "email",
             "referral_code": _new_referral_code(),
             "credit_balance": 0.0,
+            "welcome_discount": {"pct": 10, "status": "available", "granted_at": ts},
             "created_at": ts,
             "signup_ip": _client_ip(request),
         }
