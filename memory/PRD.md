@@ -651,6 +651,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Partial refunds: CancelBookingDialog amount input (prefilled full, "Full" button, "You keep $X as cancellation fee", validation); `refund_amount` → `refund_payment(amount=…)`.
 - Tested: iteration_33 — 10/10 backend + 5/5 UI.
 
+## 2026-10-12 — Stripe webhook events + partial refund status fix
+- `charge.refunded` webhook now sets `partially_refunded` vs `refunded` from Stripe's `charge.refunded` flag (was always `refunded`).
+- Recommended Stripe webhook events: checkout.session.completed, checkout.session.expired, checkout.session.async_payment_failed, payment_intent.succeeded, payment_intent.payment_failed, charge.refunded. Optional (not handled yet): setup_intent.succeeded (card holds are saved via success page), charge.dispute.created.
+
+
 
 
 

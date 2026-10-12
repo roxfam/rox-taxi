@@ -1,0 +1,33 @@
+{
+  "summary": "Verified charge.refunded partial vs full handling in routes.payments._process_stripe_event + regression for checkout.session.completed, checkout.session.expired, payment_intent.succeeded, and POST /api/webhooks/stripe unverifiable->400. All 7 iter34 tests PASS and all 10 iter33 regression tests PASS. Charge.refunded now correctly sets 'partially_refunded' when refunded=False (refund_amount=45.0 for 4500 cents on $60 booking) and 'refunded' when refunded=True (refund_amount=60.0 for 6000 cents).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter34_webhook_charge_refunded.py",
+    "/app/test_reports/pytest/iter34.xml",
+    "/app/test_reports/pytest/iter33_regress.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/payments.py _process_stripe_event charge.refunded branch now correctly distinguishes partial vs full refunds using charge.refunded bool. Looks good.",
+    "payments.py is 1068 lines — consider splitting into stripe/paypal/card_hold submodules for maintainability (not blocking).",
+    "In _process_stripe_event the charge.refunded branch only updates the specific tx matched by stripe_payment_intent; if a booking has multiple txs for the same PI (e.g., partial refund then another partial), only the first-matched tx is updated. Current flow is single-tx-per-PI so OK, but worth noting."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter34_webhook_charge_refunded.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7 iter34 + 10/10 iter33 regression)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "admin roxfam2509@gmail.com / admin123 (used by iter33 regression only)",
+  "seed_data_creation": "Seeded + torn down bookings TESTREF_PART, TESTREF_FULL, TESTCKS_COMP, TESTPIS1 and matching payment_transactions (stripe_payment_intent pi_TEST_partial, pi_TEST_full, pi_TEST_succeeded). stripe_webhook_events test rows cleaned via final test. iter33 TESTPR1/TESTCHK33 cleaned by its own fixtures.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Partial refund handler verified in-process. In test_iter34_webhook_charge_refunded.py the autouse fixture _configure_payments_module wires routes.payments._db/_now_iso/_clean/_notify so _process_stripe_event + _mark_paid can run outside server startup. For future tests calling payments module functions directly, reuse this pattern.",
+  "rca of the issue": "Previous bug: charge.refunded branch unconditionally set payment_status='refunded' regardless of partial vs full refund. Main-agent fix: refund_state = 'refunded' if charge.get('refunded') else 'partially_refunded'; amt_refunded = charge.amount_refunded/100. Verified: amount_refunded=4500, refunded=False -> partially_refunded, 45.0; amount_refunded=6000, refunded=True -> refunded, 60.0."
+}
