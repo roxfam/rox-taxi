@@ -2950,7 +2950,8 @@ async def create_booking(req: BookingCreate, request: Request):
     # ── One-time 10% signup welcome discount ────────────────────────────
     # Granted at /auth/register; consumed atomically on the first booking
     # made with that account email (or while signed in to it).
-    _welcome_q = {"welcome_discount.status": "available"}
+    _welcome_q = {"welcome_discount.status": "available",
+                  "$or": [{"welcome_discount.expires_at": {"$exists": False}}, {"welcome_discount.expires_at": {"$gt": now_iso()}}]}
     _welcome_q.update({"user_id": _customer_user_id} if _customer_user_id else {"email": (req.customer_email or "").lower()})
     _welcome_user = await db.users.find_one(_welcome_q, {"welcome_discount": 1, "user_id": 1})
     if _welcome_user:

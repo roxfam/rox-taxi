@@ -61,7 +61,8 @@ async def send_welcome(user_id: str) -> None:
 
 async def run_reminders() -> int:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=REMINDER_AFTER_DAYS)).isoformat()
-    q = {"welcome_discount.status": "available", "welcome_email_sent_at": {"$lte": cutoff},
+    q = {"welcome_discount.status": "available", "welcome_discount.source": {"$ne": "return_visit"},
+         "welcome_email_sent_at": {"$lte": cutoff},
          "welcome_reminder_sent_at": {"$exists": False}}
     sent = 0
     async for u in _db.users.find(q, {"user_id": 1, "email": 1, "name": 1}).limit(50):

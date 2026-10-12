@@ -734,5 +734,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - `routes/arrival_welcome.py`: in-app loop (every 15 min, started in server.py). From 9 AM Nassau time it texts each customer whose `profile.travel_from` is today and who has `profile.phone`: a welcome message with the 24/7 call/WhatsApp number +1 (242) 432-2587, plus their hotel/ship if given. Sent once per arrival date (`arrival_text_for`, `arrival_text_at`, `arrival_text_ok`). It's a service message, so it doesn't depend on the marketing opt-in.
 - Verified with stubbed SMS: nothing before 9 AM, 1 text at 9 AM for the right guest (none for other dates or no phone), no repeat later that day. Test users deleted.
 
+## 2026-10-12 — Departure thank-you text
+- `arrival_welcome.run_departure_once()` (same 15-min loop): from 10 AM Nassau time on `profile.travel_to`, texts the guest once (`departure_text_for/at/ok`) with a thank-you, the Google review link (site_config.google_review_url → GOOGLE_REVIEW_URL env → default g.page link) and a note that 10% off their next booking is on their account.
+- The discount reuses `users.welcome_discount` = {pct 10, status available, source "return_visit", expires_at +365d}. It's applied automatically at checkout (create_booking welcome query now skips expired discounts). An unused, still-valid discount is kept, not replaced. Welcome-reminder emails skip return_visit grants.
+- Verified with stubbed SMS: nothing before 10 AM, 2 texts at 10 AM, no repeats; discount granted or kept correctly; expired discount not matched. Test users deleted.
+
+
 
 
