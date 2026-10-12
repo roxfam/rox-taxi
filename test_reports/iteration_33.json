@@ -1,0 +1,30 @@
+{
+  "summary": "Iter33 testing: Stripe webhook unverifiable-event path, _fetch_verified_event, reconcile_pending_sessions, partial refund via admin cancel, and UI CancelBookingDialog partial-refund flow. All 10 backend pytests pass + all 5 UI assertions pass on live preview admin.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter33_webhook_reconcile_partialrefund.py",
+    "/app/backend/tests/_iter33_seed.py",
+    "/app/test_reports/pytest/iter33.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CancelBookingDialog.submit passes refund_amount to backend as float; backend BookingCancel pydantic model uses `gt=0, le=100000` validation — matches the UI 0.01..paid bounds. OK.",
+    "routes.payments.reconcile_pending_sessions correctly short-circuits on empty / sk_test_emergent key — safe in preview.",
+    "stripe_webhook_v2: when webhook_secret empty and event id doesn't begin with evt_ or _key() empty, returns None -> 400 Unverifiable event (not 500/503). Verified on live preview endpoint.",
+    "_fetch_verified_event: good — handles malformed JSON via ValueError catch returning None.",
+    "admin_cancel_booking: HTTPException(400) from refund_payment (amount>remaining) is caught and surfaced as {ok:false,error:detail} — booking still gets cancelled. Correct per request.",
+    "Minor: refund_payment always returns ok=True at top level regardless of provider refund outcome; frontend relies on data.refund.refund?.refunded nested check. Consider surfacing provider error as top-level ok=false for clarity (already noted in iter32)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter33_webhook_reconcile_partialrefund.py (new)",
+    "/app/backend/tests/_iter33_seed.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (5/5 assertions)"},
+  "test_credentials": "admin roxfam2509@gmail.com / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Seeded TESTPR1 booking (total=60 paid stripe, cs_TEST_pr1 tx) for UI test. Also unit-test fixture seeds TESTREC_PAID/TESTREC_404 for reconcile, TESTCHK33 for checkout regression. All TEST data cleaned up (pymongo sync teardown).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "UI partial refund dialog contract: cancel-dialog-refund-amount prefilled to refundable amount; typing >amount+0.001 toggles amountBad -> submit shows 'Refund must be between $0.01 and $X.XX' toast and stays open. cancel-dialog-fee only renders when fee > $0.004 (positive). cancel-dialog-refund-full button resets input to refundable amount string. Unchecking cancel-dialog-refund sends refund:false (even on paid booking). Backend _fetch_verified_event only accepts ids starting with evt_ when _key() non-empty — webhook returns 400 in all other code paths (never 500/503). reconcile_pending_sessions skips entirely on sk_test_emergent or empty key.",
+  "rca of the issue": "Original user issue (Stripe takes payment but booking stays unpaid) was caused by missing STRIPE_WEBHOOK_SECRET returning 503 on live site. Fix 1 (unverifiable->fetch via API key) + Fix 2 (reconcile loop every 10 min) + Fix 3 (partial refunds in cancel dialog) all verified working as designed in preview. Live site needs sk_live + optional STRIPE_WEBHOOK_SECRET to be fully protected."
+}

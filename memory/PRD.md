@@ -644,6 +644,14 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Tested: iteration_32 — 7/7 backend + 7/7 UI.
 
 
+## 2026-10-12 — Stripe payments not landing · Partial refunds
+- Live check: `sk_live_` key now set, but `STRIPE_WEBHOOK_SECRET` missing → `/api/webhooks/stripe` returned 503 and bookings stayed unpaid unless the guest reached the success page. Earlier "paid" bookings (A9DED3B5, 7AA8F032) were on the shared test sandbox (cs_test_), so no real funds.
+- Webhook fallback: with no signing secret, the event is verified by fetching `GET /v1/events/{id}` with the secret key (`_fetch_verified_event`); unverifiable → 400.
+- `reconcile_pending_sessions()` loop (every 10 min, started at startup): checks pending `cs_` sessions from last 48h with Stripe; paid → `_mark_paid` (+ stores payment_intent), expired → retry link. Skipped for sandbox/empty key.
+- Partial refunds: CancelBookingDialog amount input (prefilled full, "Full" button, "You keep $X as cancellation fee", validation); `refund_amount` → `refund_payment(amount=…)`.
+- Tested: iteration_33 — 10/10 backend + 5/5 UI.
+
+
 
 
 
