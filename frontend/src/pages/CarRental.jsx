@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
 import Seo from "../components/Seo";
-import { Users, ArrowRight, CalendarX, Info, ArrowUpDown, MapPinned } from "lucide-react";
+import { Users, ArrowRight, CalendarX, Info, ArrowUpDown, MapPinned, ExternalLink } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 
 // Sort options mirror the /tours page so the shopper's mental model carries
@@ -124,6 +124,16 @@ export default function CarRental() {
           <div className="md:col-span-7">
             <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Drive the islands</span>
             <h1 className="serif text-6xl sm:text-7xl mt-3 leading-[0.9] text-[#0B3B5C]">Rent a car in <em className="italic text-[#D4A94A]">Nassau</em>.</h1>
+            <a
+              href="https://easydrivecarrental.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#0B3B5C]/20 bg-white px-4 py-2 text-xs text-[#0B3B5C] hover:border-[#D4A94A] hover:text-[#D4A94A] transition-colors"
+              data-testid="rental-official-site-link"
+            >
+              Prefer to book directly? Visit our official Easy Drive Car Rental site
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
           </div>
           <div className="md:col-span-5 text-[#64748B] leading-relaxed">
             Pay online with credit card, PayPal or Zelle. Unlimited mileage, full insurance available, and free

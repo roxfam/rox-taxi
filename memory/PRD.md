@@ -714,5 +714,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - `GET /api/admin/gift-cards/report` (admin only, 401 without auth): sold all-time and last 30 days, redeemed, outstanding balance, expired unused, list of cards expiring within 30 days with reminder status. Shown on the admin dashboard in `GiftCardReportCard.jsx` above the calendar.
 - Verified: drag TEST booking 13th→14th moved it and showed the toast; report endpoint returns data. CI=true build is clean.
 
+## 2026-10-12 — Car Rentals official site link
+- Optional "Prefer to book directly? Visit our official Easy Drive Car Rental site" link in the /rentals header → https://easydrivecarrental.com (new tab). The user confirmed this spelling; the typed "easydrivecarerental.com" does not resolve.
+
 
 
