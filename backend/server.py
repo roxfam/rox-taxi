@@ -392,6 +392,7 @@ class GiftCardPurchaseRequest(BaseModel):
     message: Optional[str] = Field(None, max_length=400)
     origin_url: str
     scheduled_send_at: Optional[str] = Field(None, max_length=40)  # ISO datetime — defer delivery (birthday / anniversary)
+    theme: str = Field("classic", pattern="^(classic|birthday|honeymoon|thank_you)$")
 
 
 class GiftCardRedeemRequest(BaseModel):
@@ -1871,6 +1872,7 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
         "status": "pending",   # → 'active' after Stripe webhook
         "expires_at": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat(),
         "non_refundable": True,
+        "theme": req.theme,
         "scheduled_send_at": scheduled_at_iso,
         "delivered_at": None,
         "created_at": ts,
@@ -3835,17 +3837,20 @@ async def _send_gift_voucher_email(gc: dict) -> dict:
             f'<div style="font-size:14px;color:#0B3B5C;font-style:italic">{(gc.get("message") or "").replace(chr(10), "<br/>")}</div>'
             f'</div>'
         ) if gc.get("message") else ""
+        th = gift_redeem_module.gift_theme(gc)
+        site = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
+        headline = th["headline"].replace("<em>", f'<em style="font-style:italic;color:{th["accent"]}">')
         html = f"""
         <!doctype html><html><body style="margin:0;background:#FBF7EF;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#0B3B5C">
           <table width="100%" cellspacing="0" cellpadding="0" style="padding:32px 16px"><tr><td align="center">
             <table width="560" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 20px 50px rgba(11,25,44,0.08)">
-              <tr><td style="background:linear-gradient(135deg,#0B3B5C,#128C7E);padding:34px;color:#fff">
-                <div style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;font-weight:900;opacity:0.9">Toes in the Sandy Turquoise of Cable Beach, Nassau</div>
-                <div style="font-family:Georgia,serif;font-size:36px;font-weight:700;margin-top:8px;line-height:1.1">You've been <em style="font-style:italic;color:#F7E6C6">gifted</em> a Rox beach day.</div>
+              <tr><td style="background:linear-gradient(135deg,{th['grad']});padding:34px;color:#fff">
+                <div style="font-size:11px;letter-spacing:0.3em;text-transform:uppercase;font-weight:900;opacity:0.9">{th['kicker']}</div>
+                <div style="font-family:Georgia,serif;font-size:36px;font-weight:700;margin-top:8px;line-height:1.1">{headline}</div>
               </td></tr>
               <tr><td style="padding:28px 32px 8px">
                 <p style="font-size:15px;line-height:1.55;margin:0 0 10px">Hey {recipient_label},</p>
-                <p style="font-size:15px;line-height:1.55;margin:0 0 10px"><b>{buyer_label}</b> just sent you a Cable Beach day on them.</p>
+                <p style="font-size:15px;line-height:1.55;margin:0 0 10px"><b>{buyer_label}</b> just sent you a Rox gift card for your time in The Bahamas.</p>
                 {msg_block}
                 <table cellspacing="0" cellpadding="0" style="margin:18px 0;background:#0B3B5C;border-radius:14px;padding:22px;width:100%;color:#fff">
                   <tr><td align="center">
@@ -3855,7 +3860,7 @@ async def _send_gift_voucher_email(gc: dict) -> dict:
                     <div style="font-family:Menlo,monospace;font-size:22px;letter-spacing:0.2em;color:#fff;font-weight:700;margin-top:4px">{gc.get("code","")}</div>
                   </td></tr>
                 </table>
-                <a href="https://roxtaxi.com/tours/cable-beach-day" style="display:inline-block;background:#D4A94A;color:#0B192C;text-decoration:none;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;font-size:13px;padding:14px 28px;border-radius:999px">Pick your beach day →</a>
+                <a href="{site}{th['cta_path']}" style="display:inline-block;background:#D4A94A;color:#0B192C;text-decoration:none;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;font-size:13px;padding:14px 28px;border-radius:999px">{th['cta']}</a>
                 <p style="font-size:13px;color:#64748B;line-height:1.55;margin:20px 0 0">The branded PDF voucher is attached — screenshot, print, or forward it; the code is all you need. {gift_redeem_module.expiry_label(gc)}. Non-refundable. Redeemable on any Rox taxi, tour, or rental.</p>
               </td></tr>
               <tr><td style="padding:20px 32px 32px;color:#94A3B8;font-size:11px;line-height:1.55">Rox Taxi Service &amp; Tours · Nassau · hello@roxtaxi.com</td></tr>
@@ -3865,7 +3870,7 @@ async def _send_gift_voucher_email(gc: dict) -> dict:
         """
         return send_email(
             to_email=gc.get("recipient_email"),
-            subject=f"🌴 You've been gifted a Rox beach day — ${float(gc.get('amount') or 0):.0f} on {buyer_label}",
+            subject=f"{th['subject']} — ${float(gc.get('amount') or 0):.0f} from {buyer_label}",
             html=html,
             text=f"You've been gifted ${float(gc.get('amount') or 0):.0f} on Rox from {buyer_label}. Code: {gc.get('code','')}",
             category="confirmation",

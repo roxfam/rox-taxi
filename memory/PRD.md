@@ -719,3 +719,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 
 
+
+## 2026-10-12 — Gift card themes · gift copy
+- Buyers pick a card design on /gift-cards (Beach day = classic, Birthday, Honeymoon, Thank you). The live preview card changes colour and message. Saved as `gift_cards.theme` (`GiftCardPurchaseRequest.theme`, default classic).
+- `gift_redeem.GIFT_THEMES` / `gift_theme()` drive the voucher email (header gradient, kicker, headline, subject, CTA link based on PUBLIC_SITE_URL) and the PDF voucher title. Older cards with no theme use the classic design.
+- Gift copy on the home promo + /gift-cards: "Treat someone special to a little piece of paradise."
+- Verified: PDF builds for every theme, birthday email HTML/subject rendered (send_email stubbed), picker works in the browser, CI=true build is clean.
+

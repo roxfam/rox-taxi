@@ -404,8 +404,10 @@ def build_gift_voucher_pdf(gc: dict) -> bytes:
     if logo:
         story.append(logo)
         story.append(Spacer(1, 6))
-    story.append(Paragraph("TOES IN THE TURQUOISE · CABLE BEACH, NASSAU", kicker))
-    story.append(Paragraph("You've been <i>gifted</i><br/>a Rox beach day.", title))
+    from routes.gift_redeem import gift_theme as _gift_theme
+    _th = _gift_theme(gc)
+    story.append(Paragraph(_th["kicker"].upper(), kicker))
+    story.append(Paragraph(_th["pdf_title"], title))
     story.append(Paragraph(f"For {gc.get('recipient_name') or 'you'} · from {gc.get('buyer_name','a friend')}", sub))
     story.append(Spacer(1, 10))
 

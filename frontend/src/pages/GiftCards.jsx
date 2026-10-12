@@ -6,8 +6,16 @@ import { toast } from "sonner";
 
 const AMOUNT_OPTIONS = [50, 100, 150, 250, 500];
 
+const THEMES = [
+  { id: "classic", label: "Beach day", grad: "from-[#0B3B5C] via-[#123f66] to-[#128C7E]", line: "You've been gifted a Rox beach day" },
+  { id: "birthday", label: "Birthday", grad: "from-[#E86A3C] via-[#e98a4a] to-[#D4A94A]", line: "Happy birthday! Your island treat" },
+  { id: "honeymoon", label: "Honeymoon", grad: "from-[#7A2E4D] via-[#a24d6a] to-[#E8A0A8]", line: "For your honeymoon in paradise" },
+  { id: "thank_you", label: "Thank you", grad: "from-[#0B3B5C] via-[#24557a] to-[#3C6E91]", line: "Thank you, enjoy some island magic" },
+];
+
 export default function GiftCards() {
   const [amount, setAmount] = useState(100);
+  const [theme, setTheme] = useState("classic");
   const [custom, setCustom] = useState("");
   const [form, setForm] = useState({ buyer_name: "", buyer_email: "", recipient_email: "", recipient_name: "", message: "" });
   const [busy, setBusy] = useState(false);
@@ -16,6 +24,7 @@ export default function GiftCards() {
   const cancelled = params.get("cancelled");
 
   const finalAmount = custom ? Number(custom) : amount;
+  const activeTheme = THEMES.find((t) => t.id === theme) || THEMES[0];
 
   const submit = async (e) => {
     e.preventDefault();
@@ -24,7 +33,7 @@ export default function GiftCards() {
     setBusy(true);
     try {
       const { data } = await api.post("/gift-cards/purchase", {
-        amount: finalAmount, ...form, origin_url: window.location.origin,
+        amount: finalAmount, ...form, theme, origin_url: window.location.origin,
       });
       window.location.href = data.checkout_url;
     } catch (ex) {
@@ -74,6 +83,19 @@ export default function GiftCards() {
               </div>
             </div>
 
+            <div>
+              <div className="text-[10px] tracking-[0.28em] uppercase font-black text-[#64748B] mb-3">Card design</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" data-testid="gift-theme-picker">
+                {THEMES.map((t) => (
+                  <button key={t.id} type="button" onClick={() => setTheme(t.id)} data-testid={`gift-theme-${t.id}`}
+                    className={`rounded-xl p-1 transition-transform hover:-translate-y-0.5 ${theme === t.id ? "ring-2 ring-[#D4A94A]" : "ring-1 ring-[#EFE7D5]"}`}>
+                    <div className={`h-12 rounded-lg bg-gradient-to-br ${t.grad}`} />
+                    <div className="text-xs font-semibold text-[#0B3B5C] py-1.5">{t.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <label className="block">
               <span className="text-[10px] tracking-[0.28em] uppercase text-[#64748B] font-black mb-1.5 block">Your name *</span>
               <input required value={form.buyer_name} onChange={(e) => setForm({ ...form, buyer_name: e.target.value })} data-testid="gift-buyer-name" className="w-full rounded-xl border border-[#EFE7D5] bg-white px-3.5 py-2.5 text-sm focus:border-[#D4A94A] focus:outline-none" />
@@ -97,8 +119,11 @@ export default function GiftCards() {
           </div>
 
           <aside className="rounded-3xl bg-white/90 backdrop-blur-md border border-white/80 shadow-[0_25px_60px_rgba(11,25,44,0.14)] p-6 lg:sticky lg:top-24">
-            <div className="w-full aspect-[16/10] rounded-2xl bg-gradient-to-br from-[#0B3B5C] via-[#123f66] to-[#D4A94A] p-6 text-white flex flex-col justify-between shadow-[0_20px_50px_rgba(11,25,44,0.35)]">
-              <div className="flex items-center gap-2 text-[10px] tracking-[0.3em] uppercase font-black opacity-80"><Gift className="w-3.5 h-3.5" /> Rox gift card</div>
+            <div className={`w-full aspect-[16/10] rounded-2xl bg-gradient-to-br ${activeTheme.grad} p-6 text-white flex flex-col justify-between shadow-[0_20px_50px_rgba(11,25,44,0.35)] transition-colors`} data-testid="gift-preview-card">
+              <div>
+                <div className="flex items-center gap-2 text-[10px] tracking-[0.3em] uppercase font-black opacity-80"><Gift className="w-3.5 h-3.5" /> Rox gift card</div>
+                <div className="serif italic text-lg mt-2 leading-tight" data-testid="gift-preview-theme-line">{activeTheme.line}</div>
+              </div>
               <div>
                 <div className="mono text-4xl font-black tracking-tight" data-testid="gift-preview-amount">{money(finalAmount || 0)}</div>
                 <div className="text-[10px] tracking-widest uppercase opacity-70 mt-1">Redeemable at checkout</div>

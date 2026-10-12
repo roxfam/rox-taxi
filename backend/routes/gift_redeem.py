@@ -101,6 +101,25 @@ async def settle_if_zero(booking_id: str) -> bool:
 
 EXPIRY_REMINDER_DAYS = 30
 
+GIFT_THEMES = {
+    "classic": {"kicker": "Toes in the Sandy Turquoise of Cable Beach, Nassau", "headline": "You've been <em>gifted</em> a Rox beach day.",
+                "subject": "🌴 You've been gifted a Rox beach day", "grad": "#0B3B5C,#128C7E", "accent": "#F7E6C6",
+                "cta": "Pick your beach day →", "cta_path": "/tours/cable-beach-day", "pdf_title": "You've been <i>gifted</i><br/>a Rox beach day."},
+    "birthday": {"kicker": "Happy Birthday from The Bahamas", "headline": "Happy <em>birthday</em>! Your island treat is here.",
+                 "subject": "🎂 Happy birthday! A Rox gift card for you", "grad": "#E86A3C,#D4A94A", "accent": "#FFF1C9",
+                 "cta": "Plan your birthday treat →", "cta_path": "/tours", "pdf_title": "Happy <i>birthday</i>!<br/>Your island treat."},
+    "honeymoon": {"kicker": "Congratulations to the newlyweds", "headline": "For your <em>honeymoon</em> in paradise.",
+                  "subject": "💍 A honeymoon gift for your Bahamas trip", "grad": "#7A2E4D,#E8A0A8", "accent": "#FFE3E8",
+                  "cta": "Plan your romantic day →", "cta_path": "/tours", "pdf_title": "For your <i>honeymoon</i><br/>in paradise."},
+    "thank_you": {"kicker": "With gratitude", "headline": "<em>Thank you</em>, enjoy a little island magic.",
+                  "subject": "🙏 A thank-you gift: Rox gift card inside", "grad": "#0B3B5C,#3C6E91", "accent": "#D4E8F7",
+                  "cta": "Choose your ride or tour →", "cta_path": "/tours", "pdf_title": "<i>Thank you</i>.<br/>Enjoy some island magic."},
+}
+
+
+def gift_theme(gc: dict) -> dict:
+    return GIFT_THEMES.get(gc.get("theme") or "classic", GIFT_THEMES["classic"])
+
 
 def _expiry_email(gc: dict) -> tuple:
     from routes.payment_digest import _site_url  # noqa: PLC0415
