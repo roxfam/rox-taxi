@@ -18,8 +18,8 @@ export default function GiftCardPromo() {
         </div>
         <div className="flex-1 relative">
           <div className="text-xs tracking-[0.3em] uppercase text-[#D4A94A]">Gift cards available</div>
-          <h2 className="serif text-3xl sm:text-4xl mt-2 leading-tight">Give a Bahamas ride, tour or beach day.</h2>
-          <p className="mt-3 text-white/70 text-sm max-w-xl">Delivered instantly by email. Good on every taxi, tour, car rental, Cable Beach day and group booking. Valid for 12 months from purchase.</p>
+          <h2 className="serif text-3xl sm:text-4xl mt-2 leading-tight">Treat someone special to a little piece of paradise.</h2>
+          <p className="mt-3 text-white/70 text-sm max-w-xl">Surprise a friend, partner or loved one visiting The Bahamas with a gift they'll never forget: a smooth island ride, an unforgettable tour, or a sun-soaked day on the beach with us. Sent instantly by email and valid for 12 months.</p>
         </div>
         <Link to="/gift-cards" className="relative btn-shine inline-flex items-center gap-2 rounded-full bg-[#E86A3C] px-7 py-4 text-sm font-semibold hover:bg-[#d55a30] transition-colors shrink-0" data-testid="home-gift-card-cta">
           Buy a gift card <ArrowRight className="w-4 h-4" />
