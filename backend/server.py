@@ -47,6 +47,7 @@ from routes import payment_digest as payment_digest_module
 from routes import dayof_reminders as dayof_module
 from routes import welcome_email as welcome_email_module
 from routes import arrival_welcome as arrival_module
+from routes import quotes as quotes_module
 import secrets_store
 
 ROOT_DIR = Path(__file__).parent
@@ -149,6 +150,7 @@ def annotate_promo(doc: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------- Models ----------------
 
 class BookingCreate(BaseModel):
+    quote_only: bool = False
     service_type: str
     item_id: str
     item_name: str
@@ -720,9 +722,14 @@ async def _apply_referral_conversion_if_paid(booking_id: str) -> Optional[dict]:
                 logging.getLogger(__name__).warning("share credit (no-referrer): %s", e)
         return None
     # First paid booking only.
+    # Only real card/PayPal charges count — $0 or gift-card-only bookings never convert.
+    if float(booking.get("total") or 0) <= 0 or booking.get("payment_method") == "gift_card":
+        return None
     prior_paid = await db.bookings.count_documents({
         "customer_email": email,
         "payment_status": "paid",
+        "total": {"$gt": 0},
+        "payment_method": {"$ne": "gift_card"},
         "id": {"$ne": booking_id},
     })
     if prior_paid > 0:
@@ -2948,6 +2955,9 @@ async def create_booking(req: BookingCreate, request: Request):
             computed_total = round(computed_total - promo_discount, 2)
 
     # ── One-time 10% signup welcome discount ────────────────────────────
+    if req.quote_only:
+        booking["total"] = round(computed_total, 2)
+        return {"quote_only": True, "booking": clean(dict(booking))}
     # Granted at /auth/register; consumed atomically on the first booking
     # made with that account email (or while signed in to it).
     _welcome_q = {"welcome_discount.status": "available",
@@ -6597,6 +6607,8 @@ payments_module.configure(
 api_router.include_router(payments_module.router)
 gift_redeem_module.configure(db=db, now_iso=now_iso, mark_paid=payments_module._mark_paid, require_admin=require_admin)
 api_router.include_router(gift_redeem_module.router)
+quotes_module.configure(db=db, now_iso=now_iso, create_booking=create_booking, booking_model=BookingCreate, require_admin=require_admin)
+api_router.include_router(quotes_module.router)
 
 # Wire up the gallery router — has specific /admin/gallery/* routes that must
 # also beat routes/admin.py's catch-all /admin/{kind} pattern.

@@ -5,6 +5,7 @@ import { api, money, BACKEND_URL, isAdminAuthed, adminLogout, clearAdminAuth } f
 import ResendPayLinkButton from "./admin/ResendPayLinkButton";
 import BookingRowActions from "./admin/BookingRowActions";
 import BookingCalendar from "./admin/BookingCalendar";
+import QuotesPanel from "./admin/QuotesPanel";
 import GiftCardReportCard from "./admin/GiftCardReportCard";
 import RecentlyDeletedPanel from "./admin/RecentlyDeletedPanel";
 import NewBookingDialog from "./admin/NewBookingDialog";
@@ -398,6 +399,7 @@ export default function AdminDashboard() {
         <PickupAuditCard />
 
         <GiftCardReportCard />
+        <QuotesPanel />
 
         <BookingCalendar bookings={bookings} onOpen={setDetailBooking} onMoved={load} />
 

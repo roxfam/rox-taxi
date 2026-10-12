@@ -28,6 +28,9 @@ Disallow: /payment/cancel
 Disallow: /track
 Disallow: /driver/
 Disallow: /pay/
+Disallow: /quote/
+Allow: /quote
+Allow: /gift-cards
 Disallow: /api/admin
 Disallow: /login
 Disallow: /signup

@@ -1,3 +1,5 @@
+import Seo from "../components/Seo";
+
 import { motion } from "framer-motion";
 import { Award, MapPin, ShieldCheck, Heart, Star, Clock, Sparkles, PhoneCall, RefreshCw, Baby, Wifi, DollarSign, Quote } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -34,6 +36,12 @@ const STORIES = [
 export default function About() {
   return (
     <div data-testid="about-page" className="bg-[#FBF7EF]">
+      <Seo
+        title="About Rox Taxi Service & Tours | Local Nassau, Bahamas Drivers"
+        description="Meet Rox Taxi Service & Tours, your trusted ride and adventure partner across Nassau, Paradise Island and the Out Islands of The Bahamas. Licensed local drivers, airport transfers, island tours and car rentals."
+        canonical="https://roxtaxi.com/about"
+        keywords="about Rox Taxi, Nassau taxi company, Bahamas local drivers, Paradise Island taxi, Nassau tour operator"
+      />
       {/* HERO */}
       <section className="relative overflow-hidden bg-[#0B3B5C] text-white py-28">
         <div className="absolute inset-0 opacity-30 bg-cover bg-center" style={{ backgroundImage: "url(https://images.pexels.com/photos/2422915/pexels-photo-2422915.jpeg?auto=compress&cs=tinysrgb&w=1920)" }} />

@@ -8,6 +8,7 @@ import { DateTimePicker } from "../components/DateTimePicker";
 import { PaymentBrandRow } from "../components/PaymentBrands";
 import { GiftCodeBox } from "../components/GiftCodeBox";
 import { DiscountBadge, activeDiscount } from "../components/DiscountBadge";
+import { isQuoteMode } from "../components/QuoteModeBanner";
 import { useAuth } from "../lib/auth";
 import { trackLead, trackPurchase, trackInitiateCheckout } from "../lib/fbpixel";
 
@@ -144,6 +145,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const PROCESSING_FEE_PCT = 0.05;
   const [payMethod, setPayMethod] = useState("stripe");
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
+  const quoteMode = isQuoteMode();
   const [loading, setLoading] = useState(false);
   const [booking, setBooking] = useState(null);
   const [gift, setGift] = useState(null);
@@ -474,6 +476,13 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         referred_by_name: referral?.from || undefined,
         referral_discount: referralDiscount > 0 ? Number(referralDiscount.toFixed(2)) : 0,
       };
+      if (quoteMode) {
+        const { data: q } = await api.post("/quotes", { payload });
+        toast.success(`Quote ${q.id} is ready — we've emailed you a copy.`);
+        onClose?.();
+        nav(`/quote/${q.id}`);
+        return;
+      }
       let { data: b } = await api.post("/bookings", payload);
       if (gift?.code) {
         const { data: g } = await api.post(`/bookings/${b.id}/apply-gift`, { code: gift.code });
@@ -1178,6 +1187,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 </div>
                 <button
                   onClick={() => {
+                    if (quoteMode) { submit(); return; }
                     setStep(2);
                     // Checkout abandonment capture — fire-and-forget POST to
                     // the backend so the nudge cron has a quote to resurrect
@@ -1200,7 +1210,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   className="btn-shine rounded-full bg-[#0B3B5C] text-white px-6 py-3 text-sm font-semibold hover:bg-[#132a4a] active:scale-95"
                   data-testid="booking-continue-payment-btn"
                 >
-                  Continue to Payment
+                  {quoteMode ? (loading ? "Preparing quote…" : "Get my quote") : "Continue to Payment"}
                 </button>
               </div>
             </>

@@ -1,3 +1,5 @@
+import Seo from "../components/Seo";
+
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, money } from "../lib/api";
@@ -55,6 +57,12 @@ export default function GiftCards() {
 
   return (
     <div className="relative min-h-[calc(100vh-5rem)]" data-testid="gift-cards-page">
+      <Seo
+        title="Bahamas Gift Cards | Nassau Taxi, Tours & Beach Day Gifts — Rox"
+        description="Give a Bahamas gift card for taxis, tours, car rentals and Cable Beach days in Nassau. 10 card designs, email or text delivery on your chosen date, valid 12 months."
+        canonical="https://roxtaxi.com/gift-cards"
+        keywords="Bahamas gift card, Nassau gift card, Bahamas honeymoon gift, Cable Beach gift, Nassau tour gift voucher, Bahamas birthday gift"
+      />
       <div className="absolute inset-0 -z-10" style={{ background: "radial-gradient(ellipse at 30% 10%, rgba(212,169,74,0.18), transparent 55%), linear-gradient(180deg, #FBF7EF 0%, #F1E8D3 100%)" }} />
       <div className="max-w-4xl mx-auto px-6 lg:px-10 py-16 lg:py-24">
         <div className="flex items-center gap-2 mb-3">

@@ -1,3 +1,5 @@
+import Seo from "../components/Seo";
+
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { toast } from "sonner";
@@ -24,6 +26,12 @@ export default function Contact() {
 
   return (
     <div data-testid="contact-page" className="max-w-6xl mx-auto px-6 lg:px-10 py-24">
+      <Seo
+        title="Contact Rox Taxi Nassau | Call or WhatsApp 24/7 Bahamas Taxi"
+        description="Contact Rox Taxi Service & Tours in Nassau, Bahamas. Call or WhatsApp +1 (242) 432-2587 for airport transfers, cruise-port pickups, Paradise Island tours, car rentals and group bookings."
+        canonical="https://roxtaxi.com/contact"
+        keywords="contact Nassau taxi, Bahamas taxi phone number, WhatsApp taxi Nassau, Nassau airport taxi booking, Rox Taxi contact"
+      />
       <span className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Get in touch</span>
       <h1 className="serif text-6xl sm:text-7xl text-[#0B3B5C] mt-3 leading-[0.9]">
         Say <em className="italic text-[#D4A94A]">hello</em>.

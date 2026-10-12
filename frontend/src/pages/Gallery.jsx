@@ -1,3 +1,5 @@
+import Seo from "../components/Seo";
+
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
@@ -70,6 +72,12 @@ export default function Gallery() {
 
   return (
     <div className="min-h-[80vh] bg-[#F7F5EF]" data-testid="gallery-page">
+      <Seo
+        title="Nassau & Paradise Island Photo Gallery | Rox Taxi & Tours Bahamas"
+        description="See real photos from Rox Taxi & Tours guests: Cable Beach days, Paradise Island tours, Blue Lagoon trips and island rides around Nassau, The Bahamas."
+        canonical="https://roxtaxi.com/gallery"
+        keywords="Nassau photos, Paradise Island tour photos, Cable Beach pictures, Bahamas excursion gallery, Rox Taxi gallery"
+      />
       {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-br from-[#0B3B5C] via-[#0B192C] to-[#0B192C] text-white py-20 lg:py-28">
         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_20%_20%,rgba(212,169,74,0.4),transparent_50%),radial-gradient(circle_at_80%_60%,rgba(232,106,60,0.35),transparent_45%)]" />

@@ -139,8 +139,20 @@
     </url>
     <url>
         <loc>https://roxtaxi.com/gift-cards</loc>
-        <lastmod>2026-02-15</lastmod>
+        <lastmod>2026-10-12</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.6</priority>
+    </url>
+    <url>
+        <loc>https://roxtaxi.com/quote</loc>
+        <lastmod>2026-10-12</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    <url>
+        <loc>https://roxtaxi.com/tours/cable-beach-day</loc>
+        <lastmod>2026-10-12</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
     </url>
 </urlset>

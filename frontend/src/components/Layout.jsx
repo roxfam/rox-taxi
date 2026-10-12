@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import WelcomeOfferBanner from "./WelcomeOfferBanner";
 import CompleteProfileModal from "./CompleteProfileModal";
+import QuoteModeBanner from "./QuoteModeBanner";
 import { Menu, X, Facebook, Phone, MapPin, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart, ChevronDown, User as UserIcon, Images, Users, History, Gift } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
@@ -655,6 +656,7 @@ export default function Layout({ children }) {
       </AnimatePresence>
 
       <WelcomeOfferBanner />
+      <QuoteModeBanner />
       <CompleteProfileModal />
       <main className="flex-1">{children}</main>
       <ReferralCatcher />
@@ -683,6 +685,9 @@ export default function Layout({ children }) {
               <p className="serif italic text-white/55 mt-6 text-base leading-relaxed max-w-md">
                 Your trusted ride and adventure partner across Nassau, Paradise Island, and the Out Islands of The Bahamas.
               </p>
+              <Link to="/quote" data-testid="footer-quote-btn" className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#D4A94A] text-[#0B192C] px-6 py-3 text-sm font-bold hover:bg-[#e0b856] hover:-translate-y-0.5 transition-transform">
+                Get a quote <span className="text-xs font-medium opacity-70">· free, valid 48 hours</span>
+              </Link>
             </div>
             <div className="flex flex-wrap gap-2.5" data-testid="footer-socials">
               <a href={config.facebook_url || "https://www.facebook.com/roxtaxiservice/"} target="_blank" rel="noreferrer" title="Facebook" data-testid="footer-facebook-link" className="group relative w-12 h-12 rounded-full bg-white/[0.06] border border-white/10 hover:border-[#1877F2]/60 hover:bg-[#1877F2] hover:scale-110 flex items-center justify-center transition-all duration-300 hover:shadow-[0_15px_30px_rgba(24,119,242,0.5)]">

@@ -1,3 +1,5 @@
+import Seo from "../components/Seo";
+
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Heart, Users, Briefcase, Ship, GlassWater, Sparkles, Check, ArrowRight, Ticket } from "lucide-react";
@@ -92,6 +94,12 @@ export default function Groups() {
 
   return (
     <div data-testid="groups-page" className="bg-[#FBF7EF]">
+      <Seo
+        title="Group & Wedding Transportation Nassau Bahamas | Rox Taxi & Tours"
+        description="Group, wedding and event transportation in Nassau, Bahamas. Airport shuttles, wedding guest transfers, group tours and Cable Beach days for families, cruise groups and destination weddings."
+        canonical="https://roxtaxi.com/groups"
+        keywords="Nassau group transportation, Bahamas wedding transportation, destination wedding Nassau, group tours Bahamas, cruise group excursions Nassau, Nassau shuttle service"
+      />
       {/* HERO */}
       <section className="relative overflow-hidden bg-[#0B3B5C] text-white py-28">
         <div className="absolute inset-0 opacity-30 bg-cover bg-center" style={{ backgroundImage: "url(https://images.pexels.com/photos/2549018/pexels-photo-2549018.jpeg?auto=compress&cs=tinysrgb&w=1920)" }} />

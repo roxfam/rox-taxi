@@ -50,6 +50,8 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const PrintReceipt = lazy(() => import("./pages/PrintReceipt"));
 const GiftCards = lazy(() => import("./pages/GiftCards"));
+const QuoteStart = lazy(() => import("./pages/QuoteStart"));
+const QuoteView = lazy(() => import("./pages/QuoteView"));
 const UploadLicense = lazy(() => import("./pages/UploadLicense"));
 const TravelToNassau = lazy(() => import("./pages/TravelToNassau"));
 const CruiseGroupsNassau = lazy(() => import("./pages/CruiseGroupsNassau"));
@@ -124,6 +126,8 @@ function AppRouter() {
       <Route path="/nassau-with-reagan" element={<CustomerShell><NassauWithReagan /></CustomerShell>} />
       <Route path="/refer" element={<CustomerShell><ReferFriend /></CustomerShell>} />
       <Route path="/gift-cards" element={<CustomerShell><GiftCards /></CustomerShell>} />
+      <Route path="/quote" element={<CustomerShell><QuoteStart /></CustomerShell>} />
+      <Route path="/quote/:id" element={<CustomerShell><QuoteView /></CustomerShell>} />
       <Route path="/gift-cards/success" element={<CustomerShell><GiftCards /></CustomerShell>} />
       <Route path="/tip-topup" element={<CustomerShell><TipTopUp /></CustomerShell>} />
       <Route path="/tip" element={<CustomerShell><TipLookup /></CustomerShell>} />

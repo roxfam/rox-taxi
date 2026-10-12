@@ -440,3 +440,53 @@ def build_gift_voucher_pdf(gc: dict) -> bytes:
     ))
     doc_pdf.build(story)
     return buf.getvalue()
+
+
+
+def build_quote_pdf(q: dict) -> bytes:
+    """Professional, printable price quote (no booking). `q` = public quote dict."""
+    buf = BytesIO()
+    doc_pdf = SimpleDocTemplate(buf, pagesize=letter, leftMargin=0.7 * inch, rightMargin=0.7 * inch, topMargin=0.6 * inch, bottomMargin=0.6 * inch)
+    styles = getSampleStyleSheet()
+    h = ParagraphStyle("qh", parent=styles["Title"], fontName="Times-Bold", fontSize=26, textColor=NAVY, alignment=0, spaceAfter=2)
+    k = ParagraphStyle("qk", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8, textColor=GOLD, spaceAfter=2)
+    n = ParagraphStyle("qn", parent=styles["Normal"], fontName="Helvetica", fontSize=10, textColor=INK, leading=14)
+    s = ParagraphStyle("qs", parent=styles["Normal"], fontName="Helvetica", fontSize=8, textColor=GREY, leading=11)
+    story = []
+    logo = _load_logo()
+    head_left = [Paragraph("PRICE QUOTE", k), Paragraph(f"Quote {q['id']}", h),
+                 Paragraph(f"Issued {str(q.get('created_at', ''))[:10]} · Valid until <b>{q.get('expires_label', '')}</b>", s)]
+    head = Table([[head_left, logo or ""]], colWidths=[4.9 * inch, 2.2 * inch])
+    head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "RIGHT")]))
+    story += [head, Spacer(1, 14)]
+    info = [["Prepared for", q.get("customer_name") or ""], ["Email / phone", f"{q.get('customer_email') or ''}  {q.get('customer_phone') or ''}"],
+            ["Service", q.get("item_name") or ""], ["Date & time", str(q.get("booking_date") or "").replace("T", " ")]]
+    if q.get("pickup_location"):
+        info.append(["Pickup", q["pickup_location"]])
+    if q.get("dropoff_location"):
+        info.append(["Drop-off", q["dropoff_location"]])
+    if q.get("service_type") == "rental" and q.get("days"):
+        info.append(["Rental days", str(q["days"])])
+    elif q.get("passengers"):
+        info.append(["Guests", str(q["passengers"])])
+    t = Table(info, colWidths=[1.6 * inch, 5.5 * inch])
+    t.setStyle(TableStyle([("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9), ("FONT", (1, 0), (1, -1), "Helvetica", 10),
+                           ("TEXTCOLOR", (0, 0), (0, -1), GREY), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                           ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#E2E8F0"))]))
+    story += [t, Spacer(1, 16)]
+    rows = [["Description", "Amount"]] + [[ln["label"], f"${ln['amount']:,.2f}"] for ln in q.get("lines", [])]
+    rows.append(["Quote total (USD)", f"${float(q.get('total') or 0):,.2f}"])
+    pt = Table(rows, colWidths=[5.3 * inch, 1.8 * inch])
+    pt.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), NAVY), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                            ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 9), ("FONT", (0, 1), (-1, -2), "Helvetica", 10),
+                            ("ALIGN", (1, 0), (1, -1), "RIGHT"), ("BACKGROUND", (0, -1), (-1, -1), SAND),
+                            ("FONT", (0, -1), (-1, -1), "Helvetica-Bold", 12), ("TEXTCOLOR", (1, -1), (1, -1), CORAL),
+                            ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                            ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.HexColor("#E2E8F0"))]))
+    story += [pt, Spacer(1, 18)]
+    story.append(Paragraph(f"<b>This is a quote, not a booking.</b> Nothing has been reserved or charged. Prices are held for 48 hours, "
+                           f"until {q.get('expires_label', '')}. To book at this price, open your quote online and press <b>Book this quote</b>, "
+                           f"or reply to the quote email. Discounts and gift cards on your account are applied at checkout.", n))
+    story += [Spacer(1, 22), Paragraph("Rox Taxi Service &amp; Tours · Nassau &amp; Paradise Island, The Bahamas · Call / WhatsApp +1 (242) 432-2587", s)]
+    doc_pdf.build(story)
+    return buf.getvalue()
