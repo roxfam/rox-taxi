@@ -46,6 +46,7 @@ from routes import team_sms as team_sms_module
 from routes import payment_digest as payment_digest_module
 from routes import dayof_reminders as dayof_module
 from routes import welcome_email as welcome_email_module
+from routes import arrival_welcome as arrival_module
 import secrets_store
 
 ROOT_DIR = Path(__file__).parent
@@ -1635,6 +1636,7 @@ async def seed_db():
     asyncio.create_task(welcome_email_module.reminder_loop())
     asyncio.create_task(gift_redeem_module.expiry_reminder_loop())
     asyncio.create_task(_scheduled_gift_loop())
+    asyncio.create_task(arrival_module.arrival_loop())
     asyncio.create_task(cron_module.google_reviews_loop())
     asyncio.create_task(payments_module.reconcile_loop())
     # ── Owner-SMS routing cache — refreshed every 60s from site_config ──
@@ -6635,6 +6637,7 @@ admin_module.configure(
 )
 dayof_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
 welcome_email_module.configure(db=db)
+arrival_module.configure(db=db)
 api_router.include_router(dayof_module.router)
 api_router.include_router(admin_module.router)
 
