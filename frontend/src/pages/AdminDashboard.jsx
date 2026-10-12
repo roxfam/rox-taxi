@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, money, BACKEND_URL, isAdminAuthed, adminLogout, clearAdminAuth } from "../lib/api";
 import ResendPayLinkButton from "./admin/ResendPayLinkButton";
 import BookingRowActions from "./admin/BookingRowActions";
+import BookingCalendar from "./admin/BookingCalendar";
 import RecentlyDeletedPanel from "./admin/RecentlyDeletedPanel";
 import NewBookingDialog from "./admin/NewBookingDialog";
 import { LogOut, RefreshCw, DollarSign, ClipboardList, PlayCircle, Timer, ShieldCheck, ShieldAlert, ShieldOff, Lock, Info, X, Mail, MessageSquare, RotateCw, Zap, Download, Activity, Images, Bell, BellOff, Route, Users, Chrome, Camera, TrendingUp, Car, FileText } from "lucide-react";
@@ -394,6 +395,8 @@ export default function AdminDashboard() {
             booked pickup anchor and red-flags check-ins that landed
             >500m away from where the trip was supposed to start. */}
         <PickupAuditCard />
+
+        <BookingCalendar bookings={bookings} onOpen={setDetailBooking} />
 
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">

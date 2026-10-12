@@ -26,6 +26,7 @@ import paypal_client
 from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS, HOME_SLIDES_SEED
 from pdf_utils import build_wedding_pdf, build_receipt_pdf
 from routes import payments as payments_module
+from routes import gift_redeem as gift_redeem_module
 from routes import admin as admin_module
 from routes import catalog as catalog_module
 from routes import chat as chat_module
@@ -44,6 +45,7 @@ from routes import cable_beach as cable_beach_module
 from routes import team_sms as team_sms_module
 from routes import payment_digest as payment_digest_module
 from routes import dayof_reminders as dayof_module
+from routes import welcome_email as welcome_email_module
 import secrets_store
 
 ROOT_DIR = Path(__file__).parent
@@ -1628,6 +1630,7 @@ async def seed_db():
         logging.warning("dispatcher digest loop start warn: %s", e)
     asyncio.create_task(payment_digest_module.digest_loop())
     asyncio.create_task(dayof_module.dayof_loop())
+    asyncio.create_task(welcome_email_module.reminder_loop())
     asyncio.create_task(cron_module.google_reviews_loop())
     asyncio.create_task(payments_module.reconcile_loop())
     # ── Owner-SMS routing cache — refreshed every 60s from site_config ──
@@ -1865,6 +1868,8 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
         "recipient_email": req.recipient_email.lower(),
         "message": req.message or "",
         "status": "pending",   # → 'active' after Stripe webhook
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat(),
+        "non_refundable": True,
         "scheduled_send_at": scheduled_at_iso,
         "delivered_at": None,
         "created_at": ts,
@@ -1895,20 +1900,17 @@ async def gift_card_balance(code: str):
         "balance": doc.get("balance"),
         "status": doc.get("status"),
         "recipient_name": doc.get("recipient_name") or None,
+        "expires_at": doc.get("expires_at"),
+        "expired": gift_redeem_module.is_expired(doc),
     }
 
 
 @api_router.post("/gift-cards/redeem-check")
 async def gift_card_redeem_check(req: GiftCardRedeemRequest):
     """Validate a code + return current balance. Actual deduction happens at booking-create time."""
-    doc = await db.gift_cards.find_one({"code": req.code.upper().strip()})
-    if not doc:
-        raise HTTPException(404, "Gift card not found")
-    if doc.get("status") != "active":
-        raise HTTPException(400, f"Gift card is not active (status: {doc.get('status')})")
-    if float(doc.get("balance", 0)) <= 0:
-        raise HTTPException(400, "Gift card has no remaining balance")
-    return {"code": doc["code"], "balance": float(doc.get("balance", 0)), "status": "active"}
+    doc = await gift_redeem_module.validate(req.code)
+    return {"code": doc["code"], "balance": float(doc.get("balance", 0)), "status": "active",
+            "expires_at": doc.get("expires_at")}
 
 
 
@@ -2960,22 +2962,7 @@ async def create_booking(req: BookingCreate, request: Request):
     # ── Gift-card redemption ────────────────────────────────────────────
     gift_credit = 0.0
     if req.gift_code:
-        code = req.gift_code.upper().strip()
-        gc = await db.gift_cards.find_one({"code": code, "status": "active"})
-        if not gc:
-            raise HTTPException(400, "Gift card not found or not active")
-        bal = float(gc.get("balance", 0.0))
-        if bal <= 0:
-            raise HTTPException(400, "Gift card has no remaining balance")
-        gift_credit = round(min(bal, computed_total), 2)
-        booking["gift_code"] = code
-        booking["gift_credit"] = gift_credit
-        # Deduct from card + record redemption
-        await db.gift_cards.update_one(
-            {"code": code},
-            {"$inc": {"balance": -gift_credit},
-             "$push": {"redemptions": {"booking_id": booking["id"], "amount": gift_credit, "at": now_iso()}}},
-        )
+        gift_credit = await gift_redeem_module.apply_on_create(booking, req.gift_code, computed_total)
 
     # ── Referral-reward credit auto-apply ────────────────────────────────
     # If the customer email maps to a user with a `credit_balance > 0`, apply
@@ -2996,6 +2983,8 @@ async def create_booking(req: BookingCreate, request: Request):
     booking["total"] = round(max(0.0, computed_total - gift_credit - referral_credit), 2)
 
     await db.bookings.insert_one(booking)
+    if gift_credit > 0 and await gift_redeem_module.settle_if_zero(booking["id"]):
+        booking = await db.bookings.find_one({"id": booking["id"]}) or booking
     # Admin push — never let a push failure block the response
     try:
         await _send_admin_push(
@@ -3536,9 +3525,11 @@ async def cancel_booking(booking_id: str):
             "updated_at": now_iso(),
         }},
     )
+    gift_back = await gift_redeem_module.restore_for_booking(doc)
     return {
         "id": doc["id"],
         "status": "cancelled",
+        "gift_restored": gift_back,
         "hours_notice": round(hours_until, 2),
         "eligible_for_refund": eligible,
         "cancellation_fee": fee,
@@ -3864,7 +3855,7 @@ async def _send_gift_voucher_email(gc: dict) -> dict:
                   </td></tr>
                 </table>
                 <a href="https://roxtaxi.com/tours/cable-beach-day" style="display:inline-block;background:#D4A94A;color:#0B192C;text-decoration:none;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;font-size:13px;padding:14px 28px;border-radius:999px">Pick your beach day →</a>
-                <p style="font-size:13px;color:#64748B;line-height:1.55;margin:20px 0 0">The branded PDF voucher is attached — screenshot, print, or forward it; the code is all you need. Never expires. Redeemable on any Rox taxi, tour, or rental.</p>
+                <p style="font-size:13px;color:#64748B;line-height:1.55;margin:20px 0 0">The branded PDF voucher is attached — screenshot, print, or forward it; the code is all you need. {gift_redeem_module.expiry_label(gc)}. Non-refundable. Redeemable on any Rox taxi, tour, or rental.</p>
               </td></tr>
               <tr><td style="padding:20px 32px 32px;color:#94A3B8;font-size:11px;line-height:1.55">Rox Taxi Service &amp; Tours · Nassau · hello@roxtaxi.com</td></tr>
             </table>
@@ -4006,6 +3997,7 @@ class GroupBookingCheckout(BaseModel):
     dropoff_location: Optional[str] = None
     notes: Optional[str] = None
     pay_full: bool = False  # True = charge full total now; False = charge deposit only
+    gift_code: Optional[str] = Field(None, max_length=32)
 
 
 @api_router.post("/group-bookings/checkout")
@@ -4062,7 +4054,15 @@ async def group_booking_checkout(req: GroupBookingCheckout):
         "created_at": now,
         "updated_at": now,
     }
+    if req.gift_code:
+        g_amt = await gift_redeem_module.apply_on_create(booking, req.gift_code, quote["total"])
+        booking["total"] = round(quote["total"] - g_amt, 2)
+        amount_due = round(min(amount_due, booking["total"]), 2)
+        booking["balance_due"] = round(booking["total"] - amount_due, 2)
     await db.bookings.insert_one(booking)
+    if req.gift_code and amount_due <= 0:
+        await gift_redeem_module.settle_if_zero(bid)
+        return {"booking_id": bid, "paid": True, "amount": 0.0, "total": 0.0, "pay_mode": booking["group_pay_mode"]}
 
     # Build Stripe Checkout session for the deposit (or full) amount.
     try:
@@ -5634,19 +5634,15 @@ async def booking_qr_png(booking_id: str):
     camera → phone opens `/driver/scan?b=ID&t=TOKEN` → driver taps confirm.
     Token is HMAC-signed with JWT_SECRET so IDs can't be brute-forced."""
     from fastapi.responses import Response
-    import qrcode
-    from io import BytesIO
+    from qr_utils import qr_png_bytes
     booking = await db.bookings.find_one({"id": booking_id.upper()})
     if not booking:
         raise HTTPException(404, "Booking not found")
     token = _booking_qr_token(booking["id"])
     base = (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "") or "https://roxtaxi.com").rstrip("/")
     scan_url = f"{base}/driver/scan?b={booking['id']}&t={token}"
-    img = qrcode.make(scan_url, box_size=10, border=2)
-    buf = BytesIO()
-    img.save(buf, format="PNG")
     return Response(
-        content=buf.getvalue(),
+        content=qr_png_bytes(scan_url),
         media_type="image/png",
         headers={"Cache-Control": "private, max-age=300"},
     )
@@ -6571,6 +6567,8 @@ payments_module.configure(
     require_admin=require_admin,
 )
 api_router.include_router(payments_module.router)
+gift_redeem_module.configure(db=db, now_iso=now_iso, mark_paid=payments_module._mark_paid)
+api_router.include_router(gift_redeem_module.router)
 
 # Wire up the gallery router — has specific /admin/gallery/* routes that must
 # also beat routes/admin.py's catch-all /admin/{kind} pattern.
@@ -6611,6 +6609,7 @@ admin_module.configure(
     upload_dir=UPLOAD_DIR,
 )
 dayof_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
+welcome_email_module.configure(db=db)
 api_router.include_router(dayof_module.router)
 api_router.include_router(admin_module.router)
 

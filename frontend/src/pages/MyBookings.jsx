@@ -8,6 +8,7 @@ import ExtendRentalModal from "./ExtendRentalModal";
 import WalletCard from "./WalletCard";
 import TripWalletCard from "./TripWalletCard";
 import PayWithWalletButton from "./PayWithWalletButton";
+import { TripSummary, MyGiftCards, RecommendedForYou, bookAgainLink } from "./AccountExtras";
 
 export default function MyBookings() {
   const { user, loading, logout } = useAuth();
@@ -21,6 +22,7 @@ export default function MyBookings() {
   const [signOutAllBusy, setSignOutAllBusy] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [revoking, setRevoking] = useState(null);
+  const [tab, setTab] = useState("upcoming");
 
   const loadSessions = async () => {
     try {
@@ -350,9 +352,13 @@ export default function MyBookings() {
       </div>
 
       <h2 className="serif text-3xl text-[#0B3B5C] mt-12">Your bookings</h2>
+      <TripSummary bookings={bookings} />
 
       {/* ── Trip wallet · saved Stripe cards for one-tap re-booking ── */}
       <TripWalletCard />
+
+      <MyGiftCards />
+      <RecommendedForYou />
 
       {/* ── License Wallet ─────────────────────────────────── */}
       {wallet && (
@@ -368,8 +374,20 @@ export default function MyBookings() {
           You haven't made a booking yet. <Link to="/taxi" className="text-[#D4A94A] hover:underline">Book a taxi →</Link>
         </div>
       ) : (
+        <>
+        <div className="mt-10 inline-flex rounded-full bg-[#F1F5F9] p-1" data-testid="mybookings-tabs">
+          {[["upcoming", "Upcoming"], ["past", "Past trips"]].map(([k, l]) => (
+            <button key={k} onClick={() => setTab(k)} data-testid={`mybookings-tab-${k}`}
+              className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors ${tab === k ? "bg-[#0B3B5C] text-white" : "text-[#0B3B5C] hover:bg-white"}`}>{l}</button>
+          ))}
+        </div>
         <div className="mt-6 grid gap-4">
-          {bookings.map((b) => {
+          {bookings.filter((b) => (isPastBooking(b) ? "past" : "upcoming") === tab).length === 0 && (
+            <div className="rounded-2xl border border-dashed border-[#E2E8F0] p-8 text-center text-sm text-[#64748B]" data-testid="mybookings-tab-empty">
+              {tab === "past" ? "No past trips yet." : "No upcoming trips."} <Link to="/tours" className="text-[#D4A94A] hover:underline">Plan your next one →</Link>
+            </div>
+          )}
+          {bookings.filter((b) => (isPastBooking(b) ? "past" : "upcoming") === tab).map((b) => {
             const idx = STATUS_INDEX(b.status);
             const isCancelled = b.status === "cancelled";
             const isCompleted = b.status === "completed";
@@ -442,6 +460,11 @@ export default function MyBookings() {
                       <CalendarPlus className="w-3.5 h-3.5 text-[#D4A94A]" /> Extend rental
                     </button>
                   )}
+                  {isPastBooking(b) && b.item_id && (
+                    <Link to={bookAgainLink(b)} data-testid={`mybookings-book-again-${b.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#0B3B5C] text-white hover:bg-[#0B192C] text-xs font-semibold px-3.5 py-2 transition-colors">
+                      <CalendarPlus className="w-3.5 h-3.5" /> Book again
+                    </Link>
+                  )}
                   {isCancelled && b.cancellation && (
                     <span className="text-[11px] text-[#64748B]" data-testid={`mybookings-cancel-info-${b.id}`}>
                       Cancelled · fee {money(b.cancellation.fee)} · refund est {money(b.cancellation.refund_estimate)}
@@ -452,6 +475,7 @@ export default function MyBookings() {
             );
           })}
         </div>
+        </>
       )}
       {extending && (
         <ExtendRentalModal
@@ -462,6 +486,10 @@ export default function MyBookings() {
       )}
     </div>
   );
+}
+
+function isPastBooking(b) {
+  return ["completed", "cancelled", "no_show"].includes(b.status) || new Date(b.booking_date) < new Date(Date.now() - 6 * 3600 * 1000);
 }
 
 function Stat({ label, value, tone, testid }) {

@@ -3,6 +3,7 @@ import { useParams, useSearchParams, Link, useNavigate } from "react-router-dom"
 import { api, money } from "../lib/api";
 import { Loader2, CreditCard, Copy, ExternalLink, ShieldCheck, XCircle, CheckCircle2, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { GiftCodeBox } from "../components/GiftCodeBox";
 
 // Shareable "Complete Payment" page — one URL per booking that a customer
 // (or the admin, via text/email) can bounce to at any time and finish
@@ -137,6 +138,14 @@ export default function Pay() {
                 <h2 className="serif text-2xl text-[#0B3B5C]">Choose how to pay</h2>
                 <p className="mt-2 text-sm text-[#64748B]">All methods clear instantly and unlock your booking status the moment payment lands.</p>
 
+                <div className="mt-5">
+                  <GiftCodeBox
+                    bookingId={booking.id}
+                    applied={booking.gift_code ? { code: booking.gift_code, amount: booking.gift_credit } : null}
+                    onApplied={(d) => setBooking(d.booking)}
+                  />
+                </div>
+
                 {/* Stripe */}
                 <button
                   onClick={payStripe}
@@ -228,6 +237,7 @@ export default function Pay() {
               <Row k="Date" v={new Date(booking.booking_date).toLocaleString()} />
               <Row k="Passengers" v={booking.passengers} />
               {booking.service_type === "rental" && <Row k="Days" v={booking.days} />}
+              {booking.gift_credit > 0 && <Row k="Gift card" v={`−${money(booking.gift_credit)}`} />}
             </div>
 
             <div className="mt-5 border-t border-[#E2E8F0] pt-4 flex items-baseline justify-between">

@@ -95,10 +95,10 @@ export function PaymentSuccess() {
           {/* QR code — cruise passengers flash this at the driver */}
           <div className="mt-8 flex flex-col sm:flex-row items-center gap-6 rounded-2xl bg-[#FBF7EF] border border-[#EFE7D5] p-6" data-testid="payment-success-qr-block">
             <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(`${window.location.origin}/track?id=${booking.id}`)}`}
+              src={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/qr.png`}
               alt={`QR code for booking ${booking.id}`}
-              width={160} height={160}
-              className="w-40 h-40 rounded-xl bg-white p-2 border border-[#E2E8F0] shrink-0"
+              width={176} height={176}
+              className="w-44 h-44 rounded-xl bg-white border border-[#E2E8F0] shrink-0 [image-rendering:pixelated]"
               data-testid="payment-success-qr-img"
             />
             <div className="text-center sm:text-left">

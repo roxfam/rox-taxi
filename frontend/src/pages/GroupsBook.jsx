@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Users, Lock, Calendar, AlertTriangle, CheckCircle2, Sparkles } from "lucide-react";
 import { api, money } from "../lib/api";
 import { PaymentBrandRow } from "../components/PaymentBrands";
+import { GiftCodeBox } from "../components/GiftCodeBox";
 
 /**
  * /groups/book — dedicated public page for 10+ pax bookings.
@@ -35,6 +36,7 @@ export default function GroupsBook() {
   });
   const [quote, setQuote] = useState(null);
   const [quoting, setQuoting] = useState(false);
+  const [gift, setGift] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -72,9 +74,12 @@ export default function GroupsBook() {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const { data } = await api.post("/group-bookings/checkout", form);
+      const { data } = await api.post("/group-bookings/checkout", { ...form, gift_code: gift?.code || undefined });
       if (data?.checkout_url) {
         window.location.assign(data.checkout_url);
+      } else if (data?.paid) {
+        toast.success(`Paid in full with your gift card — booking ${data.booking_id} confirmed`);
+        nav(`/track?id=${data.booking_id}`);
       } else {
         toast.success(`Reserved — booking ${data.booking_id}`);
         nav(`/track?id=${data.booking_id}`);
@@ -90,8 +95,10 @@ export default function GroupsBook() {
     return <div className="max-w-3xl mx-auto px-6 py-16 text-[#64748B]">Loading group pricing…</div>;
   }
 
-  const dueNow = form.pay_full ? (quote?.total || 0) : (quote?.deposit || 0);
-  const dueLater = form.pay_full ? 0 : (quote?.due_later || 0);
+  const giftOff = gift ? Math.min(gift.balance, quote?.total || 0) : 0;
+  const netTotal = Math.max(0, (quote?.total || 0) - giftOff);
+  const dueNow = form.pay_full ? netTotal : Math.min(quote?.deposit || 0, netTotal);
+  const dueLater = Math.max(0, netTotal - dueNow);
   const hasPriceCapped = form.pax >= 50;
 
   return (
@@ -232,6 +239,9 @@ export default function GroupsBook() {
             )}
 
             {/* Deposit toggle */}
+            <div className="mt-5">
+              <GiftCodeBox dark applied={gift ? { code: gift.code, amount: giftOff } : null} onChange={setGift} />
+            </div>
             <div className="mt-5 rounded-xl bg-white/5 border border-white/10 p-3">
               <div className="text-[10px] tracking-[0.22em] uppercase text-[#D4A94A] font-bold mb-2">Pay today</div>
               <div className="grid grid-cols-2 gap-1 bg-white/5 rounded-full p-1">

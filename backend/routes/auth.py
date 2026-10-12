@@ -984,6 +984,8 @@ async def customer_register(req: CustomerRegisterRequest, request: Request, resp
                 user_id=user_id, email=email, name=req.name or "", ip=ip, when_iso=ts,
             ))
             _aio.create_task(_maybe_send_signup_burst_alert(ip=ip))
+            from routes.welcome_email import send_welcome  # noqa: PLC0415
+            _aio.create_task(send_welcome(user_id))
         except Exception:  # noqa: BLE001
             pass
 

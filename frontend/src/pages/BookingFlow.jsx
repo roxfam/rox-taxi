@@ -6,6 +6,7 @@ import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { api, money, BACKEND_URL } from "../lib/api";
 import { DateTimePicker } from "../components/DateTimePicker";
 import { PaymentBrandRow } from "../components/PaymentBrands";
+import { GiftCodeBox } from "../components/GiftCodeBox";
 import { trackLead, trackPurchase, trackInitiateCheckout } from "../lib/fbpixel";
 
 // Rental 2-day minimum — module-scoped so linters see it inside submit()
@@ -143,6 +144,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
   const [loading, setLoading] = useState(false);
   const [booking, setBooking] = useState(null);
+  const [gift, setGift] = useState(null);
   const [siteCfg, setSiteCfg] = useState({ zelle_email: "payments@roxtaxi.com", zelle_phone: "+1-242-000-0000", taxi_addon_master_enabled: true });
   const [paypalCfg, setPaypalCfg] = useState({ client_id: "", configured: false, mode: "sandbox" });
 
@@ -454,7 +456,17 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         referred_by_name: referral?.from || undefined,
         referral_discount: referralDiscount > 0 ? Number(referralDiscount.toFixed(2)) : 0,
       };
-      const { data: b } = await api.post("/bookings", payload);
+      let { data: b } = await api.post("/bookings", payload);
+      if (gift?.code) {
+        const { data: g } = await api.post(`/bookings/${b.id}/apply-gift`, { code: gift.code });
+        b = g.booking;
+        if (g.paid) {
+          toast.success("Paid in full with your gift card — booking confirmed!");
+          onClose?.();
+          nav(`/pay/${b.id}`);
+          return;
+        }
+      }
       setBooking(b);
 
       // Persist the tip choice so returning guests see the same default
@@ -497,7 +509,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         // Booking is reserved — reveal PayPal Smart Buttons for in-page capture
         setStep(5);
       } else if (payMethod === "paypal") {
-        const paypalUrl = (cfg.paypal_me_url || "https://www.paypal.com/paypalme/roxtaxiservice") + `/${total.toFixed(2)}`;
+        const paypalUrl = (cfg.paypal_me_url || "https://www.paypal.com/paypalme/roxtaxiservice") + `/${Number(b.total ?? total).toFixed(2)}`;
         setStep(4);
         window.open(paypalUrl, "_blank", "noopener,noreferrer");
       } else {
@@ -1124,10 +1136,15 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 />
               </div>
 
+              <GiftCodeBox applied={gift ? { code: gift.code, amount: Math.min(gift.balance, total) } : null} onChange={setGift} />
+
               <div className="pt-4 border-t border-[#E2E8F0] flex items-center justify-between">
                 <div>
                   <div className="text-xs text-[#64748B]">Total</div>
                   <div className="serif text-2xl text-[#0B3B5C]" data-testid="booking-total">{money(total)}</div>
+                  {gift && (
+                    <div className="text-[11px] text-[#059669] font-semibold mt-0.5" data-testid="booking-total-after-gift">Due after gift card: {money(Math.max(0, total - gift.balance))}</div>
+                  )}
                   {serviceType === "rental" && (
                     <div className="text-[11px] text-[#64748B] mt-0.5" data-testid="booking-total-deposit-note">Includes ${RENTAL_DEPOSIT} refundable deposit</div>
                   )}
@@ -1322,7 +1339,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 <ul className="mt-3 space-y-2 text-sm">
                   <li><span className="text-[#64748B]">Email:</span> <span className="mono text-[#0B3B5C]" data-testid="zelle-email">{siteCfg.zelle_email}</span></li>
                   <li><span className="text-[#64748B]">Phone:</span> <span className="mono text-[#0B3B5C]" data-testid="zelle-phone">{siteCfg.zelle_phone}</span></li>
-                  <li><span className="text-[#64748B]">Amount:</span> <span className="mono text-[#E86A3C] font-semibold">{money(total)}</span></li>
+                  <li><span className="text-[#64748B]">Amount:</span> <span className="mono text-[#E86A3C] font-semibold">{money(booking.total ?? total)}</span></li>
                   <li><span className="text-[#64748B]">Memo:</span> <span className="mono text-[#0B3B5C]">Booking {booking.id}</span></li>
                 </ul>
                 <p className="text-xs text-[#64748B] mt-4 leading-relaxed">
@@ -1513,7 +1530,7 @@ function BoardingQrCard({ bookingId }) {
       data-testid="booking-qr-card"
     >
       <div className="shrink-0 bg-white rounded-xl p-2.5">
-        <img src={src} alt="Scan at pickup" className="w-24 h-24" data-testid="booking-qr-image" />
+        <img src={src} alt="Scan at pickup" className="w-32 h-32 bg-white rounded-lg [image-rendering:pixelated]" data-testid="booking-qr-image" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black">Rox boarding pass</div>

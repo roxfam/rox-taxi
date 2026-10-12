@@ -294,6 +294,8 @@ def build_receipt_pdf(booking: dict) -> bytes:
         import qrcode as _qrcode
         from io import BytesIO as _BIO
         from reportlab.graphics.barcode import code128 as _code128
+        from qr_utils import qr_png_bytes as _qr_png
+        from routes.payment_digest import _site_url as _site
 
         _is_cable_beach = booking.get("item_id") == "cable-beach-day"
         if _is_cable_beach:
@@ -303,7 +305,7 @@ def build_receipt_pdf(booking: dict) -> bytes:
                 f"cable-beach-attendant:{booking['id']}".encode(),
                 _hashlib.sha256,
             ).hexdigest()[:24]
-            _qr_url = f"https://roxtaxi.com/attendant/scan?b={booking['id']}&t={_tok}"
+            _qr_url = f"{_site()}/attendant/scan?b={booking['id']}&t={_tok}"
             _qr_caption = (
                 "<b>Scan QR</b> — beach attendants see your full order (chairs, "
                 "lunch, drinks, water sports) and check your party in on arrival.<br/>"
@@ -313,7 +315,7 @@ def build_receipt_pdf(booking: dict) -> bytes:
                 "Tours · TIN on file.</font>"
             )
         else:
-            _qr_url = f"https://roxtaxi.com/booking/{booking['id']}/pass"
+            _qr_url = f"{_site()}/booking/{booking['id']}/pass"
             _qr_caption = (
                 "<b>Scan QR</b> for your live boarding pass + driver tracker.<br/>"
                 "<b>Scan barcode</b> at pickup — the driver verifies your booking "
@@ -322,17 +324,8 @@ def build_receipt_pdf(booking: dict) -> bytes:
                 "Tours · TIN on file.</font>"
             )
 
-        qr = _qrcode.QRCode(version=1, box_size=4, border=1)
-        qr.add_data(_qr_url)
-        qr.make(fit=True)
-        # qrcode uses PIL under the hood, which requires string/tuple colors
-        # — reportlab's HexColor object would raise. Hex string works both
-        # here and in the Image embed below.
-        img = qr.make_image(fill_color="#0B3B5C", back_color="white")
-        qrbuf = _BIO()
-        img.save(qrbuf, format="PNG")
-        qrbuf.seek(0)
-        qr_img = Image(qrbuf, width=0.9 * inch, height=0.9 * inch)
+        qrbuf = _BIO(_qr_png(_qr_url, box_size=8))
+        qr_img = Image(qrbuf, width=1.25 * inch, height=1.25 * inch)
 
         # Code128 is already a reportlab Flowable — drop it straight into
         # the Table cell. humanReadable=True prints the booking id below
@@ -367,7 +360,7 @@ def build_receipt_pdf(booking: dict) -> bytes:
             [[qr_img,
               Paragraph(_qr_caption, small),
               bc]],
-            colWidths=[1.0 * inch, 3.6 * inch, 1.9 * inch],
+            colWidths=[1.4 * inch, 3.3 * inch, 1.8 * inch],
         )
         footer_tbl.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -435,7 +428,7 @@ def build_gift_voucher_pdf(gc: dict) -> bytes:
     story.append(Spacer(1, 10))
     story.append(Paragraph("Fine print", kicker))
     story.append(Paragraph(
-        "Never expires. Transferable only via Rox dispatch — contact hello@roxtaxi.com if you want to re-assign it. Not redeemable for cash. Balance carries across multiple bookings until exhausted.",
+        ("Valid until " + datetime.fromisoformat(str(gc["expires_at"]).replace("Z", "+00:00")).strftime("%b %d, %Y") if gc.get("expires_at") else "Never expires") + ". Non-refundable and not redeemable for cash. Transferable only via Rox dispatch — contact hello@roxtaxi.com if you want to re-assign it. Balance carries across multiple bookings until exhausted.",
         small,
     ))
     story.append(Spacer(1, 20))

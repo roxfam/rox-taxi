@@ -226,6 +226,9 @@ h2.serif em, h2.serif i {
     0%   { transform: translateX(0); }
     100% { transform: translateX(-50%); }
 }
+.welcome-marquee-slow {
+    animation-duration: 60s;
+}
 @media (prefers-reduced-motion: reduce) {
     .promo-marquee-track { animation: none; }
 }

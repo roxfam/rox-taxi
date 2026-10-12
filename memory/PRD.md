@@ -689,3 +689,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 
 
+
+## 2026-10-12 — Booking calendar · Welcome offer email · Banner marquee
+- `pages/admin/BookingCalendar.jsx`: Day/Week/Month views above bookings table, colour by status, click opens booking detail, cancelled hidden by default (toggle).
+- `routes/welcome_email.py`: email with Book Now button sent on new signup (`welcome_email_sent_at`); in-app loop (15 min) sends one reminder 3 days later if `welcome_discount.status` still "available" (`welcome_reminder_sent_at`). Only users signed up after this release get reminders.
+- WelcomeOfferBanner now scrolls slowly (60s marquee, pauses on hover); "one-time offer" → "limited-time offer" (banner + Signup page).
+- Backlog: Cancellation report, Guest flight texts, Flight board, split server.py / AdminDashboard.jsx.
+

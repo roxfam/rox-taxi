@@ -1493,7 +1493,7 @@ function GiftBeachDayModal({ onClose, suggestedAmount }) {
           <div>
             <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">Gift a beach day</div>
             <h3 className="serif text-2xl text-[#0B3B5C]">Send Toes in the Sandy Turquoise of Cable Beach</h3>
-            <div className="text-xs text-[#64748B] mt-1">Branded voucher · instant email delivery · never expires</div>
+            <div className="text-xs text-[#64748B] mt-1">Branded voucher · instant email delivery · valid 12 months · non-refundable</div>
           </div>
           <button onClick={onClose} className="text-[#64748B] hover:text-[#0B3B5C]" data-testid="cable-gift-close">✕</button>
         </div>

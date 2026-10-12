@@ -71,6 +71,48 @@ async def my_bookings(user: dict = _current_user()):
     return [_clean(d) for d in docs]
 
 
+@router.get("/my/gift-cards")
+async def my_gift_cards(user: dict = _current_user()):
+    email = (user.get("email") or "").lower()
+    from routes.gift_redeem import is_expired  # noqa: PLC0415
+    docs = await _db.gift_cards.find(
+        {"status": "active", "$or": [{"recipient_email": email}, {"buyer_email": email}]},
+        {"_id": 0, "code": 1, "amount": 1, "balance": 1, "expires_at": 1, "recipient_email": 1, "buyer_name": 1},
+    ).sort("created_at", -1).to_list(50)
+    for d in docs:
+        d["mine"] = d.get("recipient_email") == email
+        d["expired"] = is_expired(d)
+    return docs
+
+
+@router.get("/my/recommendations")
+async def my_recommendations(user: dict = _current_user()):
+    mine = await _db.bookings.find({"customer_email": user["email"], "status": {"$ne": "cancelled"}},
+                                   {"item_id": 1, "service_type": 1}).to_list(500)
+    done = {b.get("item_id") for b in mine}
+    types = {b.get("service_type") for b in mine}
+    popular = await _db.bookings.aggregate([
+        {"$match": {"service_type": "tour", "status": {"$ne": "cancelled"}}},
+        {"$group": {"_id": "$item_id", "n": {"$sum": 1}}}, {"$sort": {"n": -1}}, {"$limit": 30},
+    ]).to_list(30)
+    rank = {p["_id"]: i for i, p in enumerate(popular)}
+    tours = await _db.tours.find({"active": True}, {"_id": 0, "id": 1, "name": 1, "price": 1, "image_url": 1, "duration": 1, "featured": 1}).to_list(200)
+    tours = [t for t in tours if t["id"] not in done]
+    tours.sort(key=lambda t: (rank.get(t["id"], 999), not t.get("featured")))
+    out = []
+    if "cable-beach-day" not in done:
+        out.append({"id": "cable-beach-day", "name": "Cable Beach Day", "reason": "Our most-loved beach package",
+                    "link": "/tours/cable-beach-day", "price": None, "image_url": None})
+    reason = "Popular with guests who rode with us" if "taxi" in types else "Popular right now"
+    for t in tours[: 4 - len(out)]:
+        out.append({**t, "reason": reason, "link": f"/tours?book={t['id']}"})
+    if "rental" not in types and len(out) < 5:
+        out.append({"id": "rentals", "name": "Explore Nassau at your own pace", "reason": "Car rentals from our fleet",
+                    "link": "/rentals", "price": None, "image_url": None})
+    return out
+
+
+
 @router.get("/referrals/summary")
 async def referral_summary(user: dict = _current_user()):
     doc = await _db.users.find_one({"user_id": user["user_id"]}) or {}

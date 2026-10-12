@@ -2,7 +2,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import WelcomeOfferBanner from "./WelcomeOfferBanner";
-import { Menu, X, Facebook, Phone, MapPin, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart, ChevronDown, User as UserIcon, Images, Users, History } from "lucide-react";
+import { Menu, X, Facebook, Phone, MapPin, Car, ShipWheel, MapPinned, Home as HomeIcon, Search, Ticket, MessageCircle, Info, Heart, ChevronDown, User as UserIcon, Images, Users, History, Gift } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
 const BOOK_OPTIONS = [
@@ -25,6 +25,7 @@ const NAV = [
   { to: "/rentals", label: "Car Rentals", icon: MapPinned },
   { to: "/gallery", label: "Gallery", icon: Images },
   { to: "/groups", label: "Groups", icon: Heart },
+  { to: "/gift-cards", label: "Gift Cards", icon: Gift },
   { to: "/track", label: "Track", icon: Search },
   { to: "/about", label: "About", icon: Info },
   { to: "/contact", label: "Contact", icon: MessageCircle },
@@ -725,6 +726,7 @@ export default function Layout({ children }) {
                 <li><Link to="/gallery" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors" data-testid="footer-gallery-link"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Island Gallery</Link></li>
                 <li><Link to="/travel-to-nassau" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Travel to Nassau Guide</Link></li>
                 <li><Link to="/cruise-groups-nassau" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Cruise Groups (10% off)</Link></li>
+                <li><Link to="/gift-cards" data-testid="footer-gift-cards-link" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Gift Cards</Link></li>
                 <li><Link to="/refer" data-testid="footer-refer-link" className="group inline-flex items-center gap-2 text-[#D4A94A] font-bold hover:text-[#F5E1A4] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Refer a friend · 10% off</Link></li>
               </ul>
             </div>

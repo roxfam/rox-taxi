@@ -38,7 +38,7 @@ export default function GiftCards() {
           <span className="text-[10px] tracking-[0.35em] uppercase font-black text-[#D4A94A]">Rox gift cards</span>
         </div>
         <h1 className="serif text-5xl sm:text-6xl text-[#0B3B5C] font-bold leading-[0.95]">Give the <em className="italic text-[#D4A94A]">gift</em> of the Bahamas.</h1>
-        <p className="text-[#64748B] mt-4 max-w-xl leading-relaxed">Instant email delivery. Redeemable on taxis, tours, or car rentals at checkout. Never expires. Balance carries over across bookings.</p>
+        <p className="text-[#64748B] mt-4 max-w-xl leading-relaxed">Instant email delivery. Redeemable on taxis, tours, car rentals, Cable Beach days and group bookings at checkout. Valid for 12 months from purchase. Non-refundable. Balance carries over across bookings.</p>
 
         <form onSubmit={submit} className="mt-10 grid lg:grid-cols-[1fr_360px] gap-8 items-start" data-testid="gift-purchase-form">
           <div className="space-y-6">
@@ -89,7 +89,7 @@ export default function GiftCards() {
                 <div className="text-[10px] tracking-widest uppercase opacity-70 mt-1">Redeemable at checkout</div>
               </div>
             </div>
-            <p className="text-[11px] text-[#94a3b8] mt-4 leading-relaxed">Delivered by email within seconds of payment. Balance carries over across bookings. Never expires.</p>
+            <p className="text-[11px] text-[#94a3b8] mt-4 leading-relaxed">Delivered by email within seconds of payment. Balance carries over across bookings. Expires 12 months after purchase. Gift cards are non-refundable and can't be exchanged for cash.</p>
             <button type="submit" disabled={busy} data-testid="gift-purchase-submit" className="w-full mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-6 py-3.5 text-sm font-semibold shadow-[0_10px_25px_rgba(232,106,60,0.35)] disabled:opacity-60">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {busy ? "Redirecting…" : `Buy ${money(finalAmount || 0)} card`}

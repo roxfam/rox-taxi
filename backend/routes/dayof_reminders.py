@@ -608,7 +608,9 @@ async def admin_cancel_booking(booking_id: str, req: BookingCancel, admin: str =
                 refund = await refund_payment(tx["session_id"], body, admin=admin)
             except HTTPException as he:
                 refund = {"ok": False, "error": he.detail}
-    return {"cancelled": True,
+    from routes.gift_redeem import restore_for_booking  # noqa: PLC0415
+    gift_back = await restore_for_booking(b)
+    return {"cancelled": True, "gift_restored": gift_back,
             "guest_notified": bool(notice and (notice["email"].get("sent") or notice["sms"].get("sent"))),
             "refund": refund}
 

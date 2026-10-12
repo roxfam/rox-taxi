@@ -1238,8 +1238,8 @@ def _verify_attendant_token(booking_id: str, token: str) -> bool:
 
 
 def _public_site_url() -> str:
-    return (os.environ.get("PUBLIC_SITE_URL", "")
-            or os.environ.get("REACT_APP_BACKEND_URL", "")
+    import secrets_store  # noqa: PLC0415
+    return (secrets_store.get_secret("PUBLIC_SITE_URL", "") or os.environ.get("PUBLIC_SITE_URL", "")
             or "https://roxtaxi.com").rstrip("/")
 
 
@@ -1253,14 +1253,11 @@ async def cable_beach_qr_png(booking_id: str):
     booking = await _db.bookings.find_one({"id": bid})
     if not booking or booking.get("item_id") != "cable-beach-day":
         raise HTTPException(404, "Cable Beach booking not found")
-    import qrcode
+    from qr_utils import qr_png_bytes  # noqa: PLC0415
     token = _attendant_token(bid)
     scan_url = f"{_public_site_url()}/attendant/scan?b={bid}&t={token}"
-    img = qrcode.make(scan_url, box_size=10, border=2)
-    buf = BytesIO()
-    img.save(buf, format="PNG")
     return Response(
-        content=buf.getvalue(),
+        content=qr_png_bytes(scan_url),
         media_type="image/png",
         headers={"Cache-Control": "private, max-age=600"},
     )
