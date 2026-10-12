@@ -1419,7 +1419,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
               <p className="text-sm text-[#64748B] mt-2">
                 Confirmation code <code className="mono bg-[#F1F5F9] px-2 py-0.5 rounded text-[#0B3B5C]" data-testid="paypal-checkout-code">{booking.id}</code>
                 {" · "}
-                <span className="mono text-[#E86A3C] font-semibold">{money(total)}</span>
+                <span className="mono text-[#E86A3C] font-semibold">{money(booking.total ?? total)}</span>
               </p>
 
               <div className="mt-6 rounded-2xl border border-[#E2E8F0] p-5 bg-[#FBF7EF]/60" data-testid="paypal-buttons-wrapper">

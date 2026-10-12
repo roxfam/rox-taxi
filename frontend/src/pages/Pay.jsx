@@ -4,6 +4,7 @@ import { api, money } from "../lib/api";
 import { Loader2, CreditCard, Copy, ExternalLink, ShieldCheck, XCircle, CheckCircle2, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { GiftCodeBox } from "../components/GiftCodeBox";
+import { PayPalPayButtons } from "../components/PayPalPayButtons";
 
 // Shareable "Complete Payment" page — one URL per booking that a customer
 // (or the admin, via text/email) can bounce to at any time and finish
@@ -164,6 +165,9 @@ export default function Pay() {
                   {payingWith === "stripe" && <Loader2 className="w-5 h-5 animate-spin text-[#635BFF]" />}
                 </button>
 
+                {/* PayPal Smart Buttons (live) */}
+                <PayPalPayButtons bookingId={booking.id} onPaid={(b) => b && setBooking(b)} />
+
                 {/* PayPal */}
                 <a
                   href={paypalUrl}
@@ -175,7 +179,7 @@ export default function Pay() {
                 >
                   <div className="w-12 h-12 rounded-xl bg-[#003087]/10 text-[#003087] flex items-center justify-center shrink-0 font-black text-xl">P</div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-[#0B3B5C]">PayPal</div>
+                    <div className="font-semibold text-[#0B3B5C]">PayPal.me link</div>
                     <div className="text-xs text-[#64748B]">Opens paypal.me — add "Booking {booking.id}" in the note.</div>
                   </div>
                   <div className="mono text-lg text-[#0B3B5C] font-black shrink-0">{money(total)}</div>
