@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Gift } from "lucide-react";
+import { Gift, Send, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { api, money } from "../../lib/api";
 
 const Tile = ({ label, value, sub, testid }) => (
@@ -12,9 +13,20 @@ const Tile = ({ label, value, sub, testid }) => (
 
 export default function GiftCardReportCard() {
   const [r, setR] = useState(null);
-  useEffect(() => {
-    api.get("/admin/gift-cards/report").then(({ data }) => setR(data)).catch(() => setR(null));
-  }, []);
+  const [sending, setSending] = useState(null);
+  const load = () => api.get("/admin/gift-cards/report").then(({ data }) => setR(data)).catch(() => setR(null));
+  useEffect(() => { load(); }, []);
+  const resend = async (code) => {
+    setSending(code);
+    try {
+      const { data } = await api.post(`/admin/gift-cards/${code}/resend`);
+      if (data.sent) toast.success(`Voucher resent to ${data.to}${data.sms ? " + text" : ""}`);
+      else toast.error(data.error || "Email could not be sent");
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Resend failed");
+    } finally { setSending(null); }
+  };
   if (!r) return null;
   return (
     <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] p-5" data-testid="admin-gift-card-report">
@@ -47,6 +59,42 @@ export default function GiftCardReportCard() {
                     <td>{new Date(g.expires_at).toLocaleDateString()}</td>
                     <td className="text-[#64748B]">{g.recipient_email || "—"}</td>
                     <td>{g.reminded ? <span className="text-[#059669] font-semibold">Sent</span> : <span className="text-[#64748B]">Pending</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <div className="mt-5">
+        <div className="text-xs font-semibold text-[#0B3B5C]">Recent gift cards</div>
+        {(r.recent || []).length === 0 ? (
+          <p className="text-xs text-[#64748B] mt-1">No gift cards sold yet.</p>
+        ) : (
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-left text-[10px] uppercase tracking-widest text-[#64748B]">
+                <tr><th className="py-1.5">Code</th><th>Amount</th><th>Balance</th><th>Design</th><th>Holder</th><th>Delivery</th><th></th></tr>
+              </thead>
+              <tbody>
+                {r.recent.map((g) => (
+                  <tr key={g.code} className="border-t border-[#F1F5F9]" data-testid={`gc-recent-row-${g.code}`}>
+                    <td className="py-1.5 mono font-semibold text-[#0B3B5C]">{g.code}</td>
+                    <td className="mono">{money(g.amount)}</td>
+                    <td className="mono text-[#E86A3C]">{money(g.balance)}</td>
+                    <td className="capitalize">{(g.theme || "classic").replace("_", " ")}</td>
+                    <td className="text-[#64748B]">{g.recipient_email}{g.recipient_phone ? ` · ${g.recipient_phone}` : ""}</td>
+                    <td className="text-[#64748B]">
+                      {g.delivered_at ? `Sent ${new Date(g.delivered_at).toLocaleDateString()}` : g.scheduled_send_at ? `Scheduled ${new Date(g.scheduled_send_at).toLocaleString()}` : "Pending"}
+                      {g.resent_at && <span className="block text-[10px]">Resent {new Date(g.resent_at).toLocaleString()}</span>}
+                    </td>
+                    <td className="text-right">
+                      <button onClick={() => resend(g.code)} disabled={sending === g.code}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#E2E8F0] px-3 py-1 font-semibold text-[#0B3B5C] hover:border-[#D4A94A] transition-colors disabled:opacity-60"
+                        data-testid={`gc-resend-${g.code}`}>
+                        {sending === g.code ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} Resend
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

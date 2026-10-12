@@ -114,6 +114,24 @@ GIFT_THEMES = {
     "thank_you": {"kicker": "With gratitude", "headline": "<em>Thank you</em>, enjoy a little island magic.",
                   "subject": "🙏 A thank-you gift: Rox gift card inside", "grad": "#0B3B5C,#3C6E91", "accent": "#D4E8F7",
                   "cta": "Choose your ride or tour →", "cta_path": "/tours", "pdf_title": "<i>Thank you</i>.<br/>Enjoy some island magic."},
+    "anniversary": {"kicker": "Happy Anniversary", "headline": "Celebrate your <em>love</em> in paradise.",
+                    "subject": "❤️ Happy anniversary! A Rox gift card for you", "grad": "#8B1E3F,#D4A94A", "accent": "#FFE0B8",
+                    "cta": "Plan your anniversary day →", "cta_path": "/tours", "pdf_title": "Celebrate your <i>love</i><br/>in paradise."},
+    "wedding": {"kicker": "Congratulations on your wedding", "headline": "Here's to <em>forever</em>, island style.",
+                "subject": "👰 A wedding gift for your Bahamas celebration", "grad": "#5B6B8C,#E8D5B0", "accent": "#FFF6E0",
+                "cta": "Plan your celebration →", "cta_path": "/groups", "pdf_title": "Here's to <i>forever</i>,<br/>island style."},
+    "graduation": {"kicker": "Congratulations, graduate", "headline": "You <em>did it</em>! Time to celebrate.",
+                   "subject": "🎓 Congrats, grad! A Rox gift card for you", "grad": "#1E3A8A,#D4A94A", "accent": "#FDE68A",
+                   "cta": "Pick your celebration →", "cta_path": "/tours", "pdf_title": "You <i>did it</i>!<br/>Time to celebrate."},
+    "holiday": {"kicker": "Season's Greetings from The Bahamas", "headline": "A <em>holiday</em> gift in the sunshine.",
+                "subject": "🎄 Happy holidays! A Rox gift card for you", "grad": "#14532D,#B91C1C", "accent": "#FDE68A",
+                "cta": "Plan your island holiday →", "cta_path": "/tours", "pdf_title": "A <i>holiday</i> gift<br/>in the sunshine."},
+    "mothers_day": {"kicker": "Happy Mother's Day", "headline": "For the <em>best mom</em>, a day in paradise.",
+                    "subject": "🌸 Happy Mother's Day! A Rox gift card for you", "grad": "#BE185D,#F9A8D4", "accent": "#FFF1F7",
+                    "cta": "Plan her perfect day →", "cta_path": "/tours/cable-beach-day", "pdf_title": "For the <i>best mom</i>,<br/>a day in paradise."},
+    "just_because": {"kicker": "A little something for you", "headline": "<em>Just because</em> you deserve it.",
+                     "subject": "🌺 A surprise Rox gift card, just because", "grad": "#0E7490,#5EEAD4", "accent": "#CCFBF1",
+                     "cta": "Treat yourself →", "cta_path": "/tours", "pdf_title": "<i>Just because</i><br/>you deserve it."},
 }
 
 
@@ -207,7 +225,29 @@ async def gift_card_report(_admin=Depends(_admin_dep)):
         "expiring_soon": [{"code": g["code"], "balance": g.get("balance"), "expires_at": g["expires_at"],
                            "recipient_email": g.get("recipient_email"),
                            "reminded": bool(g.get("expiry_reminder_sent_at"))} for g in expiring[:50]],
+        "recent": [{"code": g["code"], "amount": g.get("amount"), "balance": g.get("balance"),
+                    "recipient_email": g.get("recipient_email"), "recipient_phone": g.get("recipient_phone"),
+                    "theme": g.get("theme") or "classic", "scheduled_send_at": g.get("scheduled_send_at"),
+                    "delivered_at": g.get("delivered_at"), "resent_at": g.get("resent_at")}
+                   for g in sorted(sold, key=lambda g: g.get("created_at") or "", reverse=True)[:25]],
     }
+
+
+@router.post("/admin/gift-cards/{code}/resend")
+async def resend_gift_card(code: str, _admin=Depends(_admin_dep)):
+    gc = await _db.gift_cards.find_one({"code": code.upper().strip()})
+    if not gc:
+        raise HTTPException(404, "Gift card not found")
+    if gc.get("status") != "active":
+        raise HTTPException(400, "Only paid (active) gift cards can be resent")
+    from server import _send_gift_voucher_email  # noqa: PLC0415
+    rep = await _send_gift_voucher_email(gc)
+    upd = {"resent_at": _now_iso(), "last_resend_report": rep}
+    if not gc.get("delivered_at") and rep.get("sent"):
+        upd["delivered_at"] = _now_iso()
+    await _db.gift_cards.update_one({"code": gc["code"]}, {"$set": upd})
+    return {"sent": bool(rep.get("sent")), "sms": bool((rep.get("sms") or {}).get("sent")),
+            "to": gc.get("recipient_email"), "error": rep.get("error")}
 
 
 class ApplyGiftRequest(BaseModel):

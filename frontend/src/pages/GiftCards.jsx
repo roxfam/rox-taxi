@@ -11,13 +11,21 @@ const THEMES = [
   { id: "birthday", label: "Birthday", grad: "from-[#E86A3C] via-[#e98a4a] to-[#D4A94A]", line: "Happy birthday! Your island treat" },
   { id: "honeymoon", label: "Honeymoon", grad: "from-[#7A2E4D] via-[#a24d6a] to-[#E8A0A8]", line: "For your honeymoon in paradise" },
   { id: "thank_you", label: "Thank you", grad: "from-[#0B3B5C] via-[#24557a] to-[#3C6E91]", line: "Thank you, enjoy some island magic" },
+  { id: "anniversary", label: "Anniversary", grad: "from-[#8B1E3F] via-[#a8473f] to-[#D4A94A]", line: "Celebrate your love in paradise" },
+  { id: "wedding", label: "Wedding", grad: "from-[#5B6B8C] via-[#9c9fa8] to-[#E8D5B0]", line: "Here's to forever, island style" },
+  { id: "graduation", label: "Graduation", grad: "from-[#1E3A8A] via-[#5b5f7a] to-[#D4A94A]", line: "You did it! Time to celebrate" },
+  { id: "holiday", label: "Holiday", grad: "from-[#14532D] via-[#6b3a26] to-[#B91C1C]", line: "A holiday gift in the sunshine" },
+  { id: "mothers_day", label: "Mother's Day", grad: "from-[#BE185D] via-[#db5d98] to-[#F9A8D4]", line: "For the best mom, a day in paradise" },
+  { id: "just_because", label: "Just because", grad: "from-[#0E7490] via-[#2aa5ad] to-[#5EEAD4]", line: "Just because you deserve it" },
 ];
 
 export default function GiftCards() {
   const [amount, setAmount] = useState(100);
   const [theme, setTheme] = useState("classic");
   const [custom, setCustom] = useState("");
-  const [form, setForm] = useState({ buyer_name: "", buyer_email: "", recipient_email: "", recipient_name: "", message: "" });
+  const [form, setForm] = useState({ buyer_name: "", buyer_email: "", recipient_email: "", recipient_name: "", recipient_phone: "", message: "" });
+  const [sendAt, setSendAt] = useState("");
+  const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [params] = useSearchParams();
   const paidCode = params.get("code");
@@ -30,10 +38,13 @@ export default function GiftCards() {
     e.preventDefault();
     if (!finalAmount || finalAmount < 25 || finalAmount > 1000) return toast.error("Choose $25–$1000");
     if (!form.buyer_name || !form.buyer_email || !form.recipient_email) return toast.error("Fill required fields");
+    if (!agree) return toast.error("Please confirm you understand gift cards are non-refundable");
+    if (sendAt && new Date(sendAt) < new Date()) return toast.error("Pick a delivery date in the future, or leave it blank to send now");
     setBusy(true);
     try {
       const { data } = await api.post("/gift-cards/purchase", {
-        amount: finalAmount, ...form, theme, origin_url: window.location.origin,
+        amount: finalAmount, ...form, recipient_phone: form.recipient_phone || undefined, theme,
+        scheduled_send_at: sendAt ? new Date(sendAt).toISOString() : undefined, origin_url: window.location.origin,
       });
       window.location.href = data.checkout_url;
     } catch (ex) {
@@ -85,7 +96,7 @@ export default function GiftCards() {
 
             <div>
               <div className="text-[10px] tracking-[0.28em] uppercase font-black text-[#64748B] mb-3">Card design</div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" data-testid="gift-theme-picker">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2" data-testid="gift-theme-picker">
                 {THEMES.map((t) => (
                   <button key={t.id} type="button" onClick={() => setTheme(t.id)} data-testid={`gift-theme-${t.id}`}
                     className={`rounded-xl p-1 transition-transform hover:-translate-y-0.5 ${theme === t.id ? "ring-2 ring-[#D4A94A]" : "ring-1 ring-[#EFE7D5]"}`}>
@@ -113,6 +124,16 @@ export default function GiftCards() {
               <input value={form.recipient_name} onChange={(e) => setForm({ ...form, recipient_name: e.target.value })} data-testid="gift-recipient-name" className="w-full rounded-xl border border-[#EFE7D5] bg-white px-3.5 py-2.5 text-sm focus:border-[#D4A94A] focus:outline-none" />
             </label>
             <label className="block">
+              <span className="text-[10px] tracking-[0.28em] uppercase text-[#64748B] font-black mb-1.5 block">Recipient mobile number (optional)</span>
+              <input type="tel" value={form.recipient_phone} onChange={(e) => setForm({ ...form, recipient_phone: e.target.value })} placeholder="+1 242 555 0123" data-testid="gift-recipient-phone" className="w-full rounded-xl border border-[#EFE7D5] bg-white px-3.5 py-2.5 text-sm focus:border-[#D4A94A] focus:outline-none" />
+              <span className="text-[11px] text-[#94a3b8] mt-1 block">We'll also text them their gift code.</span>
+            </label>
+            <label className="block">
+              <span className="text-[10px] tracking-[0.28em] uppercase text-[#64748B] font-black mb-1.5 block">Delivery date (optional)</span>
+              <input type="datetime-local" value={sendAt} onChange={(e) => setSendAt(e.target.value)} data-testid="gift-send-date" className="w-full rounded-xl border border-[#EFE7D5] bg-white px-3.5 py-2.5 text-sm focus:border-[#D4A94A] focus:outline-none" />
+              <span className="text-[11px] text-[#94a3b8] mt-1 block" data-testid="gift-send-date-note">{sendAt ? `Delivers on ${new Date(sendAt).toLocaleString()} (your local time). Perfect for birthdays and anniversaries.` : "Leave blank to send right after payment."}</span>
+            </label>
+            <label className="block">
               <span className="text-[10px] tracking-[0.28em] uppercase text-[#64748B] font-black mb-1.5 block">Message (optional)</span>
               <textarea rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} data-testid="gift-message" className="w-full rounded-xl border border-[#EFE7D5] bg-white px-3.5 py-2.5 text-sm focus:border-[#D4A94A] focus:outline-none" placeholder="Have a magical Bahamas trip!" />
             </label>
@@ -129,8 +150,15 @@ export default function GiftCards() {
                 <div className="text-[10px] tracking-widest uppercase opacity-70 mt-1">Redeemable at checkout</div>
               </div>
             </div>
-            <p className="text-[11px] text-[#94a3b8] mt-4 leading-relaxed">Delivered by email within seconds of payment. Balance carries over across bookings. Expires 12 months after purchase. Gift cards are non-refundable and can't be exchanged for cash.</p>
-            <button type="submit" disabled={busy} data-testid="gift-purchase-submit" className="w-full mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-6 py-3.5 text-sm font-semibold shadow-[0_10px_25px_rgba(232,106,60,0.35)] disabled:opacity-60">
+            <p className="text-[11px] text-[#94a3b8] mt-4 leading-relaxed">Delivered by email (and text, if you add a number) right after payment or on your chosen date. Balance carries over across bookings. Expires 12 months after purchase.</p>
+            <div className="mt-3 rounded-xl bg-[#FFF4EE] border border-[#E86A3C]/30 px-3 py-2.5 text-[11px] text-[#7c3a20]" data-testid="gift-nonrefundable-notice">
+              <b>All gift cards are non-refundable</b> and can't be exchanged for cash.
+            </div>
+            <label className="mt-3 flex items-start gap-2 text-[11px] text-[#0B3B5C] cursor-pointer">
+              <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5" data-testid="gift-nonrefundable-agree" />
+              I understand this gift card is non-refundable.
+            </label>
+            <button type="submit" disabled={busy || !agree} data-testid="gift-purchase-submit" className="w-full mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-6 py-3.5 text-sm font-semibold shadow-[0_10px_25px_rgba(232,106,60,0.35)] disabled:opacity-60">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {busy ? "Redirecting…" : `Buy ${money(finalAmount || 0)} card`}
             </button>

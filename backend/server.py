@@ -392,7 +392,8 @@ class GiftCardPurchaseRequest(BaseModel):
     message: Optional[str] = Field(None, max_length=400)
     origin_url: str
     scheduled_send_at: Optional[str] = Field(None, max_length=40)  # ISO datetime — defer delivery (birthday / anniversary)
-    theme: str = Field("classic", pattern="^(classic|birthday|honeymoon|thank_you)$")
+    theme: str = Field("classic", pattern="^(classic|birthday|honeymoon|thank_you|anniversary|wedding|graduation|holiday|mothers_day|just_because)$")
+    recipient_phone: Optional[str] = Field(None, max_length=40)
 
 
 class GiftCardRedeemRequest(BaseModel):
@@ -1633,6 +1634,7 @@ async def seed_db():
     asyncio.create_task(dayof_module.dayof_loop())
     asyncio.create_task(welcome_email_module.reminder_loop())
     asyncio.create_task(gift_redeem_module.expiry_reminder_loop())
+    asyncio.create_task(_scheduled_gift_loop())
     asyncio.create_task(cron_module.google_reviews_loop())
     asyncio.create_task(payments_module.reconcile_loop())
     # ── Owner-SMS routing cache — refreshed every 60s from site_config ──
@@ -1873,6 +1875,7 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
         "expires_at": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat(),
         "non_refundable": True,
         "theme": req.theme,
+        "recipient_phone": (req.recipient_phone or "").strip(),
         "scheduled_send_at": scheduled_at_iso,
         "delivered_at": None,
         "created_at": ts,
@@ -3868,7 +3871,7 @@ async def _send_gift_voucher_email(gc: dict) -> dict:
           </td></tr></table>
         </body></html>
         """
-        return send_email(
+        rep = send_email(
             to_email=gc.get("recipient_email"),
             subject=f"{th['subject']} — ${float(gc.get('amount') or 0):.0f} from {buyer_label}",
             html=html,
@@ -3880,6 +3883,12 @@ async def _send_gift_voucher_email(gc: dict) -> dict:
                 "mime_type": "application/pdf",
             }],
         )
+        if gc.get("recipient_phone"):
+            from notifications import send_sms
+            rep["sms"] = send_sms(gc["recipient_phone"], (
+                f"Rox: {buyer_label} sent you a ${float(gc.get('amount') or 0):.0f} Rox gift card! "
+                f"Code {gc.get('code','')} · {gift_redeem_module.expiry_label(gc)}. Book: {site}{th['cta_path']}")[:600])
+        return rep
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("gift voucher email err: %s", e)
         return {"sent": False, "error": str(e)}
@@ -3934,6 +3943,16 @@ async def _activate_gift_if_paid(session_id: str) -> Optional[str]:
     except Exception as e:  # noqa: BLE001
         logging.getLogger(__name__).warning("gift buyer ack err: %s", e)
     return gc["code"]
+
+
+async def _scheduled_gift_loop() -> None:
+    """Self-hosted fallback: deliver scheduled gift cards when their send date arrives."""
+    while True:
+        try:
+            await _drain_scheduled_gifts()
+        except Exception as e:  # noqa: BLE001
+            logging.warning("scheduled gift tick err: %s", e)
+        await asyncio.sleep(600)
 
 
 async def _drain_scheduled_gifts() -> dict:
