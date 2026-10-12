@@ -624,5 +624,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - `PATCH /admin/bookings/{id}/details` now emails + texts the guest when date/time, pickup or drop-off changes (`notify_guest` default true; checkbox `booking-edit-notify-guest`). Result stored in `change_notice_last`. SMS includes "Reply YES to confirm".
 - Flight tracker (AviationStack): key now read via secrets_store (Admin Secrets panel works). Owner SMS kind changed `dispatch` → `flight_status`, matched by `booking`, `dispatch`, `all_bookings` and `*` subscriptions. New `arriving_soon` event (ETA ≤45 min) alongside departed / landed / delay ≥30m. Times formatted in Nassau local. Applies to every active booking with a `flight_number` within −6h/+24h, polled every 20 min.
 
+## 2026-10-12 — Owner text on guest confirmation email
+- `notify_booking_confirmed` now sends owner SMS (kind `booking_confirmed`, matched by `booking`, `all_bookings`, `*`) whenever the guest confirmation email is sent successfully: ID, guest, item, date, pax, total (total||total_price), paid flag, guest phone. Covers all callers (Stripe/PayPal webhook confirm, admin status → confirmed, admin resend invoice). Guest SMS total also fixed to fall back to `total_price`.
+
+
 
 

@@ -340,7 +340,7 @@ def _matches_subscription(recipient: dict, kind: Optional[str]) -> bool:
             "taxi_created", "taxi_paid", "taxi_booking",
             "tour_created", "tour_paid", "tour_booking",
             "rental_created", "rental_paid", "rental_booking",
-            "group_booking", "wedding_booking", "flight_status",
+            "group_booking", "wedding_booking", "flight_status", "booking_confirmed",
         ),
         "payment": ("checkout_paid", "payment_failed", "refund_issued",
                     "payout_sent", "share_conversion", "payment_digest"),
@@ -2034,12 +2034,27 @@ def notify_booking_confirmed(booking: dict, prefs: Optional[dict] = None) -> dic
         _tail = f" · Invoice: {_invoice_url}" if _paid else ""
         sms = (
             f"Rox Taxi: Booking {booking['id']} confirmed for {booking['item_name']} on {booking['booking_date']}. "
-            f"Total {_fmt_money(booking.get('total',0))}. Pickup pass (driver scans this): {_pass_url}{_tail}"
+            f"Total {_fmt_money(booking.get('total') or booking.get('total_price') or 0)}. Pickup pass (driver scans this): {_pass_url}{_tail}"
         )
         result = send_sms(booking["customer_phone"], sms)
         report["sms"].update(result)
     else:
         report["sms"]["error"] = "Disabled by admin" if not sms_enabled else "No phone number"
+
+    if report["email"].get("sent"):
+        try:
+            owner_body = (
+                f"Rox: ✅ Booking {booking['id']} CONFIRMED — {booking.get('customer_name') or 'Guest'} · "
+                f"{booking.get('item_name', '')} · {str(booking.get('booking_date', '')).replace('T', ' ')[:16]} · "
+                f"{booking.get('passengers', 1)} pax · "
+                f"{_fmt_money(booking.get('total') or booking.get('total_price') or 0)}"
+                f"{' (paid)' if _paid else ''}"
+                f"{' · ' + booking['customer_phone'] if booking.get('customer_phone') else ''}. "
+                f"Confirmation emailed to guest."
+            )
+            report["owner_sms"] = send_owner_sms(owner_body, "booking_confirmed")
+        except Exception as ex:  # noqa: BLE001
+            logger.warning("owner confirmed sms err: %s", ex)
 
     return report
 
