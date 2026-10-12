@@ -709,4 +709,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - `gift_redeem.run_expiry_reminders()` + hourly in-app `expiry_reminder_loop` (started in server.py): emails the recipient (or the buyer if there's no recipient) once when an active card with balance > 0 is within 30 days of `expires_at`. Includes code, balance, expiry date and a Book Now button. Idempotent via `expiry_reminder_sent_at` and `expiry_reminder_ok`. Cards with no expiry or no balance are skipped.
 - Verified with test cards: 1 email sent for the card due soon, 0 on the second run, cards expiring later and empty cards skipped. Test data deleted.
 
+## 2026-10-12 — Calendar drag reschedule · Gift card sales report
+- BookingCalendar: drag an active booking chip onto another day (week/month view). A confirm dialog keeps the original time, and "Email and text the guest" is ticked by default. It calls the existing `PATCH /admin/bookings/{id}/details`, which sends the change notice and resets the day-of reminder, then the bookings list reloads. Cancelled, completed and no-show bookings can't be dragged.
+- `GET /api/admin/gift-cards/report` (admin only, 401 without auth): sold all-time and last 30 days, redeemed, outstanding balance, expired unused, list of cards expiring within 30 days with reminder status. Shown on the admin dashboard in `GiftCardReportCard.jsx` above the calendar.
+- Verified: drag TEST booking 13th→14th moved it and showed the toast; report endpoint returns data. CI=true build is clean.
+
+
 

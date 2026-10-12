@@ -6568,7 +6568,7 @@ payments_module.configure(
     require_admin=require_admin,
 )
 api_router.include_router(payments_module.router)
-gift_redeem_module.configure(db=db, now_iso=now_iso, mark_paid=payments_module._mark_paid)
+gift_redeem_module.configure(db=db, now_iso=now_iso, mark_paid=payments_module._mark_paid, require_admin=require_admin)
 api_router.include_router(gift_redeem_module.router)
 
 # Wire up the gallery router — has specific /admin/gallery/* routes that must

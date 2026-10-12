@@ -5,18 +5,24 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 router = APIRouter()
 _db = None
 _now_iso = None
 _mark_paid = None
+_require_admin = None
 
 
-def configure(*, db, now_iso, mark_paid):
-    global _db, _now_iso, _mark_paid
-    _db, _now_iso, _mark_paid = db, now_iso, mark_paid
+def configure(*, db, now_iso, mark_paid, require_admin=None):
+    global _db, _now_iso, _mark_paid, _require_admin
+    _db, _now_iso, _mark_paid, _require_admin = db, now_iso, mark_paid, require_admin
+
+
+async def _admin_dep(request: Request, authorization: Optional[str] = Header(None),
+                     x_csrf_token: Optional[str] = Header(None, alias="X-CSRF-Token")):
+    return await _require_admin(request, authorization, x_csrf_token)
 
 
 def is_expired(gc: dict) -> bool:
@@ -157,6 +163,32 @@ async def expiry_reminder_loop() -> None:
         except Exception as e:  # noqa: BLE001
             logging.warning("gift expiry tick err: %s", e)
         await asyncio.sleep(3600)
+
+
+@router.get("/admin/gift-cards/report")
+async def gift_card_report(_admin=Depends(_admin_dep)):
+    now = datetime.now(timezone.utc)
+    soon = (now + timedelta(days=EXPIRY_REMINDER_DAYS)).isoformat()
+    month_ago = (now - timedelta(days=30)).isoformat()
+    sold = await _db.gift_cards.find({"status": {"$in": ["active", "used"]}}, {"_id": 0}).to_list(5000)
+    redeemed = sum(sum(float(r.get("amount") or 0) for r in (g.get("redemptions") or [])) for g in sold)
+    live = [g for g in sold if not is_expired(g)]
+    expired = [g for g in sold if is_expired(g)]
+    expiring = sorted(
+        [g for g in live if g.get("expires_at") and g["expires_at"] <= soon and float(g.get("balance") or 0) > 0],
+        key=lambda g: g["expires_at"])
+    return {
+        "sold_count": len(sold),
+        "sold_value": round(sum(float(g.get("amount") or 0) for g in sold), 2),
+        "sold_30d_count": sum(1 for g in sold if (g.get("created_at") or "") >= month_ago),
+        "sold_30d_value": round(sum(float(g.get("amount") or 0) for g in sold if (g.get("created_at") or "") >= month_ago), 2),
+        "redeemed_value": round(redeemed, 2),
+        "outstanding_balance": round(sum(float(g.get("balance") or 0) for g in live), 2),
+        "expired_unused": round(sum(float(g.get("balance") or 0) for g in expired), 2),
+        "expiring_soon": [{"code": g["code"], "balance": g.get("balance"), "expires_at": g["expires_at"],
+                           "recipient_email": g.get("recipient_email"),
+                           "reminded": bool(g.get("expiry_reminder_sent_at"))} for g in expiring[:50]],
+    }
 
 
 class ApplyGiftRequest(BaseModel):
