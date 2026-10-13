@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, X, RefreshCw, Images, Mail, Facebook, RotateCw, ExternalLink, AlertTriangle, Pin, PinOff, Trash2 } from "lucide-react";
+import { Check, X, RefreshCw, Images, Mail, Facebook, RotateCw, ExternalLink, AlertTriangle, Pin, PinOff, Trash2, Award, Pencil } from "lucide-react";
 import { api, BACKEND_URL } from "../../lib/api";
+import { GalleryRewardSettings } from "./GalleryRewardSettings";
+import { GalleryEditForm } from "./GalleryEditForm";
 
 // Admin panel for reviewing customer-submitted gallery photos.
 // Two tabs: "Pending" (approve/reject) and "Approved" (repost to Facebook, view live post).
@@ -11,6 +13,8 @@ export default function GalleryPanel() {
   const [approved, setApproved] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState({}); // { [id]: 'approve'|'reject'|'repost' }
+  const [editing, setEditing] = useState(null);
+  const [potmId, setPotmId] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -21,6 +25,7 @@ export default function GalleryPanel() {
       ]);
       setPending(Array.isArray(p.data) ? p.data : []);
       setApproved(Array.isArray(a.data) ? a.data : []);
+      api.get("/admin/gallery-rewards").then(({ data }) => setPotmId(data?.photo_of_month?.submission_id || null)).catch(() => {});
     } catch {
       toast.error("Failed to load gallery submissions");
     } finally {
@@ -99,6 +104,26 @@ export default function GalleryPanel() {
     }
   };
 
+  const makePotm = async (id) => {
+    if (!window.confirm("Make this the Photo of the Month? It will show on the home page and the guest gets a gift card (once per guest).")) return;
+    setBusy((b) => ({ ...b, [id]: "potm" }));
+    try {
+      const { data } = await api.post(`/admin/gallery/${id}/photo-of-month`);
+      setPotmId(id);
+      toast.success(data.reward_code ? `Photo of the Month set. Gift card ${data.reward_code} emailed.` : "Photo of the Month set. No new gift card (guest already received one or has no email).");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed to set Photo of the Month");
+    } finally {
+      setBusy((b) => { const n = { ...b }; delete n[id]; return n; });
+    }
+  };
+
+  const onSaved = (doc) => {
+    setApproved((xs) => xs.map((x) => (x.id === doc.id ? { ...x, ...doc } : x)));
+    setPending((xs) => xs.map((x) => (x.id === doc.id ? { ...x, ...doc } : x)));
+    setEditing(null);
+  };
+
   const hardDelete = async (id, source) => {
     if (!window.confirm("Permanently delete this photo? The image file will be removed from disk. This cannot be undone.")) return;
     setBusy((b) => ({ ...b, [id]: "delete" }));
@@ -156,6 +181,7 @@ export default function GalleryPanel() {
         </div>
       </div>
 
+      <GalleryRewardSettings />
       {loading ? (
         <div className="text-center text-[#64748B] py-12" data-testid="admin-gallery-loading">Loading…</div>
       ) : tab === "pending" ? (
@@ -244,6 +270,11 @@ export default function GalleryPanel() {
                 <div key={it.id} className="rounded-2xl bg-white border border-[#E2E8F0] overflow-hidden flex flex-col" data-testid={`admin-gallery-approved-item-${it.id}`}>
                   <div className="aspect-[4/3] bg-[#F1F5F9] overflow-hidden relative">
                     <img src={resolveUrl(it.url)} alt={it.caption || "Guest submission"} className="w-full h-full object-cover" loading="lazy" />
+                    {potmId === it.id && (
+                      <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-[#0B192C] text-[#D4A94A] text-[10px] font-black px-2 py-1 shadow-sm" data-testid={`admin-gallery-potm-badge-${it.id}`}>
+                        <Award className="w-3 h-3" /> Photo of the Month
+                      </span>
+                    )}
                     {it.is_pinned && (
                       <span className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-[#D4A94A] text-[#0B192C] text-[10px] font-black px-2 py-1 shadow-sm" data-testid={`admin-gallery-pinned-badge-${it.id}`}>
                         <Pin className="w-3 h-3" /> Featured
@@ -270,7 +301,24 @@ export default function GalleryPanel() {
                         {it.approved_at && `Approved ${new Date(it.approved_at).toLocaleString()}`}
                       </div>
                     </div>
-                    {it.caption && <p className="text-sm text-[#334155] leading-snug line-clamp-2">&ldquo;{it.caption}&rdquo;</p>}
+                    {editing === it.id ? (
+                      <GalleryEditForm item={it} onSaved={onSaved} onCancel={() => setEditing(null)} />
+                    ) : (
+                      it.caption && <p className="text-sm text-[#334155] leading-snug line-clamp-2">&ldquo;{it.caption}&rdquo;</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button onClick={() => makePotm(it.id)} disabled={!!b || potmId === it.id}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full bg-[#0B192C] hover:bg-[#0B3B5C] text-[#D4A94A] text-xs font-semibold py-2 disabled:opacity-60 active:scale-95"
+                        data-testid={`admin-gallery-potm-${it.id}`}>
+                        {b === "potm" ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Award className="w-3.5 h-3.5" />}
+                        {potmId === it.id ? "Photo of the Month" : "Make Photo of the Month"}
+                      </button>
+                      <button onClick={() => setEditing(it.id)} disabled={!!b}
+                        className="inline-flex items-center justify-center gap-1 rounded-full bg-white border border-[#E2E8F0] text-[#0B3B5C] hover:bg-[#F1F5F9] text-xs font-semibold px-3 py-2 disabled:opacity-60"
+                        data-testid={`admin-gallery-edit-${it.id}`}>
+                        <Pencil className="w-3.5 h-3.5" /> Edit
+                      </button>
+                    </div>
                     {attempted && !posted && it.facebook_error && (
                       <p className="text-[11px] text-[#DC2626] leading-snug bg-[#DC2626]/8 rounded-md px-2 py-1.5" data-testid={`admin-gallery-fb-error-${it.id}`}>
                         {it.facebook_error}

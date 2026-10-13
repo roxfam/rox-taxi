@@ -214,7 +214,7 @@ async def gift_card_report(_admin=Depends(_admin_dep)):
     expiring = sorted(
         [g for g in live if g.get("expires_at") and g["expires_at"] <= soon and float(g.get("balance") or 0) > 0],
         key=lambda g: g["expires_at"])
-    paid = [g for g in sold if g.get("source") != "photo_reward"]
+    paid = [g for g in sold if g.get("source") not in REWARD_SOURCES]
     return {
         "sold_count": len(paid),
         "sold_value": round(sum(float(g.get("amount") or 0) for g in paid), 2),
@@ -252,24 +252,48 @@ async def resend_gift_card(code: str, _admin=Depends(_admin_dep)):
             "to": gc.get("recipient_email"), "error": rep.get("error")}
 
 
-PHOTO_REWARD_USD = 5.0
+REWARD_SOURCES = ("photo_reward", "photo_of_month")
+REWARD_DEFAULTS = {"enabled": True, "approval_amount": 5.0, "potm_amount": 5.0}
+
+
+async def reward_settings() -> dict:
+    cfg = await _db.site_config.find_one({"_id": "main"}, {"photo_rewards": 1}) or {}
+    return {**REWARD_DEFAULTS, **(cfg.get("photo_rewards") or {})}
 
 
 async def issue_photo_reward(sub: dict) -> Optional[str]:
-    """$5 thank-you gift card the first time a guest's photo is approved (one per email)."""
+    """Thank-you gift card the first time a guest's photo is approved (one per email)."""
+    s = await reward_settings()
+    if not s["enabled"] or float(s["approval_amount"]) <= 0:
+        return None
+    return await _issue_reward(sub, "photo_reward", float(s["approval_amount"]),
+                               "Thank you for sharing your Bahamas photo with us! Here's a little something toward your next ride.")
+
+
+async def issue_potm_reward(sub: dict) -> Optional[str]:
+    """Photo of the Month gift card — one per guest, ever."""
+    s = await reward_settings()
+    if float(s["potm_amount"]) <= 0:
+        return None
+    return await _issue_reward(sub, "photo_of_month", float(s["potm_amount"]),
+                               "Your photo is our Photo of the Month! Thank you for sharing your Bahamas moment. Enjoy this gift toward your next ride.")
+
+
+async def _issue_reward(sub: dict, source: str, amount: float, message: str) -> Optional[str]:
     email = (sub.get("submitter_email") or "").lower().strip()
     if not email:
         return None
-    if await _db.gift_cards.find_one({"source": "photo_reward", "recipient_email": email}, {"_id": 1}):
+    if await _db.gift_cards.find_one({"source": source, "recipient_email": email}, {"_id": 1}):
         return None
     from server import _new_gift_code, _send_gift_voucher_email  # noqa: PLC0415
     now = datetime.now(timezone.utc)
+    amount = round(amount, 2)
     gc = {
-        "code": _new_gift_code(), "amount": PHOTO_REWARD_USD, "balance": PHOTO_REWARD_USD, "status": "active",
-        "source": "photo_reward", "submission_id": sub.get("id"), "theme": "thank_you",
+        "code": _new_gift_code(), "amount": amount, "balance": amount, "status": "active",
+        "source": source, "submission_id": sub.get("id"), "theme": "thank_you",
         "buyer_name": "Rox Taxi & Tours", "buyer_email": "",
         "recipient_name": sub.get("submitter_name") or "", "recipient_email": email,
-        "message": "Thank you for sharing your Bahamas photo with us! Here's a little something toward your next ride.",
+        "message": message,
         "created_at": now.isoformat(), "expires_at": (now + timedelta(days=365)).isoformat(),
         "non_refundable": True, "redemptions": [],
     }

@@ -400,8 +400,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     return subtotal * (pct / 100);
   })();
 
-  // ── Bahamas VAT (10%) — applies to every order, taxi included (matches backend) ──
-  const vatApplies = true;
+  // ── Bahamas VAT (10%) — every order except taxi fares (matches backend) ──
+  const vatApplies = serviceType !== "taxi";
   const vatAmount = vatApplies ? subtotal * BAHAMAS_VAT_PCT : 0;
 
   // ── Payment-processing fee (4.5%) — applied to every order ─────────
@@ -1318,8 +1318,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   <div className="min-w-0">
                     <div className="text-[9px] sm:text-[10px] tracking-[0.22em] sm:tracking-[0.24em] uppercase text-[#D4A94A] font-bold">Order total</div>
                     <div className="serif text-2xl sm:text-3xl mt-0.5 sm:mt-1 leading-none" data-testid="checkout-grand-total">{money(total)}</div>
-                    <div className="hidden sm:block text-[11px] text-white/60 mt-0.5">Includes 10% VAT & 5% processing · all fees final</div>
-                    <div className="sm:hidden text-[10px] text-white/60 mt-0.5">VAT & fees included</div>
+                    <div className="hidden sm:block text-[11px] text-white/60 mt-0.5">{vatApplies ? "Includes 10% VAT & 5% processing" : "VAT-free taxi fare · includes 5% processing"} · all fees final</div>
+                    <div className="sm:hidden text-[10px] text-white/60 mt-0.5">{vatApplies ? "VAT & fees included" : "No VAT on taxi · fees included"}</div>
                   </div>
                   <button
                     onClick={submit}

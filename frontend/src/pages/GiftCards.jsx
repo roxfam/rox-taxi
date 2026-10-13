@@ -34,6 +34,8 @@ export default function GiftCards() {
   const cancelled = params.get("cancelled");
 
   const finalAmount = custom ? Number(custom) : amount;
+  const giftVat = Math.round((finalAmount || 0) * 10) / 100;
+  const giftTotal = (finalAmount || 0) + giftVat;
   const activeTheme = THEMES.find((t) => t.id === theme) || THEMES[0];
 
   const submit = async (e) => {
@@ -162,13 +164,18 @@ export default function GiftCards() {
             <div className="mt-3 rounded-xl bg-[#FFF4EE] border border-[#E86A3C]/30 px-3 py-2.5 text-[11px] text-[#7c3a20]" data-testid="gift-nonrefundable-notice">
               <b>All gift cards are non-refundable</b> and can&apos;t be exchanged for cash.
             </div>
+            <div className="mt-4 space-y-1 text-sm text-[#0B3B5C]" data-testid="gift-price-breakdown">
+              <div className="flex justify-between"><span>Card value</span><span data-testid="gift-card-value">{money(finalAmount || 0)}</span></div>
+              <div className="flex justify-between text-[#64748B]"><span>Bahamas VAT 10%</span><span data-testid="gift-vat">{money(giftVat)}</span></div>
+              <div className="flex justify-between font-black border-t border-[#EFE7D5] pt-1"><span>Total today</span><span data-testid="gift-total">{money(giftTotal)}</span></div>
+            </div>
             <label className="mt-3 flex items-start gap-2 text-[11px] text-[#0B3B5C] cursor-pointer">
               <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5" data-testid="gift-nonrefundable-agree" />
               I understand this gift card is non-refundable.
             </label>
             <button type="submit" disabled={busy || !agree} data-testid="gift-purchase-submit" className="w-full mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-6 py-3.5 text-sm font-semibold shadow-[0_10px_25px_rgba(232,106,60,0.35)] disabled:opacity-60">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {busy ? "Redirecting…" : `Buy ${money(finalAmount || 0)} card`}
+              {busy ? "Redirecting…" : `Pay ${money(giftTotal)} for ${money(finalAmount || 0)} card`}
             </button>
             <p className="text-[10px] text-[#94a3b8] text-center mt-2">Secured by Stripe · funds go to Rox Taxi</p>
           </aside>

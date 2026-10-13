@@ -228,7 +228,7 @@ RENTAL_DISCOUNT_TIERS = [(14, 0.12), (7, 0.07), (5, 0.03)]
 # Taxes & processing — apply to every paid booking. Deposit + tip are
 # excluded from the taxable subtotal (deposit is refundable hold, tip
 # is a gratuity for the driver). Processing fee is 5% of subtotal+VAT.
-BAHAMAS_VAT_PCT = 0.10           # 10% Bahamas VAT on EVERY order (incl. taxi)
+BAHAMAS_VAT_PCT = 0.10           # 10% Bahamas VAT on every order except taxi fares
 PROCESSING_FEE_PCT = 0.05        # 5% payment-processing fee
 
 
@@ -1874,8 +1874,13 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
             scheduled_at_iso = dt.astimezone(timezone.utc).isoformat()
         except Exception:  # noqa: BLE001
             scheduled_at_iso = None
+    card_value = round(float(req.amount), 2)
+    vat = round(card_value * BAHAMAS_VAT_PCT, 2)
+    charged = round(card_value + vat, 2)
     doc = {
         "code": code,
+        "vat_amount": vat,
+        "total_charged": charged,
         "amount": round(float(req.amount), 2),
         "balance": round(float(req.amount), 2),
         "buyer_name": req.buyer_name,
@@ -1898,13 +1903,13 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
     webhook_url = f"{host_url}/api/webhook/stripe"
     sc = StripeCheckout(api_key=stripe_key, webhook_url=webhook_url)
     session = await sc.create_checkout_session(CheckoutSessionRequest(
-        amount=float(req.amount), currency="usd",
+        amount=charged, currency="usd",
         success_url=f"{req.origin_url}/gift-cards/success?code={code}",
         cancel_url=f"{req.origin_url}/gift-cards?cancelled=1",
         metadata={"gift_code": code, "type": "gift_card", "buyer_email": req.buyer_email},
     ))
     await db.gift_cards.update_one({"code": code}, {"$set": {"stripe_session_id": session.session_id, "updated_at": now_iso()}})
-    return {"checkout_url": session.url, "code": code}
+    return {"checkout_url": session.url, "code": code, "vat_amount": vat, "total_charged": charged}
 
 
 @api_router.get("/gift-cards/{code}")
@@ -2911,8 +2916,8 @@ async def create_booking(req: BookingCreate, request: Request):
         2,
     )
 
-    # ── Bahamas VAT (10%) — applies to every order, taxi included ─────
-    vat_amount = round(subtotal_before_tax * BAHAMAS_VAT_PCT, 2)
+    # ── Bahamas VAT (10%) — every order except taxi fares ─────
+    vat_amount = 0.0 if req.service_type == "taxi" else round(subtotal_before_tax * BAHAMAS_VAT_PCT, 2)
 
     # ── Payment-processing fee (5%) — applied to every order ──────────
     processing_fee = round((subtotal_before_tax + vat_amount) * PROCESSING_FEE_PCT, 2)

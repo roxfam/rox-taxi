@@ -23,6 +23,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from PIL import Image, ImageOps
+from pydantic import BaseModel, Field
 import httpx
 
 
@@ -382,7 +383,79 @@ async def admin_delete_submission(sub_id: str, _admin: str = _require()):
     except Exception:  # noqa: BLE001
         pass
     await _db.gallery_submissions.delete_one({"id": sub_id})
+    await _db.site_config.update_one({"_id": "main", "photo_of_month.submission_id": sub_id}, {"$unset": {"photo_of_month": ""}})
     return {"id": sub_id, "deleted": True}
+
+
+class SubmissionEdit(BaseModel):
+    caption: Optional[str] = Field(None, max_length=500)
+    submitter_name: Optional[str] = Field(None, max_length=100)
+
+
+@router.patch("/admin/gallery/{sub_id}")
+async def admin_edit_submission(sub_id: str, req: SubmissionEdit, _admin: str = _require()):
+    upd = {k: v.strip() for k, v in req.model_dump().items() if v is not None}
+    if not upd:
+        raise HTTPException(400, "Nothing to update")
+    r = await _db.gallery_submissions.update_one({"id": sub_id}, {"$set": {**upd, "edited_at": _now_iso()}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Submission not found")
+    return _clean(await _db.gallery_submissions.find_one({"id": sub_id}))
+
+
+class RewardSettings(BaseModel):
+    enabled: bool
+    approval_amount: float = Field(..., ge=0, le=500)
+    potm_amount: float = Field(..., ge=0, le=500)
+
+
+@router.get("/admin/gallery-rewards")
+async def admin_get_reward_settings(_admin: str = _require()):
+    from routes.gift_redeem import reward_settings  # noqa: PLC0415
+    cfg = await _db.site_config.find_one({"_id": "main"}, {"photo_of_month": 1}) or {}
+    return {**(await reward_settings()), "photo_of_month": cfg.get("photo_of_month")}
+
+
+@router.put("/admin/gallery-rewards")
+async def admin_put_reward_settings(req: RewardSettings, _admin: str = _require()):
+    data = {**req.model_dump(), "approval_amount": round(req.approval_amount, 2), "potm_amount": round(req.potm_amount, 2)}
+    await _db.site_config.update_one({"_id": "main"}, {"$set": {"photo_rewards": data}}, upsert=True)
+    return data
+
+
+@router.post("/admin/gallery/{sub_id}/photo-of-month")
+async def admin_set_photo_of_month(sub_id: str, _admin: str = _require()):
+    doc = await _db.gallery_submissions.find_one({"id": sub_id, "status": "approved"})
+    if not doc:
+        raise HTTPException(404, "Approved submission not found")
+    from datetime import datetime, timezone  # noqa: PLC0415
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    potm = {"submission_id": sub_id, "month": month, "set_at": _now_iso()}
+    await _db.site_config.update_one({"_id": "main"}, {"$set": {"photo_of_month": potm}}, upsert=True)
+    reward_code = None
+    try:
+        from routes.gift_redeem import issue_potm_reward  # noqa: PLC0415
+        reward_code = await issue_potm_reward(doc)
+    except Exception as e:  # noqa: BLE001
+        _logger.warning(f"photo of month reward failed: {e}")
+    await _db.gallery_submissions.update_one({"id": sub_id}, {"$set": {"potm_month": month, **({"potm_reward_code": reward_code} if reward_code else {})}})
+    return {**potm, "reward_code": reward_code, "already_rewarded": reward_code is None}
+
+
+@router.get("/gallery/photo-of-month")
+async def public_photo_of_month():
+    cfg = await _db.site_config.find_one({"_id": "main"}, {"photo_of_month": 1}) or {}
+    potm = cfg.get("photo_of_month")
+    if not potm:
+        return None
+    doc = await _db.gallery_submissions.find_one({"id": potm["submission_id"], "status": "approved"})
+    if not doc:
+        return None
+    url = doc.get("url") or ""
+    if url.startswith("/uploads/"):
+        url = "/api" + url
+    return {"id": doc["id"], "url": url, "caption": doc.get("caption") or "",
+            "submitter": doc.get("submitter_name") or "", "month": potm["month"]}
 
 
 

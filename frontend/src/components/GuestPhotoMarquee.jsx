@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Camera } from "lucide-react";
 import { api } from "../lib/api";
+import { PhotoOfTheMonth } from "./PhotoOfTheMonth";
 
 const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${process.env.REACT_APP_BACKEND_URL}${u}`);
 
@@ -22,11 +23,12 @@ export default function GuestPhotoMarquee() {
           <Camera className="w-4 h-4" /> Share your photo
         </Link>
       </div>
+      <PhotoOfTheMonth />
       {photos.length === 0 ? (
         <p className="max-w-7xl mx-auto px-6 lg:px-10 text-sm text-[#64748B]" data-testid="home-guest-photos-empty">Be the first to share a photo from your trip. Approved photos appear here.</p>
       ) : (
         <div className="promo-marquee overflow-hidden">
-          <div className="promo-marquee-track guest-photo-marquee inline-flex gap-4 px-2">
+          <div className="promo-marquee-track guest-photo-marquee inline-flex gap-4 px-2" style={{ animationDuration: `${Math.max(180, photos.length * 20)}s` }}>
             {[...photos, ...photos].map((p, i) => (
               <Link key={`${p.id || p.url}-${i}`} to="/gallery" aria-hidden={i >= photos.length || undefined} tabIndex={i >= photos.length ? -1 : undefined}
                 className="shrink-0 w-56 h-56 rounded-2xl overflow-hidden border border-[#EFE7D5] bg-white shadow-[0_6px_18px_rgba(11,25,44,0.08)]"
