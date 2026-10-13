@@ -767,6 +767,18 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - VAT rule picked (owner delegated): 10% VAT on taxis, the same as the backend charge (backend "taxi included" rule from 2026-10-02 is newer than the frontend exemption from 2026-09-20). BookingFlow `vatApplies = true`. Verified: Marathon Mall, 1 pax, no tip → window $40.43 = backend $40.43.
 - Photo rewards: `gift_redeem.issue_photo_reward()` runs on `POST /admin/gallery/{id}/approve`: one $5 "thank_you" gift card per guest email (source "photo_reward", valid 12 months, non-refundable), emailed with the themed voucher; the code is saved on the submission (`reward_code`) and returned. Gift report "sold" figures exclude rewards (`rewards_issued` count). Gallery copy mentions the $5 reward.
 
+## 2026-10-13 — Taxi VAT-free · Gift card VAT · Reward settings · Photo of the Month · Gallery edit
+- Owner rule: NO VAT on taxi fares; 10% VAT on everything else. server.py `vat_amount = 0 if service_type == "taxi"`; BookingFlow `vatApplies = serviceType !== "taxi"` + "VAT-free taxi fare" label.
+- Gift cards: buyer pays card value + 10% VAT (Stripe charges amount×1.1; card holds face value). Stored `vat_amount`, `total_charged`. GiftCards.jsx shows card value / VAT / total.
+- Reward settings: `site_config.photo_rewards {enabled, approval_amount, potm_amount}` (defaults true/5/5). GET/PUT `/api/admin/gallery-rewards`. Admin box `GalleryRewardSettings.jsx`.
+- Photo of the Month: `POST /api/admin/gallery/{id}/photo-of-month` → `site_config.photo_of_month`; gift card source "photo_of_month", one per guest email ever, 12-month expiry. Public `GET /api/gallery/photo-of-month`; home `PhotoOfTheMonth.jsx` above the guest strip.
+- Gallery edit: `PATCH /api/admin/gallery/{id}` (caption, submitter_name), inline `GalleryEditForm.jsx`. Delete clears Photo of the Month.
+- Guest strip slower: inline duration max(180s, 20s × photos).
+- SECURITY FIX: routes/gallery.py admin dependency never awaited require_admin, so the gallery admin endpoints were open. It's now async with CSRF, same as gift_redeem. Verified 401 without login, 200 with.
+
+## Backlog
+- P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
+
 
 
 

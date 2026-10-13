@@ -57,6 +57,10 @@ def admin():
     tok = body.get("token") or body.get("access_token")
     assert tok, f"no token in login resp: {body}"
     s.headers.update({"Authorization": f"Bearer {tok}"})
+    # Clear cookies so FastAPI falls back to Bearer flow (CSRF skipped).
+    # Keeping both admin_session cookie + Bearer caused server to enforce
+    # CSRF and reject mutating calls with 403.
+    s.cookies.clear()
     return s
 
 
@@ -147,15 +151,18 @@ class TestGiftCardVat:
 
 class TestRewardSettings:
     def test_requires_auth(self):
-        # KNOWN BUG: Gallery admin endpoints bypass auth because the
-        # late-bound _require_admin_dep calls the async require_admin()
-        # without awaiting and without a request arg, so FastAPI never
-        # evaluates the coroutine. Documenting as xfail — needs main
-        # agent fix in routes/gallery.py _require_admin_dep.
+        # Previously xfail — now main agent fixed _require_admin_dep to await
+        # the async require_admin properly. All /api/admin/gallery/* endpoints
+        # should reject unauthenticated callers with 401.
         r = requests.get(f"{BASE}/api/admin/gallery-rewards", timeout=10)
-        if r.status_code == 200:
-            pytest.xfail("Admin gallery endpoints are not auth-protected — see critical_code_review_comments")
-        assert r.status_code == 401
+        assert r.status_code == 401, f"expected 401, got {r.status_code} {r.text}"
+        r2 = requests.get(f"{BASE}/api/admin/gallery/pending", timeout=10)
+        assert r2.status_code == 401, f"expected 401, got {r2.status_code} {r2.text}"
+        r3 = requests.patch(f"{BASE}/api/admin/gallery/does-not-exist",
+                            json={"caption": "x"}, timeout=10)
+        assert r3.status_code == 401, f"expected 401, got {r3.status_code} {r3.text}"
+        r4 = requests.delete(f"{BASE}/api/admin/gallery/does-not-exist", timeout=10)
+        assert r4.status_code == 401, f"expected 401, got {r4.status_code} {r4.text}"
 
     def test_get_returns_defaults(self, admin):
         r = admin.get(f"{BASE}/api/admin/gallery-rewards", timeout=10)
