@@ -287,6 +287,7 @@ function GallerySubmitCard() {
 
   return (
     <form
+      id="share"
       onSubmit={submit}
       className="rounded-3xl border border-[#E2E8F0] bg-white p-6 lg:p-8 shadow-[0_10px_30px_rgba(11,25,44,0.06)]"
       data-testid="gallery-submit-card"

@@ -229,6 +229,9 @@ h2.serif em, h2.serif i {
 .welcome-marquee-slow {
     animation-duration: 60s;
 }
+.guest-photo-marquee {
+    animation-duration: 90s;
+}
 @media (prefers-reduced-motion: reduce) {
     .promo-marquee-track { animation: none; }
 }

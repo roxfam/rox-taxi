@@ -12,6 +12,7 @@ import HomeHeroCarousel from "../components/HomeHeroCarousel";
 import QuickBookWidget from "../components/QuickBookWidget";
 import PackagesStrip from "../components/PackagesStrip";
 import GiftCardPromo from "../components/GiftCardPromo";
+import GuestPhotoMarquee from "../components/GuestPhotoMarquee";
 
 export default function Home() {
   const [tours, setTours] = useState([]);
@@ -335,6 +336,7 @@ export default function Home() {
 
       {/* GOOGLE REVIEWS */}
       <GoogleReviews />
+      <GuestPhotoMarquee />
 
       {/* FEATURED GUEST WALL — pinned guest photos surfaced site-wide */}
       <FeaturedGuestWall />

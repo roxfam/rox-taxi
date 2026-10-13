@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin, Share2, Gift, Search, ChevronDown, ChefHat, Waves, WheatOff, Fish, MilkOff, NutOff, Shell } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { FileText, Umbrella, Ship, Hotel, Utensils, Wine, Plus, Minus, Users, MapPin, Share2, Gift, Search, ChevronDown, ChefHat, Waves, WheatOff, Fish, MilkOff, NutOff, Shell } from "lucide-react";
 import { API, money } from "../lib/api";
 import Seo from "../components/Seo";
 
@@ -42,6 +43,8 @@ export default function CableBeachDay() {
   const [quoting, setQuoting] = useState(false);
   const [shareToken, setShareToken] = useState(null);     // Inbound ?r=<token>
   const [guestModalOpen, setGuestModalOpen] = useState(false);
+  const [quoteMode, setQuoteMode] = useState(false);
+  const navigate = useNavigate();
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [giftModalOpen, setGiftModalOpen] = useState(false);
 
@@ -228,6 +231,17 @@ export default function CableBeachDay() {
       special_requests: guest.special_requests || null,
       share_token: shareToken || null,
     };
+    if (quoteMode) {
+      const qr = await fetch(`${API}/quotes/cable-beach`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payload }),
+      });
+      const qd = await qr.json().catch(() => ({}));
+      if (!qr.ok) { toast.error(qd.detail || "Could not create quote."); return; }
+      toast.success(`Quote ${qd.id} is ready — we've emailed you a copy.`);
+      navigate(`/quote/${qd.id}`);
+      return;
+    }
     const res = await fetch(`${API}/cable-beach/book`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -411,6 +425,11 @@ export default function CableBeachDay() {
             className="mt-5 w-full inline-flex items-center justify-center rounded-full bg-[#E86A3C] text-white font-black uppercase tracking-wider py-3 text-sm hover:bg-[#d55a30] active:scale-95 disabled:opacity-50">
             {quoting ? "Updating…" : "Continue to checkout"}
           </button>
+          <button onClick={() => { setQuoteMode(true); book(); }} disabled={!quote || quoting}
+            data-testid="cable-beach-quote"
+            className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-full border-2 border-[#0B3B5C] text-[#0B3B5C] font-bold py-2.5 text-sm hover:bg-[#0B3B5C] hover:text-white active:scale-95 transition disabled:opacity-50">
+            <FileText className="w-4 h-4" /> Get a quote instead · valid 48h
+          </button>
           <ShareBeachDayButton quote={quote} pax={pax} transferKind={transferKind} hotelName={selectedHotel?.name} onOpen={() => setShareModalOpen(true)} />
           <button
             onClick={() => setGiftModalOpen(true)}
@@ -431,9 +450,10 @@ export default function CableBeachDay() {
 
       {guestModalOpen && (
         <GuestDetailsModal
-          onClose={() => setGuestModalOpen(false)}
+          onClose={() => { setGuestModalOpen(false); setQuoteMode(false); }}
           onSubmit={submitBooking}
           totalLabel={quote ? money(quote.total) : ""}
+          quoteMode={quoteMode}
         />
       )}
       {shareModalOpen && (
@@ -1105,7 +1125,7 @@ function HotelPickupMap({ hotel }) {
  * of a full new page). On submit it hands the data back to CableBeachDay
  * which POSTs `/cable-beach/book` and redirects to `/pay/{booking_id}`.
  */
-function GuestDetailsModal({ onClose, onSubmit, totalLabel }) {
+function GuestDetailsModal({ onClose, onSubmit, totalLabel, quoteMode = false }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -1163,9 +1183,9 @@ function GuestDetailsModal({ onClose, onSubmit, totalLabel }) {
           <button type="submit" disabled={busy}
             className="w-full rounded-full bg-[#E86A3C] text-white font-black uppercase tracking-wider py-3 text-sm hover:bg-[#d55a30] active:scale-95 disabled:opacity-50"
             data-testid="cable-guest-submit">
-            {busy ? "Reserving…" : `Reserve & pay · ${totalLabel}`}
+            {busy ? (quoteMode ? "Preparing quote…" : "Reserving…") : (quoteMode ? `Get my quote · ${totalLabel}` : `Reserve & pay · ${totalLabel}`)}
           </button>
-          <p className="text-[11px] text-[#94A3B8] text-center">You'll pay on the next screen with Stripe or PayPal.</p>
+          <p className="text-[11px] text-[#94A3B8] text-center">{quoteMode ? "Nothing is booked or charged. Your quote is valid for 48 hours." : "You'll pay on the next screen with Stripe or PayPal."}</p>
         </form>
       </div>
     </div>

@@ -84,11 +84,7 @@ def _notify(q: dict) -> None:
 async def create_quote(req: QuoteRequest, request: Request):
     res = await _create_booking(_model(req.payload, True), request)
     b = res["booking"]
-    now = datetime.now(timezone.utc)
-    exp = now + timedelta(hours=VALID_HOURS)
-    q = {
-        "id": f"Q-{secrets.token_hex(3).upper()}",
-        "payload": req.payload,
+    return await _save_quote(req.payload, "booking", {
         "service_type": b.get("service_type"), "item_name": b.get("item_name"),
         "customer_name": b.get("customer_name"), "customer_email": b.get("customer_email"),
         "customer_phone": b.get("customer_phone"), "booking_date": b.get("booking_date"),
@@ -96,6 +92,55 @@ async def create_quote(req: QuoteRequest, request: Request):
         "passengers": b.get("passengers"), "days": b.get("days"),
         "lines": [{"label": lbl, "amount": round(float(b[k]), 2)} for k, lbl in PRICE_KEYS if b.get(k)],
         "total": round(float(b.get("total") or 0), 2),
+    })
+
+
+CB_LINES = [("base", "Beach day package (chairs + umbrella)"), ("extra_seats_total", "Extra seats"),
+            ("transfer_total", "Taxi transfer"), ("menu_total", "Lunch & drinks"), ("sides_extra_total", "Extra sides"),
+            ("water_sports_total", "Water sports"), ("combo_discount", "Combo discount"),
+            ("loyalty_discount", "Loyalty discount"), ("vat", "VAT 10%"), ("processing_fee", "Processing fee 5%")]
+
+
+def _cb_models(payload: dict):
+    from routes.cable_beach import CableBeachBookRequest, CableBeachQuoteRequest  # noqa: PLC0415
+    try:
+        r = CableBeachBookRequest(**payload)
+    except ValidationError as e:
+        err = e.errors()[0]
+        raise HTTPException(422, f"{'.'.join(str(x) for x in err.get('loc', []))}: {err.get('msg')}") from e
+    qr = CableBeachQuoteRequest(
+        pax=r.pax, transfer_kind=r.transfer_kind, hotel_id=r.hotel_id, extra_seats=r.extra_seats,
+        lunch_item_ids=r.lunch_item_ids, drink_item_ids=r.drink_item_ids, drink_choices=r.drink_choices,
+        combo_id=r.combo_id, side_selections=r.side_selections, water_sport_qty=r.water_sport_qty,
+        parasail_spectators=r.parasail_spectators, loyalty_email=r.loyalty_email or r.customer_email)
+    return r, qr
+
+
+@router.post("/quotes/cable-beach")
+async def create_cable_beach_quote(req: QuoteRequest):
+    from routes.cable_beach import cable_beach_quote  # noqa: PLC0415
+    r, qr = _cb_models(req.payload)
+    cq = await cable_beach_quote(qr)
+    lines = []
+    for k, lbl in CB_LINES:
+        v = round(float(cq.get(k) or 0), 2)
+        if v:
+            lines.append({"label": lbl, "amount": -abs(v) if "discount" in k else v})
+    return await _save_quote(req.payload, "cable_beach", {
+        "service_type": "cable_beach", "item_name": "Cable Beach Day · Toes in the Sandy Turquoise",
+        "customer_name": r.customer_name, "customer_email": r.customer_email.lower(), "customer_phone": r.customer_phone,
+        "booking_date": r.booking_date, "passengers": r.pax,
+        "pickup_location": {"hotel": "Hotel pickup", "none": "Meet at the beach"}.get(r.transfer_kind, "Nassau Cruise Port"),
+        "dropoff_location": "Cable Beach (Goodman's Bay)",
+        "lines": lines, "total": round(float(cq.get("total") or 0), 2),
+    })
+
+
+async def _save_quote(payload: dict, kind: str, fields: dict) -> dict:
+    now = datetime.now(timezone.utc)
+    exp = now + timedelta(hours=VALID_HOURS)
+    q = {
+        "id": f"Q-{secrets.token_hex(3).upper()}", "kind": kind, "payload": payload, **fields,
         "created_at": now.isoformat(), "expires_at": exp.isoformat(),
         "expires_label": exp.astimezone(timezone(timedelta(hours=-4))).strftime("%b %d, %Y %I:%M %p") + " Nassau time",
         "status": "open",
@@ -137,7 +182,12 @@ async def book_quote(qid: str, request: Request):
     if not claim.modified_count:
         raise HTTPException(409, "This quote is already being booked")
     try:
-        b = await _create_booking(_model(q["payload"], False), request)
+        if q.get("kind") == "cable_beach":
+            from routes.cable_beach import cable_beach_book  # noqa: PLC0415
+            r, _ = _cb_models(q["payload"])
+            b = {"id": (await cable_beach_book(r))["booking_id"]}
+        else:
+            b = await _create_booking(_model(q["payload"], False), request)
     except Exception:
         await _db.quotes.update_one({"id": q["id"]}, {"$set": {"status": "open"}})
         raise
