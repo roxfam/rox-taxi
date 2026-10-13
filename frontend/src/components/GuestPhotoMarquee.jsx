@@ -9,6 +9,7 @@ const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${process.env.REACT_
 // Approved guest photos scrolling slowly next to the reviews; links to the upload form.
 export default function GuestPhotoMarquee() {
   const [photos, setPhotos] = useState([]);
+  const drop = (url) => setPhotos((xs) => xs.filter((x) => x.url !== url));
   useEffect(() => {
     api.get("/gallery").then(({ data }) => setPhotos(Array.isArray(data) ? data.filter((p) => p.category === "guests").slice(0, 24) : [])).catch(() => setPhotos([]));
   }, []);
@@ -33,7 +34,7 @@ export default function GuestPhotoMarquee() {
               <Link key={`${p.id || p.url}-${i}`} to="/gallery" aria-hidden={i >= photos.length || undefined} tabIndex={i >= photos.length ? -1 : undefined}
                 className="shrink-0 w-56 h-56 rounded-2xl overflow-hidden border border-[#EFE7D5] bg-white shadow-[0_6px_18px_rgba(11,25,44,0.08)]"
                 data-testid={i < photos.length ? `home-guest-photo-${i}` : undefined}>
-                <img src={resolveUrl(p.url)} alt={p.title || "Guest photo from a Rox trip"} loading="lazy" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
+                <img src={resolveUrl(p.url)} alt={p.title || "Guest photo from a Rox trip"} loading="lazy" onError={() => drop(p.url)} onLoad={(e) => { if (e.currentTarget.naturalWidth < 50) drop(p.url); }} className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
               </Link>
             ))}
           </div>

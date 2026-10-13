@@ -776,6 +776,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Guest strip slower: inline duration max(180s, 20s × photos).
 - SECURITY FIX: routes/gallery.py admin dependency never awaited require_admin, so the gallery admin endpoints were open. It's now async with CSRF, same as gift_redeem. Verified 401 without login, 200 with.
 
+- Guest strip: photos that fail to load or are under 50px wide are hidden, so blank cards no longer appear. Removed 1-pixel test uploads from the preview. Mobile view checked: the section shows (empty-state text until real photos are approved).
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 
