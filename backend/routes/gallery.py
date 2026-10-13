@@ -206,7 +206,15 @@ async def admin_approve_submission(sub_id: str, _admin: str = _require()):
                 )
     except Exception:  # noqa: BLE001
         pass
-    return {"id": sub_id, "status": "approved", "facebook": fb_result}
+    reward_code = None
+    try:
+        from routes.gift_redeem import issue_photo_reward  # noqa: PLC0415
+        reward_code = await issue_photo_reward(doc)
+        if reward_code:
+            await _db.gallery_submissions.update_one({"id": sub_id}, {"$set": {"reward_code": reward_code}})
+    except Exception as e:  # noqa: BLE001
+        _logger.warning(f"photo reward failed: {e}")
+    return {"id": sub_id, "status": "approved", "facebook": fb_result, "reward_code": reward_code}
 
 
 @router.get("/admin/integrations/facebook/status")

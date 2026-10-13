@@ -271,7 +271,8 @@ function GallerySubmitCard() {
         <h3 className="serif text-2xl text-[#0B3B5C]">Photo received</h3>
         <p className="text-sm text-[#64748B] mt-2 max-w-md mx-auto">
           Our team reviews every submission before it appears in the gallery.
-          You'll see yours here within a day or two.
+          You'll see yours here within a day or two. When your first photo is approved,
+          we'll email you a $5 thank-you gift card for your next ride.
         </p>
         <button
           type="button"
@@ -299,7 +300,7 @@ function GallerySubmitCard() {
         <div>
           <h3 className="serif text-2xl text-[#0B3B5C]">Share your trip photo</h3>
           <p className="text-sm text-[#64748B] mt-1">
-            Rode with us? Send us your favourite Nassau memory — approved shots appear in this gallery.
+            Rode with us? Send us your favourite Nassau memory — approved shots appear in this gallery, and your first approved photo earns a $5 thank-you gift card.
           </p>
         </div>
       </div>

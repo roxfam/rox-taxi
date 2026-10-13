@@ -400,8 +400,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     return subtotal * (pct / 100);
   })();
 
-  // ── Bahamas VAT (10%) — taxi fares are exempt per policy ───────────
-  const vatApplies = serviceType !== "taxi";
+  // ── Bahamas VAT (10%) — applies to every order, taxi included (matches backend) ──
+  const vatApplies = true;
   const vatAmount = vatApplies ? subtotal * BAHAMAS_VAT_PCT : 0;
 
   // ── Payment-processing fee (4.5%) — applied to every order ─────────

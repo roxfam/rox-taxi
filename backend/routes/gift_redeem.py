@@ -214,11 +214,13 @@ async def gift_card_report(_admin=Depends(_admin_dep)):
     expiring = sorted(
         [g for g in live if g.get("expires_at") and g["expires_at"] <= soon and float(g.get("balance") or 0) > 0],
         key=lambda g: g["expires_at"])
+    paid = [g for g in sold if g.get("source") != "photo_reward"]
     return {
-        "sold_count": len(sold),
-        "sold_value": round(sum(float(g.get("amount") or 0) for g in sold), 2),
-        "sold_30d_count": sum(1 for g in sold if (g.get("created_at") or "") >= month_ago),
-        "sold_30d_value": round(sum(float(g.get("amount") or 0) for g in sold if (g.get("created_at") or "") >= month_ago), 2),
+        "sold_count": len(paid),
+        "sold_value": round(sum(float(g.get("amount") or 0) for g in paid), 2),
+        "sold_30d_count": sum(1 for g in paid if (g.get("created_at") or "") >= month_ago),
+        "sold_30d_value": round(sum(float(g.get("amount") or 0) for g in paid if (g.get("created_at") or "") >= month_ago), 2),
+        "rewards_issued": len(sold) - len(paid),
         "redeemed_value": round(redeemed, 2),
         "outstanding_balance": round(sum(float(g.get("balance") or 0) for g in live), 2),
         "expired_unused": round(sum(float(g.get("balance") or 0) for g in expired), 2),
@@ -248,6 +250,36 @@ async def resend_gift_card(code: str, _admin=Depends(_admin_dep)):
     await _db.gift_cards.update_one({"code": gc["code"]}, {"$set": upd})
     return {"sent": bool(rep.get("sent")), "sms": bool((rep.get("sms") or {}).get("sent")),
             "to": gc.get("recipient_email"), "error": rep.get("error")}
+
+
+PHOTO_REWARD_USD = 5.0
+
+
+async def issue_photo_reward(sub: dict) -> Optional[str]:
+    """$5 thank-you gift card the first time a guest's photo is approved (one per email)."""
+    email = (sub.get("submitter_email") or "").lower().strip()
+    if not email:
+        return None
+    if await _db.gift_cards.find_one({"source": "photo_reward", "recipient_email": email}, {"_id": 1}):
+        return None
+    from server import _new_gift_code, _send_gift_voucher_email  # noqa: PLC0415
+    now = datetime.now(timezone.utc)
+    gc = {
+        "code": _new_gift_code(), "amount": PHOTO_REWARD_USD, "balance": PHOTO_REWARD_USD, "status": "active",
+        "source": "photo_reward", "submission_id": sub.get("id"), "theme": "thank_you",
+        "buyer_name": "Rox Taxi & Tours", "buyer_email": "",
+        "recipient_name": sub.get("submitter_name") or "", "recipient_email": email,
+        "message": "Thank you for sharing your Bahamas photo with us! Here's a little something toward your next ride.",
+        "created_at": now.isoformat(), "expires_at": (now + timedelta(days=365)).isoformat(),
+        "non_refundable": True, "redemptions": [],
+    }
+    await _db.gift_cards.insert_one(dict(gc))
+    try:
+        rep = await _send_gift_voucher_email(gc)
+        await _db.gift_cards.update_one({"code": gc["code"]}, {"$set": {"delivered_at": _now_iso() if rep.get("sent") else None}})
+    except Exception as e:  # noqa: BLE001
+        logging.warning("photo reward email err: %s", e)
+    return gc["code"]
 
 
 class ApplyGiftRequest(BaseModel):

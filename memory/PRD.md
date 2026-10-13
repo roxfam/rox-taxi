@@ -763,6 +763,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Taxi VAT mismatch still waiting on the owner's VAT rule choice.
 
 
+## 2026-10-13 — Taxi VAT fix · Photo upload rewards
+- VAT rule picked (owner delegated): 10% VAT on taxis, the same as the backend charge (backend "taxi included" rule from 2026-10-02 is newer than the frontend exemption from 2026-09-20). BookingFlow `vatApplies = true`. Verified: Marathon Mall, 1 pax, no tip → window $40.43 = backend $40.43.
+- Photo rewards: `gift_redeem.issue_photo_reward()` runs on `POST /admin/gallery/{id}/approve`: one $5 "thank_you" gift card per guest email (source "photo_reward", valid 12 months, non-refundable), emailed with the themed voucher; the code is saved on the submission (`reward_code`) and returned. Gift report "sold" figures exclude rewards (`rewards_issued` count). Gallery copy mentions the $5 reward.
+
+
 
 
 

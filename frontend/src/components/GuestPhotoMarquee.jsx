@@ -18,7 +18,7 @@ export default function GuestPhotoMarquee() {
           <div className="text-xs tracking-[0.3em] uppercase text-[#D4A94A]">Guest photos</div>
           <h2 className="serif text-3xl text-[#0B3B5C] mt-1">Moments from our guests</h2>
         </div>
-        <Link to="/gallery#share" className="inline-flex items-center gap-2 rounded-full bg-[#0B3B5C] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#0B192C] transition-colors" data-testid="home-guest-photos-upload">
+        <Link to="/gallery#submit" className="inline-flex items-center gap-2 rounded-full bg-[#0B3B5C] text-white px-5 py-2.5 text-sm font-semibold hover:bg-[#0B192C] transition-colors" data-testid="home-guest-photos-upload">
           <Camera className="w-4 h-4" /> Share your photo
         </Link>
       </div>
