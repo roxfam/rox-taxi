@@ -20,7 +20,7 @@ import uuid
 from typing import Callable, Awaitable, Optional
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
@@ -60,8 +60,9 @@ router = APIRouter()
 # Late-binding Depends wrapper — calls the current global _require_admin
 # at REQUEST time. Naive Depends(_require_admin) captures the initial
 # `lambda: None` at module-load time and bypasses auth.
-def _require_admin_dep(authorization: Optional[str] = Header(None)):
-    return _require_admin(authorization) if callable(_require_admin) else None
+async def _require_admin_dep(request: Request, authorization: Optional[str] = Header(None),
+                             x_csrf_token: Optional[str] = Header(None, alias="X-CSRF-Token")):
+    return await _require_admin(request, authorization, x_csrf_token)
 
 
 def _require():

@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 39 — taxi VAT removal, gift-card VAT markup, gallery reward settings, Photo of the Month, admin gallery edit/delete. Backend 10/10 passed + 1 xfail (critical auth bypass). Frontend: gift-cards price breakdown ($100/$10/$110) + submit label verified; home guest-photo marquee shows 10 approved guest-only photos with animation-duration=200s (>=180s); admin Guest Photos panel renders gallery-reward-settings box with correct testids and default values 5/5.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/admin/gallery/* (all gallery admin endpoints)",
+        "issue": "AUTH BYPASS — routes/gallery.py _require_admin_dep calls the async server-level require_admin() without awaiting it and without the required Request/csrf params. FastAPI treats the returned coroutine as the dependency value, so NO authentication is performed. Verified by curling /api/admin/gallery/pending and /api/admin/gallery-rewards with zero credentials → 200 OK with full admin data. Affects: pending list, approved list, approve/reject/delete, PATCH edit, POTM set, reward settings GET/PUT, pin, repost, facebook status.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter39_vat_potm_rewards.py",
+    "/app/test_reports/pytest/iter39.xml"
+  ],
+  "action_items": [
+    "URGENT: Fix /app/backend/routes/gallery.py _require_admin_dep — it must await require_admin(request, authorization, x_csrf_token) with a Request param and raise on failure. Current implementation leaves every /api/admin/gallery/* endpoint completely unauthenticated, allowing anyone to approve/reject/delete photos, change reward settings, set Photo of the Month, and read pending submitter emails. Simplest fix: inside gallery.py register a dependency like `async def _require_admin_dep(request: Request, authorization: Optional[str] = Header(None), x_csrf_token: Optional[str] = Header(None, alias='X-CSRF-Token')): return await _require_admin(request, authorization, x_csrf_token)` and keep _require()=Depends(_require_admin_dep)."
+  ],
+  "critical_code_review_comments": [
+    "routes/gallery.py lines 60-68: _require_admin_dep is sync and calls an async function without await, with wrong signature. This is the auth-bypass RCA. Pattern applies to EVERY /admin/gallery/* route in gallery.py since all share _require().",
+    "routes/gift_redeem.py issue_potm_reward (line 273) does NOT check settings.enabled — approval reward respects enabled but POTM does not. This appears intentional (POTM is a deliberate admin action), but worth confirming with product spec.",
+    "server.py line 2920: VAT applied as `0 if taxi else 10%` is correct and matches spec. Gift card purchase (line 1878-1879) correctly charges amount * 1.1."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter39_vat_potm_rewards.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 passed, 1 xfail documenting auth bug)",
+    "frontend": "100% of listed UI contracts verified"
+  },
+  "test_credentials": "admin: roxfam2509@gmail.com / admin123 — login OK",
+  "seed_data_creation": "All TEST_* gallery submissions and gift_cards created during this run were deleted in test teardowns. site_config.photo_of_month was unset after the POTM test.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "RCA for the gallery auth bug is in critical_code_review_comments. After main agent fixes _require_admin_dep, the test_requires_auth xfail should flip to pass automatically (test asserts 401 after an initial 200→xfail short-circuit). Backend test file at /app/backend/tests/test_iter39_vat_potm_rewards.py is self-contained (uses .env loader) and can be run with `python -m pytest backend/tests/test_iter39_vat_potm_rewards.py -o addopts= -v`. Taxi vs tour VAT is checked by inspecting the `lines` array of POST /api/quotes response (taxi has no 'vat' line, tour has one with amount>0). Gift-card response includes vat_amount=10 and total_charged=110 for a $100 card.",
+  "rca of the issue": "Gallery admin auth bypass: routes/gallery.py registers a late-binding Depends wrapper `_require_admin_dep(authorization)` that calls `_require_admin(authorization)` where `_require_admin` is the async `require_admin(request, authorization, x_csrf_token)` from server.py. Calling an async function returns a coroutine without executing the body, and the wrapper is itself sync, so FastAPI never awaits it. The returned coroutine is then injected as the dependency value — zero auth checks happen. Reproduction: `curl $BASE/api/admin/gallery-rewards` returns 200 with reward settings; `curl $BASE/api/admin/gallery/pending` returns full pending list including submitter emails. Mitigation: rewrite _require_admin_dep as an async FastAPI dep that awaits require_admin with the correct Request + headers (see action_items)."
+}
