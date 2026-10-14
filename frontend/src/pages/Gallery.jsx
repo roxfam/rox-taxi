@@ -26,6 +26,7 @@ export default function Gallery() {
   const [active, setActive] = useState(null);
   const [params, setParams] = useSearchParams();
   const deepLinkId = params.get("photo");
+  const tourFilter = params.get("tour") || "";
   const submitRef = useRef(null);
 
   useEffect(() => {
@@ -47,10 +48,28 @@ export default function Gallery() {
     }
   }, []);
 
-  const filtered = useMemo(
-    () => (filter === "all" ? photos : photos.filter((p) => p.category === filter)),
-    [photos, filter],
-  );
+  const filtered = useMemo(() => {
+    if (tourFilter) return photos.filter((p) => p.category === "guests" && p.trip_id === tourFilter);
+    return filter === "all" ? photos : photos.filter((p) => p.category === filter);
+  }, [photos, filter, tourFilter]);
+
+  // Tours that have at least one guest photo (tagged or from the guest's booking).
+  const guestTours = useMemo(() => {
+    const m = new Map();
+    photos.forEach((p) => {
+      if (p.category !== "guests" || !p.trip_id || p.trip_type !== "tour") return;
+      const t = m.get(p.trip_id) || { id: p.trip_id, name: p.trip_name || "Tour", count: 0 };
+      t.count += 1;
+      m.set(p.trip_id, t);
+    });
+    return [...m.values()].sort((a, b) => b.count - a.count);
+  }, [photos]);
+
+  const pickTour = (id) => {
+    const next = new URLSearchParams(params);
+    if (id) next.set("tour", id); else next.delete("tour");
+    setParams(next, { replace: true });
+  };
 
   // Drop ?photo= when the lightbox closes so back-button doesn't re-open it
   const closeLightbox = () => {
@@ -125,12 +144,12 @@ export default function Gallery() {
             // Hide empty category chips so we don't advertise "0" tabs. "All"
             // always renders even when photos is still loading.
             if (key !== "all" && count === 0) return null;
-            const on = filter === key;
+              const on = filter === key && !tourFilter;
             return (
               <button
                 key={key}
                 type="button"
-                onClick={() => setFilter(key)}
+                onClick={() => { setFilter(key); pickTour(""); }}
                 data-testid={`gallery-filter-${key}`}
                 className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold border transition-all ${
                   on
@@ -144,6 +163,29 @@ export default function Gallery() {
             );
           })}
         </div>
+        {guestTours.length > 0 && (
+          <div className="mt-5" data-testid="gallery-tour-filters">
+            <div className="text-[10px] tracking-[0.28em] uppercase font-black text-[#64748B] mb-2">Guest photos by tour</div>
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {guestTours.map((t) => {
+                const on = tourFilter === t.id;
+                return (
+                  <button key={t.id} type="button" onClick={() => pickTour(on ? "" : t.id)} data-testid={`gallery-tour-filter-${t.id}`}
+                    className={`shrink-0 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold border transition-colors ${on ? "bg-[#D4A94A] text-[#0B192C] border-[#D4A94A]" : "bg-white text-[#0B3B5C] border-[#E2E8F0] hover:border-[#D4A94A]"}`}>
+                    <ShipWheel className="w-4 h-4" /> {t.name}
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-black/5">{t.count}</span>
+                    {on && <X className="w-3.5 h-3.5" />}
+                  </button>
+                );
+              })}
+            </div>
+            {tourFilter && (
+              <Link to={`/tours?book=${tourFilter}`} className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#E86A3C] hover:underline" data-testid="gallery-tour-book">
+                Book this tour →
+              </Link>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Masonry grid — CSS columns so each tile keeps its native aspect */}

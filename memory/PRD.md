@@ -790,6 +790,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Tag Photo Trip: the admin Edit form has a "Tour in this photo" dropdown (PATCH `/admin/gallery/{id}` `tour_id`, saves `tour_id` and `tour_name`). A tagged tour takes priority over the guest's last booking for the Book button.
 - "Book this experience" in the full-screen view: /api/gallery now adds `trip_id` and `trip_type` from the guest's latest booking. A tour opens /tours?book={id}, a taxi /taxi?book={id}, a rental /rentals; with no booking it falls back to /tours.
 
+- Gallery tour filter: a "Guest photos by tour" chip row on /gallery (only tours that have guest photos, with counts). It deep-links with ?tour={id}, adds a "Book this tour" link, and the category chips clear it.
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 
