@@ -797,6 +797,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Tour Page Photos: `TourGuestPhotos.jsx` strip (tap to open the full-screen viewer) on attraction pages via config `tour_ids`: Blue Lagoon → blue-lagoon, dolphin-swim-blue-lagoon; Atlantis → atlantis-tour. Ardastra and Baha Mar have no matching tour, so no strip. On /tours, each card with guest photos gets a "N guest photos" badge linking to /gallery?tour={id}.
 - Live reward amount: public `GET /api/gallery/reward-info` {enabled, amount}. The upload form and thank-you text use it and drop the reward line when rewards are off. Verified $7, then restored to $5.
 
+- Pre-approval photo editing: the Pending tab has "Edit name, caption or tour" (reuses GalleryEditForm) and `PhotoAdjustBar.jsx`: Auto enhance, Rotate left/right, Undo edits. `POST /api/admin/gallery/{id}/adjust` {action: enhance|rotate_left|rotate_right|revert} saves each edit as a new file (`guest_{id}_v{hex}.jpg`) and keeps `original_filename` for undo. Enhance = tone-preserving autocontrast, colour ×1.12, brightness ×1.04, sharpness ×1.25. Delete removes the edited and original files.
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 

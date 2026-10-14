@@ -381,6 +381,8 @@ async def admin_delete_submission(sub_id: str, _admin: str = _require()):
     try:
         if doc.get("filename"):
             (_upload_dir / doc["filename"]).unlink(missing_ok=True)
+        if doc.get("original_filename") and doc["original_filename"] != doc.get("filename"):
+            (_upload_dir / doc["original_filename"]).unlink(missing_ok=True)
     except Exception:  # noqa: BLE001
         pass
     await _db.gallery_submissions.delete_one({"id": sub_id})
@@ -409,6 +411,45 @@ async def admin_edit_submission(sub_id: str, req: SubmissionEdit, _admin: str = 
     r = await _db.gallery_submissions.update_one({"id": sub_id}, {"$set": {**upd, "edited_at": _now_iso()}})
     if r.matched_count == 0:
         raise HTTPException(404, "Submission not found")
+    return _clean(await _db.gallery_submissions.find_one({"id": sub_id}))
+
+
+class PhotoAdjust(BaseModel):
+    action: str = Field(..., pattern="^(enhance|rotate_left|rotate_right|revert)$")
+
+
+@router.post("/admin/gallery/{sub_id}/adjust")
+async def admin_adjust_photo(sub_id: str, req: PhotoAdjust, _admin: str = _require()):
+    """Auto-enhance / rotate a guest photo (saved as a new file) or revert to the original upload."""
+    from PIL import ImageEnhance  # noqa: PLC0415
+    doc = await _db.gallery_submissions.find_one({"id": sub_id})
+    if not doc:
+        raise HTTPException(404, "Submission not found")
+    original = doc.get("original_filename") or doc.get("filename")
+    current = doc.get("filename")
+    if req.action == "revert":
+        if current != original:
+            (_upload_dir / current).unlink(missing_ok=True)
+        new_name = original
+    else:
+        src = _upload_dir / current
+        if not src.is_file():
+            raise HTTPException(404, "Image file missing")
+        img = ImageOps.exif_transpose(Image.open(_io.BytesIO(src.read_bytes()))).convert("RGB")
+        if req.action == "enhance":
+            img = ImageOps.autocontrast(img, cutoff=1, preserve_tone=True)
+            img = ImageEnhance.Color(img).enhance(1.12)
+            img = ImageEnhance.Brightness(img).enhance(1.04)
+            img = ImageEnhance.Sharpness(img).enhance(1.25)
+        else:
+            img = img.rotate(90 if req.action == "rotate_left" else -90, expand=True)
+        new_name = f"guest_{sub_id}_v{uuid.uuid4().hex[:6]}.jpg"
+        img.save(_upload_dir / new_name, format="JPEG", quality=90, optimize=True)
+        if current != original:
+            (_upload_dir / current).unlink(missing_ok=True)
+    upd = {"filename": new_name, "url": f"/api/uploads/{new_name}", "original_filename": original,
+           "edited_at": _now_iso(), "enhanced": req.action == "enhance" or (doc.get("enhanced") and req.action != "revert")}
+    await _db.gallery_submissions.update_one({"id": sub_id}, {"$set": upd})
     return _clean(await _db.gallery_submissions.find_one({"id": sub_id}))
 
 

@@ -4,6 +4,7 @@ import { Check, X, RefreshCw, Images, Mail, Facebook, RotateCw, ExternalLink, Al
 import { api, BACKEND_URL } from "../../lib/api";
 import { GalleryRewardSettings } from "./GalleryRewardSettings";
 import { GalleryEditForm } from "./GalleryEditForm";
+import { PhotoAdjustBar } from "./PhotoAdjustBar";
 
 // Admin panel for reviewing customer-submitted gallery photos.
 // Two tabs: "Pending" (approve/reject) and "Approved" (repost to Facebook, view live post).
@@ -208,7 +209,17 @@ export default function GalleryPanel() {
                         </a>
                       )}
                     </div>
-                    {it.caption && <p className="text-sm text-[#334155] leading-snug">&ldquo;{it.caption}&rdquo;</p>}
+                    {editing === it.id ? (
+                      <GalleryEditForm item={it} onSaved={onSaved} onCancel={() => setEditing(null)} />
+                    ) : (
+                      <>
+                        {it.caption && <p className="text-sm text-[#334155] leading-snug">&ldquo;{it.caption}&rdquo;</p>}
+                        <button type="button" onClick={() => setEditing(it.id)} className="self-start inline-flex items-center gap-1 text-xs font-semibold text-[#0B3B5C] hover:text-[#D4A94A]" data-testid={`admin-gallery-pending-edit-${it.id}`}>
+                          <Pencil className="w-3.5 h-3.5" /> Edit name, caption or tour
+                        </button>
+                      </>
+                    )}
+                    <PhotoAdjustBar item={it} onSaved={(doc) => setPending((xs) => xs.map((x) => (x.id === doc.id ? { ...x, ...doc } : x)))} />
                     <div className="text-[10px] uppercase tracking-widest text-[#94a3b8]">
                       {it.created_at && new Date(it.created_at).toLocaleString()}
                     </div>
