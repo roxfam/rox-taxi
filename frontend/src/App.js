@@ -86,6 +86,17 @@ function ScrollToTop() {
   return null;
 }
 
+// Block right-click save and drag-out on every image.
+function ImageGuard() {
+  useEffect(() => {
+    const block = (e) => { if (e.target?.tagName === "IMG") e.preventDefault(); };
+    document.addEventListener("contextmenu", block);
+    document.addEventListener("dragstart", block);
+    return () => { document.removeEventListener("contextmenu", block); document.removeEventListener("dragstart", block); };
+  }, []);
+  return null;
+}
+
 function CustomerShell({ children }) {
   return <Layout><SummerBanner />{children}</Layout>;
 }
@@ -170,6 +181,7 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <ScrollToTop />
+          <ImageGuard />
           <Toaster position="top-right" richColors />
           <AppRouter />
         </AuthProvider>

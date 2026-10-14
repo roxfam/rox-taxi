@@ -781,6 +781,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Tap to enlarge: strip photos are buttons that open `GuestPhotoLightbox.jsx` (full screen on mobile, caption + "Shared by" name).
 - Sample photo in preview: stock Unsplash beach photo, submitted as "Rox Team (sample)" (id 00569f2ec997) and approved straight in the database, so no Facebook post or gift card went out. Delete it from admin Guest Photos when no longer needed.
 
+- Lightbox now swipes (touch, arrows, keyboard) through all guest photos with an "n / total" counter, plus a Share button (native share sheet, or copies the roxtaxi.com/api/og/photo/{id} link). It shares a link, never the file.
+- Image protection site-wide: `ImageGuard` in App.js blocks right-click and drag on every <img>; CSS turns off the iOS long-press save menu and image dragging.
+- Strip always scrolls edge to edge: photos repeat until one loop holds 10+ cards; duration max(120s, 16s × cards). It keeps scrolling even when the phone has reduced motion turned on.
+- Second sample photo "Rox Team (sample 2)" (id 6b06d8638ebb), approved directly in the database.
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 
