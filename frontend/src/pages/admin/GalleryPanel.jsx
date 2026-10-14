@@ -5,6 +5,7 @@ import { api, BACKEND_URL } from "../../lib/api";
 import { GalleryRewardSettings } from "./GalleryRewardSettings";
 import { GalleryEditForm } from "./GalleryEditForm";
 import { PhotoAdjustBar } from "./PhotoAdjustBar";
+import { BeforeAfterSlider } from "./BeforeAfterSlider";
 
 // Admin panel for reviewing customer-submitted gallery photos.
 // Two tabs: "Pending" (approve/reject) and "Approved" (repost to Facebook, view live post).
@@ -210,7 +211,11 @@ export default function GalleryPanel() {
               return (
                 <div key={it.id} className="rounded-2xl bg-white border border-[#E2E8F0] overflow-hidden flex flex-col" data-testid={`admin-gallery-item-${it.id}`}>
                   <div className="aspect-[4/3] bg-[#F1F5F9] overflow-hidden">
-                    <img src={resolveUrl(it.url)} alt={it.caption || "Guest submission"} className="w-full h-full object-cover" loading="lazy" />
+                    {it.original_filename && it.original_filename !== it.filename ? (
+                      <BeforeAfterSlider id={it.id} beforeUrl={resolveUrl(`/api/uploads/${it.original_filename}`)} afterUrl={resolveUrl(it.url)} />
+                    ) : (
+                      <img src={resolveUrl(it.url)} alt={it.caption || "Guest submission"} className="w-full h-full object-cover" loading="lazy" />
+                    )}
                   </div>
                   <div className="p-4 flex-1 flex flex-col gap-3">
                     <div>

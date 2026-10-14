@@ -801,6 +801,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 - Enhance & approve: a gold button on pending cards runs adjust(enhance) then approve, and stops if the enhance fails. Approved cards also get PhotoAdjustBar (enhance, rotate, "Undo enhance"). Remove buttons now say "Remove" in both tabs.
 
+- Before/after slider: `BeforeAfterSlider.jsx` replaces the pending card image once a photo is edited (original on the left, edited on the right, drag to compare).
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 
