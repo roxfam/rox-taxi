@@ -778,6 +778,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 - Guest strip: photos that fail to load or are under 50px wide are hidden, so blank cards no longer appear. Removed 1-pixel test uploads from the preview. Mobile view checked: the section shows (empty-state text until real photos are approved).
 
+- Tap to enlarge: strip photos are buttons that open `GuestPhotoLightbox.jsx` (full screen on mobile, caption + "Shared by" name).
+- Sample photo in preview: stock Unsplash beach photo, submitted as "Rox Team (sample)" (id 00569f2ec997) and approved straight in the database, so no Facebook post or gift card went out. Delete it from admin Guest Photos when no longer needed.
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 

@@ -3,12 +3,14 @@ import { Link } from "react-router-dom";
 import { Camera } from "lucide-react";
 import { api } from "../lib/api";
 import { PhotoOfTheMonth } from "./PhotoOfTheMonth";
+import { GuestPhotoLightbox } from "./GuestPhotoLightbox";
 
 const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${process.env.REACT_APP_BACKEND_URL}${u}`);
 
 // Approved guest photos scrolling slowly next to the reviews; links to the upload form.
 export default function GuestPhotoMarquee() {
   const [photos, setPhotos] = useState([]);
+  const [open, setOpen] = useState(null);
   const drop = (url) => setPhotos((xs) => xs.filter((x) => x.url !== url));
   useEffect(() => {
     api.get("/gallery").then(({ data }) => setPhotos(Array.isArray(data) ? data.filter((p) => p.category === "guests").slice(0, 24) : [])).catch(() => setPhotos([]));
@@ -31,15 +33,16 @@ export default function GuestPhotoMarquee() {
         <div className="promo-marquee overflow-hidden">
           <div className="promo-marquee-track guest-photo-marquee inline-flex gap-4 px-2" style={{ animationDuration: `${Math.max(180, photos.length * 20)}s` }}>
             {[...photos, ...photos].map((p, i) => (
-              <Link key={`${p.id || p.url}-${i}`} to="/gallery" aria-hidden={i >= photos.length || undefined} tabIndex={i >= photos.length ? -1 : undefined}
-                className="shrink-0 w-56 h-56 rounded-2xl overflow-hidden border border-[#EFE7D5] bg-white shadow-[0_6px_18px_rgba(11,25,44,0.08)]"
+              <button type="button" key={`${p.id || p.url}-${i}`} onClick={() => setOpen(p)} aria-hidden={i >= photos.length || undefined} tabIndex={i >= photos.length ? -1 : undefined}
+                className="shrink-0 w-56 h-56 rounded-2xl overflow-hidden border border-[#EFE7D5] bg-white shadow-[0_6px_18px_rgba(11,25,44,0.08)] cursor-zoom-in"
                 data-testid={i < photos.length ? `home-guest-photo-${i}` : undefined}>
                 <img src={resolveUrl(p.url)} alt={p.title || "Guest photo from a Rox trip"} loading="lazy" onError={() => drop(p.url)} onLoad={(e) => { if (e.currentTarget.naturalWidth < 50) drop(p.url); }} className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-              </Link>
+              </button>
             ))}
           </div>
         </div>
       )}
+      <GuestPhotoLightbox photo={open} onClose={() => setOpen(null)} />
     </section>
   );
 }
