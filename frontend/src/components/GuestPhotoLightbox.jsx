@@ -1,7 +1,16 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Share2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Share2, CalendarCheck } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
+import { PhotoWatermark } from "./PhotoWatermark";
+
+const bookLink = (p) => {
+  if (p.trip_type === "tour" && p.trip_id) return `/tours?book=${p.trip_id}`;
+  if (p.trip_type === "taxi" && p.trip_id) return `/taxi?book=${p.trip_id}`;
+  if (p.trip_type === "rental") return "/rentals";
+  return "/tours";
+};
 
 const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${process.env.REACT_APP_BACKEND_URL}${u}`);
 
@@ -45,7 +54,10 @@ export const GuestPhotoLightbox = ({ photos, index, onIndex, onClose }) => {
           <>
             <div className="relative flex-1 min-h-0 flex items-center justify-center bg-black select-none"
               onTouchStart={(e) => { startX.current = e.touches[0].clientX; }} onTouchEnd={onTouchEnd} data-testid="guest-photo-lightbox-stage">
-              <img src={resolveUrl(photo.url)} alt={photo.caption || "Guest photo"} draggable={false} className="max-w-full max-h-[80dvh] object-contain pointer-events-none" data-testid="guest-photo-lightbox-image" />
+              <div className="relative inline-block max-w-full max-h-[80dvh]">
+                <img src={resolveUrl(photo.url)} alt={photo.caption || "Guest photo"} draggable={false} className="max-w-full max-h-[80dvh] object-contain pointer-events-none" data-testid="guest-photo-lightbox-image" />
+                <PhotoWatermark size="lg" />
+              </div>
               <div className="absolute inset-0" aria-hidden="true" />
               {photos.length > 1 && (
                 <>
@@ -54,18 +66,23 @@ export const GuestPhotoLightbox = ({ photos, index, onIndex, onClose }) => {
                 </>
               )}
             </div>
-            <div className="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-end justify-between gap-4">
+            <div className="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-4">
               <div className="min-w-0">
                 <DialogTitle className="serif italic text-xl leading-snug" data-testid="guest-photo-lightbox-caption">
                   {photo.caption ? `\u201C${photo.caption}\u201D` : "Guest moment"}
                 </DialogTitle>
                 <DialogDescription className="text-sm text-white/70 mt-1" data-testid="guest-photo-lightbox-name">
-                  Shared by {photo.submitter || "a Rox guest"} · {index + 1} / {photos.length}
+                  Shared by {photo.submitter || "a Rox guest"}{photo.trip_name ? ` on the ${photo.trip_name}` : ""} · {index + 1} / {photos.length}
                 </DialogDescription>
               </div>
-              <button type="button" onClick={() => sharePhoto(photo)} className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] px-4 py-2.5 text-sm font-semibold transition-colors" data-testid="guest-photo-lightbox-share">
-                <Share2 className="w-4 h-4" /> Share
-              </button>
+              <div className="flex gap-2">
+                <Link to={bookLink(photo)} onClick={onClose} className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-4 py-2.5 text-sm font-semibold transition-colors" data-testid="guest-photo-lightbox-book">
+                  <CalendarCheck className="w-4 h-4" /> Book this experience
+                </Link>
+                <button type="button" onClick={() => sharePhoto(photo)} className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] px-4 py-2.5 text-sm font-semibold transition-colors" data-testid="guest-photo-lightbox-share">
+                  <Share2 className="w-4 h-4" /> Share
+                </button>
+              </div>
             </div>
           </>
         )}

@@ -2137,16 +2137,19 @@ async def list_gallery():
         pipe = [
             {"$match": {"customer_email": {"$in": list(emails_seen)}, "item_name": {"$exists": True}}},
             {"$sort": {"created_at": -1}},
-            {"$group": {"_id": "$customer_email", "item_name": {"$first": "$item_name"}}},
+            {"$group": {"_id": "$customer_email", "item_name": {"$first": "$item_name"},
+                        "item_id": {"$first": "$item_id"}, "service_type": {"$first": "$service_type"}}},
         ]
-        trip_by_email: dict[str, str] = {}
+        trip_by_email: dict[str, dict] = {}
         async for r in db.bookings.aggregate(pipe):
             if r.get("_id") and r.get("item_name"):
-                trip_by_email[r["_id"].lower()] = r["item_name"]
+                trip_by_email[r["_id"].lower()] = r
         for e in guest_entries:
             tn = trip_by_email.get(e.get("submitter_email") or "")
             if tn:
-                e["trip_name"] = tn
+                e["trip_name"] = tn["item_name"]
+                e["trip_id"] = tn.get("item_id")
+                e["trip_type"] = tn.get("service_type")
             # Drop the raw email — public endpoint should not leak PII.
             e.pop("submitter_email", None)
     else:
