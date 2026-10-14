@@ -4,7 +4,6 @@ import { Camera } from "lucide-react";
 import { api } from "../lib/api";
 import { PhotoOfTheMonth } from "./PhotoOfTheMonth";
 import { GuestPhotoLightbox } from "./GuestPhotoLightbox";
-import { PhotoWatermark } from "./PhotoWatermark";
 
 const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${process.env.REACT_APP_BACKEND_URL}${u}`);
 
@@ -40,7 +39,6 @@ export default function GuestPhotoMarquee() {
                 className="relative shrink-0 w-56 h-56 rounded-2xl overflow-hidden border border-[#EFE7D5] bg-white shadow-[0_6px_18px_rgba(11,25,44,0.08)] cursor-zoom-in"
                 data-testid={i < photos.length ? `home-guest-photo-${i}` : undefined}>
                 <img src={resolveUrl(p.url)} alt={p.title || "Guest photo from a Rox trip"} loading="lazy" onError={() => drop(p.url)} onLoad={(e) => { if (e.currentTarget.naturalWidth < 50) drop(p.url); }} className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-                <PhotoWatermark />
               </button>
             ))}
           </div>

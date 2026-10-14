@@ -3,7 +3,6 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Share2, CalendarCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
-import { PhotoWatermark } from "./PhotoWatermark";
 
 const bookLink = (p) => {
   if (p.trip_type === "tour" && p.trip_id) return `/tours?book=${p.trip_id}`;
@@ -56,7 +55,6 @@ export const GuestPhotoLightbox = ({ photos, index, onIndex, onClose }) => {
               onTouchStart={(e) => { startX.current = e.touches[0].clientX; }} onTouchEnd={onTouchEnd} data-testid="guest-photo-lightbox-stage">
               <div className="relative inline-block max-w-full max-h-[80dvh]">
                 <img src={resolveUrl(photo.url)} alt={photo.caption || "Guest photo"} draggable={false} className="max-w-full max-h-[80dvh] object-contain pointer-events-none" data-testid="guest-photo-lightbox-image" />
-                <PhotoWatermark size="lg" />
               </div>
               <div className="absolute inset-0" aria-hidden="true" />
               {photos.length > 1 && (

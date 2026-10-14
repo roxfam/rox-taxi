@@ -2127,6 +2127,8 @@ async def list_gallery():
             "approved_at": d.get("approved_at"),
             "is_pinned": bool(d.get("is_pinned")),
         }
+        if d.get("tour_id"):
+            entry.update({"trip_id": d["tour_id"], "trip_type": "tour", "trip_name": d.get("tour_name") or "", "tagged": True})
         seen[entry_url] = entry
         guest_entries.append(entry)
         if entry["submitter_email"]:
@@ -2146,7 +2148,7 @@ async def list_gallery():
                 trip_by_email[r["_id"].lower()] = r
         for e in guest_entries:
             tn = trip_by_email.get(e.get("submitter_email") or "")
-            if tn:
+            if tn and not e.get("tagged"):
                 e["trip_name"] = tn["item_name"]
                 e["trip_id"] = tn.get("item_id")
                 e["trip_type"] = tn.get("service_type")

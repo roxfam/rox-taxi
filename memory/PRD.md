@@ -786,7 +786,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Strip always scrolls edge to edge: photos repeat until one loop holds 10+ cards; duration max(120s, 16s × cards). It keeps scrolling even when the phone has reduced motion turned on.
 - Second sample photo "Rox Team (sample 2)" (id 6b06d8638ebb), approved directly in the database.
 
-- Watermark: `PhotoWatermark.jsx` adds a "Rox Taxi & Tours" overlay on guest photos in the strip, the full-screen view and Photo of the Month. It's an on-screen overlay, so it shows in screenshots; the original image files are unchanged.
+- Watermark: REMOVED at the owner's request (2026-10-14), both the on-screen overlay and the share-preview image stamp. No photo shows a Rox mark.
+- Tag Photo Trip: the admin Edit form has a "Tour in this photo" dropdown (PATCH `/admin/gallery/{id}` `tour_id`, saves `tour_id` and `tour_name`). A tagged tour takes priority over the guest's last booking for the Book button.
 - "Book this experience" in the full-screen view: /api/gallery now adds `trip_id` and `trip_type` from the guest's latest booking. A tour opens /tours?book={id}, a taxi /taxi?book={id}, a rental /rentals; with no booking it falls back to /tours.
 
 ## Backlog

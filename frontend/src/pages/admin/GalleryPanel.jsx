@@ -301,6 +301,9 @@ export default function GalleryPanel() {
                         {it.approved_at && `Approved ${new Date(it.approved_at).toLocaleString()}`}
                       </div>
                     </div>
+                    {it.tour_name && editing !== it.id && (
+                      <div className="text-[11px] font-semibold text-[#0B3B5C] bg-[#D4A94A]/15 rounded-md px-2 py-1 self-start" data-testid={`admin-gallery-tour-tag-${it.id}`}>Tour: {it.tour_name}</div>
+                    )}
                     {editing === it.id ? (
                       <GalleryEditForm item={it} onSaved={onSaved} onCancel={() => setEditing(null)} />
                     ) : (

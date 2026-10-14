@@ -391,11 +391,19 @@ async def admin_delete_submission(sub_id: str, _admin: str = _require()):
 class SubmissionEdit(BaseModel):
     caption: Optional[str] = Field(None, max_length=500)
     submitter_name: Optional[str] = Field(None, max_length=100)
+    tour_id: Optional[str] = Field(None, max_length=100)
 
 
 @router.patch("/admin/gallery/{sub_id}")
 async def admin_edit_submission(sub_id: str, req: SubmissionEdit, _admin: str = _require()):
-    upd = {k: v.strip() for k, v in req.model_dump().items() if v is not None}
+    upd = {k: v.strip() for k, v in req.model_dump().items() if v is not None and k != "tour_id"}
+    if req.tour_id is not None:
+        tid = req.tour_id.strip()
+        tour = await _db.tours.find_one({"id": tid}, {"_id": 0, "id": 1, "name": 1}) if tid else None
+        if tid and not tour:
+            raise HTTPException(404, "Tour not found")
+        upd["tour_id"] = tour["id"] if tour else ""
+        upd["tour_name"] = tour["name"] if tour else ""
     if not upd:
         raise HTTPException(400, "Nothing to update")
     r = await _db.gallery_submissions.update_one({"id": sub_id}, {"$set": {**upd, "edited_at": _now_iso()}})
@@ -626,7 +634,7 @@ async def og_photo_page(sub_id: str):
     # Facebook / WhatsApp / Twitter previews never letterbox or center-crop
     # awkwardly. External-URL photos (unsplash etc) fall back to the raw src.
     og_image_url = (
-        f"https://roxtaxi.com/api/og/photo/{sub_id}/image.jpg"
+        f"https://roxtaxi.com/api/og/photo/{sub_id}/image.jpg?v=2"
         if not (doc.get("url") or "").startswith("http")
         else img_url
     )
@@ -700,7 +708,7 @@ async def og_photo_image(sub_id: str):
         return Response(
             content=buf.getvalue(),
             media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=86400, immutable"},
+            headers={"Cache-Control": "public, max-age=86400"},
         )
     except Exception as e:  # noqa: BLE001
         if _logger:
