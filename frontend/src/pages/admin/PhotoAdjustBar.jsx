@@ -37,7 +37,7 @@ export const PhotoAdjustBar = ({ item, onSaved }) => {
       ))}
       {edited && (
         <button type="button" onClick={() => run("revert")} disabled={!!busy} className={`${btn} border-[#E2E8F0] text-[#64748B] hover:bg-[#F1F5F9]`} data-testid={`admin-gallery-revert-${item.id}`}>
-          <Undo2 className="w-3.5 h-3.5" /> Undo edits
+          <Undo2 className="w-3.5 h-3.5" /> Undo enhance
         </button>
       )}
     </div>

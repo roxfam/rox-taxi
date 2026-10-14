@@ -799,6 +799,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 - Pre-approval photo editing: the Pending tab has "Edit name, caption or tour" (reuses GalleryEditForm) and `PhotoAdjustBar.jsx`: Auto enhance, Rotate left/right, Undo edits. `POST /api/admin/gallery/{id}/adjust` {action: enhance|rotate_left|rotate_right|revert} saves each edit as a new file (`guest_{id}_v{hex}.jpg`) and keeps `original_filename` for undo. Enhance = tone-preserving autocontrast, colour ×1.12, brightness ×1.04, sharpness ×1.25. Delete removes the edited and original files.
 
+- Enhance & approve: a gold button on pending cards runs adjust(enhance) then approve, and stops if the enhance fails. Approved cards also get PhotoAdjustBar (enhance, rotate, "Undo enhance"). Remove buttons now say "Remove" in both tabs.
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 

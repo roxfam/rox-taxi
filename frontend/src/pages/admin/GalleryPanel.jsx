@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, X, RefreshCw, Images, Mail, Facebook, RotateCw, ExternalLink, AlertTriangle, Pin, PinOff, Trash2, Award, Pencil } from "lucide-react";
+import { Check, X, RefreshCw, Images, Mail, Facebook, RotateCw, ExternalLink, AlertTriangle, Pin, PinOff, Trash2, Award, Pencil, Wand2 } from "lucide-react";
 import { api, BACKEND_URL } from "../../lib/api";
 import { GalleryRewardSettings } from "./GalleryRewardSettings";
 import { GalleryEditForm } from "./GalleryEditForm";
@@ -35,6 +35,18 @@ export default function GalleryPanel() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const enhanceApprove = async (id) => {
+    setBusy((b) => ({ ...b, [id]: "enhance-approve" }));
+    try {
+      await api.post(`/admin/gallery/${id}/adjust`, { action: "enhance" });
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Enhance failed, photo not approved");
+      setBusy((b) => { const n = { ...b }; delete n[id]; return n; });
+      return;
+    }
+    await decide(id, "approve");
+  };
 
   const decide = async (id, action) => {
     setBusy((b) => ({ ...b, [id]: action }));
@@ -233,6 +245,16 @@ export default function GalleryPanel() {
                     </p>
                     <div className="mt-auto flex gap-2 pt-2">
                       <button
+                        onClick={() => enhanceApprove(it.id)}
+                        disabled={!!b}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] text-xs font-semibold py-2 disabled:opacity-60 active:scale-95"
+                        data-testid={`admin-gallery-enhance-approve-${it.id}`}
+                      >
+                        <Wand2 className="w-3.5 h-3.5" /> {b === "enhance-approve" ? "…" : "Enhance & approve"}
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
                         onClick={() => decide(it.id, "approve")}
                         disabled={!!b}
                         className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-semibold py-2 disabled:opacity-60 active:scale-95"
@@ -251,11 +273,11 @@ export default function GalleryPanel() {
                       <button
                         onClick={() => hardDelete(it.id, "pending")}
                         disabled={!!b}
-                        className="inline-flex items-center justify-center rounded-full bg-white border border-[#94a3b8] text-[#64748B] hover:bg-[#DC2626] hover:text-white hover:border-[#DC2626] p-2 disabled:opacity-60 active:scale-95 transition-colors"
+                        className="inline-flex items-center justify-center gap-1 rounded-full bg-white border border-[#94a3b8] text-[#64748B] hover:bg-[#DC2626] hover:text-white hover:border-[#DC2626] px-3 py-2 text-xs font-semibold disabled:opacity-60 active:scale-95 transition-colors"
                         data-testid={`admin-gallery-delete-${it.id}`}
                         title="Permanently delete — removes file from disk + DB"
                       >
-                        {b === "delete" ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        {b === "delete" ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Remove
                       </button>
                     </div>
                   </div>
@@ -333,6 +355,7 @@ export default function GalleryPanel() {
                         <Pencil className="w-3.5 h-3.5" /> Edit
                       </button>
                     </div>
+                    <PhotoAdjustBar item={it} onSaved={(doc) => setApproved((xs) => xs.map((x) => (x.id === doc.id ? { ...x, ...doc } : x)))} />
                     {attempted && !posted && it.facebook_error && (
                       <p className="text-[11px] text-[#DC2626] leading-snug bg-[#DC2626]/8 rounded-md px-2 py-1.5" data-testid={`admin-gallery-fb-error-${it.id}`}>
                         {it.facebook_error}
@@ -373,11 +396,11 @@ export default function GalleryPanel() {
                       <button
                         onClick={() => hardDelete(it.id, "approved")}
                         disabled={!!b}
-                        className="inline-flex items-center justify-center rounded-full bg-white border border-[#94a3b8] text-[#64748B] hover:bg-[#DC2626] hover:text-white hover:border-[#DC2626] p-2 disabled:opacity-60 active:scale-95 transition-colors"
+                        className="inline-flex items-center justify-center gap-1 rounded-full bg-white border border-[#94a3b8] text-[#64748B] hover:bg-[#DC2626] hover:text-white hover:border-[#DC2626] px-3 py-2 text-xs font-semibold disabled:opacity-60 active:scale-95 transition-colors"
                         data-testid={`admin-gallery-delete-${it.id}`}
                         title="Permanently delete photo — removes file from disk + DB (does NOT delete the Facebook post)"
                       >
-                        {b === "delete" ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        {b === "delete" ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Remove
                       </button>
                     </div>
                   </div>
