@@ -794,6 +794,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 - "Share your photo" (home strip, Wall) → /gallery#submit: the upload card now renders right under the hero and the page scrolls to it. ScrollToTop skips URLs with a hash. Without the hash the card stays at the bottom.
 
+- Tour Page Photos: `TourGuestPhotos.jsx` strip (tap to open the full-screen viewer) on attraction pages via config `tour_ids`: Blue Lagoon → blue-lagoon, dolphin-swim-blue-lagoon; Atlantis → atlantis-tour. Ardastra and Baha Mar have no matching tour, so no strip. On /tours, each card with guest photos gets a "N guest photos" badge linking to /gallery?tour={id}.
+- Live reward amount: public `GET /api/gallery/reward-info` {enabled, amount}. The upload form and thank-you text use it and drop the reward line when rewards are off. Verified $7, then restored to $5.
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 

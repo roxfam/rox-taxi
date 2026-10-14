@@ -3,7 +3,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import BookingModal, { Field } from "./BookingFlow";
 import Seo from "../components/Seo";
-import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown, MapPin, Star, Users, Ship, X as XIcon, CheckCircle2, Share2 } from "lucide-react";
+import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown, MapPin, Star, Users, Ship, X as XIcon, CheckCircle2, Share2, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { cdn, cdnSrcSet } from "../lib/img";
 import { PromoPrice } from "../components/PromoPrice";
@@ -171,6 +171,7 @@ const HUB_ATTRACTIONS = [
 
 export default function Tours() {
   const [tours, setTours] = useState([]);
+  const [guestCounts, setGuestCounts] = useState({});
   const [taxiById, setTaxiById] = useState({});
   const [selected, setSelected] = useState(null);
   const [params] = useSearchParams();
@@ -200,6 +201,11 @@ export default function Tours() {
         const t = r.data.find((x) => x.id === bookId);
         if (t) setSelected(t);
       }
+    }).catch(() => {});
+    api.get("/gallery").then(({ data }) => {
+      const c = {};
+      (data || []).forEach((p) => { if (p.category === "guests" && p.trip_id) c[p.trip_id] = (c[p.trip_id] || 0) + 1; });
+      setGuestCounts(c);
     }).catch(() => {});
     // Fetch taxi routes once so the Hub cards show live "from $XX" pricing.
     api.get("/taxi-services").then((r) => {
@@ -562,6 +568,11 @@ export default function Tours() {
                 </div>
               )}
               <ShareTourButton tour={t} />
+              {guestCounts[t.id] > 0 && (
+                <Link to={`/gallery?tour=${t.id}`} onClick={(e) => e.stopPropagation()} className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-[#0B192C]/80 backdrop-blur text-white text-[11px] font-semibold px-3 py-1 hover:bg-[#0B192C]" data-testid={`tour-guest-photos-link-${t.id}`}>
+                  <Camera className="w-3 h-3 text-[#D4A94A]" /> {guestCounts[t.id]} guest photo{guestCounts[t.id] > 1 ? "s" : ""}
+                </Link>
+              )}
             </div>
             <div className="p-6">
               <h3 className="serif text-2xl text-[#0B3B5C] leading-tight">{t.name}</h3>

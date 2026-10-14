@@ -451,6 +451,13 @@ async def admin_set_photo_of_month(sub_id: str, _admin: str = _require()):
     return {**potm, "reward_code": reward_code, "already_rewarded": reward_code is None}
 
 
+@router.get("/gallery/reward-info")
+async def public_reward_info():
+    from routes.gift_redeem import reward_settings  # noqa: PLC0415
+    s = await reward_settings()
+    return {"enabled": bool(s["enabled"]) and float(s["approval_amount"]) > 0, "amount": float(s["approval_amount"])}
+
+
 @router.get("/gallery/photo-of-month")
 async def public_photo_of_month():
     cfg = await _db.site_config.find_one({"_id": "main"}, {"photo_of_month": 1}) or {}

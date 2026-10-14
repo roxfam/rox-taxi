@@ -2,6 +2,7 @@ import AttractionLanding from "../../components/AttractionLanding";
 
 const BLUE_LAGOON_CONFIG = {
   slug: "blue-lagoon",
+  tour_ids: ["blue-lagoon", "dolphin-swim-blue-lagoon"],
   kicker: "Ferry-only island escape",
   name: "Blue Lagoon Island",
   tagline: "A 250-acre private island three miles off Paradise Island — swim with dolphins, hammocks in the coconut grove, and one of the calmest beaches in the Bahamas.",

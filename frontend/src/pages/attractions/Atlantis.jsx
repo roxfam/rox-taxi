@@ -2,6 +2,7 @@ import AttractionLanding from "../../components/AttractionLanding";
 
 const ATLANTIS_CONFIG = {
   slug: "atlantis",
+  tour_ids: ["atlantis-tour"],
   kicker: "Paradise Island icon",
   name: "Atlantis Paradise Island",
   tagline: "The Bahamas' legendary mega-resort — waterpark, aquarium, casino, and 11 pools spread across Paradise Island.",

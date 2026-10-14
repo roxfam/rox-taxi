@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Clock, MapPin, ArrowRight, ExternalLink, Ticket, Info, Phone, Star } from "lucide-react";
 import { api, money } from "../lib/api";
+import { TourGuestPhotos } from "./TourGuestPhotos";
 
 /**
  * AttractionLanding — reusable landing page for a single Nassau attraction.
@@ -21,6 +22,7 @@ export default function AttractionLanding({ config }) {
     external_url, external_label,
     taxi_route_ids = [],
     admission_note,
+    tour_ids = [],
   } = config;
 
   const [taxiRoutes, setTaxiRoutes] = useState([]);
@@ -249,6 +251,7 @@ export default function AttractionLanding({ config }) {
           </a>
         </div>
       </section>
+      <TourGuestPhotos tourIds={tour_ids} title={`Guest moments at ${name}`} />
     </div>
   );
 }
