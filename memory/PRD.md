@@ -803,6 +803,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 - Before/after slider: `BeforeAfterSlider.jsx` replaces the pending card image once a photo is edited (original on the left, edited on the right, drag to compare).
 
+- Enhance & approve all: a Pending-tab header button (`admin-gallery-enhance-approve-all`). It asks for confirmation, then goes through each photo (enhance unless already hand-edited, then approve), shows "Working n / total", reloads once at the end, and leaves any failures in Pending.
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 

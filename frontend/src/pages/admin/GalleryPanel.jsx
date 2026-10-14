@@ -37,6 +37,29 @@ export default function GalleryPanel() {
 
   useEffect(() => { load(); }, []);
 
+  const [bulk, setBulk] = useState("");
+  const approveAll = async () => {
+    const list = [...pending];
+    if (!list.length || !window.confirm(`Enhance and approve all ${list.length} pending photo${list.length > 1 ? "s" : ""}? They go live right away and guests with an email get their thank-you gift card.`)) return;
+    let ok = 0;
+    for (let i = 0; i < list.length; i += 1) {
+      const it = list[i];
+      setBulk(`${i + 1} / ${list.length}`);
+      try {
+        // Skip re-enhancing photos you already edited by hand.
+        if (!(it.original_filename && it.original_filename !== it.filename)) {
+          await api.post(`/admin/gallery/${it.id}/adjust`, { action: "enhance" });
+        }
+        await api.post(`/admin/gallery/${it.id}/approve`);
+        ok += 1;
+      } catch { /* keep going; failures stay in Pending */ }
+    }
+    setBulk("");
+    if (ok === list.length) toast.success(`${ok} photo${ok > 1 ? "s" : ""} enhanced & approved`);
+    else toast.error(`${ok} of ${list.length} approved. The rest are still in Pending.`);
+    load();
+  };
+
   const enhanceApprove = async (id) => {
     setBusy((b) => ({ ...b, [id]: "enhance-approve" }));
     try {
@@ -169,6 +192,14 @@ export default function GalleryPanel() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {tab === "pending" && pending.length > 0 && (
+            <button onClick={approveAll} disabled={!!bulk}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] text-xs font-semibold px-4 py-2 disabled:opacity-70"
+              data-testid="admin-gallery-enhance-approve-all">
+              {bulk ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+              {bulk ? `Working ${bulk}…` : `Enhance & approve all (${pending.length})`}
+            </button>
+          )}
           <div className="inline-flex rounded-full bg-[#F1F5F9] p-1" role="tablist">
             <button
               onClick={() => setTab("pending")}
