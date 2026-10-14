@@ -792,6 +792,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 - Gallery tour filter: a "Guest photos by tour" chip row on /gallery (only tours that have guest photos, with counts). It deep-links with ?tour={id}, adds a "Book this tour" link, and the category chips clear it.
 
+- "Share your photo" (home strip, Wall) → /gallery#submit: the upload card now renders right under the hero and the page scrolls to it. ScrollToTop skips URLs with a hash. Without the hash the card stays at the bottom.
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 

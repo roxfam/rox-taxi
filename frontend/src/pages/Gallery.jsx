@@ -1,7 +1,7 @@
 import Seo from "../components/Seo";
 
 import { useEffect, useMemo, useState, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import { Images, X, MapPin, Car, ShipWheel, MapPinned, Camera, Upload, CheckCircle2, Loader2, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -28,6 +28,8 @@ export default function Gallery() {
   const deepLinkId = params.get("photo");
   const tourFilter = params.get("tour") || "";
   const submitRef = useRef(null);
+  const { hash } = useLocation();
+  const uploadFirst = hash === "#submit" || hash === "#share";
 
   useEffect(() => {
     api.get("/gallery").then(({ data }) => setPhotos(data)).catch(() => setPhotos([]));
@@ -41,12 +43,12 @@ export default function Gallery() {
     if (match) setActive(match);
   }, [deepLinkId, photos]);
 
-  // Honour #submit hash — used by the post-trip photo-nudge email CTA
+  // Honour #submit hash — re-run once photos load so the grid above can't push the form out of view
   useEffect(() => {
-    if (typeof window !== "undefined" && window.location.hash === "#submit" && submitRef.current) {
-      submitRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, []);
+    if (!uploadFirst) return undefined;
+    const t = setTimeout(() => { submitRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150);
+    return () => { clearTimeout(t); };
+  }, [uploadFirst]);
 
   const filtered = useMemo(() => {
     if (tourFilter) return photos.filter((p) => p.category === "guests" && p.trip_id === tourFilter);
@@ -114,6 +116,12 @@ export default function Gallery() {
           </p>
         </div>
       </section>
+
+      {uploadFirst && (
+        <div id="submit" className="max-w-6xl mx-auto px-6 lg:px-10 pt-8 scroll-mt-24" ref={submitRef} data-testid="gallery-upload-first">
+          <GallerySubmitCard />
+        </div>
+      )}
 
       {/* Filter chips */}
       <section className="max-w-7xl mx-auto px-6 lg:px-10 pt-8">
@@ -252,8 +260,8 @@ export default function Gallery() {
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto px-6 lg:px-10 pb-16" ref={submitRef}>
-        <GallerySubmitCard />
+      <div id={uploadFirst ? undefined : "submit"} className="max-w-6xl mx-auto px-6 lg:px-10 pb-16 scroll-mt-24" ref={uploadFirst ? undefined : submitRef}>
+        {!uploadFirst && <GallerySubmitCard />}
       </div>
     </div>
   );
