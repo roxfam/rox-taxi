@@ -125,7 +125,7 @@ export default function Gallery() {
 
       {/* Filter chips */}
       <section className="max-w-7xl mx-auto px-6 lg:px-10 pt-8">
-        {/* Wall of Moments teaser — screenshot-and-share strip */}
+        {/* Wall of Moments teaser */}
         <Link
           to="/wall"
           data-testid="gallery-wall-cta"
@@ -137,9 +137,9 @@ export default function Gallery() {
           <div className="flex-1 min-w-0">
             <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">New — Wall of moments</div>
             <div className="serif text-lg leading-tight mt-0.5">
-              Grab a shareable strip of our featured guests
+              See the wall of our featured guests
             </div>
-            <div className="text-[11px] text-white/60 mt-0.5">Save it as an image, drop it in your IG story.</div>
+            <div className="text-[11px] text-white/60 mt-0.5">Real Nassau moments from Rox riders.</div>
           </div>
           <span className="hidden sm:inline-flex text-xs font-black tracking-widest uppercase rounded-full bg-[#D4A94A] text-[#0B192C] px-4 py-2 group-hover:bg-[#E5BC5A]">
             Open →

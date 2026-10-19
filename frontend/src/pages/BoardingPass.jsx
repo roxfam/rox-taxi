@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { api, BACKEND_URL, money } from "../lib/api";
+import { GoogleWalletButton } from "../components/GoogleWalletButton";
 import { Ticket, MapPin, Clock, Users, Share2, Download, Camera, Smartphone } from "lucide-react";
 
 /**
@@ -146,6 +147,7 @@ export default function BoardingPass() {
 
         {/* Save-to-phone controls */}
         <div className="mt-6 space-y-3">
+          <GoogleWalletButton bookingId={booking?.id} />
           <button
             onClick={saveAsImage}
             className="w-full inline-flex items-center justify-center gap-2 bg-[#D4A94A] hover:bg-[#B8912F] text-[#0B3B5C] font-bold py-3 rounded-xl transition-colors"

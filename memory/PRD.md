@@ -808,6 +808,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - PayPal: removed the PayPal.me option (booking modal and /pay page). "PayPal" now redirects to PayPal's own checkout page: create-order takes `origin_url` and returns `approve_url`, with return_url /payment/success?provider=paypal&booking_id=… and cancel_url /payment/cancel. PaymentSuccess captures `?token=` once, then loads the booking. This also fixes the old Smart-Button return, which spun on "Confirming payment…" forever with no QR.
 - QR fix: the photo protection rule had blocked long-press "Save image" on QR codes. QR imgs now carry `allow-save`, and ImageGuard skips allow-save and qr.png. QR checked on the boarding pass, payment success (PayPal) and Track pages.
 
+- Love Beach: added to the taxi "Popular destinations" grid and the pickup/drop-off dropdowns (Taxi.jsx). It uses the existing routes port-love-beach ($20 pp) and paradise-love-beach ($40 pp).
+- Guest photo sharing removed: the full-screen viewer Share button, the Home featured-guest share row (WhatsApp/Facebook/Copy), and the Wall page Save-as-image/Share/Copy link/social tray. The Wall teaser copy no longer mentions sharing.
+- Fixes from iteration 40: facebook.py `_post_photo` now strips the "api/" prefix (FB auto-post had failed with file_not_found). Pay.jsx and PaymentReturn use total ?? total_price, so CB-* bookings no longer show $0.00.
+- Google Wallet pass (owner chose Google only for now): `routes/google_wallet.py`. `GET /api/google-wallet/status` and `GET /api/bookings/{id}/google-wallet` return a signed save URL (RS256 JWT with the generic class/object inline, QR = the HMAC driver-scan URL, JWT about 1.7k chars). Keys go in admin Tokens → Google Wallet: GOOGLE_WALLET_ISSUER_ID and GOOGLE_WALLET_SERVICE_ACCOUNT_JSON. `GoogleWalletButton.jsx` stays hidden until configured and appears on the boarding pass and payment success pages. JWT build was verified with a generated test key; real save is not tested (no owner keys yet).
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 

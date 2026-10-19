@@ -1,0 +1,40 @@
+{
+  "summary": "Regression-tested the features added after iteration 39. Backend: 11/11 pytest passed. That covers gallery adjust enhance/rotate_left/rotate_right/revert (401 without auth, 422 for a bad action, 404 for an unknown id, rotation dimensions checked, old edited files removed), PATCH tour_id (valid, 404 for an unknown tour, clearing it, persisted in pending), reward-info, the tagged sample photo exposing trip_id=blue-lagoon, and PayPal create-order called ONCE for CB-6N6MRQ26. That call returned an approve_url starting https://www.paypal.com/checkoutnow; the created tx row was deleted and the test is now skipped unless RUN_LIVE_PAYPAL=1. Missing booking returns 404 and an unknown capture order returns 404. Frontend items all pass. Home at 390px: the guest strip is 4800px wide against a 390px viewport and the transform changes over time. The lightbox shows caption/name, next/prev and touch swipe change the photo, Share is visible, and Book links to /tours?book=blue-lagoon for 00569f2ec997 and /tours for the other photo. Right-click and drag are prevented on guest photos. They are not prevented on the QR images on /booking/CB-YGXNNZ35/pass, /track and /payment/success; on that last page the heading is 'You're all set!' and the QR loads. Share-your-photo goes to /gallery#submit with the upload card at top=98px. The reward shows $5. The gallery tour chip filters 35 tiles down to 1 and shows a Book link; the chip toggles off and the All category chip resets. /gallery?tour=blue-lagoon is pre-filtered. The /tours badge links to /gallery?tour=blue-lagoon. The /tours/blue-lagoon strip opens the lightbox. Admin: the edit form tour dropdown has 16 tours plus 'No tour' and saves. Enhance gives the before/after slider (range works) and Undo appears; revert removes the slider. Rotate works. Enhance & approve sets the photo approved and enhanced=true. Approve all shows a confirm dialog and a toast, and skips re-enhancing photos edited by hand. Remove shows a confirm dialog and deletes. Booking modal step 2 offers Stripe, PayPal checkout and Zelle; there is no pay-method-paypal and no PayPal.me text, and the CTA reads 'Continue to PayPal'. /pay/CB-6N6MRQ26 has a 'Pay with PayPal' button. The PayPal return for an unpaid booking shows 'Payment not completed' and a retry link. Two real bugs were found (see action_items).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/admin/gallery/{id}/approve (facebook.py _post_photo)", "issue": "Facebook auto-post can never find the image file. rel = image_url.lstrip('/').removeprefix('uploads/') leaves 'api/uploads/guest_x.jpg' for every new submission, since the url is always /api/uploads/..., and it returns error 'file_not_found:api/uploads/...'. This was seen on a TEST photo after Enhance & approve. Even with a valid FB token, approve, pin and repost posts would all fail. Fix: rel = image_url.lstrip('/').removeprefix('api/').removeprefix('uploads/').", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Pay.jsx and PaymentReturn.jsx (PaymentSuccess)", "issue": "Amount shows $0.00 for Cable Beach bookings. These bookings (e.g. CB-6N6MRQ26, total_price 115.5; CB-YGXNNZ35, total_price 152.46) store total_price and have no 'total'. Pay.jsx line 88 uses Number(booking.total || 0) and PaymentSuccess uses money(booking.total), so the Stripe/PayPal cards on /pay/CB-* and 'Total paid' on /payment/success show $0.00. The backend create-order correctly uses total || total_price. Use booking.total ?? booking.total_price on the frontend.", "selector": "[data-testid=pay-paypal-btn], [data-testid=payment-success-summary]", "priority": "HIGH"},
+      {"component": "PhotoAdjustBar", "issue": "The revert button is labelled 'Undo enhance' even when the only edit was a rotation. Label it 'Undo edits' or 'Restore original'.", "selector": "[data-testid^=admin-gallery-revert-]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Booking modal step 2 with PayPal selected", "issues": ["The banner 'Card details are tokenised by Stripe' and the footer 'Powered by Stripe' still show when PayPal or Zelle is selected."]},
+      {"screen": "Booking modal step 1 vs step 2", "issues": ["Step 1 shows 'Processing fee (3%)'. Step 2 shows 'Includes 10% VAT & 5% processing' and a $132.17 total. Step 1 has no VAT line in view, so the fee breakdown looks inconsistent to the guest. Please verify."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter40_gallery_adjust_paypal.py", "/app/test_reports/pytest/iter40.xml"],
+  "action_items": [
+    "Fix facebook.py _post_photo path resolution: strip the 'api/' prefix before 'uploads/'. Right now every gallery FB auto-post, pin post and repost fails with file_not_found.",
+    "Pay.jsx and PaymentSuccess: use booking.total ?? booking.total_price so Cable Beach (CB-*) bookings don't show $0.00.",
+    "Optional cleanup: BookingFlow.jsx still has dead PayPal.me code (payMethod==='paypal' branch ~line 544, the paypal-instructions step ~1427 and the old Smart-Buttons paypal-checkout-step ~1465). Remove it to avoid confusion.",
+    "Optional: rename 'Undo enhance' to 'Undo edits'. Hide the 'Stripe' security copy when PayPal or Zelle is selected."
+  ],
+  "critical_code_review_comments": [
+    "facebook.py _post_photo: prefix-strip bug (see above).",
+    "BookingFlow.jsx is 1709 lines. Split the payment step into its own component; the dead PayPal.me / Smart Buttons branches remain.",
+    "GalleryPanel approveAll approves every pending photo sequentially with no per-item error detail. Acceptable, but if a real guest uploads while the confirm dialog is open, that photo is not included because the list is snapshotted. Fine.",
+    "Admin gallery endpoints now correctly require auth (the iter39 critical issue is fixed: 401 without a token)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter40_gallery_adjust_paypal.py"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "~95% (all requested flows pass; $0.00 amount display bug on CB bookings)"},
+  "seed_data_creation": "Created 4 TEST_ gallery submissions (1 via pytest, 3 via the UI flow) and deleted all of them. One PayPal payment_transactions row (order 88N80354LM4850008) was created by the single create-order call and deleted. No gift cards were created, because the submissions had no email.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The live PayPal create-order test is skipped unless RUN_LIVE_PAYPAL=1; delete the created payment_transactions row afterwards. Pending queue was empty of real submissions at test time; check this before clicking admin-gallery-enhance-approve-all. Tour badge links to /gallery?tour=<id>. The gallery tour chip toggles, and the All category chip also resets it. Booking modal reaches step 2 via booking-continue-payment-btn without filling the form, and no booking is created.",
+  "rca of the issue": "FB: approval stores url '/api/uploads/<file>'. _post_photo strips only a leading '/' and 'uploads/', so it looks up UPLOAD_DIR/'api/uploads/<file>', which doesn't exist. Reproduced: Enhance & approve on a TEST photo set facebook_error='file_not_found:api/uploads/guest_0fe74d69be9b_vd50bfa.jpg'. $0.00: Cable Beach bookings (routes/cable_beach.py:848) write total_price only, and the frontend reads booking.total."
+}

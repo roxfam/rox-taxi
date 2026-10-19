@@ -3,7 +3,7 @@ import Seo from "../components/Seo";
 import { Link } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Car, MapPinned, ShipWheel, Ship, Hotel, Star, ShieldCheck, Clock, Users, X, Facebook, MessageCircle, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { ArrowRight, Car, MapPinned, ShipWheel, Ship, Hotel, Star, ShieldCheck, Clock, Users, X, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { api, money } from "../lib/api";
 import { cdn, cdnSrcSet } from "../lib/img";
 import NassauCarousel from "../components/NassauCarousel";
@@ -524,71 +524,6 @@ function FeaturedGuestWall() {
               >
                 Book my Nassau day <ArrowRight className="w-4 h-4" />
               </Link>
-
-              {/* Share row — lets featured guests spread their own moment. */}
-              <div className="mt-5 pt-5 border-t border-white/15">
-                <div className="text-[10px] uppercase tracking-widest text-white/50 mb-2.5">Share this moment</div>
-                <div className="flex items-center gap-2">
-                  {(() => {
-                    // Share URL: /api/og/photo/<id> gives social crawlers a
-                    // photo-specific OG preview card + redirects humans to
-                    // the SPA. Fall back to plain /gallery for legacy photos
-                    // that don't carry an id (catalog/nassau images).
-                    const shareUrl = active.id
-                      ? `https://roxtaxi.com/api/og/photo/${active.id}`
-                      : "https://roxtaxi.com/gallery";
-                    const bits = [
-                      active.submitter ? `${active.submitter}'s Nassau moment` : "A Nassau moment",
-                      active.trip_name ? `on the ${active.trip_name}` : null,
-                      active.title ? `— "${active.title}"` : null,
-                    ].filter(Boolean).join(" ");
-                    const waHref = `https://wa.me/?text=${encodeURIComponent(`${bits}. Book yours 👉 ${shareUrl}`)}`;
-                    const quote = (active.submitter ? active.submitter + "'s " : "A ") + "Nassau moment with Rox Taxi & Tours" + (active.title ? ` — "${active.title}"` : "");
-                    const fbHref = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(quote)}`;
-                    return (
-                      <>
-                        <a
-                          href={waHref}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          data-testid="home-featured-lightbox-share-whatsapp"
-                          className="inline-flex items-center gap-1.5 rounded-full bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-bold px-3.5 py-2 transition-colors active:scale-95"
-                          aria-label="Share on WhatsApp"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
-                        </a>
-                        <a
-                          href={fbHref}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          data-testid="home-featured-lightbox-share-facebook"
-                          className="inline-flex items-center gap-1.5 rounded-full bg-[#1877F2] hover:bg-[#0d5fc4] text-white text-xs font-bold px-3.5 py-2 transition-colors active:scale-95"
-                          aria-label="Share on Facebook"
-                        >
-                          <Facebook className="w-3.5 h-3.5" /> Facebook
-                        </a>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              await navigator.clipboard.writeText(shareUrl);
-                              const { toast } = await import("sonner");
-                              toast.success("Photo link copied");
-                            } catch {
-                              // ignore — old browsers just do nothing
-                            }
-                          }}
-                          data-testid="home-featured-lightbox-share-copy"
-                          className="inline-flex items-center gap-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold px-3.5 py-2 transition-colors active:scale-95"
-                          aria-label="Copy link"
-                        >
-                          Copy link
-                        </button>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
             </div>
           </div>
         </div>

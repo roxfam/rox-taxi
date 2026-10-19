@@ -69,6 +69,10 @@ TOKEN_REGISTRY: list[dict] = [
     # AviationStack
     {"key": "AVIATIONSTACK_API_KEY", "group": "AviationStack","label": "API Key",             "sensitive": True,  "help": "Flight tracker widget uses this."},
 
+    # Google Wallet (boarding pass)
+    {"key": "GOOGLE_WALLET_ISSUER_ID", "group": "Google Wallet", "label": "Issuer ID",        "sensitive": False, "help": "From pay.google.com/business/console (a long number)."},
+    {"key": "GOOGLE_WALLET_SERVICE_ACCOUNT_JSON", "group": "Google Wallet", "label": "Service account key (JSON)", "sensitive": True, "help": "Paste the whole downloaded JSON key file content."},
+
     # Emergent LLM (Claude / GPT / Gemini)
     {"key": "EMERGENT_LLM_KEY",      "group": "Emergent LLM","label": "Universal LLM Key",    "sensitive": True,  "help": "sk-emergent-… Powers the chat concierge."},
 

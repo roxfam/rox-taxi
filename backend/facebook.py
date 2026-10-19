@@ -142,7 +142,7 @@ async def _post_photo(*, image_url: str, caption: str) -> dict:
     if not cfg["page_id"] or not cfg["token"]:
         return {"ok": False, "post_id": None, "error": "not_configured"}
 
-    rel = image_url.lstrip("/").removeprefix("uploads/")
+    rel = image_url.lstrip("/").removeprefix("api/").removeprefix("uploads/")
     local = UPLOAD_DIR / rel
     if not local.is_file():
         return {"ok": False, "post_id": None, "error": f"file_not_found:{rel}"}

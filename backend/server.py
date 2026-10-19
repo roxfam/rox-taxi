@@ -26,6 +26,7 @@ import paypal_client
 from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_IDS, HOME_SLIDES_SEED
 from pdf_utils import build_wedding_pdf, build_receipt_pdf
 from routes import payments as payments_module
+from routes import google_wallet as google_wallet_module
 from routes import gift_redeem as gift_redeem_module
 from routes import admin as admin_module
 from routes import catalog as catalog_module
@@ -6624,6 +6625,8 @@ payments_module.configure(
     require_admin=require_admin,
 )
 api_router.include_router(payments_module.router)
+google_wallet_module.configure(db=db)
+api_router.include_router(google_wallet_module.router)
 gift_redeem_module.configure(db=db, now_iso=now_iso, mark_paid=payments_module._mark_paid, require_admin=require_admin)
 api_router.include_router(gift_redeem_module.router)
 quotes_module.configure(db=db, now_iso=now_iso, create_booking=create_booking, booking_model=BookingCreate, require_admin=require_admin)

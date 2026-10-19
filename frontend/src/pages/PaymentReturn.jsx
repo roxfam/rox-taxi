@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api, money } from "../lib/api";
 import { trackPurchase } from "../lib/fbpixel";
 import TourUpsellCard from "../components/TourUpsellCard";
+import { GoogleWalletButton } from "../components/GoogleWalletButton";
 
 export function PaymentSuccess() {
   const [params] = useSearchParams();
@@ -110,7 +111,7 @@ export function PaymentSuccess() {
             </div>
             <div className="text-right">
               <div className="text-xs tracking-[0.3em] uppercase text-[#64748B]">Total paid</div>
-              <div className="mono text-2xl text-[#E86A3C] font-black tracking-tight">{money(booking.total)}</div>
+              <div className="mono text-2xl text-[#E86A3C] font-black tracking-tight">{money(booking.total ?? booking.total_price ?? 0)}</div>
               {booking.tip_amount > 0 && (
                 <div
                   className="mt-1 text-[10px] uppercase tracking-widest font-black text-[#059669]"
@@ -135,6 +136,7 @@ export function PaymentSuccess() {
               <div className="text-[10px] tracking-[0.3em] uppercase text-[#D4A94A] font-black">Show at pickup</div>
               <div className="serif text-xl text-[#0B3B5C] mt-1">Scan to confirm your ride</div>
               <p className="text-sm text-[#64748B] mt-2 leading-relaxed">Flash this at your driver. It opens your live booking + status page.</p>
+              <GoogleWalletButton bookingId={booking.id} className="mt-3 sm:w-auto" />
             </div>
           </div>
 

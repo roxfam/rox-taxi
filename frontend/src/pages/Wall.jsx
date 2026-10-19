@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
-import { toPng } from "html-to-image";
-import { Download, Share2, Copy, Camera, Sparkles, ArrowRight, RefreshCw, Instagram, Palette, Sun, Waves, PartyPopper, Facebook, MessageCircle, Twitter } from "lucide-react";
+import { Camera, Sparkles, ArrowRight, Palette, Sun, Waves, PartyPopper } from "lucide-react";
 import { api } from "../lib/api";
 
 // Theme presets — each drives the exportable strip's colours. Kept as plain
@@ -61,10 +59,8 @@ const THEMES = {
 export default function Wall() {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [themeId, setThemeId] = useState("classic");
   const [caption, setCaption] = useState("");
-  const [showSocial, setShowSocial] = useState(false);
   const theme = THEMES[themeId] || THEMES.classic;
   const stripRef = useRef(null);
   const CAPTION_MAX = 60;
@@ -95,76 +91,6 @@ export default function Wall() {
 
   const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${process.env.REACT_APP_BACKEND_URL}${u}`);
 
-  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/wall` : "https://roxtaxi.com/wall";
-  const shareText = caption ? `${caption} — Nassau moments · Rox Taxi` : "Real Nassau moments from the Rox Taxi guest wall. Book yours 👉";
-
-  // Platform-specific share URLs. Instagram has no direct URL API (they
-  // deliberately don't allow it), so we surface a "Save image → then IG
-  // Story" hint instead.
-  const socialTargets = useMemo(() => {
-    const u = encodeURIComponent(shareUrl);
-    const t = encodeURIComponent(shareText);
-    return [
-      { id: "facebook",  label: "Facebook",  color: "#1877F2", Icon: Facebook,      url: `https://www.facebook.com/sharer/sharer.php?u=${u}&quote=${t}` },
-      { id: "whatsapp",  label: "WhatsApp",  color: "#25D366", Icon: MessageCircle, url: `https://wa.me/?text=${t}%20${u}` },
-      { id: "twitter",   label: "X",         color: "#000000", Icon: Twitter,       url: `https://twitter.com/intent/tweet?text=${t}&url=${u}` },
-      { id: "messenger", label: "Messenger", color: "#0084FF", Icon: MessageCircle, url: `https://www.facebook.com/dialog/send?link=${u}&app_id=140586622674265&redirect_uri=${u}` },
-    ];
-  }, [shareUrl, shareText]);
-
-  const openSocial = (target) => {
-    // window.open with a name so mobile browsers respect popup behaviour
-    window.open(target.url, "_blank", "noopener,noreferrer,width=680,height=680");
-  };
-
-  const savePNG = async () => {
-    if (!stripRef.current || saving) return;
-    setSaving(true);
-    try {
-      // Force fresh <img> loads with crossOrigin so canvas isn't tainted.
-      // We can't retroactively add crossorigin to already-mounted images,
-      // so the workaround is to bake the images into <img> tags with the
-      // attribute at render time (see WallTile below).
-      const dataUrl = await toPng(stripRef.current, {
-        cacheBust: true,
-        pixelRatio: 2,
-        // Fallback solid so the PNG never has a transparent edge if the
-        // gradient stops don't fully cover a rounded corner.
-        backgroundColor: "#0B192C",
-        style: { margin: "0" },
-      });
-      const link = document.createElement("a");
-      link.download = `rox-taxi-${theme.id}-moments-${Date.now()}.png`;
-      link.href = dataUrl;
-      link.click();
-      toast.success("Wall saved to your device 📸");
-    } catch (e) {
-      toast.error("Couldn't save the image — try screenshotting the strip below instead.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const shareNative = async () => {
-    const payload = { title: "Nassau moments — Rox Taxi", text: shareText, url: shareUrl };
-    if (navigator.share) {
-      try {
-        await navigator.share(payload);
-      } catch { /* user cancelled */ }
-    } else {
-      copyLink();
-    }
-  };
-
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success("Link copied — paste it into any DM or story.");
-    } catch {
-      toast.error("Couldn't copy — long-press the URL bar to grab it.");
-    }
-  };
-
   return (
     <div className="min-h-[100vh] bg-[#0B192C] text-white" data-testid="wall-page">
       {/* Hero — sits outside the exported strip */}
@@ -178,85 +104,8 @@ export default function Wall() {
             Nassau moments, <span className="text-[#D4A94A]">unfiltered</span>.
           </h1>
           <p className="max-w-2xl mx-auto mt-4 text-white/70 text-sm sm:text-base">
-            Screenshot the strip below — or hit Save — and drop it into your Instagram story to show your crew where they're going next.
+            Real Nassau moments from our guests — your trip could be next.
           </p>
-
-          {/* Share actions */}
-          <div className="mt-7 flex items-center justify-center gap-2 flex-wrap">
-            <button
-              onClick={savePNG}
-              disabled={saving || loading || photos.length === 0}
-              data-testid="wall-save-png"
-              className="inline-flex items-center gap-2 rounded-full bg-[#D4A94A] text-[#0B192C] font-black text-sm px-5 py-3 hover:bg-[#E5BC5A] active:scale-95 disabled:opacity-60 shadow-[0_10px_30px_rgba(212,169,74,0.35)]"
-            >
-              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {saving ? "Rendering…" : "Save as image"}
-            </button>
-            <button
-              onClick={() => setShowSocial((v) => !v)}
-              data-testid="wall-share-to-social"
-              aria-expanded={showSocial}
-              className="inline-flex items-center gap-2 rounded-full bg-[#D4A94A]/15 border border-[#D4A94A]/40 text-[#D4A94A] font-bold text-sm px-4 py-3 hover:bg-[#D4A94A]/25 active:scale-95 backdrop-blur"
-            >
-              <Share2 className="w-4 h-4" /> Share to Social
-            </button>
-            <button
-              onClick={shareNative}
-              data-testid="wall-share"
-              className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/25 text-white font-bold text-sm px-4 py-3 hover:bg-white/20 active:scale-95 backdrop-blur"
-            >
-              <Share2 className="w-4 h-4" /> Share
-            </button>
-            <button
-              onClick={copyLink}
-              data-testid="wall-copy-link"
-              className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/25 text-white font-bold text-sm px-4 py-3 hover:bg-white/20 active:scale-95 backdrop-blur"
-            >
-              <Copy className="w-4 h-4" /> Copy link
-            </button>
-          </div>
-
-          {/* Social platform tray — expands under the CTAs when guests hit
-              "Share to Social". Each button opens the platform's official
-              share dialog in a popup. Instagram gets a helper hint since
-              they don't offer a public share-URL API. */}
-          {showSocial && (
-            <div
-              data-testid="wall-social-tray"
-              className="mt-4 mx-auto max-w-md rounded-2xl bg-white/8 border border-white/20 backdrop-blur px-4 py-4"
-            >
-              <div className="text-[10px] tracking-[0.28em] uppercase text-white/70 font-black mb-3">Share to</div>
-              <div className="flex items-center justify-center gap-2 flex-wrap">
-                {socialTargets.map((s) => {
-                  const Ico = s.Icon;
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => openSocial(s)}
-                      data-testid={`wall-social-${s.id}`}
-                      className="inline-flex items-center gap-2 rounded-full text-white font-bold text-sm px-4 py-2.5 hover:opacity-90 active:scale-95 transition-all"
-                      style={{ background: s.color }}
-                    >
-                      <Ico className="w-4 h-4" /> {s.label}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={() => { savePNG(); toast("Save the image, then paste it into a new IG Story."); }}
-                  data-testid="wall-social-instagram"
-                  className="inline-flex items-center gap-2 rounded-full text-white font-bold text-sm px-4 py-2.5 hover:opacity-90 active:scale-95 transition-all"
-                  style={{ background: "linear-gradient(135deg, #F58529 0%, #DD2A7B 50%, #8134AF 100%)" }}
-                >
-                  <Instagram className="w-4 h-4" /> Instagram
-                </button>
-              </div>
-              <div className="mt-3 text-[10px] text-white/60 text-center leading-relaxed">
-                Instagram doesn't support direct sharing — hit the button to save the image, then drop it into a new Story.
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
@@ -359,9 +208,6 @@ export default function Wall() {
               <StripMosaic photos={photos} resolveUrl={resolveUrl} theme={theme} />
               <StripFooter theme={theme} />
             </div>
-            <p className="text-center text-[11px] text-white/50 mt-4">
-              Tip: on iPhone, tap Save as image → open Photos → share to Instagram Story.
-            </p>
           </div>
         )}
       </section>
@@ -486,10 +332,10 @@ function StripFooter() {
 function EmptyWall() {
   return (
     <div className="text-center max-w-md mx-auto py-16" data-testid="wall-empty">
-      <Instagram className="w-10 h-10 mx-auto text-[#D4A94A] mb-4" />
+      <Camera className="w-10 h-10 mx-auto text-[#D4A94A] mb-4" />
       <h3 className="serif text-2xl text-white">No moments pinned yet.</h3>
       <p className="text-white/60 text-sm mt-2 mb-6">
-        Check back after your trip — approved photos land on the wall and become shareable in one tap.
+        Check back after your trip — approved photos land on the wall.
       </p>
       <Link
         to="/gallery#submit"

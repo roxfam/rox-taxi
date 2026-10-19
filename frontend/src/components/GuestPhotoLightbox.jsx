@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Share2, CalendarCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
 
@@ -13,19 +12,7 @@ const bookLink = (p) => {
 
 const resolveUrl = (u) => (u && u.startsWith("http") ? u : `${process.env.REACT_APP_BACKEND_URL}${u}`);
 
-const sharePhoto = async (p) => {
-  const url = p.id ? `https://roxtaxi.com/api/og/photo/${p.id}` : "https://roxtaxi.com/gallery";
-  const text = `${p.submitter ? `${p.submitter}'s` : "A"} Nassau moment with Rox Taxi & Tours`;
-  try {
-    if (navigator.share) return await navigator.share({ title: "Rox guest photo", text, url });
-    await navigator.clipboard.writeText(url);
-    toast.success("Link copied, paste it anywhere to share");
-  } catch (e) {
-    if (e?.name !== "AbortError") toast.error("Couldn't share right now");
-  }
-};
-
-// Full-screen guest photo viewer: swipe/arrows to browse, share a link (no download).
+// Full-screen guest photo viewer: swipe/arrows to browse (no download, no sharing).
 export const GuestPhotoLightbox = ({ photos, index, onIndex, onClose }) => {
   const startX = useRef(null);
   const photo = index === null ? null : photos[index];
@@ -77,9 +64,6 @@ export const GuestPhotoLightbox = ({ photos, index, onIndex, onClose }) => {
                 <Link to={bookLink(photo)} onClick={onClose} className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-4 py-2.5 text-sm font-semibold transition-colors" data-testid="guest-photo-lightbox-book">
                   <CalendarCheck className="w-4 h-4" /> Book this experience
                 </Link>
-                <button type="button" onClick={() => sharePhoto(photo)} className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#D4A94A] hover:bg-[#E5BC5A] text-[#0B192C] px-4 py-2.5 text-sm font-semibold transition-colors" data-testid="guest-photo-lightbox-share">
-                  <Share2 className="w-4 h-4" /> Share
-                </button>
               </div>
             </div>
           </>

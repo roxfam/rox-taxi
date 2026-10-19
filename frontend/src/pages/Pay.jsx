@@ -85,7 +85,7 @@ export default function Pay() {
 
   const paid = booking.payment_status === "paid";
   const cancelled = booking.status === "cancelled";
-  const total = Number(booking.total || 0);
+  const total = Number(booking.total ?? booking.total_price ?? 0);
   const payWithPayPal = async () => {
     setPayingWith("paypal");
     try {
