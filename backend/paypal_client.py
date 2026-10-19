@@ -68,7 +68,8 @@ async def _access_token() -> str:
     return token
 
 
-async def create_order(amount: float, booking_id: str, currency: str = "USD", description: str = "") -> Dict[str, Any]:
+async def create_order(amount: float, booking_id: str, currency: str = "USD", description: str = "",
+                       return_url: str = "", cancel_url: str = "") -> Dict[str, Any]:
     """Create a PayPal order. Returns the raw PayPal response including `id` (order id)."""
     token = await _access_token()
     body = {
@@ -88,6 +89,7 @@ async def create_order(amount: float, booking_id: str, currency: str = "USD", de
             "brand_name": "Rox Taxi Service & Tours",
             "shipping_preference": "NO_SHIPPING",
             "user_action": "PAY_NOW",
+            **({"return_url": return_url, "cancel_url": cancel_url} if return_url else {}),
         },
     }
     async with httpx.AsyncClient(timeout=20.0) as client:

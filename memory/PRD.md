@@ -805,6 +805,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 - Enhance & approve all: a Pending-tab header button (`admin-gallery-enhance-approve-all`). It asks for confirmation, then goes through each photo (enhance unless already hand-edited, then approve), shows "Working n / total", reloads once at the end, and leaves any failures in Pending.
 
+- PayPal: removed the PayPal.me option (booking modal and /pay page). "PayPal" now redirects to PayPal's own checkout page: create-order takes `origin_url` and returns `approve_url`, with return_url /payment/success?provider=paypal&booking_id=… and cancel_url /payment/cancel. PaymentSuccess captures `?token=` once, then loads the booking. This also fixes the old Smart-Button return, which spun on "Confirming payment…" forever with no QR.
+- QR fix: the photo protection rule had blocked long-press "Save image" on QR codes. QR imgs now carry `allow-save`, and ImageGuard skips allow-save and qr.png. QR checked on the boarding pass, payment success (PayPal) and Track pages.
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 

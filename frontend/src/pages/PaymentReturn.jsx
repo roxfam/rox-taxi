@@ -9,6 +9,10 @@ import TourUpsellCard from "../components/TourUpsellCard";
 export function PaymentSuccess() {
   const [params] = useSearchParams();
   const sessionId = params.get("session_id");
+  const isPayPal = params.get("provider") === "paypal";
+  const paypalToken = params.get("token");
+  const paypalBookingId = params.get("booking_id");
+  const captureStarted = useRef(false);
   const [status, setStatus] = useState({ payment_status: "pending" });
   const [booking, setBooking] = useState(null);
   const attempts = useRef(0);
@@ -48,7 +52,31 @@ export function PaymentSuccess() {
     return () => { cancelled = true; };
   }, [sessionId]);
 
+  // PayPal return: capture the approved order (once), then load the booking.
+  useEffect(() => {
+    if (!isPayPal || !paypalBookingId || captureStarted.current) return;
+    captureStarted.current = true;
+    const loadBooking = async () => {
+      const { data: b } = await api.get(`/bookings/${paypalBookingId}`);
+      setBooking(b);
+      setStatus({ payment_status: b?.payment_status === "paid" ? "paid" : "failed" });
+      if (b?.payment_status === "paid" && !purchaseFired.current) {
+        purchaseFired.current = true;
+        trackPurchase({ value: Number(b.total || 0), currency: "USD", contentName: b.item_name, contentCategory: b.service_type, orderId: b.id });
+      }
+    };
+    (async () => {
+      try {
+        if (paypalToken) await api.post(`/paypal/capture-order/${paypalToken}`);
+      } catch (e) {
+        if (e?.response?.status !== 404) toast.error(e?.response?.data?.detail || "PayPal payment could not be completed.");
+      }
+      try { await loadBooking(); } catch { setStatus({ payment_status: "failed" }); }
+    })();
+  }, [isPayPal, paypalBookingId, paypalToken]);
+
   const paid = status.payment_status === "paid";
+  const failed = status.payment_status === "failed";
   const shareUrl = booking ? `${window.location.origin}/pay/${booking.id}` : "";
   const copyShare = async () => {
     try { await navigator.clipboard.writeText(shareUrl); toast.success("Payment link copied"); }
@@ -65,11 +93,13 @@ export function PaymentSuccess() {
         data-testid="payment-success-logo"
       />
       <div className="mx-auto w-20 h-20 rounded-full bg-[#D4A94A]/10 flex items-center justify-center mb-8">
-        {paid ? <CheckCircle2 className="w-10 h-10 text-[#D4A94A]" /> : <Loader2 className="w-10 h-10 text-[#D4A94A] animate-spin" />}
+        {paid ? <CheckCircle2 className="w-10 h-10 text-[#D4A94A]" /> : failed ? <XCircle className="w-10 h-10 text-[#E86A3C]" /> : <Loader2 className="w-10 h-10 text-[#D4A94A] animate-spin" />}
       </div>
-      <h1 className="serif text-5xl text-[#0B3B5C]">{paid ? "You're all set!" : "Confirming payment…"}</h1>
+      <h1 className="serif text-5xl text-[#0B3B5C]">{paid ? "You're all set!" : failed ? "Payment not completed" : "Confirming payment…"}</h1>
       <p className="mt-4 text-[#64748B] leading-relaxed">
-        {paid ? "Your booking is confirmed. We've emailed your receipt and your driver will be assigned shortly." : "Hang tight — we're confirming your payment with Stripe."}
+        {paid ? "Your booking is confirmed. We've emailed your receipt and your driver will be assigned shortly."
+          : failed ? <>Your booking is reserved but not paid yet. {paypalBookingId && <Link to={`/pay/${paypalBookingId}`} className="text-[#E86A3C] font-semibold underline" data-testid="payment-retry-link">Try paying again</Link>}</>
+          : `Hang tight — we're confirming your payment with ${isPayPal ? "PayPal" : "Stripe"}.`}
       </p>
       {booking && (
         <div className="mt-10 rounded-3xl border border-[#E2E8F0] bg-white p-8 text-left" data-testid="payment-success-summary">
@@ -98,7 +128,7 @@ export function PaymentSuccess() {
               src={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/qr.png`}
               alt={`QR code for booking ${booking.id}`}
               width={176} height={176}
-              className="w-44 h-44 rounded-xl bg-white border border-[#E2E8F0] shrink-0 [image-rendering:pixelated]"
+              className="allow-save w-44 h-44 rounded-xl bg-white border border-[#E2E8F0] shrink-0 [image-rendering:pixelated]"
               data-testid="payment-success-qr-img"
             />
             <div className="text-center sm:text-left">

@@ -229,7 +229,7 @@ h2.serif em, h2.serif i {
 .welcome-marquee-slow {
     animation-duration: 60s;
 }
-img {
+img:not(.allow-save) {
     -webkit-user-drag: none;
     -webkit-touch-callout: none;
     user-select: none;

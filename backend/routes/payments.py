@@ -65,6 +65,7 @@ class CheckoutRequest(BaseModel):
 
 class PayPalCreateOrderRequest(BaseModel):
     booking_id: str
+    origin_url: Optional[str] = None
 
 
 # -- Stripe Checkout ----------------------------------------------------------
@@ -568,11 +569,14 @@ async def paypal_create_order(req: PayPalCreateOrderRequest):
     if booking.get("payment_status") == "paid":
         raise HTTPException(409, "Booking already paid")
 
+    origin = (req.origin_url or "").rstrip("/")
     try:
         order = await paypal_client.create_order(
             amount=float(booking.get("total") or booking.get("total_price") or 0),
             booking_id=booking["id"],
             description=f"{booking.get('item_name','Rox Taxi booking')} — {booking['id']}",
+            return_url=f"{origin}/payment/success?provider=paypal&booking_id={booking['id']}" if origin else "",
+            cancel_url=f"{origin}/payment/cancel?booking_id={booking['id']}" if origin else "",
         )
     except Exception as e:  # noqa: BLE001
         logging.exception("PayPal create-order failed")
@@ -589,7 +593,8 @@ async def paypal_create_order(req: PayPalCreateOrderRequest):
         "created_at": _now_iso(),
         "updated_at": _now_iso(),
     })
-    return {"order_id": order["id"], "status": order.get("status")}
+    approve_url = next((l.get("href") for l in order.get("links", []) if l.get("rel") in ("approve", "payer-action")), None)
+    return {"order_id": order["id"], "status": order.get("status"), "approve_url": approve_url}
 
 
 @router.post("/paypal/capture-order/{order_id}")

@@ -89,7 +89,13 @@ function ScrollToTop() {
 // Block right-click save and drag-out on every image.
 function ImageGuard() {
   useEffect(() => {
-    const block = (e) => { if (e.target?.tagName === "IMG") e.preventDefault(); };
+    const block = (e) => {
+      const t = e.target;
+      if (t?.tagName !== "IMG") return;
+      // QR codes / boarding passes must stay saveable for the guest's wallet.
+      if (t.classList.contains("allow-save") || (t.getAttribute("src") || "").includes("qr.png")) return;
+      e.preventDefault();
+    };
     document.addEventListener("contextmenu", block);
     document.addEventListener("dragstart", block);
     return () => { document.removeEventListener("contextmenu", block); document.removeEventListener("dragstart", block); };

@@ -537,8 +537,10 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         });
         window.location.href = c.checkout_url;
       } else if (payMethod === "paypal_checkout") {
-        // Booking is reserved — reveal PayPal Smart Buttons for in-page capture
-        setStep(5);
+        // Booking is reserved — send the guest to PayPal's own checkout page
+        const { data: o } = await api.post("/paypal/create-order", { booking_id: b.id, origin_url: window.location.origin });
+        if (o.approve_url) window.location.href = o.approve_url;
+        else setStep(5);
       } else if (payMethod === "paypal") {
         const paypalUrl = (cfg.paypal_me_url || "https://www.paypal.com/paypalme/roxtaxiservice") + `/${Number(b.total ?? total).toFixed(2)}`;
         setStep(4);
@@ -1276,18 +1278,10 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     onClick={() => setPayMethod("paypal_checkout")}
                     icon={<PayPalGlyph />}
                     title="PayPal"
-                    desc="Pay in seconds with the PayPal button — approve from your phone, no card entry."
+                    desc="Continue to PayPal's secure checkout page — log in to PayPal or pay with a card as a guest."
                     testid="pay-method-paypal-checkout"
                   />
                 )}
-                <PayCard
-                  active={payMethod === "paypal"}
-                  onClick={() => setPayMethod("paypal")}
-                  icon={<Wallet className="w-5 h-5" />}
-                  title="PayPal.me (manual)"
-                  desc="Reserve now and send payment via our PayPal.me link. We'll confirm once it lands."
-                  testid="pay-method-paypal"
-                />
                 <PayCard
                   active={payMethod === "zelle"}
                   onClick={() => setPayMethod("zelle")}
@@ -1338,7 +1332,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                         <Lock className="w-3.5 h-3.5" />
                         <span className="hidden sm:inline">
                           {payMethod === "stripe" ? "Pay securely"
-                            : payMethod === "paypal_checkout" ? "Continue with PayPal"
+                            : payMethod === "paypal_checkout" ? "Continue to PayPal"
                             : payMethod === "paypal" ? "Reserve & pay via PayPal"
                             : "Reserve & see Zelle details"}
                         </span>
@@ -1587,7 +1581,7 @@ function BoardingQrCard({ bookingId }) {
       data-testid="booking-qr-card"
     >
       <div className="shrink-0 bg-white rounded-xl p-2.5">
-        <img src={src} alt="Scan at pickup" className="w-32 h-32 bg-white rounded-lg [image-rendering:pixelated]" data-testid="booking-qr-image" />
+        <img src={src} alt="Scan at pickup" className="allow-save w-32 h-32 bg-white rounded-lg [image-rendering:pixelated]" data-testid="booking-qr-image" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-[10px] tracking-[0.28em] uppercase text-[#D4A94A] font-black">Rox boarding pass</div>

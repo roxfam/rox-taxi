@@ -182,7 +182,7 @@ export default function Track() {
                 <img
                   src={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/qr.png`}
                   alt={`Driver scan QR for booking ${booking.id}`}
-                  className="w-36 h-36 rounded-xl bg-white border border-[#EFE7D5] shrink-0 [image-rendering:pixelated]"
+                  className="allow-save w-36 h-36 rounded-xl bg-white border border-[#EFE7D5] shrink-0 [image-rendering:pixelated]"
                   data-testid="track-driver-qr-img"
                 />
                 <div>

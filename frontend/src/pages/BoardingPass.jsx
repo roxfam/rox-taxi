@@ -112,7 +112,7 @@ export default function BoardingPass() {
                 alt="Pickup QR"
                 width={220}
                 height={220}
-                className="w-56 h-56 object-contain bg-white rounded-lg [image-rendering:pixelated]"
+                className="allow-save w-56 h-56 object-contain bg-white rounded-lg [image-rendering:pixelated]"
                 crossOrigin="anonymous"
                 data-testid="boarding-pass-qr"
               />

@@ -4,7 +4,6 @@ import { api, money } from "../lib/api";
 import { Loader2, CreditCard, Copy, ExternalLink, ShieldCheck, XCircle, CheckCircle2, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { GiftCodeBox } from "../components/GiftCodeBox";
-import { PayPalPayButtons } from "../components/PayPalPayButtons";
 
 // Shareable "Complete Payment" page — one URL per booking that a customer
 // (or the admin, via text/email) can bounce to at any time and finish
@@ -22,6 +21,10 @@ export default function Pay() {
   const [loading, setLoading] = useState(true);
   const [payingWith, setPayingWith] = useState(null); // "stripe" | "paypal" | "zelle"
   const [error, setError] = useState("");
+  const [paypalReady, setPaypalReady] = useState(false);
+  useEffect(() => {
+    api.get("/paypal/config").then(({ data }) => setPaypalReady(!!data?.configured)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -83,7 +86,17 @@ export default function Pay() {
   const paid = booking.payment_status === "paid";
   const cancelled = booking.status === "cancelled";
   const total = Number(booking.total || 0);
-  const paypalUrl = (cfg.paypal_me_url || "https://www.paypal.com/paypalme/roxtaxiservice") + `/${total.toFixed(2)}`;
+  const payWithPayPal = async () => {
+    setPayingWith("paypal");
+    try {
+      const { data } = await api.post("/paypal/create-order", { booking_id: booking.id, origin_url: window.location.origin });
+      if (!data.approve_url) throw new Error("no approve url");
+      window.location.href = data.approve_url;
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't open PayPal. Please try again or pay by card.");
+      setPayingWith(null);
+    }
+  };
 
   const payStripe = async () => {
     setPayingWith("stripe");
@@ -165,26 +178,24 @@ export default function Pay() {
                   {payingWith === "stripe" && <Loader2 className="w-5 h-5 animate-spin text-[#635BFF]" />}
                 </button>
 
-                {/* PayPal Smart Buttons (live) */}
-                <PayPalPayButtons bookingId={booking.id} onPaid={(b) => b && setBooking(b)} />
-
-                {/* PayPal */}
-                <a
-                  href={paypalUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => setPayingWith("paypal")}
-                  data-testid="pay-paypal-btn"
-                  className="mt-4 w-full flex items-center gap-4 rounded-2xl border border-[#E2E8F0] hover:border-[#003087] p-5 text-left transition-all group hover:shadow-[0_10px_30px_rgba(0,48,135,0.18)]"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-[#003087]/10 text-[#003087] flex items-center justify-center shrink-0 font-black text-xl">P</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-[#0B3B5C]">PayPal.me link</div>
-                    <div className="text-xs text-[#64748B]">Opens paypal.me — add "Booking {booking.id}" in the note.</div>
-                  </div>
-                  <div className="mono text-lg text-[#0B3B5C] font-black shrink-0">{money(total)}</div>
-                  <ExternalLink className="w-4 h-4 text-[#94a3b8]" />
-                </a>
+                {/* PayPal — official PayPal checkout page */}
+                {paypalReady && (
+                  <button
+                    type="button"
+                    onClick={payWithPayPal}
+                    disabled={!!payingWith}
+                    data-testid="pay-paypal-btn"
+                    className="mt-4 w-full flex items-center gap-4 rounded-2xl border border-[#E2E8F0] hover:border-[#003087] p-5 text-left transition-all group hover:shadow-[0_10px_30px_rgba(0,48,135,0.18)] disabled:opacity-70"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-[#003087]/10 text-[#003087] flex items-center justify-center shrink-0 font-black text-xl">P</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-[#0B3B5C]">Pay with PayPal</div>
+                      <div className="text-xs text-[#64748B]">Opens PayPal's secure checkout — PayPal account or card as a guest.</div>
+                    </div>
+                    <div className="mono text-lg text-[#0B3B5C] font-black shrink-0">{money(total)}</div>
+                    {payingWith === "paypal" ? <Loader2 className="w-5 h-5 animate-spin text-[#003087]" /> : <ExternalLink className="w-4 h-4 text-[#94a3b8]" />}
+                  </button>
+                )}
 
                 {/* Zelle */}
                 <div className="mt-4 rounded-2xl border border-[#E2E8F0] p-5" data-testid="pay-zelle-block">
