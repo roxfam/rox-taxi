@@ -813,6 +813,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Fixes from iteration 40: facebook.py `_post_photo` now strips the "api/" prefix (FB auto-post had failed with file_not_found). Pay.jsx and PaymentReturn use total ?? total_price, so CB-* bookings no longer show $0.00.
 - Google Wallet pass (owner chose Google only for now): `routes/google_wallet.py`. `GET /api/google-wallet/status` and `GET /api/bookings/{id}/google-wallet` return a signed save URL (RS256 JWT with the generic class/object inline, QR = the HMAC driver-scan URL, JWT about 1.7k chars). Keys go in admin Tokens → Google Wallet: GOOGLE_WALLET_ISSUER_ID and GOOGLE_WALLET_SERVICE_ACCOUNT_JSON. `GoogleWalletButton.jsx` stays hidden until configured and appears on the boarding pass and payment success pages. JWT build was verified with a generated test key; real save is not tested (no owner keys yet).
 
+- PayPal (2026-10-20): the official yellow Smart Button (pop-up, guest stays on our site) on /pay, in the booking modal step 5, gift cards (`pay_with=paypal`, `/gift-cards/{code}/paypal/create-order`, `/gift-cards/paypal/capture/{order_id}`) and group bookings (`pay_with=paypal`, deposit amount). The /pay page has a branded checkout: CheckoutSteps, PaymentBrandRow, TrustBadges. React.StrictMode was removed from index.js because it double-mounted PayPal (zoid crash).
+- Add-ons v2: picnic pack removed everywhere. Meet-with-sign is $7 on all 34 taxi routes and 16 tours, ensured on every boot. Casino drop-off & wait is $20 per 30 min (`price_mode per_block`, `addon_qty` up to 12 blocks, "+ 30 min" stepper). Tours now support add-ons through the shared `_price_addons` helper.
+- Love Beach is a home beach pick (LoveBeachPick.jsx) and is in /api/taxi/locations.
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 

@@ -1,0 +1,37 @@
+{
+  "summary": "Tested add-on catalog v2 (picnic removed, $7 sign, casino $20 per 30-min block), server-side add-on pricing, Love Beach in /api/taxi/locations, PayPal cold-load crash fix, and the gift card/groups stale PayPal order fix. Backend: 9/10 pytest passed. Pricing is correct: casino 3 blocks = $60 (90 min) plus sign $7 = addons_fee 67, the subtotal delta is exactly +67 and taxi has no VAT. Quantity is capped at 12 blocks ($240, 360 min), spoofed ids are ignored, and the tour sign adds +7 to the subtotal with +0.70 VAT. FAIL: 4 taxi services have no $7 sign add-on: hourly-charter, downtown-paradise, paradise-love-beach, downtown-marathon-mall. Frontend: the taxi modal has no picnic. The casino checkbox shows the stepper: 30 -> 60 -> 90 min, minus goes back to 60, and taxi-addons-total moves $20 per block. The checkbox stays checked and the order total updates ($24.60 per block, which includes 18% gratuity and 5% fee). The tour modal shows the $7 sign and adds it to the total. /gift-cards: the PayPal button appears after submit, and changing amount/name/theme removes it and brings back the submit button. /groups/book: after reserving, clicking Full drops the PayPal block. STILL FAILING: a cold load of /pay/CB-6N6MRQ26 still throws 'zoid destroyed all components', shows the CRA runtime overlay and renders no PayPal buttons. RCA confirmed: it is caused by React.StrictMode.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/taxi-services", "issue": "No meet-greet-sign/wharf-greeter $7 add-on on hourly-charter (only bottled-water, narration), downtown-paradise (casino, marina), paradise-love-beach (no addons) and downtown-marathon-mall (no addons). The owner asked for the sign on ALL taxi routes."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PayPalPayButtons (/pay/:id cold load)", "issue": "First load in a fresh browser: pageerror 'zoid destroyed all components', CRA 'Uncaught runtime errors' overlay, 0 PayPal frames. Reload works. The isResolved gate did not fix it.", "selector": "[data-testid=pay-paypal-buttons]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Booking modal price summary", "issues": ["The label said 'Processing fee (3%)' but 5% is charged (PROCESSING_FEE_PCT=0.05). Fixed by the tester."]},
+      {"screen": "Tour modal", "issues": ["The unchecked 'Round-trip taxi $25' row shows '+$0.00' next to it, which is confusing; show +$25.00 or hide the amount until checked"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter42_addons_v2.py", "/app/test_reports/pytest/pytest_iter42.xml"],
+  "action_items": [
+    "Add the $7 meet-greet-sign (or wharf-greeter) add-on to hourly-charter, downtown-paradise, paradise-love-beach and downtown-marathon-mall, in seed_data plus the _migrate_addons_v2 migration (e.g. $push when it is missing).",
+    "Fix the PayPal cold-load crash. RCA: React.StrictMode in src/index.js double-mounts PayPalButtons. The first render is torn down mid-render, zoid throws 'zoid destroyed all components' and nothing renders. Verified: with StrictMode removed (temporarily, then reverted), the cold load had no error and 1 visible PayPal frame. Fix options: remove React.StrictMode from index.js, or guard the PayPalButtons mount (e.g. render after a setTimeout/useEffect-mounted flag, plus an error boundary / window error handler that swallows the zoid error)."
+  ],
+  "critical_code_review_comments": [
+    "BookingFlow per_block stepper: the '+ 30 min' label is hardcoded; use a.block_minutes.",
+    "Unchecking a per_block add-on leaves its addon_qty in form state. Re-checking restores the old block count, which is harmless since the server ignores qty for unselected ids.",
+    "Every gift-card/group re-submit after a form change creates a new pending gift card or reserved booking, leaving orphan pending records. Consider reusing or cancelling the previous one.",
+    "server.py is about 6965 lines; split it into routers."
+  ],
+  "updated_files": ["/app/frontend/src/pages/BookingFlow.jsx (Processing fee label now derives from PROCESSING_FEE_PCT)", "/app/backend/tests/test_iter42_addons_v2.py (new)"],
+  "success_rate": {"backend": "90% (9/10)", "frontend": "86% (6/7 flows)"},
+  "seed_data_creation": "None persisted. All test_addon@example.com bookings, TEST_Group booking and test_buyer gift cards were deleted.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Stripe and PayPal are LIVE: never click the PayPal buttons. Use payment_method=zelle for test bookings. Run test_iter42_addons_v2.py. To check the PayPal cold load: open /pay/CB-6N6MRQ26 in a fresh context, wait about 11s, then check page errors, iframe#webpack-dev-server-client-overlay and iframe.component-frame.visible inside [data-testid=pay-paypal-buttons]. The StrictMode removal experiment proved the RCA. index.js was restored to StrictMode.",
+  "rca of the issue": "PayPal zoid crash: one SDK script tag is loaded, but two smart/buttons sessions start (StrictMode mount -> unmount -> remount). The unmount closes/destroys the in-flight zoid component, so the SDK raises an unhandled 'zoid destroyed all components', which CRA shows as an overlay, and the second render never shows. Removing StrictMode fixed it on the first try."
+}

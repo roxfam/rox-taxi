@@ -114,7 +114,10 @@ _ADDON_CRUISE = [
     {"id": "wharf-greeter", "label": "Meet-with-sign at Prince George Wharf", "price": 7.0, "price_mode": "flat",
      "description": "Driver waits with a Rox placard at the cruise-port taxi stand."},
 ]
-_ADDON_BEACH = []
+_ADDON_BEACH = [
+    {"id": "meet-greet-sign", "label": "Meet-with-sign at pickup", "price": 7.0, "price_mode": "flat",
+     "description": "Driver waits with your name on a Rox placard."},
+]
 _ADDON_HOURLY = [
     {"id": "bottled-water", "label": "Bottled water package", "price": 5.0, "price_mode": "flat",
      "description": "Cold bottled water for everyone in the vehicle."},

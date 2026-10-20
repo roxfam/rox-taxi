@@ -1092,7 +1092,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   )}
                   {processingFee > 0 && (
                     <div className="flex justify-between" data-testid="processing-fee-line">
-                      <span className="text-[#64748B]">Processing fee (3%)</span>
+                      <span className="text-[#64748B]">Processing fee ({Math.round(PROCESSING_FEE_PCT * 100)}%)</span>
                       <span className="mono font-semibold text-[#0B3B5C]">+{money(processingFee)}</span>
                     </div>
                   )}

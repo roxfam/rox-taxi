@@ -6856,11 +6856,16 @@ async def _seed_team_sms_startup():
 async def _migrate_addons_v2():
     """One-time (owner request): drop picnic pack, casino wait $20 per 30 min, Meet-with-sign $7 on every taxi + tour."""
     try:
+        # Every boot (seed may re-sync catalogs): no picnic pack, every taxi + tour offers the $7 sign.
+        sign = {"id": "meet-greet-sign", "label": "Meet-with-sign at pickup", "price": 7.0, "price_mode": "flat",
+                "description": "Driver waits with your name on a Rox placard."}
+        for coll in (db.taxi_services, db.tours):
+            await coll.update_many({"addons": None}, {"$set": {"addons": []}})
+            await coll.update_many({}, {"$pull": {"addons": {"id": "beach-picnic"}}})
+        await db.taxi_services.update_many({"addons.id": {"$nin": ["meet-greet-sign", "wharf-greeter"]}}, {"$push": {"addons": sign}})
+        await db.tours.update_many({"addons.id": {"$ne": "meet-greet-sign"}}, {"$push": {"addons": sign}})
         if await db.site_config.find_one({"_id": "migrations", "addons_v2": True}):
             return
-        sign_desc = "Driver waits with your name on a Rox placard."
-        for coll in (db.taxi_services, db.tours):
-            await coll.update_many({}, {"$pull": {"addons": {"id": "beach-picnic"}}})
         await db.taxi_services.update_many(
             {"addons.id": "casino-wait-30"},
             {"$set": {"addons.$[a].price": 20.0, "addons.$[a].price_mode": "per_block", "addons.$[a].block_minutes": 30,
@@ -6868,9 +6873,6 @@ async def _migrate_addons_v2():
                       "addons.$[a].description": "Driver drops you at the casino and waits. $20 per 30 minutes — add more time as needed."}},
             array_filters=[{"a.id": "casino-wait-30"}],
         )
-        sign = {"id": "meet-greet-sign", "label": "Meet-with-sign at pickup", "price": 7.0, "price_mode": "flat", "description": sign_desc}
-        await db.taxi_services.update_many({"addons.id": {"$nin": ["meet-greet-sign", "wharf-greeter"]}}, {"$push": {"addons": sign}})
-        await db.tours.update_many({"addons.id": {"$ne": "meet-greet-sign"}}, {"$push": {"addons": sign}})
         await db.site_config.update_one({"_id": "migrations"}, {"$set": {"addons_v2": True}}, upsert=True)
     except Exception as e:  # noqa: BLE001
         logger.warning("addons v2 migration err: %s", e)
