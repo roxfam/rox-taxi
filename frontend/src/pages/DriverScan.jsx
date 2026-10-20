@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { toast } from "sonner";
+import { CasinoDropoffButton } from "../components/CasinoDropoffButton";
 import { CheckCircle2, MapPin, Clock, User, Loader2, AlertTriangle, ArrowLeft } from "lucide-react";
 
 /**
@@ -207,6 +208,7 @@ export default function DriverScan() {
               <div className="text-emerald-300/70 text-xs mt-1">Guest was auto-notified. Track updated.</div>
             </div>
           )}
+          <CasinoDropoffButton bookingId={bookingId} token={token} booking={booking} onStarted={(u) => setBooking((b) => ({ ...b, ...u }))} />
         </div>
 
         <div className="mt-6 text-center">

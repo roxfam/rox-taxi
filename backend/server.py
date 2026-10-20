@@ -27,6 +27,7 @@ from seed_data import TOURS_SEED, TAXI_SERVICES, RENTALS_SEED, CURRENT_RENTAL_ID
 from pdf_utils import build_wedding_pdf, build_receipt_pdf
 from routes import payments as payments_module
 from routes import google_wallet as google_wallet_module
+from routes import casino_wait as casino_wait_module
 from routes import gift_redeem as gift_redeem_module
 from routes import admin as admin_module
 from routes import catalog as catalog_module
@@ -1609,6 +1610,10 @@ async def seed_db():
         asyncio.create_task(_booking_reminder_loop())
     except Exception as e:  # noqa: BLE001
         logging.warning("reminder loop start warn: %s", e)
+    try:
+        asyncio.create_task(casino_wait_module.reminder_loop())
+    except Exception as e:  # noqa: BLE001
+        logging.warning("casino loop start warn: %s", e)
     # T-60 min airport-specific reminder (passport / belongings / check-in).
     # Runs alongside the 24h reminder — different cadence, different content.
     try:
@@ -5805,6 +5810,9 @@ async def booking_scan_preview(booking_id: str, t: str = ""):
         "billed_passengers": b.get("billed_passengers"),
         "return_time": b.get("return_time"),
         "round_trip": b.get("round_trip", False),
+        "casino_wait": next(({"minutes": a.get("minutes", 30)} for a in (b.get("addons_selected") or []) if a.get("id") == "casino-wait-30"), None),
+        "casino_wait_started_at": b.get("casino_wait_started_at"),
+        "casino_wait_ends_at": b.get("casino_wait_ends_at"),
     }
 
 
@@ -6685,6 +6693,8 @@ payments_module.configure(
 api_router.include_router(payments_module.router)
 google_wallet_module.configure(db=db)
 api_router.include_router(google_wallet_module.router)
+casino_wait_module.configure(db=db, public_base_url=os.environ.get("PUBLIC_SITE_URL") or None)
+api_router.include_router(casino_wait_module.router)
 gift_redeem_module.configure(db=db, now_iso=now_iso, mark_paid=payments_module._mark_paid, require_admin=require_admin)
 api_router.include_router(gift_redeem_module.router)
 quotes_module.configure(db=db, now_iso=now_iso, create_booking=create_booking, booking_model=BookingCreate, require_admin=require_admin)

@@ -59,6 +59,7 @@ const DriverSpotlight = lazy(() => import("./pages/DriverSpotlight"));
 const NassauWithReagan = lazy(() => import("./pages/NassauWithReagan"));
 const ReferFriend = lazy(() => import("./pages/ReferFriend"));
 const TipTopUp = lazy(() => import("./pages/TipTopUp"));
+const CasinoWait = lazy(() => import("./pages/CasinoWait"));
 const TipLookup = lazy(() => import("./pages/TipLookup"));
 const MyBookingLookup = lazy(() => import("./pages/MyBookingLookup"));
 const GuestChat = lazy(() => import("./pages/GuestChat"));
@@ -147,6 +148,7 @@ function AppRouter() {
       <Route path="/quote/:id" element={<CustomerShell><QuoteView /></CustomerShell>} />
       <Route path="/gift-cards/success" element={<CustomerShell><GiftCards /></CustomerShell>} />
       <Route path="/tip-topup" element={<CustomerShell><TipTopUp /></CustomerShell>} />
+      <Route path="/casino-wait" element={<CustomerShell><CasinoWait /></CustomerShell>} />
       <Route path="/tip" element={<CustomerShell><TipLookup /></CustomerShell>} />
       <Route path="/my-booking" element={<CustomerShell><MyBookingLookup /></CustomerShell>} />
       <Route path="/find-booking" element={<CustomerShell><MyBookingLookup /></CustomerShell>} />

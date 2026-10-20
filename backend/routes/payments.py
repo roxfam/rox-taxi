@@ -296,6 +296,9 @@ async def stripe_webhook(request: Request):
                 await _activate_gift_if_paid(result.session_id)
             except Exception as e:  # noqa: BLE001
                 logging.warning("gift activation (legacy) err: %s", e)
+        if (result.metadata or {}).get("type") == "casino_extend":
+            from routes.casino_wait import handle_stripe_paid  # noqa: PLC0415
+            await handle_stripe_paid(result.session_id, result.metadata)
     return {"status": "ok"}
 
 
@@ -335,6 +338,9 @@ async def _process_stripe_event(event: dict) -> None:
                         await _activate_gift_if_paid(session_id)
                     except Exception as e:  # noqa: BLE001
                         logging.warning("gift activation err: %s", e)
+                if metadata.get("type") == "casino_extend":
+                    from routes.casino_wait import handle_stripe_paid  # noqa: PLC0415
+                    await handle_stripe_paid(session_id, metadata)
         elif etype in ("checkout.session.expired", "checkout.session.async_payment_failed"):
             from routes.payment_digest import send_payment_retry  # noqa: PLC0415
             reason = "expired" if etype.endswith("expired") else "failed"

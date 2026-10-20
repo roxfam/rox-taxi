@@ -817,6 +817,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Add-ons v2: picnic pack removed everywhere. Meet-with-sign is $7 on all 34 taxi routes and 16 tours, ensured on every boot. Casino drop-off & wait is $20 per 30 min (`price_mode per_block`, `addon_qty` up to 12 blocks, "+ 30 min" stepper). Tours now support add-ons through the shared `_price_addons` helper.
 - Love Beach is a home beach pick (LoveBeachPick.jsx) and is in /api/taxi/locations.
 
+- Casino wait reminder: `routes/casino_wait.py`. The driver scan page has a "Dropped at casino · start N min wait" button (POST /bookings/{id}/casino-dropoff with the QR token) that starts the clock. A background loop runs every 60s and texts the guest once per end time, 10 min before the wait ends, with a signed /casino-wait?id&t link. On that page the guest adds 30-min blocks (1-8, $20 each) by Stripe card (webhook metadata type casino_extend) or the PayPal button (/casino-wait/paypal/capture). Extensions are idempotent per payment ref and push casino_wait_ends_at; the owner (and driver_phone, if set) get an SMS.
+
 ## Backlog
 - P0 split server.py · P1 split AdminDashboard.jsx / BookingFlow.jsx · P2 Cancellation report, Guest flight texts, Flight board
 
