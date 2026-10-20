@@ -831,3 +831,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Driver scan page shows live HH:MM:SS countdown once casino wait starts; turns orange at ≤10 min ("Head back to the casino"), red at 0.
 - Polls GET /api/bookings/{id}/casino-wait/driver?token= (QR-token protected) every 30s; picks up guest extensions with toast + highlight.
 
+## 2026-10-20 — Casino pickup button + driver alert
+- POST /api/bookings/{id}/casino-pickup (QR token): stops clock, stores casino_wait_picked_up_at + casino_waited_minutes, texts owner total wait (and minutes over paid time). Idempotent; reminders and guest extensions stop after pickup.
+- Driver countdown beeps 3x (Web Audio) + vibrates once per end time when ≤10 min left; audio unlocked on first tap.
+
+

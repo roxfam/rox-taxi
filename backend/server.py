@@ -5813,6 +5813,8 @@ async def booking_scan_preview(booking_id: str, t: str = ""):
         "casino_wait": next(({"minutes": a.get("minutes", 30)} for a in (b.get("addons_selected") or []) if a.get("id") == "casino-wait-30"), None),
         "casino_wait_started_at": b.get("casino_wait_started_at"),
         "casino_wait_ends_at": b.get("casino_wait_ends_at"),
+        "casino_wait_picked_up_at": b.get("casino_wait_picked_up_at"),
+        "casino_waited_minutes": b.get("casino_waited_minutes"),
     }
 
 

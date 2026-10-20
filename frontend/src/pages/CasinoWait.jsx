@@ -28,6 +28,7 @@ export default function CasinoWait() {
   };
   if (err) return <div className="max-w-md mx-auto px-6 py-24 text-center text-[#64748B]" data-testid="casino-wait-error">{err}</div>;
   if (!info) return <div className="py-24 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#D4A94A]" /></div>;
+  if (info.picked_up_at) return <div className="max-w-md mx-auto px-6 py-24 text-center text-[#64748B]" data-testid="casino-wait-picked-up"><CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />You've been picked up. Thanks for riding with Rox!</div>;
   return (
     <div className="max-w-md mx-auto px-6 py-14" data-testid="casino-wait-page">
       <div className="text-xs tracking-[0.3em] uppercase text-[#D4A94A] flex items-center gap-1.5"><Timer className="w-4 h-4" /> Casino wait · {info.id}</div>

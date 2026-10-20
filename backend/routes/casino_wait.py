@@ -60,6 +60,7 @@ def _info(b: dict) -> dict:
     return {
         "id": b["id"], "customer_name": b.get("customer_name", ""),
         "started_at": b.get("casino_wait_started_at"), "ends_at": b.get("casino_wait_ends_at"),
+        "picked_up_at": b.get("casino_wait_picked_up_at"), "waited_minutes": b.get("casino_waited_minutes"),
         "minutes_total": int(b.get("casino_wait_minutes") or a.get("minutes") or 30),
         "block_price": float(a.get("price") or 20.0), "block_minutes": 30,
         "paypal": paypal_client.is_configured(),
@@ -84,6 +85,33 @@ async def casino_dropoff(bid: str, req: DropoffReq):
     upd = {"casino_wait_started_at": start.isoformat(), "casino_wait_minutes": minutes,
            "casino_wait_ends_at": (start + timedelta(minutes=minutes)).isoformat()}
     await _db.bookings.update_one({"id": b["id"]}, {"$set": upd})
+    return _info({**b, **upd})
+
+
+@router.post("/bookings/{bid}/casino-pickup")
+async def casino_pickup(bid: str, req: DropoffReq):
+    """Driver taps 'Guest picked up' — stops the clock and texts the owner the total wait."""
+    from server import _verify_qr_token  # noqa: PLC0415
+    if not _verify_qr_token(bid.upper(), req.token):
+        raise HTTPException(401, "Invalid scan link")
+    b = await _booking(bid)
+    if not b.get("casino_wait_started_at"):
+        raise HTTPException(400, "Casino wait hasn't started")
+    if b.get("casino_wait_picked_up_at"):
+        return _info(b)
+    now = _now()
+    waited = max(0, round((now - datetime.fromisoformat(b["casino_wait_started_at"])).total_seconds() / 60))
+    upd = {"casino_wait_picked_up_at": now.isoformat(), "casino_waited_minutes": waited}
+    res = await _db.bookings.update_one({"id": b["id"], "casino_wait_picked_up_at": None}, {"$set": upd})
+    if res.modified_count:
+        try:
+            from notifications import send_owner_sms  # noqa: PLC0415
+            paid_for = int(b.get("casino_wait_minutes") or 30)
+            over = waited - paid_for
+            extra = f" ({over} min over paid time)" if over > 0 else ""
+            send_owner_sms(f"Rox: {b.get('customer_name','Guest')} picked up from casino on {b['id']}. Total wait {waited // 60}h {waited % 60}m, paid for {paid_for} min{extra}.")
+        except Exception as e:  # noqa: BLE001
+            log.warning("casino pickup notify err: %s", e)
     return _info({**b, **upd})
 
 
@@ -137,6 +165,8 @@ async def _apply_extension(bid: str, blocks: int, ref: str):
 async def casino_extend(bid: str, t: str, req: ExtendReq, request: Request):
     _check(bid.upper(), t)
     b = await _booking(bid)
+    if b.get("casino_wait_picked_up_at"):
+        raise HTTPException(400, "You've already been picked up")
     amount = round(float((_addon(b) or {}).get("price") or 20) * req.blocks, 2)
     if req.pay_with == "paypal":
         order = await paypal_client.create_order(amount=amount, booking_id=b["id"], description=f"Casino wait +{30*req.blocks} min — {b['id']}")
@@ -181,7 +211,7 @@ async def reminder_loop():
         try:
             soon = (_now() + timedelta(minutes=10)).isoformat()
             q = {"casino_wait_ends_at": {"$lte": soon, "$gte": _now().isoformat()},
-                 "customer_phone": {"$nin": [None, ""]}, "status": {"$ne": "cancelled"}}
+                 "customer_phone": {"$nin": [None, ""]}, "casino_wait_picked_up_at": None, "status": {"$ne": "cancelled"}}
             async for b in _db.bookings.find(q).limit(50):
                 if b.get("casino_reminder_for") == b["casino_wait_ends_at"]:
                     continue
