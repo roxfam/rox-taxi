@@ -1,0 +1,46 @@
+{
+  "summary": "Tested the PayPal checkout for gift cards and group bookings, the branded /pay page, the booking modal's paypal_checkout step, the meet-sign $7 change, Love Beach, removal of the share buttons and Google Wallet. Backend: 8/8 pytest passed. Gift purchase with pay_with=paypal returns code and total_charged=55.0 for a $50 card with no checkout_url. Gift create-order returns order_id and stores it. Unknown gift returns 404, unknown capture returns 404, and a bad pay_with returns 422. Group checkout with pay_with=paypal returns the deposit with no Stripe call, and payment_transactions.amount equals the deposit. Meet-sign and wharf-greeter add-ons are all $7. Google Wallet status is configured=false, and port-love-beach is $20. Frontend: /pay/CB-6N6MRQ26 shows the checkout steps (Trip details done, Payment current), the brand logo row, pay-stripe-btn, the yellow PayPal/Pay Later/Card buttons inside pay-paypal-buttons, the 'or other ways to pay' divider, Zelle and checkout-trust. There is no PayPal.me text and the 390px layout works. However, on the FIRST cold load in a fresh browser the PayPal SDK throws 'zoid destroyed all components'. The CRA 'Uncaught runtime errors' overlay appears and no PayPal button renders (0 visible frames). This happened on 3 of 3 cold loads; reloads render fine. Booking modal: choosing pay-method-paypal-checkout gives the label 'Continue to PayPal', and submitting reserves the booking and shows paypal-checkout-step with the yellow button. /gift-cards: the toggle works, the label reads 'Continue to PayPal · $55.00', and after submit the PayPal block replaces the submit button. BUG: changing the amount after that updates the PayPal title (Pay $275.00) but the order is still for the $55 card. /groups/book: same stale-amount bug. After reserving with the deposit ($196.35), clicking Full changes the title to 'Pay $785.40' but the booking/order is still the deposit. Home Love Beach card shows $20.00 per person and links to /taxi?book=port-love-beach. The taxi modal dropdown has Love Beach, but the 'Pick your destination' fare-check widget (/api/taxi/locations) does NOT. The lightbox has no share button and /wall has no save/share/copy buttons. Regression: /payment/success shows 'You're all set!' with the QR, /pass shows the QR, and google-wallet-add-btn is absent. No payment was completed and no PayPal pop-up was opened. All TEST_/test_ data was removed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/taxi/locations (taxi_locations, server.py ~2040)", "issue": "Love Beach is not in the location list, so the /taxi 'Pick your destination' fare-check widget (RouteQuoteWidget) can't quote Downtown/Cruise Port → Love Beach ($20) or Paradise → Love Beach ($40)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "GiftCards.jsx PayPal step", "issue": "Stale amount: after 'Continue to PayPal' creates the pending gift code, the amount, theme and recipient fields can still be edited and the PayPal title updates (e.g. 'Pay $275.00 with PayPal'). The PayPal order is still created from the original card (e.g. $55 for a $50 card), so the guest is told one amount and charged another. Fix: clear paypalCode when amount, custom, theme or form change, or lock the form once the code exists.", "selector": "[data-testid='gift-amount-250'] then [data-testid='pay-paypal-buttons']", "priority": "HIGH"},
+      {"component": "GroupsBook.jsx PayPal step", "issue": "Stale amount: after reserving the GRP booking (deposit $196.35), the guest can still toggle groups-pay-full, change pax or change the date. The title then shows 'Pay $785.40 with PayPal' but the backend order charges the deposit stored on the booking. Fix: disable the quote/pay-mode/pax inputs while paypalBooking is set, or reset paypalBooking on change.", "selector": "[data-testid='groups-pay-full'] then [data-testid='groups-paypal-wrap']", "priority": "HIGH"},
+      {"component": "PayPalPayButtons.jsx (/pay, /gift-cards, /groups/book)", "issue": "On the first cold page load, the PayPal SDK throws an unhandled 'zoid destroyed all components' error. The CRA dev overlay ('Uncaught runtime errors: Script error') covers the page and the PayPal buttons don't render. This happened on 3 of 3 fresh browser sessions on /pay/CB-6N6MRQ26; reloads work. Likely cause: React.StrictMode double-mount destroys the zoid component while the SDK is still loading. It may be dev-only, but preview users see it. Possible fixes: render PayPalButtons only after usePayPalScriptReducer isResolved, hoist PayPalScriptProvider to App level, or add an unhandledrejection guard that swallows this specific zoid error.", "selector": "[data-testid='pay-paypal-buttons'] iframe", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "/taxi fare check", "issue": "Love Beach is missing from the From/To selects (backed by /api/taxi/locations). The booking modal dropdown and the destination cards do include it.", "affected_selectors": ["RouteQuoteWidget select"]}
+    ],
+    "design_issues": [
+      {"screen": "/pay desktop Zelle block", "issues": ["Zelle email is clipped ('roxfam2509@gmail.c') and the phone number wraps in the 2-column grid. Use a single column or break-all."]},
+      {"screen": "Booking modal Date & Time row", "issues": ["The time input sticks out past the modal's right padding by about 18px on desktop."]},
+      {"screen": "/groups/book and /gift-cards", "issues": ["These use the browser's native datetime-local picker instead of the shadcn DateTimePicker used in the booking modal."]},
+      {"screen": "/taxi?book=port-love-beach modal", "issues": ["Dropoff is not prefilled with Love Beach even though the route is Downtown → Love Beach."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter41_paypal_gift_group.py", "/app/test_reports/pytest/pytest_iter41.xml"],
+  "action_items": [
+    "GiftCards.jsx: reset paypalCode (or lock the form) when the amount, theme or form changes after the PayPal code is created, so the displayed total always matches the order",
+    "GroupsBook.jsx: disable the pay-mode, pax and date inputs once paypalBooking is set, or clear paypalBooking on change, so the title amount matches the deposit/full order",
+    "PayPalPayButtons: stop the cold-load 'zoid destroyed all components' crash/overlay (gate PayPalButtons on isResolved, or hoist the provider)",
+    "Add Love Beach to /api/taxi/locations so the fare-check widget quotes the $20 and $40 routes",
+    "Minor: Zelle email clipping on /pay; time input overflow in the booking modal; remove the dead payMethod==='paypal' (PayPal.me) branch in BookingFlow.jsx submit"
+  ],
+  "critical_code_review_comments": [
+    "BookingFlow.jsx is 1708 lines and still contains a dead paypal.me branch (payMethod==='paypal').",
+    "gift_card_purchase with pay_with=paypal leaves 'pending' gift docs whenever a buyer abandons the flow. Consider a TTL or cleanup.",
+    "group_booking_checkout applies the gift_code on create before PayPal is paid. If the guest abandons, the gift balance stays deducted (same behaviour as Stripe; confirm a release path exists).",
+    "PayPal transactions for group deposits don't store pay_mode='deposit' the way the Stripe path does. Harmless today because _mark_paid only special-cases 'balance', but it is inconsistent."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter41_paypal_gift_group.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "~80% (all requested items render; 2 HIGH stale-amount bugs + cold-load PayPal crash + Love Beach missing from fare widget)"},
+  "seed_data_creation": "None kept. Created and deleted: gift cards (test_buyer@, test_gbuyer@), GRP bookings (test_group@, test_grpui@ GRP-768825F) plus 1 PayPal tx, and booking 2794E4E9 (test_pp@). Also removed two leftover TEST_sms@example.com zelle bookings from earlier iterations.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Stripe and PayPal are LIVE: never click the PayPal buttons. /tmp/clean.py-style cleanup deletes test_* bookings, transactions and gift cards. Groups date input is datetime-local; 10 pax at $80 base gives a $196.35 deposit and $785.40 full. To check PayPal render, count iframe.component-frame.visible inside [data-testid=pay-paypal-buttons] about 10s after load; the first cold load fails with a zoid error. The home guest strip moves constantly, so click photos via JS.",
+  "rca of the issue": "Stale amount: GiftCards and GroupsBook compute the displayed total from live form state (giftTotal/dueNow), but the PayPal order amount comes from the server document created at submit time. After submit nothing invalidates paypalCode/paypalBooking, so the two can diverge. Repro: /gift-cards → $50 → PayPal → fill the form → submit → click $250 → the title reads $275 but the order would be $55. Cold-load PayPal crash: PayPalButtons mounts, StrictMode unmounts it and calls buttons.close() while the zoid render is still pending, and the rejected promise is unhandled, which triggers the CRA overlay; on a cold cache the remount doesn't recover."
+}

@@ -99,8 +99,8 @@ _ADDON_QUEENS = [
      "description": "Detour by Graycliff estate for a quick espresso to-go."},
 ]
 _ADDON_ATLANTIS = [
-    {"id": "casino-wait-30", "label": "Casino drop-off wait (30 min)", "price": 15.0, "price_mode": "flat",
-     "description": "Driver waits 30 minutes at the Atlantis casino entrance."},
+    {"id": "casino-wait-30", "label": "Casino drop-off & wait", "price": 20.0, "price_mode": "per_block", "block_minutes": 30,
+     "description": "Driver drops you at the casino and waits. $20 per 30 minutes — add more time as needed."},
     {"id": "marina-village", "label": "Marina Village photo stop", "price": 8.0, "price_mode": "flat",
      "description": "Sunset photo stop at Atlantis Marina Village on the way in."},
 ]
@@ -114,10 +114,7 @@ _ADDON_CRUISE = [
     {"id": "wharf-greeter", "label": "Meet-with-sign at Prince George Wharf", "price": 7.0, "price_mode": "flat",
      "description": "Driver waits with a Rox placard at the cruise-port taxi stand."},
 ]
-_ADDON_BEACH = [
-    {"id": "beach-picnic", "label": "Bahamian picnic snack pack", "price": 12.0, "price_mode": "per_person",
-     "description": "Conch fritters, Bahamian mac, and a fresh coconut per person."},
-]
+_ADDON_BEACH = []
 _ADDON_HOURLY = [
     {"id": "bottled-water", "label": "Bottled water package", "price": 5.0, "price_mode": "flat",
      "description": "Cold bottled water for everyone in the vehicle."},

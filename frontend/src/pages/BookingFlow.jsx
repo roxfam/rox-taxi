@@ -326,16 +326,21 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
 
   // ── Popular Add-ons (taxi only). Server re-prices these from the
   // service's own `addons` catalog so this only drives the UI + total.
-  const taxiAddonsCatalog = serviceType === "taxi" && Array.isArray(item?.addons) ? item.addons : [];
+  const taxiAddonsCatalog = (serviceType === "taxi" || serviceType === "tour") && Array.isArray(item?.addons) ? item.addons : [];
   const selectedAddonIds = Array.isArray(form.selected_addon_ids) ? form.selected_addon_ids : [];
+  const addonQty = form.addon_qty || {};
+  const blocksOf = (a) => Math.max(1, Math.min(12, Number(addonQty[a.id] || 1)));
   const taxiPaxForAddons = Number(form.passengers || 1);
+  const addonLineFee = (a) => {
+    const price = Number(a.price || 0);
+    const mode = (a.price_mode || "flat").toLowerCase();
+    if (mode === "per_person") return price * Math.max(1, taxiPaxForAddons);
+    if (mode === "per_block") return price * blocksOf(a);
+    return price;
+  };
   const taxiExtrasFee = taxiAddonsCatalog
     .filter((a) => selectedAddonIds.includes(a.id))
-    .reduce((sum, a) => {
-      const price = Number(a.price || 0);
-      const mode = (a.price_mode || "flat").toLowerCase();
-      return sum + (mode === "per_person" ? price * Math.max(1, taxiPaxForAddons) : price);
-    }, 0);
+    .reduce((sum, a) => sum + addonLineFee(a), 0);
 
   const rentalAirportDropoff = serviceType === "rental" && !!form.rental_airport_dropoff;
   const rentalAirportDropoffFee = rentalAirportDropoff ? RENTAL_AIRPORT_DROPOFF_FEE : 0;
@@ -472,7 +477,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         return_time: form.round_trip ? (form.return_time || "") : "",
         return_date: form.round_trip ? (form.return_date || "") : "",
         flight_number: form.flight_number ? form.flight_number.trim().toUpperCase().replace(/\s+/g, "") : null,
-        selected_addon_ids: serviceType === "taxi" ? selectedAddonIds : undefined,
+        selected_addon_ids: (serviceType === "taxi" || serviceType === "tour") ? selectedAddonIds : undefined,
+        addon_qty: (serviceType === "taxi" || serviceType === "tour") ? addonQty : undefined,
         wait_minutes: waitMinutes || 0,
         requested_driver: serviceType === "taxi" && form.requested_driver ? form.requested_driver.trim() : undefined,
         tip_amount: tipAmount > 0 ? Number(tipAmount.toFixed(2)) : 0,
@@ -757,7 +763,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
               {/* Popular Add-ons picker — taxi only, when the service ships
                   an `addons` catalog. Selecting/unselecting recomputes the
                   total live. Server re-prices from the catalog on submit. */}
-              {serviceType === "taxi" && taxiAddonsCatalog.length > 0 && (
+              {(serviceType === "taxi" || serviceType === "tour") && taxiAddonsCatalog.length > 0 && (
                 <div
                   className="rounded-2xl border border-[#EFE7D5] bg-gradient-to-br from-[#FBF7EF] to-white p-4"
                   data-testid="taxi-popular-addons"
@@ -785,7 +791,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                       const picked = selectedAddonIds.includes(a.id);
                       const mode = (a.price_mode || "flat").toLowerCase();
                       const price = Number(a.price || 0);
-                      const lineFee = mode === "per_person" ? price * Math.max(1, taxiPaxForAddons) : price;
+                      const lineFee = addonLineFee(a);
                       return (
                         <label
                           key={a.id}
@@ -819,6 +825,17 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                             {a.description && (
                               <span className="block text-[11px] text-[#64748B] mt-0.5 leading-relaxed">
                                 {a.description}
+                              </span>
+                            )}
+                            {mode === "per_block" && picked && (
+                              <span className="mt-2 inline-flex items-center gap-2" data-testid={`taxi-addon-time-${a.id}`} onClick={(e) => e.preventDefault()}>
+                                <button type="button" aria-label="Less time" disabled={blocksOf(a) <= 1}
+                                  onClick={() => setForm({ ...form, addon_qty: { ...addonQty, [a.id]: blocksOf(a) - 1 } })}
+                                  className="w-7 h-7 rounded-full border border-[#E2E8F0] text-[#0B3B5C] font-bold disabled:opacity-40" data-testid={`taxi-addon-time-minus-${a.id}`}>−</button>
+                                <span className="mono text-sm font-semibold text-[#0B3B5C] min-w-[64px] text-center" data-testid={`taxi-addon-time-value-${a.id}`}>{blocksOf(a) * Number(a.block_minutes || 30)} min</span>
+                                <button type="button" aria-label="More time" disabled={blocksOf(a) >= 12}
+                                  onClick={() => setForm({ ...form, addon_qty: { ...addonQty, [a.id]: blocksOf(a) + 1 } })}
+                                  className="rounded-full border border-[#D4A94A] text-[#0B3B5C] text-xs font-semibold px-3 h-7 hover:bg-[#D4A94A]/15 disabled:opacity-40" data-testid={`taxi-addon-time-plus-${a.id}`}>+ 30 min</button>
                               </span>
                             )}
                           </span>

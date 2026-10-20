@@ -199,6 +199,7 @@ class BookingCreate(BaseModel):
     # guest ticked. Server re-hydrates each id against the taxi service's
     # `addons` catalog so the fee/label can't be spoofed.
     selected_addon_ids: Optional[List[str]] = None
+    addon_qty: Optional[Dict[str, int]] = None
     wait_minutes: int = Field(0, ge=0, le=240)
     # Guest can request a specific driver on the booking (e.g. "Reagan").
     # Free-text so anyone can be requested even if they're not in the
@@ -1919,6 +1920,27 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
     return {"checkout_url": session.url, "code": code, "vat_amount": vat, "total_charged": charged}
 
 
+def _price_addons(catalog: list, ids: list, qty: Optional[dict], pax: int):
+    """Re-price picked add-ons from the service's own catalog (client can't spoof). per_block = price × blocks (1-12)."""
+    by_id = {a.get("id"): a for a in catalog if a.get("id")}
+    picked, total = [], 0.0
+    for aid in ids or []:
+        a = by_id.get(aid)
+        if not a:
+            continue
+        mode = (a.get("price_mode") or "flat").lower()
+        price = float(a.get("price") or 0.0)
+        blocks = max(1, min(12, int((qty or {}).get(aid) or 1))) if mode == "per_block" else 1
+        fee = round(price * max(1, pax), 2) if mode == "per_person" else round(price * blocks, 2)
+        if fee > 0:
+            total += fee
+            row = {"id": aid, "label": a.get("label", ""), "price": price, "price_mode": mode, "fee": fee}
+            if mode == "per_block":
+                row.update({"blocks": blocks, "minutes": blocks * int(a.get("block_minutes") or 30)})
+            picked.append(row)
+    return picked, round(total, 2)
+
+
 @api_router.post("/gift-cards/{code}/paypal/create-order")
 async def gift_card_paypal_create(code: str):
     gc = await db.gift_cards.find_one({"code": code.upper().strip()})
@@ -2001,6 +2023,7 @@ TAXI_LOCATIONS = [
     {"tag": "adelaide",     "label": "Adelaide Village / South West",     "keywords": ["adelaide"]},
     {"tag": "compass",      "label": "Compass Point / West Bay",          "keywords": ["compass point", "west bay"]},
     {"tag": "junkanoo",     "label": "Junkanoo Beach",                    "keywords": ["junkanoo"]},
+    {"tag": "love_beach",   "label": "Love Beach",                        "keywords": ["love beach"]},
     {"tag": "cabbage_beach","label": "Cabbage Beach",                     "keywords": ["cabbage"]},
     {"tag": "any_hotel",    "label": "My Nassau hotel (any)",             "keywords": ["any nassau hotel", "hotel"]},
 ]
@@ -2716,6 +2739,12 @@ async def create_booking(req: BookingCreate, request: Request):
     # ── Tour: per-person kids/toddlers pricing + optional taxi add-on ────
     if req.service_type == "tour":
         tour_doc = await db.tours.find_one({"id": req.item_id}) or {}
+        if req.selected_addon_ids:
+            _tp, _tf = _price_addons(tour_doc.get("addons") or [], req.selected_addon_ids, req.addon_qty, int(req.passengers or 1))
+            if _tp:
+                taxi_extras_fee += _tf
+                booking["addons_selected"] = _tp
+                booking["addons_fee"] = round(_tf, 2)
         child_price = float(tour_doc.get("child_price") or 0.0)
         if child_price > 0 and (req.adults is not None or req.kids is not None):
             adults_n = max(0, int(req.adults or 0))
@@ -2849,26 +2878,8 @@ async def create_booking(req: BookingCreate, request: Request):
         # own `addons` catalog and re-priced server-side so the total
         # can't be spoofed from the client.
         if req.selected_addon_ids:
-            catalog_addons = _svc_doc.get("addons") or []
-            catalog_by_id = {a.get("id"): a for a in catalog_addons if a.get("id")}
-            _pax_for_addon = int(req.passengers or 1)
-            picked = []
-            for aid in req.selected_addon_ids:
-                addon = catalog_by_id.get(aid)
-                if not addon:
-                    continue
-                _amode = (addon.get("price_mode") or "flat").lower()
-                _aprice = float(addon.get("price") or 0.0)
-                _fee = round(_aprice * max(1, _pax_for_addon), 2) if _amode == "per_person" else round(_aprice, 2)
-                if _fee > 0:
-                    taxi_extras_fee += _fee
-                    picked.append({
-                        "id": aid,
-                        "label": addon.get("label", ""),
-                        "price": _aprice,
-                        "price_mode": _amode,
-                        "fee": _fee,
-                    })
+            picked, _fee_sum = _price_addons(_svc_doc.get("addons") or [], req.selected_addon_ids, req.addon_qty, int(req.passengers or 1))
+            taxi_extras_fee += _fee_sum
             if picked:
                 booking["addons_selected"] = picked
                 booking["addons_fee"] = round(taxi_extras_fee, 2)
@@ -6840,6 +6851,30 @@ async def _seed_team_sms_startup():
         await team_sms_module.seed_if_empty()
     except Exception as e:  # noqa: BLE001
         logger.warning("team_sms seed err: %s", e)
+
+@app.on_event("startup")
+async def _migrate_addons_v2():
+    """One-time (owner request): drop picnic pack, casino wait $20 per 30 min, Meet-with-sign $7 on every taxi + tour."""
+    try:
+        if await db.site_config.find_one({"_id": "migrations", "addons_v2": True}):
+            return
+        sign_desc = "Driver waits with your name on a Rox placard."
+        for coll in (db.taxi_services, db.tours):
+            await coll.update_many({}, {"$pull": {"addons": {"id": "beach-picnic"}}})
+        await db.taxi_services.update_many(
+            {"addons.id": "casino-wait-30"},
+            {"$set": {"addons.$[a].price": 20.0, "addons.$[a].price_mode": "per_block", "addons.$[a].block_minutes": 30,
+                      "addons.$[a].label": "Casino drop-off & wait",
+                      "addons.$[a].description": "Driver drops you at the casino and waits. $20 per 30 minutes — add more time as needed."}},
+            array_filters=[{"a.id": "casino-wait-30"}],
+        )
+        sign = {"id": "meet-greet-sign", "label": "Meet-with-sign at pickup", "price": 7.0, "price_mode": "flat", "description": sign_desc}
+        await db.taxi_services.update_many({"addons.id": {"$nin": ["meet-greet-sign", "wharf-greeter"]}}, {"$push": {"addons": sign}})
+        await db.tours.update_many({"addons.id": {"$ne": "meet-greet-sign"}}, {"$push": {"addons": sign}})
+        await db.site_config.update_one({"_id": "migrations"}, {"$set": {"addons_v2": True}}, upsert=True)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("addons v2 migration err: %s", e)
+
 
 @app.on_event("startup")
 async def _migrate_meet_sign_price():

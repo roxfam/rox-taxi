@@ -1,6 +1,6 @@
 import Seo from "../components/Seo";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { api, money } from "../lib/api";
 import { PayPalPayButtons } from "../components/PayPalPayButtons";
@@ -33,6 +33,8 @@ export default function GiftCards() {
   const [payWith, setPayWith] = useState("stripe");
   const [paypalCode, setPaypalCode] = useState("");
   const nav = useNavigate();
+  // Any change after a PayPal order was prepared drops it, so the charged total always matches the form.
+  useEffect(() => { setPaypalCode(""); }, [amount, custom, theme, form, sendAt]);
   const [params] = useSearchParams();
   const paidCode = params.get("code");
   const cancelled = params.get("cancelled");

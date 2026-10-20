@@ -67,6 +67,8 @@ export default function GroupsBook() {
 
   const [payWith, setPayWith] = useState("stripe");
   const [paypalBooking, setPaypalBooking] = useState("");
+  // Editing the trip after reserving drops the PayPal button so the amount always matches.
+  useEffect(() => { setPaypalBooking(""); }, [form, gift]);
   const canSubmit = useMemo(() => {
     if (!quote?.qualifies || !quote?.lead_time_ok) return false;
     return form.customer_name.trim() && form.customer_email.trim()

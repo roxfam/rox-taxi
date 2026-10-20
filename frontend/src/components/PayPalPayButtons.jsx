@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 
@@ -21,8 +21,7 @@ export function PayPalPayButtons({ bookingId, onPaid, createOrder, captureOrder,
       </div>
       {note && <p className="text-xs text-[#64748B] mb-3">{note}</p>}
       <PayPalScriptProvider options={{ clientId, currency: "USD", intent: "capture", components: "buttons", enableFunding: "paylater,card" }}>
-        <PayPalButtons
-          style={{ layout: "vertical", shape: "pill", color: "gold", label: "paypal", height: 48 }}
+        <ReadyButtons
           createOrder={create}
           onApprove={async (d) => {
             try {
@@ -41,4 +40,12 @@ export function PayPalPayButtons({ bookingId, onPaid, createOrder, captureOrder,
       </PayPalScriptProvider>
     </div>
   );
+}
+
+// Render the buttons only once the SDK has loaded (avoids the 'zoid destroyed' crash on fast unmounts).
+function ReadyButtons(props) {
+  const [{ isResolved, isRejected }] = usePayPalScriptReducer();
+  if (isRejected) return <div className="text-xs text-[#64748B]">PayPal couldn't load. Please refresh or pay by card.</div>;
+  if (!isResolved) return <div className="h-12 rounded-full bg-[#FFC439]/40 animate-pulse" data-testid="paypal-loading" />;
+  return <PayPalButtons style={{ layout: "vertical", shape: "pill", color: "gold", label: "paypal", height: 48 }} {...props} />;
 }
