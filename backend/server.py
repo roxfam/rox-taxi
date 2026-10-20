@@ -6861,7 +6861,8 @@ async def _migrate_addons_v2():
                 "description": "Driver waits with your name on a Rox placard."}
         for coll in (db.taxi_services, db.tours):
             await coll.update_many({"addons": None}, {"$set": {"addons": []}})
-            await coll.update_many({}, {"$pull": {"addons": {"id": "beach-picnic"}}})
+            await coll.update_many({}, {"$pull": {"addons": {"$or": [
+                {"id": "beach-picnic"}, {"label": {"$regex": "picnic snack|snack pack", "$options": "i"}}]}}})
         await db.taxi_services.update_many({"addons.id": {"$nin": ["meet-greet-sign", "wharf-greeter"]}}, {"$push": {"addons": sign}})
         await db.tours.update_many({"addons.id": {"$ne": "meet-greet-sign"}}, {"$push": {"addons": sign}})
         if await db.site_config.find_one({"_id": "migrations", "addons_v2": True}):
