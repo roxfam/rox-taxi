@@ -537,10 +537,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         });
         window.location.href = c.checkout_url;
       } else if (payMethod === "paypal_checkout") {
-        // Booking is reserved — send the guest to PayPal's own checkout page
-        const { data: o } = await api.post("/paypal/create-order", { booking_id: b.id, origin_url: window.location.origin });
-        if (o.approve_url) window.location.href = o.approve_url;
-        else setStep(5);
+        // Booking is reserved — show the official yellow PayPal button (PayPal pop-up)
+        setStep(5);
       } else if (payMethod === "paypal") {
         const paypalUrl = (cfg.paypal_me_url || "https://www.paypal.com/paypalme/roxtaxiservice") + `/${Number(b.total ?? total).toFixed(2)}`;
         setStep(4);
@@ -1278,7 +1276,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     onClick={() => setPayMethod("paypal_checkout")}
                     icon={<PayPalGlyph />}
                     title="PayPal"
-                    desc="Continue to PayPal's secure checkout page — log in to PayPal or pay with a card as a guest."
+                    desc="Official PayPal button — pay with your PayPal account, Pay Later or a card. Opens in a secure PayPal window."
                     testid="pay-method-paypal-checkout"
                   />
                 )}
@@ -1484,7 +1482,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     }}
                   >
                     <PayPalButtons
-                      style={{ layout: "vertical", shape: "pill", label: "pay", height: 48 }}
+                      style={{ layout: "vertical", shape: "pill", color: "gold", label: "paypal", height: 48 }}
                       createOrder={async () => {
                         const { data } = await api.post("/paypal/create-order", { booking_id: booking.id });
                         return data.order_id;

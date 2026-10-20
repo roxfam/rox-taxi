@@ -570,9 +570,13 @@ async def paypal_create_order(req: PayPalCreateOrderRequest):
         raise HTTPException(409, "Booking already paid")
 
     origin = (req.origin_url or "").rstrip("/")
+    amount = float(booking.get("total") or booking.get("total_price") or 0)
+    # Deposit-first group booking: PayPal charges the deposit now, balance later.
+    if booking.get("is_group_booking") and float(booking.get("balance_due") or 0) > 0:
+        amount = round(amount - float(booking["balance_due"]), 2)
     try:
         order = await paypal_client.create_order(
-            amount=float(booking.get("total") or booking.get("total_price") or 0),
+            amount=amount,
             booking_id=booking["id"],
             description=f"{booking.get('item_name','Rox Taxi booking')} — {booking['id']}",
             return_url=f"{origin}/payment/success?provider=paypal&booking_id={booking['id']}" if origin else "",
@@ -586,7 +590,7 @@ async def paypal_create_order(req: PayPalCreateOrderRequest):
         "provider": "paypal",
         "session_id": order["id"],
         "booking_id": booking["id"],
-        "amount": float(booking.get("total") or booking.get("total_price") or 0),
+        "amount": amount,
         "currency": "usd",
         "status": order.get("status", "CREATED"),
         "payment_status": "pending",

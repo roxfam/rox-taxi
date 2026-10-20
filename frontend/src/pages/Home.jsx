@@ -7,6 +7,7 @@ import { ArrowRight, Car, MapPinned, ShipWheel, Ship, Hotel, Star, ShieldCheck, 
 import { api, money } from "../lib/api";
 import { cdn, cdnSrcSet } from "../lib/img";
 import NassauCarousel from "../components/NassauCarousel";
+import { LoveBeachPick } from "../components/LoveBeachPick";
 import GoogleReviews from "../components/GoogleReviews";
 import HomeHeroCarousel from "../components/HomeHeroCarousel";
 import QuickBookWidget from "../components/QuickBookWidget";
@@ -113,6 +114,9 @@ export default function Home() {
           guests see a pitch that fits their journey. Live weather + today's
           docked cruise ships drive the context ribbons. */}
       <CableBeachHomePromo />
+
+      {/* Beach pick: Love Beach with live taxi fares */}
+      <LoveBeachPick />
 
       {/* DOLPHIN SWIM FEATURE — direct link to Blue Lagoon operator */}
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-12" data-testid="home-dolphin-swim">

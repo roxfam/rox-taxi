@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams, Link, useNavigate } from "react-router-dom";
 import { api, money } from "../lib/api";
-import { Loader2, CreditCard, Copy, ExternalLink, ShieldCheck, XCircle, CheckCircle2, MapPin } from "lucide-react";
+import { PayPalPayButtons } from "../components/PayPalPayButtons";
+import { CheckoutSteps, TrustBadges } from "../components/CheckoutSteps";
+import { PaymentBrandRow } from "../components/PaymentBrands";
+import { Loader2, CreditCard, Copy, XCircle, CheckCircle2, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { GiftCodeBox } from "../components/GiftCodeBox";
 
@@ -21,10 +24,6 @@ export default function Pay() {
   const [loading, setLoading] = useState(true);
   const [payingWith, setPayingWith] = useState(null); // "stripe" | "paypal" | "zelle"
   const [error, setError] = useState("");
-  const [paypalReady, setPaypalReady] = useState(false);
-  useEffect(() => {
-    api.get("/paypal/config").then(({ data }) => setPaypalReady(!!data?.configured)).catch(() => {});
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -86,17 +85,6 @@ export default function Pay() {
   const paid = booking.payment_status === "paid";
   const cancelled = booking.status === "cancelled";
   const total = Number(booking.total ?? booking.total_price ?? 0);
-  const payWithPayPal = async () => {
-    setPayingWith("paypal");
-    try {
-      const { data } = await api.post("/paypal/create-order", { booking_id: booking.id, origin_url: window.location.origin });
-      if (!data.approve_url) throw new Error("no approve url");
-      window.location.href = data.approve_url;
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Couldn't open PayPal. Please try again or pay by card.");
-      setPayingWith(null);
-    }
-  };
 
   const payStripe = async () => {
     setPayingWith("stripe");
@@ -136,6 +124,7 @@ export default function Pay() {
             Booking <code className="mono bg-white/10 px-2 py-0.5 rounded">{booking.id}</code>
             {" · "}<span className="text-white">{booking.item_name}</span>
           </p>
+          {!cancelled && <CheckoutSteps current={paid ? 2 : 1} />}
         </div>
       </section>
 
@@ -150,7 +139,8 @@ export default function Pay() {
             ) : (
               <>
                 <h2 className="serif text-2xl text-[#0B3B5C]">Choose how to pay</h2>
-                <p className="mt-2 text-sm text-[#64748B]">All methods clear instantly and unlock your booking status the moment payment lands.</p>
+                <p className="mt-2 text-sm text-[#64748B]">Card and PayPal confirm instantly. Your QR boarding pass is ready the moment payment lands.</p>
+                <div className="mt-3"><PaymentBrandRow /></div>
 
                 <div className="mt-5">
                   <GiftCodeBox
@@ -178,24 +168,13 @@ export default function Pay() {
                   {payingWith === "stripe" && <Loader2 className="w-5 h-5 animate-spin text-[#635BFF]" />}
                 </button>
 
-                {/* PayPal — official PayPal checkout page */}
-                {paypalReady && (
-                  <button
-                    type="button"
-                    onClick={payWithPayPal}
-                    disabled={!!payingWith}
-                    data-testid="pay-paypal-btn"
-                    className="mt-4 w-full flex items-center gap-4 rounded-2xl border border-[#E2E8F0] hover:border-[#003087] p-5 text-left transition-all group hover:shadow-[0_10px_30px_rgba(0,48,135,0.18)] disabled:opacity-70"
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-[#003087]/10 text-[#003087] flex items-center justify-center shrink-0 font-black text-xl">P</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-[#0B3B5C]">Pay with PayPal</div>
-                      <div className="text-xs text-[#64748B]">Opens PayPal's secure checkout — PayPal account or card as a guest.</div>
-                    </div>
-                    <div className="mono text-lg text-[#0B3B5C] font-black shrink-0">{money(total)}</div>
-                    {payingWith === "paypal" ? <Loader2 className="w-5 h-5 animate-spin text-[#003087]" /> : <ExternalLink className="w-4 h-4 text-[#94a3b8]" />}
-                  </button>
-                )}
+                {/* PayPal — official yellow button, opens in a PayPal pop-up */}
+                <div className="mt-4" data-testid="pay-paypal-btn">
+                  <PayPalPayButtons bookingId={booking.id} title={`Pay ${money(total)} with PayPal`}
+                    onPaid={() => nav(`/payment/success?provider=paypal&booking_id=${booking.id}`)} />
+                </div>
+
+                <div className="mt-6 flex items-center gap-3 text-[10px] tracking-[0.25em] uppercase text-[#94a3b8]"><span className="flex-1 h-px bg-[#E2E8F0]" />or other ways to pay<span className="flex-1 h-px bg-[#E2E8F0]" /></div>
 
                 {/* Zelle */}
                 <div className="mt-4 rounded-2xl border border-[#E2E8F0] p-5" data-testid="pay-zelle-block">
@@ -233,10 +212,7 @@ export default function Pay() {
                   </ul>
                 </div>
 
-                <div className="mt-6 flex items-center gap-2 text-xs text-[#64748B]">
-                  <ShieldCheck className="w-4 h-4 text-[#D4A94A]" />
-                  All card payments are processed by Stripe. We never see your card details.
-                </div>
+                <TrustBadges />
               </>
             )}
           </div>

@@ -105,13 +105,13 @@ _ADDON_ATLANTIS = [
      "description": "Sunset photo stop at Atlantis Marina Village on the way in."},
 ]
 _ADDON_AIRPORT = [
-    {"id": "meet-greet-sign", "label": "Meet-with-sign at arrivals", "price": 5.0, "price_mode": "flat",
+    {"id": "meet-greet-sign", "label": "Meet-with-sign at arrivals", "price": 7.0, "price_mode": "flat",
      "description": "Driver waits inside arrivals with your name on a placard."},
     {"id": "luggage-handling", "label": "Extra luggage assistance", "price": 5.0, "price_mode": "flat",
      "description": "Curbside porter help for 3+ bags — no fumbling."},
 ]
 _ADDON_CRUISE = [
-    {"id": "wharf-greeter", "label": "Meet-with-sign at Prince George Wharf", "price": 5.0, "price_mode": "flat",
+    {"id": "wharf-greeter", "label": "Meet-with-sign at Prince George Wharf", "price": 7.0, "price_mode": "flat",
      "description": "Driver waits with a Rox placard at the cruise-port taxi stand."},
 ]
 _ADDON_BEACH = [

@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Users, Lock, Calendar, AlertTriangle, CheckCircle2, Sparkles } from "lucide-react";
 import { api, money } from "../lib/api";
 import { PaymentBrandRow } from "../components/PaymentBrands";
+import { PayPalPayButtons } from "../components/PayPalPayButtons";
 import { GiftCodeBox } from "../components/GiftCodeBox";
 
 /**
@@ -64,6 +65,8 @@ export default function GroupsBook() {
     return () => clearTimeout(h);
   }, [form.service_type, form.item_id, form.base_price, form.pax, form.booking_date]);
 
+  const [payWith, setPayWith] = useState("stripe");
+  const [paypalBooking, setPaypalBooking] = useState("");
   const canSubmit = useMemo(() => {
     if (!quote?.qualifies || !quote?.lead_time_ok) return false;
     return form.customer_name.trim() && form.customer_email.trim()
@@ -74,8 +77,10 @@ export default function GroupsBook() {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const { data } = await api.post("/group-bookings/checkout", { ...form, gift_code: gift?.code || undefined });
-      if (data?.checkout_url) {
+      const { data } = await api.post("/group-bookings/checkout", { ...form, gift_code: gift?.code || undefined, pay_with: payWith });
+      if (data?.pay_with === "paypal") {
+        setPaypalBooking(data.booking_id);
+      } else if (data?.checkout_url) {
         window.location.assign(data.checkout_url);
       } else if (data?.paid) {
         toast.success(`Paid in full with your gift card — booking ${data.booking_id} confirmed`);
@@ -287,6 +292,19 @@ export default function GroupsBook() {
               </div>
             )}
 
+            <div className="mt-5 grid grid-cols-2 gap-2" data-testid="groups-pay-method">
+              {[["stripe", "Card"], ["paypal", "PayPal"]].map(([k, l]) => (
+                <button key={k} type="button" onClick={() => setPayWith(k)} disabled={!!paypalBooking} data-testid={`groups-pay-${k}`}
+                  className={`rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${payWith === k ? "bg-[#D4A94A] text-[#0B192C] border-[#D4A94A]" : "bg-white/5 text-white border-white/20 hover:border-[#D4A94A]"}`}>{l}</button>
+              ))}
+            </div>
+            {paypalBooking ? (
+              <div className="mt-4" data-testid="groups-paypal-wrap">
+                <PayPalPayButtons bookingId={paypalBooking} title={`Pay ${money(dueNow)} with PayPal`}
+                  note={`Booking ${paypalBooking} is reserved. Finish payment to confirm it.`}
+                  onPaid={() => nav(`/booking/${paypalBooking}/pass`)} />
+              </div>
+            ) : (
             <button
               onClick={submit}
               disabled={!canSubmit || submitting}
@@ -296,11 +314,12 @@ export default function GroupsBook() {
               {submitting ? (
                 <><span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Reserving…</>
               ) : (
-                <><Lock className="w-3.5 h-3.5" /> Reserve for {money(dueNow)}</>
+                <><Lock className="w-3.5 h-3.5" /> {payWith === "paypal" ? `Continue to PayPal · ${money(dueNow)}` : `Reserve for ${money(dueNow)}`}</>
               )}
             </button>
+            )}
             <div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-white/50">
-              <Lock className="w-3 h-3" /> Secure checkout · <span className="hidden sm:inline">Powered by</span> Stripe
+              <Lock className="w-3 h-3" /> Secure checkout · <span className="hidden sm:inline">Powered by</span> {payWith === "paypal" ? "PayPal" : "Stripe"}
             </div>
             <div className="mt-3 flex justify-center"><PaymentBrandRow /></div>
           </div>

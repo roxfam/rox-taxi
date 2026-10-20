@@ -401,6 +401,7 @@ class GiftCardPurchaseRequest(BaseModel):
     scheduled_send_at: Optional[str] = Field(None, max_length=40)  # ISO datetime — defer delivery (birthday / anniversary)
     theme: str = Field("classic", pattern="^(classic|birthday|honeymoon|thank_you|anniversary|wedding|graduation|holiday|mothers_day|just_because)$")
     recipient_phone: Optional[str] = Field(None, max_length=40)
+    pay_with: str = Field("stripe", pattern="^(stripe|paypal)$")
 
 
 class GiftCardRedeemRequest(BaseModel):
@@ -1855,9 +1856,12 @@ def _new_gift_code() -> str:
 @api_router.post("/gift-cards/purchase")
 async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
     """Creates a pending gift card and a Stripe Checkout Session for it.
-    Card is activated when the Stripe webhook confirms payment."""
+    Card is activated when the Stripe webhook (or PayPal capture) confirms payment."""
     stripe_key = secrets_store.get_secret("STRIPE_API_KEY", "")
-    if not stripe_key:
+    if req.pay_with == "paypal":
+        if not paypal_client.is_configured():
+            raise HTTPException(503, "PayPal not configured")
+    elif not stripe_key:
         raise HTTPException(503, "Stripe not configured")
 
     code = _new_gift_code()
@@ -1899,6 +1903,8 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
         "created_at": ts,
     }
     await db.gift_cards.insert_one(doc)
+    if req.pay_with == "paypal":
+        return {"code": code, "vat_amount": vat, "total_charged": charged, "pay_with": "paypal"}
 
     host_url = str(request.base_url).rstrip("/")
     webhook_url = f"{host_url}/api/webhook/stripe"
@@ -1911,6 +1917,43 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
     ))
     await db.gift_cards.update_one({"code": code}, {"$set": {"stripe_session_id": session.session_id, "updated_at": now_iso()}})
     return {"checkout_url": session.url, "code": code, "vat_amount": vat, "total_charged": charged}
+
+
+@api_router.post("/gift-cards/{code}/paypal/create-order")
+async def gift_card_paypal_create(code: str):
+    gc = await db.gift_cards.find_one({"code": code.upper().strip()})
+    if not gc:
+        raise HTTPException(404, "Gift card not found")
+    if gc.get("status") != "pending":
+        raise HTTPException(409, "This gift card is already paid")
+    try:
+        order = await paypal_client.create_order(amount=float(gc.get("total_charged") or gc["amount"]), booking_id=gc["code"],
+                                                 description=f"Rox gift card {gc['code']}")
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("gift PayPal create-order failed")
+        raise HTTPException(502, f"PayPal error: {e}") from e
+    await db.gift_cards.update_one({"code": gc["code"]}, {"$set": {"paypal_order_id": order["id"], "updated_at": now_iso()}})
+    return {"order_id": order["id"]}
+
+
+@api_router.post("/gift-cards/paypal/capture/{order_id}")
+async def gift_card_paypal_capture(order_id: str):
+    gc = await db.gift_cards.find_one({"paypal_order_id": order_id})
+    if not gc:
+        raise HTTPException(404, "PayPal order not found")
+    if gc.get("status") == "active":
+        return {"code": gc["code"], "status": "active"}
+    try:
+        result = await paypal_client.capture_order(order_id)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("gift PayPal capture failed")
+        raise HTTPException(502, f"PayPal capture error: {e}") from e
+    if (result.get("status") or "").upper() != "COMPLETED":
+        raise HTTPException(402, "PayPal payment not completed")
+    await db.gift_cards.update_one({"code": gc["code"]}, {"$set": {
+        "payment_provider": "paypal", "paypal_capture_id": paypal_client.extract_capture_id(result)}})
+    await _activate_gift_if_paid("", gc=gc)
+    return {"code": gc["code"], "status": "active"}
 
 
 @api_router.get("/gift-cards/{code}")
@@ -3927,10 +3970,10 @@ async def _send_gift_voucher_email(gc: dict) -> dict:
         return {"sent": False, "error": str(e)}
 
 
-async def _activate_gift_if_paid(session_id: str) -> Optional[str]:
-    """Called from Stripe webhook. Upgrades the matching gift card to active
+async def _activate_gift_if_paid(session_id: str, gc: Optional[dict] = None) -> Optional[str]:
+    """Called from Stripe webhook (or PayPal capture with `gc`). Upgrades the matching gift card to active
     and either sends the voucher now or defers to the scheduled date."""
-    gc = await db.gift_cards.find_one({"stripe_session_id": session_id})
+    gc = gc or await db.gift_cards.find_one({"stripe_session_id": session_id})
     if not gc:
         return None
     if gc.get("status") == "active" and gc.get("delivered_at"):
@@ -4055,6 +4098,7 @@ class GroupBookingCheckout(BaseModel):
     dropoff_location: Optional[str] = None
     notes: Optional[str] = None
     pay_full: bool = False  # True = charge full total now; False = charge deposit only
+    pay_with: str = Field("stripe", pattern="^(stripe|paypal)$")
     gift_code: Optional[str] = Field(None, max_length=32)
 
 
@@ -4121,6 +4165,9 @@ async def group_booking_checkout(req: GroupBookingCheckout):
     if req.gift_code and amount_due <= 0:
         await gift_redeem_module.settle_if_zero(bid)
         return {"booking_id": bid, "paid": True, "amount": 0.0, "total": 0.0, "pay_mode": booking["group_pay_mode"]}
+    if req.pay_with == "paypal":
+        await db.bookings.update_one({"id": bid}, {"$set": {"payment_method": "paypal"}})
+        return {"booking_id": bid, "pay_with": "paypal", "amount": float(amount_due), "total": booking["total"], "pay_mode": booking["group_pay_mode"]}
 
     # Build Stripe Checkout session for the deposit (or full) amount.
     try:
@@ -6793,6 +6840,22 @@ async def _seed_team_sms_startup():
         await team_sms_module.seed_if_empty()
     except Exception as e:  # noqa: BLE001
         logger.warning("team_sms seed err: %s", e)
+
+@app.on_event("startup")
+async def _migrate_meet_sign_price():
+    """One-time: Meet-with-sign add-on $5 → $7 (owner request). Flag stops it overriding later admin edits."""
+    try:
+        if await db.site_config.find_one({"_id": "migrations", "meet_sign_7": True}):
+            return
+        for aid in ("meet-greet-sign", "wharf-greeter"):
+            await db.taxi_services.update_many(
+                {"addons": {"$elemMatch": {"id": aid, "price": 5.0}}},
+                {"$set": {"addons.$[a].price": 7.0}}, array_filters=[{"a.id": aid, "a.price": 5.0}],
+            )
+        await db.site_config.update_one({"_id": "migrations"}, {"$set": {"meet_sign_7": True}}, upsert=True)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("meet-sign price migration err: %s", e)
+
 
 @api_router.get("/stripe/public-key")
 async def stripe_public_key():

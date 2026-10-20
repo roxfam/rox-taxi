@@ -1,8 +1,9 @@
 import Seo from "../components/Seo";
 
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { api, money } from "../lib/api";
+import { PayPalPayButtons } from "../components/PayPalPayButtons";
 import { Gift, Send, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +30,9 @@ export default function GiftCards() {
   const [sendAt, setSendAt] = useState("");
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [payWith, setPayWith] = useState("stripe");
+  const [paypalCode, setPaypalCode] = useState("");
+  const nav = useNavigate();
   const [params] = useSearchParams();
   const paidCode = params.get("code");
   const cancelled = params.get("cancelled");
@@ -48,8 +52,9 @@ export default function GiftCards() {
     try {
       const { data } = await api.post("/gift-cards/purchase", {
         amount: finalAmount, ...form, recipient_phone: form.recipient_phone || undefined, theme,
-        scheduled_send_at: sendAt ? new Date(sendAt).toISOString() : undefined, origin_url: window.location.origin,
+        scheduled_send_at: sendAt ? new Date(sendAt).toISOString() : undefined, origin_url: window.location.origin, pay_with: payWith,
       });
+      if (payWith === "paypal") { setPaypalCode(data.code); setBusy(false); return; }
       window.location.href = data.checkout_url;
     } catch (ex) {
       toast.error(ex?.response?.data?.detail || "Purchase failed");
@@ -173,11 +178,26 @@ export default function GiftCards() {
               <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5" data-testid="gift-nonrefundable-agree" />
               I understand this gift card is non-refundable.
             </label>
+            <div className="mt-4 grid grid-cols-2 gap-2" data-testid="gift-pay-method">
+              {[["stripe", "Card"], ["paypal", "PayPal"]].map(([k, l]) => (
+                <button key={k} type="button" onClick={() => { setPayWith(k); setPaypalCode(""); }} data-testid={`gift-pay-${k}`}
+                  className={`rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${payWith === k ? "bg-[#0B3B5C] text-white border-[#0B3B5C]" : "bg-white text-[#0B3B5C] border-[#E2E8F0] hover:border-[#D4A94A]"}`}>{l}</button>
+              ))}
+            </div>
+            {paypalCode ? (
+              <div className="mt-4">
+                <PayPalPayButtons title={`Pay ${money(giftTotal)} with PayPal`}
+                  createOrder={async () => (await api.post(`/gift-cards/${paypalCode}/paypal/create-order`)).data.order_id}
+                  captureOrder={async (id) => (await api.post(`/gift-cards/paypal/capture/${id}`)).data}
+                  onPaid={() => nav(`/gift-cards?code=${paypalCode}`)} />
+              </div>
+            ) : (
             <button type="submit" disabled={busy || !agree} data-testid="gift-purchase-submit" className="w-full mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-6 py-3.5 text-sm font-semibold shadow-[0_10px_25px_rgba(232,106,60,0.35)] disabled:opacity-60">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {busy ? "Redirecting…" : `Pay ${money(giftTotal)} for ${money(finalAmount || 0)} card`}
+              {busy ? "Please wait…" : payWith === "paypal" ? `Continue to PayPal · ${money(giftTotal)}` : `Pay ${money(giftTotal)} for ${money(finalAmount || 0)} card`}
             </button>
-            <p className="text-[10px] text-[#94a3b8] text-center mt-2">Secured by Stripe · funds go to Rox Taxi</p>
+            )}
+            <p className="text-[10px] text-[#94a3b8] text-center mt-2">Secured by {payWith === "paypal" ? "PayPal" : "Stripe"} · funds go to Rox Taxi</p>
           </aside>
         </form>
       </div>

@@ -3,27 +3,40 @@ import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 
-// Live PayPal Smart Buttons for an existing booking; auto-confirms on capture.
-export function PayPalPayButtons({ bookingId, onPaid }) {
+// Official yellow PayPal button (PayPal opens in a pop-up, guest stays on our site).
+// Defaults to a booking order; pass createOrder/captureOrder for gift cards etc.
+export function PayPalPayButtons({ bookingId, onPaid, createOrder, captureOrder, title = "Pay with PayPal", note }) {
   const [clientId, setClientId] = useState("");
   useEffect(() => {
     api.get("/paypal/config").then(({ data }) => setClientId(data?.configured ? data.client_id : "")).catch(() => {});
   }, []);
   if (!clientId) return null;
+  const create = createOrder || (async () => (await api.post("/paypal/create-order", { booking_id: bookingId })).data.order_id);
+  const capture = captureOrder || (async (id) => (await api.post(`/paypal/capture-order/${id}`)).data);
   return (
-    <div className="mt-4 rounded-2xl border border-[#E2E8F0] p-5" data-testid="pay-paypal-buttons">
-      <div className="font-semibold text-[#0B3B5C] mb-3">PayPal or Venmo · instant confirmation</div>
-      <PayPalScriptProvider options={{ clientId, currency: "USD", intent: "capture", components: "buttons" }}>
+    <div className="rounded-2xl border border-[#E2E8F0] p-5 bg-white" data-testid="pay-paypal-buttons">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="font-semibold text-[#0B3B5C]">{title}</div>
+        <span className="text-[10px] font-bold tracking-wider uppercase text-[#003087] bg-[#003087]/10 rounded-full px-2 py-0.5">PayPal · Pay Later · Card</span>
+      </div>
+      {note && <p className="text-xs text-[#64748B] mb-3">{note}</p>}
+      <PayPalScriptProvider options={{ clientId, currency: "USD", intent: "capture", components: "buttons", enableFunding: "paylater,card" }}>
         <PayPalButtons
-          style={{ layout: "vertical", shape: "pill", label: "pay", height: 45 }}
-          createOrder={async () => (await api.post("/paypal/create-order", { booking_id: bookingId })).data.order_id}
+          style={{ layout: "vertical", shape: "pill", color: "gold", label: "paypal", height: 48 }}
+          createOrder={create}
           onApprove={async (d) => {
             try {
-              const { data } = await api.post(`/paypal/capture-order/${d.orderID}`);
-              if (data?.payment_status === "paid") { toast.success("Payment received! Your booking is confirmed."); onPaid?.(data.booking); }
-            } catch (e) { toast.error(e?.response?.data?.detail || "PayPal capture failed."); }
+              const data = await capture(d.orderID);
+              if (data?.payment_status === "paid" || data?.status === "active") {
+                toast.success("Payment received, thank you!");
+                onPaid?.(data);
+              } else {
+                toast.error("Payment could not be verified. Please contact us.");
+              }
+            } catch (e) { toast.error(e?.response?.data?.detail || "PayPal payment failed."); }
           }}
-          onError={() => toast.error("PayPal error — please try another payment method.")}
+          onCancel={() => toast.info("PayPal window closed. Nothing was charged.")}
+          onError={() => toast.error("PayPal error. Please try again or pay by card.")}
         />
       </PayPalScriptProvider>
     </div>
