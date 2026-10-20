@@ -826,3 +826,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 
 
+
+## 2026-10-20 — Driver casino countdown
+- Driver scan page shows live HH:MM:SS countdown once casino wait starts; turns orange at ≤10 min ("Head back to the casino"), red at 0.
+- Polls GET /api/bookings/{id}/casino-wait/driver?token= (QR-token protected) every 30s; picks up guest extensions with toast + highlight.
+

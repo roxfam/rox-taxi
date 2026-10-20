@@ -87,6 +87,14 @@ async def casino_dropoff(bid: str, req: DropoffReq):
     return _info({**b, **upd})
 
 
+@router.get("/bookings/{bid}/casino-wait/driver")
+async def casino_wait_driver(bid: str, token: str):
+    from server import _verify_qr_token  # noqa: PLC0415
+    if not _verify_qr_token(bid.upper(), token):
+        raise HTTPException(401, "Invalid scan link")
+    return _info(await _booking(bid))
+
+
 @router.get("/bookings/{bid}/casino-wait")
 async def casino_wait_info(bid: str, t: str):
     _check(bid.upper(), t)
