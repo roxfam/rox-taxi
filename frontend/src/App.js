@@ -69,7 +69,6 @@ import { AuthProvider } from "./lib/auth";
 
 import { useVisitorBeacon } from "./hooks/useVisitorBeacon";
 import SummerBanner from "./components/SummerBanner";
-import { WhatsAppFloat } from "./components/WhatsAppFloat";
 import FacebookPixel from "./components/FacebookPixel";
 import SeoVerification from "./components/SeoVerification";
 
@@ -107,7 +106,7 @@ function ImageGuard() {
 }
 
 function CustomerShell({ children }) {
-  return <Layout><SummerBanner />{children}<WhatsAppFloat /></Layout>;
+  return <Layout><SummerBanner />{children}</Layout>;
 }
 
 function AppRouter() {

@@ -64,7 +64,37 @@ async def admin_ships(_=Depends(_admin)):
 async def add_ship(body: ShipIn, _=Depends(_admin)):
     doc = {"id": uuid.uuid4().hex[:10], **body.model_dump()}
     await _db.cruise_ships.insert_one(dict(doc))
+    asyncio.create_task(_ship_day_offer(doc))
     return doc
+
+
+def _ship_key(name: str) -> str:
+    return " ".join((name or "").lower().replace("the ", "").split())
+
+
+async def _ship_day_offer(ship: dict) -> int:
+    """Text past guests who sailed on this ship (one text per phone per ship-day)."""
+    key = _ship_key(ship["ship_name"])
+    today = datetime.now(timezone.utc).isoformat()
+    phones = {}
+    async for b in _db.bookings.find({"cruise_ship": {"$nin": [None, ""]}, "customer_phone": {"$nin": [None, ""]},
+                                       "booking_date": {"$lt": today}, "status": {"$ne": "cancelled"}}):
+        if _ship_key(b["cruise_ship"]) == key:
+            phones[b["customer_phone"]] = b.get("customer_name") or "there"
+    from notifications import send_sms  # noqa: PLC0415
+    day = datetime.strptime(ship["date"], "%Y-%m-%d").strftime("%a %b %-d")
+    sent = 0
+    for phone, name in phones.items():
+        tag = f"{key}|{ship['date']}|{phone}"
+        try:
+            await _db.ship_offers_sent.insert_one({"_id": tag, "at": today})
+        except Exception:  # noqa: BLE001
+            continue
+        send_sms(phone, (f"Rox Taxi: Hi {name.split()[0]}, {ship['ship_name']} is back in Nassau on {day}! "
+                         f"Sailing again? Book a shore trip that gets you back before all aboard: {_site}/cruise-schedule. Reply STOP to opt out.")[:320])
+        sent += 1
+    await _db.cruise_ships.update_one({"id": ship["id"]}, {"$set": {"offer_texts_sent": sent}})
+    return sent
 
 
 @router.delete("/admin/cruise-ships/{sid}")
@@ -117,6 +147,42 @@ async def update_bundle(bid: str, body: BundleIn, _=Depends(_admin)):
 async def del_bundle(bid: str, _=Depends(_admin)):
     await _db.bundles.delete_one({"id": bid})
     return {"ok": True}
+
+
+class BundleBookIn(BaseModel):
+    customer_name: str = Field(..., min_length=2, max_length=80)
+    customer_email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$", max_length=120)
+    customer_phone: str = Field(..., min_length=7, max_length=24)
+    booking_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    pickup_location: str = Field("", max_length=120)
+    cruise_ship: str = Field("", max_length=60)
+    notes: str = Field("", max_length=500)
+
+
+@router.post("/bundles/{bid}/book")
+async def book_bundle(bid: str, body: BundleBookIn):
+    b = await _db.bundles.find_one({"id": bid, "active": True})
+    if not b:
+        raise HTTPException(404, "This deal is no longer available")
+    if body.booking_date < datetime.now(NASSAU).date().isoformat():
+        raise HTTPException(400, "Pick today or a future date")
+    base = round(float(b["bundle_price"]), 2)
+    vat = round(base * 0.10, 2)
+    now = datetime.now(timezone.utc).isoformat()
+    booking = {
+        "id": "BND-" + uuid.uuid4().hex[:7].upper(), "service_type": "bundle", "item_id": b["id"], "item_name": b["name"],
+        "bundle_includes": b.get("includes") or [], **body.model_dump(), "booking_date": f"{body.booking_date}T09:00:00-05:00",
+        "passengers": 1, "price": base, "subtotal_before_tax": base, "vat_pct": 0.10, "vat_amount": vat,
+        "total": round(base + vat, 2), "payment_method": "stripe", "payment_status": "pending",
+        "status": "pending_payment", "created_at": now, "updated_at": now,
+    }
+    await _db.bookings.insert_one(dict(booking))
+    try:
+        from notifications import send_owner_sms  # noqa: PLC0415
+        send_owner_sms(f"Rox: new bundle booking {booking['id']} — {b['name']} for {body.customer_name} on {body.booking_date} (awaiting payment).")
+    except Exception as e:  # noqa: BLE001
+        log.warning("bundle owner sms err: %s", e)
+    return {"booking_id": booking["id"], "total": booking["total"], "vat_amount": vat}
 
 
 # ── Monthly report ───────────────────────────────────────────

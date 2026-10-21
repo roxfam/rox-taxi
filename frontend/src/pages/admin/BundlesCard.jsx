@@ -27,7 +27,7 @@ export default function BundlesCard() {
     <div className="mt-6 bg-white rounded-xl border border-[#E2E8F0] p-5" data-testid="admin-bundles-card">
       <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[.18em] text-[#D4A94A] font-bold"><Package className="w-3 h-3" /> Bundle deals</div>
       <h3 className="mt-1 font-[Georgia] text-[#0B3B5C] text-xl">Combo packages</h3>
-      <p className="text-xs text-[#64748B] mt-1">Shown on the home page and cruise schedule. Guests book through WhatsApp.</p>
+      <p className="text-xs text-[#64748B] mt-1">Shown on the home page and cruise schedule. Guests book and pay by card or PayPal (10% VAT added at checkout).</p>
       <form onSubmit={add} className="mt-4 grid md:grid-cols-2 gap-3">
         <input placeholder="Name, e.g. Airport + Love Beach day" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inp} data-testid="bundle-input-name" />
         <input placeholder="Short description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={inp} data-testid="bundle-input-description" />

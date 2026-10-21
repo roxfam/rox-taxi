@@ -126,6 +126,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     wait_minutes: 0,
     return_date: "",
     flight_number: "",
+    cruise_ship: "",
     notes: "",
     taxi_addon_selected: false,
     rental_airport_dropoff: false,
@@ -477,6 +478,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         return_time: form.round_trip ? (form.return_time || "") : "",
         return_date: form.round_trip ? (form.return_date || "") : "",
         flight_number: form.flight_number ? form.flight_number.trim().toUpperCase().replace(/\s+/g, "") : null,
+        cruise_ship: form.cruise_ship?.trim() || null,
         selected_addon_ids: (serviceType === "taxi" || serviceType === "tour") ? selectedAddonIds : undefined,
         addon_qty: (serviceType === "taxi" || serviceType === "tour") ? addonQty : undefined,
         wait_minutes: waitMinutes || 0,
@@ -1187,6 +1189,18 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   {waitFee > 0 && <div className="text-[11px] text-[#0B3B5C] mt-2" data-testid="taxi-wait-fee">Wait {waitMinutes} min: 5 free + {waitMinutes - 5} × $1 = <b>${waitFee.toFixed(2)}</b></div>}
                 </div>
               )}
+
+              <div>
+                <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">Cruise ship (optional)</label>
+                <input
+                  value={form.cruise_ship}
+                  onChange={setF("cruise_ship")}
+                  maxLength={60}
+                  className="w-full rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm focus:border-[#D4A94A] focus:outline-none focus:ring-2 focus:ring-[#D4A94A]/20"
+                  placeholder="e.g. Wonder of the Seas"
+                  data-testid="booking-cruise-ship"
+                />
+              </div>
 
               <div>
                 <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">Notes (optional)</label>

@@ -182,6 +182,7 @@ class BookingCreate(BaseModel):
     return_date: Optional[str] = Field(None, max_length=16)
     tip_amount: Optional[float] = Field(0, ge=0, le=1000)
     flight_number: Optional[str] = Field(None, max_length=12)
+    cruise_ship: Optional[str] = Field(None, max_length=60)
     gift_code: Optional[str] = Field(None, max_length=32)
     # Per-person passenger breakdown (tours with child_price > 0). Optional —
     # falls back to `passengers` for flat-fare items.

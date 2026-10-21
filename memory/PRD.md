@@ -845,3 +845,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Return-trip reminder: one-way taxi guests texted N hours (default 3, admin setting) after pickup; once per booking; 5-min loop.
 - Known blocker: Twilio account inactive → no SMS currently delivered.
 
+## 2026-10-21 — Bundles paid online + ship-day texts
+- Removed floating WhatsApp button (customer disliked it).
+- POST /api/bundles/{id}/book creates BND-xxxx booking (service_type "bundle", +10% VAT) → /pay/{id} (card or PayPal). Bundle card: "Book & pay" dialog; WhatsApp link kept as small "Questions?" link.
+- Optional "Cruise ship" field on booking form (cruise_ship). Adding a ship in admin texts past guests whose bookings list that ship (name-normalised; one text per phone per ship-day via ship_offers_sent).
+
+

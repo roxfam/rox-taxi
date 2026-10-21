@@ -1,0 +1,58 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { api, money } from "../lib/api";
+
+const FIELDS = [
+  ["customer_name", "Full name", "text", true],
+  ["customer_email", "Email", "email", true],
+  ["customer_phone", "Phone / WhatsApp", "tel", true],
+  ["booking_date", "Date", "date", true],
+  ["pickup_location", "Pickup (hotel or cruise pier)", "text", false],
+  ["cruise_ship", "Cruise ship (optional)", "text", false],
+];
+
+export const BundleBookDialog = ({ bundle, onClose }) => {
+  const nav = useNavigate();
+  const [form, setForm] = useState({ customer_name: "", customer_email: "", customer_phone: "", booking_date: "", pickup_location: "", cruise_ship: "", notes: "" });
+  const [busy, setBusy] = useState(false);
+  const vat = Math.round(bundle.bundle_price * 10) / 100;
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/bundles/${bundle.id}/book`, form);
+      nav(`/pay/${data.booking_id}`);
+    } catch (err) {
+      const d = err?.response?.data?.detail;
+      toast.error(typeof d === "string" ? d : "Please check your details");
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md" data-testid="bundle-book-dialog">
+        <DialogHeader><DialogTitle className="serif text-2xl text-[#0B3B5C]">{bundle.name}</DialogTitle></DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          {FIELDS.map(([k, l, t, req]) => (
+            <label key={k} className="block text-[11px] uppercase tracking-[.16em] text-[#64748B] font-semibold">{l}
+              <input type={t} required={req} value={form[k]} min={t === "date" ? new Date().toISOString().slice(0, 10) : undefined}
+                onChange={(e) => setForm({ ...form, [k]: e.target.value })}
+                className="mt-1 w-full rounded-xl border border-[#E2E8F0] px-3 py-2.5 text-sm text-[#0B3B5C] normal-case tracking-normal font-normal focus:border-[#D4A94A] focus:outline-none" data-testid={`bundle-book-${k}`} />
+            </label>
+          ))}
+          <div className="rounded-xl bg-[#FBF7EF] p-3 text-sm text-[#0B3B5C] space-y-1" data-testid="bundle-book-summary">
+            <div className="flex justify-between"><span>Bundle</span><span className="font-mono">{money(bundle.bundle_price)}</span></div>
+            <div className="flex justify-between text-[#64748B]"><span>VAT 10%</span><span className="font-mono">{money(vat)}</span></div>
+            <div className="flex justify-between font-bold"><span>Total</span><span className="font-mono" data-testid="bundle-book-total">{money(bundle.bundle_price + vat)}</span></div>
+          </div>
+          <button type="submit" disabled={busy} className="w-full rounded-full bg-[#0B3B5C] hover:bg-[#082941] text-white font-bold py-3 disabled:opacity-60 transition-colors" data-testid="bundle-book-submit">
+            {busy ? "Creating booking…" : "Continue to payment"}
+          </button>
+          <p className="text-[11px] text-center text-[#94a3b8]">Pay by card or PayPal on the next step.</p>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};

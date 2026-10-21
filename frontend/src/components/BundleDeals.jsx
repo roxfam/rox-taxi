@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { Check, Package } from "lucide-react";
 import { api, money } from "../lib/api";
 import { WhatsAppIcon } from "./BrandIcons";
+import { BundleBookDialog } from "./BundleBookDialog";
 
 const waLink = (b) => `https://wa.me/12424322587?text=${encodeURIComponent(`Hi Rox! I'd like to book the "${b.name}" deal (${money(b.bundle_price)}). Date: `)}`;
 
 const BundleCard = ({ b }) => {
+  const [open, setOpen] = useState(false);
   const save = Math.round(b.regular_price - b.bundle_price);
   return (
     <div className="relative rounded-2xl overflow-hidden bg-white border border-[#E2E8F0] flex flex-col hover:-translate-y-1 hover:shadow-[0_24px_50px_rgba(11,59,92,0.12)] transition-[transform,box-shadow]" data-testid={`bundle-card-${b.id}`}>
@@ -21,11 +23,16 @@ const BundleCard = ({ b }) => {
           <div>
             <div className="text-xs text-[#94a3b8] line-through">{money(b.regular_price)}</div>
             <div className="font-mono font-black text-2xl text-[#0B3B5C]" data-testid={`bundle-price-${b.id}`}>{money(b.bundle_price)}</div>
+            <div className="text-[10px] text-[#94a3b8]">+10% VAT</div>
           </div>
-          <a href={waLink(b)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-[#25D366] hover:bg-[#1fbe5b] text-white text-sm font-bold px-4 py-2.5 transition-colors" data-testid={`bundle-book-${b.id}`}>
-            <WhatsAppIcon className="w-4 h-4" /> Book this deal
-          </a>
+          <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-full bg-[#0B3B5C] hover:bg-[#082941] text-white text-sm font-bold px-4 py-2.5 transition-colors" data-testid={`bundle-book-${b.id}`}>
+            Book &amp; pay
+          </button>
         </div>
+        <a href={waLink(b)} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs text-[#64748B] hover:text-[#25D366]" data-testid={`bundle-whatsapp-${b.id}`}>
+          <WhatsAppIcon className="w-3.5 h-3.5" /> Questions? Ask on WhatsApp
+        </a>
+        {open && <BundleBookDialog bundle={b} onClose={() => setOpen(false)} />}
       </div>
     </div>
   );
