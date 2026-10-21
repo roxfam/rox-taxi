@@ -28,6 +28,7 @@ from pdf_utils import build_wedding_pdf, build_receipt_pdf
 from routes import payments as payments_module
 from routes import google_wallet as google_wallet_module
 from routes import casino_wait as casino_wait_module
+from routes import growth as growth_module
 from routes import gift_redeem as gift_redeem_module
 from routes import admin as admin_module
 from routes import catalog as catalog_module
@@ -1653,6 +1654,7 @@ async def seed_db():
     asyncio.create_task(dayof_module.dayof_loop())
     asyncio.create_task(welcome_email_module.reminder_loop())
     asyncio.create_task(gift_redeem_module.expiry_reminder_loop())
+    asyncio.create_task(growth_module.return_reminder_loop())
     asyncio.create_task(_scheduled_gift_loop())
     asyncio.create_task(arrival_module.arrival_loop())
     asyncio.create_task(cron_module.google_reviews_loop())
@@ -6696,6 +6698,8 @@ api_router.include_router(payments_module.router)
 google_wallet_module.configure(db=db)
 api_router.include_router(google_wallet_module.router)
 casino_wait_module.configure(db=db, public_base_url=os.environ.get("PUBLIC_SITE_URL") or None)
+growth_module.configure(db=db, require_admin=require_admin, public_base_url=os.environ.get("PUBLIC_SITE_URL") or None)
+api_router.include_router(growth_module.router)
 api_router.include_router(casino_wait_module.router)
 gift_redeem_module.configure(db=db, now_iso=now_iso, mark_paid=payments_module._mark_paid, require_admin=require_admin)
 api_router.include_router(gift_redeem_module.router)

@@ -18,6 +18,10 @@ import AttachRateCard from "./admin/AttachRateCard";
 import ReviewsInboxCard from "./admin/ReviewsInboxCard";
 import ReferralLeaderboardCard from "./admin/ReferralLeaderboardCard";
 import WeeklyReportCard from "./admin/WeeklyReportCard";
+import MonthlyReportCard from "./admin/MonthlyReportCard";
+import CruiseShipsCard from "./admin/CruiseShipsCard";
+import BundlesCard from "./admin/BundlesCard";
+import ReturnReminderCard from "./admin/ReturnReminderCard";
 import IncidentalModal from "./admin/IncidentalModal";
 import ZelleProofCard from "./admin/ZelleProofCard";
 import FlightEventsPanel from "./admin/FlightEventsPanel";
@@ -310,6 +314,10 @@ export default function AdminDashboard() {
         {/* Weekly sales & transactions rollup — same numbers as the
             Monday-morning owner email, on-demand from the dashboard. */}
         <WeeklyReportCard />
+        <MonthlyReportCard />
+        <CruiseShipsCard />
+        <BundlesCard />
+        <ReturnReminderCard />
 
         {/* Pending Zelle proof uploads — guests who sent a Zelle screenshot
             and are waiting for admin to Approve → mark paid or Reject.

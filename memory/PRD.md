@@ -836,3 +836,12 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Driver countdown beeps 3x (Web Audio) + vibrates once per end time when ≤10 min left; audio unlocked on first tap.
 
 
+
+## 2026-10-21 — Growth pack (routes/growth.py)
+- WhatsApp floating "Chat & book" button (+12424322587) on all customer pages (bottom-left).
+- Cruise ship schedule: admin CruiseShipsCard → /api/admin/cruise-ships; public /cruise-schedule page + home "Ships in port today" banner; footer link.
+- Bundle deals: admin BundlesCard (name, includes, regular/bundle price, show/hide) → /api/bundles; shown on home + cruise page; booking via prefilled WhatsApp.
+- Monthly admin report: /api/admin/analytics/monthly-report?month=YYYY-MM (revenue, by service, top tours, busiest days, casino wait income, repeat guests).
+- Return-trip reminder: one-way taxi guests texted N hours (default 3, admin setting) after pickup; once per booking; 5-min loop.
+- Known blocker: Twilio account inactive → no SMS currently delivered.
+

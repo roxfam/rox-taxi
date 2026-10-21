@@ -64,10 +64,12 @@ const TipLookup = lazy(() => import("./pages/TipLookup"));
 const MyBookingLookup = lazy(() => import("./pages/MyBookingLookup"));
 const GuestChat = lazy(() => import("./pages/GuestChat"));
 const CableBeachDay = lazy(() => import("./pages/CableBeachDay"));
+const CruiseSchedule = lazy(() => import("./pages/CruiseSchedule"));
 import { AuthProvider } from "./lib/auth";
 
 import { useVisitorBeacon } from "./hooks/useVisitorBeacon";
 import SummerBanner from "./components/SummerBanner";
+import { WhatsAppFloat } from "./components/WhatsAppFloat";
 import FacebookPixel from "./components/FacebookPixel";
 import SeoVerification from "./components/SeoVerification";
 
@@ -105,7 +107,7 @@ function ImageGuard() {
 }
 
 function CustomerShell({ children }) {
-  return <Layout><SummerBanner />{children}</Layout>;
+  return <Layout><SummerBanner />{children}<WhatsAppFloat /></Layout>;
 }
 
 function AppRouter() {
@@ -148,6 +150,7 @@ function AppRouter() {
       <Route path="/quote/:id" element={<CustomerShell><QuoteView /></CustomerShell>} />
       <Route path="/gift-cards/success" element={<CustomerShell><GiftCards /></CustomerShell>} />
       <Route path="/tip-topup" element={<CustomerShell><TipTopUp /></CustomerShell>} />
+      <Route path="/cruise-schedule" element={<CustomerShell><CruiseSchedule /></CustomerShell>} />
       <Route path="/casino-wait" element={<CustomerShell><CasinoWait /></CustomerShell>} />
       <Route path="/tip" element={<CustomerShell><TipLookup /></CustomerShell>} />
       <Route path="/my-booking" element={<CustomerShell><MyBookingLookup /></CustomerShell>} />
