@@ -229,6 +229,12 @@ async def _mark_paid(session_id: str, booking_id: Optional[str]):
             )
         except Exception as e:  # noqa: BLE001
             logging.warning("notify err: %s", e)
+        if booking.get("is_gift"):
+            try:
+                from routes.growth import send_bundle_gift  # noqa: PLC0415
+                await send_bundle_gift(booking)
+            except Exception as e:  # noqa: BLE001
+                logging.warning("bundle gift err: %s", e)
         # Owner SMS: "payment received" alert (independent of customer notify)
         try:
             from notifications import notify_owner_payment_received

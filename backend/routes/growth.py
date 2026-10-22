@@ -1,7 +1,10 @@
 """Cruise ship schedule, bundle deals, monthly admin report and return-trip reminder texts."""
 import asyncio
+import html
 import logging
+import re
 import uuid
+from urllib.parse import quote
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -169,10 +172,14 @@ class BundleBookIn(BaseModel):
     customer_name: str = Field(..., min_length=2, max_length=80)
     customer_email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$", max_length=120)
     customer_phone: str = Field(..., min_length=7, max_length=24)
-    booking_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    booking_date: str = Field("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
     pickup_location: str = Field("", max_length=120)
     cruise_ship: str = Field("", max_length=60)
     notes: str = Field("", max_length=500)
+    is_gift: bool = False
+    gift_recipient_name: str = Field("", max_length=80)
+    gift_recipient_email: str = Field("", max_length=120)
+    gift_message: str = Field("", max_length=400)
 
 
 @router.post("/bundles/{bid}/book")
@@ -180,14 +187,19 @@ async def book_bundle(bid: str, body: BundleBookIn):
     b = await _db.bundles.find_one({"id": bid, "active": True})
     if not b:
         raise HTTPException(404, "This deal is no longer available")
-    if body.booking_date < datetime.now(NASSAU).date().isoformat():
+    if body.is_gift:
+        if len(body.gift_recipient_name.strip()) < 2 or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", body.gift_recipient_email.strip()):
+            raise HTTPException(400, "Add the friend's name and a valid email")
+    elif not body.booking_date:
+        raise HTTPException(400, "Pick a date")
+    if body.booking_date and body.booking_date < datetime.now(NASSAU).date().isoformat():
         raise HTTPException(400, "Pick today or a future date")
     base = round(float(b["bundle_price"]), 2)
     vat = round(base * 0.10, 2)
     now = datetime.now(timezone.utc).isoformat()
     booking = {
         "id": "BND-" + uuid.uuid4().hex[:7].upper(), "service_type": "bundle", "item_id": b["id"], "item_name": b["name"],
-        "bundle_includes": b.get("includes") or [], **body.model_dump(), "booking_date": f"{body.booking_date}T09:00:00-05:00",
+        "bundle_includes": b.get("includes") or [], **body.model_dump(), "booking_date": f"{body.booking_date}T09:00:00-05:00" if body.booking_date else None,
         "passengers": 1, "price": base, "subtotal_before_tax": base, "vat_pct": 0.10, "vat_amount": vat,
         "total": round(base + vat, 2), "payment_method": "stripe", "payment_status": "pending",
         "status": "pending_payment", "created_at": now, "updated_at": now,
@@ -199,6 +211,36 @@ async def book_bundle(bid: str, body: BundleBookIn):
     except Exception as e:  # noqa: BLE001
         log.warning("bundle owner sms err: %s", e)
     return {"booking_id": booking["id"], "total": booking["total"], "vat_amount": vat}
+
+
+def _esc(s: str) -> str:
+    return html.escape(s or "").replace("\n", "<br>")
+
+
+async def send_bundle_gift(b: dict) -> bool:
+    """After payment: email the friend their gift (once)."""
+    claim = await _db.bookings.update_one({"id": b["id"], "is_gift": True, "gift_sent_at": None},
+                                          {"$set": {"gift_sent_at": datetime.now(timezone.utc).isoformat()}})
+    if not claim.modified_count:
+        return False
+    from notifications import send_email  # noqa: PLC0415
+    to, giver = b["gift_recipient_name"].split()[0], b.get("customer_name", "A friend")
+    items = "".join(f"<li style='margin:4px 0'>{_esc(i)}</li>" for i in b.get("bundle_includes") or [])
+    msg = f"<blockquote style='margin:20px 0;padding:16px 20px;background:#FBF7EF;border-left:4px solid #D4A94A;font-style:italic;color:#0B3B5C'>“{_esc(b.get('gift_message'))}”<br><span style='font-style:normal;font-size:13px;color:#64748B'>— {_esc(giver)}</span></blockquote>" if b.get("gift_message") else ""
+    when = f"<p>Planned date: <b>{b['booking_date'][:10]}</b></p>" if b.get("booking_date") else "<p>Choose any date that suits you — just message us to schedule.</p>"
+    body = (f"<div style='font-family:Georgia,serif;max-width:560px;margin:auto;color:#0B3B5C'>"
+            f"<p style='letter-spacing:3px;font-size:11px;color:#D4A94A;text-transform:uppercase'>A gift from {_esc(giver)}</p>"
+            f"<h1 style='font-size:30px;margin:8px 0'>Hi {_esc(to)}, you've been gifted {_esc(b['item_name'])}!</h1>{msg}"
+            f"<p style='font-family:Arial;font-size:14px'>What's included:</p><ul style='font-family:Arial;font-size:14px'>{items}</ul>"
+            f"<div style='font-family:Arial;font-size:14px'>{when}<p>Gift reference: <b>{b['id']}</b></p>"
+            f"<p><a href='https://wa.me/12424322587?text={quote('Hi Rox! I received gift ' + b['id'] + ' and want to schedule it.')}' "
+            f"style='display:inline-block;background:#25D366;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:bold'>Schedule on WhatsApp</a></p>"
+            f"<p style='color:#64748B'>Or call +1 242 432 2587. Rox Taxi &amp; Tours, Nassau, Bahamas.</p></div></div>")
+    try:
+        send_email(b["gift_recipient_email"], f"{giver} sent you a Bahamas gift: {b['item_name']}", body, category="confirmation")
+    except Exception as e:  # noqa: BLE001
+        log.warning("bundle gift email err: %s", e)
+    return True
 
 
 # ── Monthly report ───────────────────────────────────────────

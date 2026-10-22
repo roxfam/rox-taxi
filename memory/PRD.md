@@ -857,3 +857,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Taxi pickups < 60 min away (Nassau time): booking form shows TaxiTooSoonNotice (Call / WhatsApp +12424322587) and blocks submit; backend /api/bookings returns 400 too.
 
 
+
+## 2026-10-22 — Bundle gift option
+- Bundle dialog "For me / Send as a gift" toggle: friend's name, email, personal message; date optional for gifts (booking_date null).
+- After payment (_mark_paid in payments.py) → growth.send_bundle_gift emails the friend once (gift_sent_at claim): message, includes, gift ref, "Schedule on WhatsApp" button. HTML-escaped.
+
