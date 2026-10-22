@@ -1,7 +1,37 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Package, Trash2, Eye, EyeOff, Plus } from "lucide-react";
-import { api, money } from "../../lib/api";
+import { Package, Trash2, Eye, EyeOff, Plus, ImagePlus } from "lucide-react";
+import { api, money, BACKEND_URL } from "../../lib/api";
+
+const imgSrc = (u) => (u && u.startsWith("/api/") ? `${BACKEND_URL}${u}` : u);
+
+const PhotoPick = ({ url, onUrl, testid }) => {
+  const [busy, setBusy] = useState(false);
+  const pick = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const { data } = await api.post("/admin/bundles/upload", fd);
+      onUrl(data.url);
+      toast.success("Photo uploaded");
+    } catch (x) {
+      toast.error(x?.response?.data?.detail || "Upload failed");
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
+  };
+  return (
+    <label className="cursor-pointer inline-flex items-center gap-2 rounded-md border border-dashed border-[#0B3B5C]/30 px-3 py-1.5 text-xs font-semibold text-[#0B3B5C] hover:bg-[#FBF7EF]" data-testid={testid}>
+      {url ? <img src={imgSrc(url)} alt="" className="w-8 h-8 rounded object-cover" /> : <ImagePlus className="w-4 h-4" />}
+      {busy ? "Uploading…" : url ? "Change photo" : "Upload photo"}
+      <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={pick} data-testid={`${testid}-input`} />
+    </label>
+  );
+};
 
 const EMPTY = { name: "", description: "", includes: "", regular_price: "", bundle_price: "", image_url: "" };
 
@@ -35,7 +65,7 @@ export default function BundlesCard() {
         <div className="grid grid-cols-2 gap-2 content-start">
           <input type="number" step="0.01" min="1" placeholder="Regular price $" required value={form.regular_price} onChange={(e) => setForm({ ...form, regular_price: e.target.value })} className={inp} data-testid="bundle-input-regular" />
           <input type="number" step="0.01" min="1" placeholder="Bundle price $" required value={form.bundle_price} onChange={(e) => setForm({ ...form, bundle_price: e.target.value })} className={inp} data-testid="bundle-input-price" />
-          <input placeholder="Image URL (optional)" value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} className={`${inp} col-span-2`} data-testid="bundle-input-image" />
+          <div className="col-span-2"><PhotoPick url={form.image_url} onUrl={(u) => setForm((f) => ({ ...f, image_url: u }))} testid="bundle-photo-upload" /></div>
         </div>
         <button type="submit" className="md:col-span-2 inline-flex items-center justify-center gap-1 rounded-md bg-[#0B3B5C] text-white text-xs font-semibold px-3 py-2" data-testid="bundle-add-btn"><Plus className="w-3 h-3" /> Add bundle</button>
       </form>
@@ -44,7 +74,8 @@ export default function BundlesCard() {
         {list.map((b) => (
           <div key={b.id} className={`py-2 flex items-center justify-between text-sm ${b.active ? "" : "opacity-50"}`} data-testid={`admin-bundle-row-${b.id}`}>
             <div><b className="text-[#0B3B5C]">{b.name}</b> <span className="text-[#64748B]">· {money(b.bundle_price)} <s>{money(b.regular_price)}</s></span></div>
-            <div className="flex gap-1">
+            <div className="flex gap-1 items-center">
+              <PhotoPick url={b.image_url} onUrl={async (u) => { try { await api.put(`/admin/bundles/${b.id}`, payload({ ...b, image_url: u }, b.active)); load(); } catch (x) { err(x); } }} testid={`bundle-photo-${b.id}`} />
               <button onClick={() => toggle(b)} className="p-1 text-[#0B3B5C]" title={b.active ? "Hide" : "Show"} data-testid={`bundle-toggle-${b.id}`}>{b.active ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}</button>
               <button onClick={() => del(b.id)} className="p-1 text-[#DC2626]" aria-label="Delete bundle" data-testid={`bundle-delete-${b.id}`}><Trash2 className="w-4 h-4" /></button>
             </div>

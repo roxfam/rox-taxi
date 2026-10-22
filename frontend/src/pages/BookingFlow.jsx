@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle, HandCoins, Calendar, Lock } from "lucide-react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { api, money, BACKEND_URL } from "../lib/api";
+import { TaxiTooSoonNotice, minutesUntilNassau } from "../components/TaxiTooSoonNotice";
+import { CruiseShipPicker } from "../components/CruiseShipPicker";
 import { DateTimePicker } from "../components/DateTimePicker";
 import { PaymentBrandRow } from "../components/PaymentBrands";
 import { GiftCodeBox } from "../components/GiftCodeBox";
@@ -422,9 +424,15 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const payTotal = Math.max(0, total - discountAmt - giftAmt);
   const savings = discountAmt + giftAmt;
 
+  const taxiTooSoon = serviceType === "taxi" && (() => { const m = minutesUntilNassau(form.booking_date); return m !== null && m < 60; })();
+
   const submit = async () => {
     if (!form.customer_name || !form.customer_email || !form.customer_phone || !form.booking_date) {
       toast.error("Please fill in your name, email, phone and date.");
+      return;
+    }
+    if (taxiTooSoon) {
+      toast.error("Pickups less than 1 hour away can't be booked online. Please call or WhatsApp us.");
       return;
     }
     if (!form.passengers || Number(form.passengers) < 1) {
@@ -888,6 +896,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 </div>
               )}
 
+              {taxiTooSoon && <TaxiTooSoonNotice />}
+
               {["taxi", "rental"].includes(serviceType) && isClosedDate(form.booking_date, Number(form.days) || 1) && (
                 <div className="rounded-xl border border-[#E86A3C]/30 bg-[#E86A3C]/10 text-[#7a2d10] px-4 py-3 flex items-start gap-2 text-sm" data-testid="closed-saturday-warning">
                   <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-[#E86A3C]" />
@@ -1200,6 +1210,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   placeholder="e.g. Wonder of the Seas"
                   data-testid="booking-cruise-ship"
                 />
+                <CruiseShipPicker bookingDate={form.booking_date} value={form.cruise_ship} onPick={(n) => setForm((f) => ({ ...f, cruise_ship: n }))} />
               </div>
 
               <div>

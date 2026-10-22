@@ -2720,6 +2720,17 @@ async def create_booking(req: BookingCreate, request: Request):
                 raise
             except Exception:  # noqa: BLE001
                 pass
+    if req.service_type == "taxi" and req.booking_date:
+        try:
+            from zoneinfo import ZoneInfo
+            _bd = datetime.fromisoformat(req.booking_date.replace("Z", "+00:00"))
+            if _bd.tzinfo is None:
+                _bd = _bd.replace(tzinfo=ZoneInfo("America/Nassau"))
+            _too_soon = (_bd - datetime.now(timezone.utc)).total_seconds() < 3600
+        except ValueError:
+            _too_soon = False
+        if _too_soon:
+            raise HTTPException(400, "Pickups less than 1 hour away can't be booked online. Please call or WhatsApp us at +1 242 432 2587.")
     booking = req.model_dump()
     booking["id"] = str(uuid.uuid4())[:8].upper()
     booking["status"] = "pending_payment" if req.payment_method == "stripe" else "confirmed"

@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
 router = APIRouter()
@@ -141,6 +141,22 @@ async def update_bundle(bid: str, body: BundleIn, _=Depends(_admin)):
     if not res.matched_count:
         raise HTTPException(404, "Bundle not found")
     return {"id": bid, **body.model_dump()}
+
+
+@router.post("/admin/bundles/upload")
+async def upload_bundle_photo(file: UploadFile = File(...), _=Depends(_admin)):
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower()
+    ct = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}.get(ext)
+    if not ct:
+        raise HTTPException(400, "Use a JPG, PNG or WebP photo")
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Photo must be 10MB or smaller")
+    from storage import put_object  # noqa: PLC0415
+    name = f"bundle-{uuid.uuid4().hex[:10]}.{ext}"
+    if not put_object(name, content, ct):
+        raise HTTPException(503, "Storage unavailable, try again in a moment")
+    return {"url": f"/api/uploads/{name}"}
 
 
 @router.delete("/admin/bundles/{bid}")

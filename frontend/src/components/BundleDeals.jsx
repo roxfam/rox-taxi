@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, Package } from "lucide-react";
-import { api, money } from "../lib/api";
+import { api, money, BACKEND_URL } from "../lib/api";
 import { WhatsAppIcon } from "./BrandIcons";
 import { BundleBookDialog } from "./BundleBookDialog";
 
@@ -11,7 +11,7 @@ const BundleCard = ({ b }) => {
   const save = Math.round(b.regular_price - b.bundle_price);
   return (
     <div className="relative rounded-2xl overflow-hidden bg-white border border-[#E2E8F0] flex flex-col hover:-translate-y-1 hover:shadow-[0_24px_50px_rgba(11,59,92,0.12)] transition-[transform,box-shadow]" data-testid={`bundle-card-${b.id}`}>
-      {b.image_url && <img src={b.image_url} alt={b.name} className="h-40 w-full object-cover" loading="lazy" />}
+      {b.image_url && <img src={b.image_url.startsWith("/api/") ? `${BACKEND_URL}${b.image_url}` : b.image_url} alt={b.name} className="h-40 w-full object-cover" loading="lazy" />}
       <span className="absolute top-3 right-3 rounded-full bg-[#E86A3C] text-white text-[11px] font-black px-2.5 py-1" data-testid={`bundle-save-${b.id}`}>Save {money(save)}</span>
       <div className="p-5 flex-1 flex flex-col">
         <div className="serif text-xl text-[#0B3B5C]">{b.name}</div>

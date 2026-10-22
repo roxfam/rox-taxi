@@ -851,3 +851,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Optional "Cruise ship" field on booking form (cruise_ship). Adding a ship in admin texts past guests whose bookings list that ship (name-normalised; one text per phone per ship-day via ship_offers_sent).
 
 
+## 2026-10-22 — Ship picker, bundle photo upload, taxi 1-hour rule
+- CruiseShipPicker chips under booking "Cruise ship" box (ships listed on booking date, else today).
+- POST /api/admin/bundles/upload (object storage) → BundlesCard "Upload photo"/"Change photo".
+- Taxi pickups < 60 min away (Nassau time): booking form shows TaxiTooSoonNotice (Call / WhatsApp +12424322587) and blocks submit; backend /api/bookings returns 400 too.
+
+
