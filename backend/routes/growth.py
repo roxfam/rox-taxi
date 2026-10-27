@@ -1,7 +1,10 @@
 """Cruise ship schedule, bundle deals, monthly admin report and return-trip reminder texts."""
 import asyncio
+import hashlib
+import hmac
 import html
 import logging
+import os
 import re
 import uuid
 from urllib.parse import quote
@@ -180,6 +183,7 @@ class BundleBookIn(BaseModel):
     gift_recipient_name: str = Field("", max_length=80)
     gift_recipient_email: str = Field("", max_length=120)
     gift_message: str = Field("", max_length=400)
+    gift_send_on: str = Field("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
 
 
 @router.post("/bundles/{bid}/book")
@@ -194,6 +198,8 @@ async def book_bundle(bid: str, body: BundleBookIn):
         raise HTTPException(400, "Pick a date")
     if body.booking_date and body.booking_date < datetime.now(NASSAU).date().isoformat():
         raise HTTPException(400, "Pick today or a future date")
+    if body.gift_send_on and body.gift_send_on < datetime.now(NASSAU).date().isoformat():
+        raise HTTPException(400, "The gift email date must be today or later")
     base = round(float(b["bundle_price"]), 2)
     vat = round(base * 0.10, 2)
     now = datetime.now(timezone.utc).isoformat()
@@ -218,7 +224,9 @@ def _esc(s: str) -> str:
 
 
 async def send_bundle_gift(b: dict) -> bool:
-    """After payment: email the friend their gift (once)."""
+    """After payment (or on the chosen delivery day): email the friend their gift (once)."""
+    if b.get("gift_send_on") and b["gift_send_on"] > datetime.now(NASSAU).date().isoformat():
+        return False
     claim = await _db.bookings.update_one({"id": b["id"], "is_gift": True, "gift_sent_at": None},
                                           {"$set": {"gift_sent_at": datetime.now(timezone.utc).isoformat()}})
     if not claim.modified_count:
@@ -227,20 +235,87 @@ async def send_bundle_gift(b: dict) -> bool:
     to, giver = b["gift_recipient_name"].split()[0], b.get("customer_name", "A friend")
     items = "".join(f"<li style='margin:4px 0'>{_esc(i)}</li>" for i in b.get("bundle_includes") or [])
     msg = f"<blockquote style='margin:20px 0;padding:16px 20px;background:#FBF7EF;border-left:4px solid #D4A94A;font-style:italic;color:#0B3B5C'>“{_esc(b.get('gift_message'))}”<br><span style='font-style:normal;font-size:13px;color:#64748B'>— {_esc(giver)}</span></blockquote>" if b.get("gift_message") else ""
-    when = f"<p>Planned date: <b>{b['booking_date'][:10]}</b></p>" if b.get("booking_date") else "<p>Choose any date that suits you — just message us to schedule.</p>"
+    when = f"<p>Planned date: <b>{b['booking_date'][:10]}</b></p>" if b.get("booking_date") else "<p>Choose any date that suits you using the button below.</p>"
+    link = f"{_site}/gift-schedule?id={b['id']}&t={_gift_token(b['id'])}"
     body = (f"<div style='font-family:Georgia,serif;max-width:560px;margin:auto;color:#0B3B5C'>"
             f"<p style='letter-spacing:3px;font-size:11px;color:#D4A94A;text-transform:uppercase'>A gift from {_esc(giver)}</p>"
             f"<h1 style='font-size:30px;margin:8px 0'>Hi {_esc(to)}, you've been gifted {_esc(b['item_name'])}!</h1>{msg}"
             f"<p style='font-family:Arial;font-size:14px'>What's included:</p><ul style='font-family:Arial;font-size:14px'>{items}</ul>"
             f"<div style='font-family:Arial;font-size:14px'>{when}<p>Gift reference: <b>{b['id']}</b></p>"
-            f"<p><a href='https://wa.me/12424322587?text={quote('Hi Rox! I received gift ' + b['id'] + ' and want to schedule it.')}' "
-            f"style='display:inline-block;background:#25D366;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:bold'>Schedule on WhatsApp</a></p>"
+            f"<p><a href='{link}' style='display:inline-block;background:#0B3B5C;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:bold'>Pick your date &amp; pickup</a></p>"
+            f"<p><a href='https://wa.me/12424322587?text={quote('Hi Rox! I received gift ' + b['id'] + ' and have a question.')}' "
+            f"style='color:#25D366;font-weight:bold'>Questions? WhatsApp us</a></p>"
             f"<p style='color:#64748B'>Or call +1 242 432 2587. Rox Taxi &amp; Tours, Nassau, Bahamas.</p></div></div>")
     try:
         send_email(b["gift_recipient_email"], f"{giver} sent you a Bahamas gift: {b['item_name']}", body, category="confirmation")
     except Exception as e:  # noqa: BLE001
         log.warning("bundle gift email err: %s", e)
     return True
+
+
+def _gift_token(bid: str) -> str:
+    secret = (os.environ.get("BOOKING_LINK_SECRET") or os.environ.get("WEBHOOK_CRON_SECRET") or "rox-gift").strip()
+    return hmac.new(secret.encode(), f"bundle-gift:{bid}".encode(), hashlib.sha256).hexdigest()[:16]
+
+
+async def _gift(bid: str, t: str) -> dict:
+    if not hmac.compare_digest(_gift_token(bid), t or ""):
+        raise HTTPException(401, "This gift link isn't valid")
+    b = await _db.bookings.find_one({"id": bid, "is_gift": True, "payment_status": "paid"})
+    if not b:
+        raise HTTPException(404, "Gift not found")
+    return b
+
+
+def _gift_info(b: dict) -> dict:
+    return {"id": b["id"], "item_name": b.get("item_name"), "includes": b.get("bundle_includes") or [],
+            "from_name": b.get("customer_name"), "to_name": b.get("gift_recipient_name"), "message": b.get("gift_message"),
+            "booking_date": b.get("booking_date"), "pickup_location": b.get("pickup_location"),
+            "scheduled": bool(b.get("gift_scheduled_at"))}
+
+
+@router.get("/gifts/{bid}")
+async def gift_info(bid: str, t: str):
+    return _gift_info(await _gift(bid, t))
+
+
+class GiftScheduleIn(BaseModel):
+    t: str
+    date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    time: str = Field(..., pattern=r"^\d{2}:\d{2}$")
+    pickup_location: str = Field(..., min_length=2, max_length=120)
+    phone: str = Field(..., min_length=7, max_length=24)
+    cruise_ship: str = Field("", max_length=60)
+
+
+@router.post("/gifts/{bid}/schedule")
+async def gift_schedule(bid: str, body: GiftScheduleIn):
+    b = await _gift(bid, body.t)
+    if b.get("gift_scheduled_at"):
+        raise HTTPException(400, "Already scheduled — message us on WhatsApp to change it")
+    if body.date < datetime.now(NASSAU).date().isoformat():
+        raise HTTPException(400, "Pick today or a future date")
+    upd = {"booking_date": f"{body.date}T{body.time}:00-05:00", "pickup_location": body.pickup_location,
+           "gift_recipient_phone": body.phone, "cruise_ship": body.cruise_ship or b.get("cruise_ship", ""),
+           "gift_scheduled_at": datetime.now(timezone.utc).isoformat()}
+    await _db.bookings.update_one({"id": b["id"]}, {"$set": upd})
+    try:
+        from notifications import send_owner_sms  # noqa: PLC0415
+        send_owner_sms(f"Rox: gift {b['id']} ({b.get('item_name')}) scheduled by {b.get('gift_recipient_name')} for {body.date} {body.time}, pickup {body.pickup_location}, phone {body.phone}.")
+    except Exception as e:  # noqa: BLE001
+        log.warning("gift schedule sms err: %s", e)
+    return _gift_info({**b, **upd})
+
+
+async def send_due_gifts() -> int:
+    now = datetime.now(NASSAU)
+    if now.hour < 8:
+        return 0
+    n = 0
+    async for b in _db.bookings.find({"is_gift": True, "payment_status": "paid", "gift_sent_at": None,
+                                       "gift_send_on": {"$lte": now.date().isoformat(), "$nin": [None, ""]}}).limit(50):
+        n += int(await send_bundle_gift(b))
+    return n
 
 
 # ── Monthly report ───────────────────────────────────────────
@@ -359,6 +434,7 @@ async def return_reminder_loop():
     while True:
         try:
             await send_due_return_reminders()
+            await send_due_gifts()
         except Exception as e:  # noqa: BLE001
             log.warning("return reminder loop err: %s", e)
         await asyncio.sleep(300)

@@ -65,6 +65,7 @@ const MyBookingLookup = lazy(() => import("./pages/MyBookingLookup"));
 const GuestChat = lazy(() => import("./pages/GuestChat"));
 const CableBeachDay = lazy(() => import("./pages/CableBeachDay"));
 const CruiseSchedule = lazy(() => import("./pages/CruiseSchedule"));
+const GiftSchedule = lazy(() => import("./pages/GiftSchedule"));
 import { AuthProvider } from "./lib/auth";
 
 import { useVisitorBeacon } from "./hooks/useVisitorBeacon";
@@ -149,6 +150,7 @@ function AppRouter() {
       <Route path="/quote/:id" element={<CustomerShell><QuoteView /></CustomerShell>} />
       <Route path="/gift-cards/success" element={<CustomerShell><GiftCards /></CustomerShell>} />
       <Route path="/tip-topup" element={<CustomerShell><TipTopUp /></CustomerShell>} />
+      <Route path="/gift-schedule" element={<CustomerShell><GiftSchedule /></CustomerShell>} />
       <Route path="/cruise-schedule" element={<CustomerShell><CruiseSchedule /></CustomerShell>} />
       <Route path="/casino-wait" element={<CustomerShell><CasinoWait /></CustomerShell>} />
       <Route path="/tip" element={<CustomerShell><TipLookup /></CustomerShell>} />

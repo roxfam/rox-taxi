@@ -862,3 +862,13 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Bundle dialog "For me / Send as a gift" toggle: friend's name, email, personal message; date optional for gifts (booking_date null).
 - After payment (_mark_paid in payments.py) → growth.send_bundle_gift emails the friend once (gift_sent_at claim): message, includes, gift ref, "Schedule on WhatsApp" button. HTML-escaped.
 
+
+
+## 2026-10-27 — Gift scheduling, gift delivery date, Humes House route
+- Gift email has "Pick your date & pickup" link → /gift-schedule?id=&t= (HMAC token). GET /api/gifts/{id}, POST /api/gifts/{id}/schedule (once; owner SMS).
+- Buyer can set gift_send_on; email held until 8 AM Nassau that day (send_due_gifts in return_reminder_loop).
+- New taxi route humes-hillcrest-airport: Humes House / Hillcrest ↔ LPIA $45 first 2 guests, +$5 extra, standard luggage policy, airport add-ons; location tag "hillcrest".
+
+## 2026-10-27 — Daily Google review rotation
+- GET /api/reviews now loads all active 4★/5★ reviews and shuffles them with a Nassau-date seed (same order all day, new mix daily); returns rotation_day. Hourly Google sync unchanged (Places API returns max 5 per call, pool grows over time).
+

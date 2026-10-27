@@ -148,7 +148,7 @@ async def list_reviews(limit: int = 60):
     every 8-second rotation shows a fresh face.
     """
     limit = max(3, min(int(limit or 60), 200))
-    docs = await _db.reviews.find({"active": {"$ne": False}, "rating": {"$gte": 4}}).sort("created_at", -1).to_list(limit)
+    docs = await _db.reviews.find({"active": {"$ne": False}, "rating": {"$gte": 4}}).sort("created_at", -1).to_list(500)
     reviews = [_clean(d) for d in docs]
     if not reviews:
         return {
@@ -158,16 +158,19 @@ async def list_reviews(limit: int = 60):
             "source": "Google",
             "reviews": [],
         }
-    # Sort tagged reviews first while preserving each subset's order
-    tagged = [r for r in reviews if r.get("driver_tags")]
-    untagged = [r for r in reviews if not r.get("driver_tags")]
-    reviews = tagged + untagged
+    # Daily rotation: same order all day (Nassau date), a fresh mix of 4★/5★ reviews each day.
+    import random  # noqa: PLC0415
+    from datetime import datetime, timedelta, timezone  # noqa: PLC0415
+    day = datetime.now(timezone(timedelta(hours=-5))).date().isoformat()
+    random.Random(day).shuffle(reviews)
+    reviews = reviews[:limit]
     avg = sum(int(r.get("rating") or 0) for r in reviews) / len(reviews)
     return {
         "place": "Rox Taxi Service & Tours",
         "rating": round(avg, 1),
         "total": len(reviews),
         "source": "Google",
+        "rotation_day": day,
         "reviews": reviews,
     }
 

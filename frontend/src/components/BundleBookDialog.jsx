@@ -23,7 +23,7 @@ const lbl = "block text-[11px] uppercase tracking-[.16em] text-[#64748B] font-se
 
 export const BundleBookDialog = ({ bundle, onClose }) => {
   const nav = useNavigate();
-  const [form, setForm] = useState({ customer_name: "", customer_email: "", customer_phone: "", booking_date: "", pickup_location: "", cruise_ship: "", notes: "", is_gift: false, gift_recipient_name: "", gift_recipient_email: "", gift_message: "" });
+  const [form, setForm] = useState({ customer_name: "", customer_email: "", customer_phone: "", booking_date: "", pickup_location: "", cruise_ship: "", notes: "", is_gift: false, gift_recipient_name: "", gift_recipient_email: "", gift_message: "", gift_send_on: "" });
   const [busy, setBusy] = useState(false);
   const vat = Math.round(bundle.bundle_price * 10) / 100;
   const gift = form.is_gift;
@@ -67,7 +67,8 @@ export const BundleBookDialog = ({ bundle, onClose }) => {
                 <textarea rows={3} maxLength={400} value={form.gift_message} onChange={(e) => setForm({ ...form, gift_message: e.target.value })}
                   placeholder="Happy birthday! Enjoy the island…" className={inp} data-testid="bundle-book-gift_message" />
               </label>
-              <p className="text-[11px] text-[#64748B]">We email your friend their gift and message as soon as payment goes through.</p>
+              {field(["gift_send_on", "Email it on (optional, e.g. their birthday)", "date", false])}
+              <p className="text-[11px] text-[#64748B]">{form.gift_send_on ? "We'll email your friend their gift and message at 8 AM Nassau time on that day, with a link to pick their date and pickup." : "We email your friend their gift and message as soon as payment goes through, with a link to pick their date and pickup."}</p>
             </div>
           )}
           {field(["booking_date", gift ? "Date (optional, they can choose later)" : "Date", "date", !gift])}

@@ -2032,6 +2032,7 @@ TAXI_LOCATIONS = [
     {"tag": "compass",      "label": "Compass Point / West Bay",          "keywords": ["compass point", "west bay"]},
     {"tag": "junkanoo",     "label": "Junkanoo Beach",                    "keywords": ["junkanoo"]},
     {"tag": "love_beach",   "label": "Love Beach",                        "keywords": ["love beach"]},
+    {"tag": "hillcrest",    "label": "Humes House / Hillcrest",           "keywords": ["humes house", "hillcrest"]},
     {"tag": "cabbage_beach","label": "Cabbage Beach",                     "keywords": ["cabbage"]},
     {"tag": "any_hotel",    "label": "My Nassau hotel (any)",             "keywords": ["any nassau hotel", "hotel"]},
 ]
