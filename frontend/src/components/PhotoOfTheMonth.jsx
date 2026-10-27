@@ -16,7 +16,7 @@ export const PhotoOfTheMonth = () => {
     <div className="max-w-7xl mx-auto px-6 lg:px-10 mb-8" data-testid="photo-of-month">
       <div className="grid md:grid-cols-[1.3fr_1fr] rounded-3xl overflow-hidden bg-[#0B192C] text-white shadow-[0_20px_50px_rgba(11,25,44,0.25)]">
         <div className="relative aspect-[4/3] md:aspect-auto md:min-h-[320px] overflow-hidden">
-          <img src={resolveUrl(p.url)} alt={p.caption || "Photo of the Month"} className="w-full h-full object-cover" data-testid="photo-of-month-image" />
+          <img src={resolveUrl(p.url)} alt={p.caption || "Photo of the Month"} loading="lazy" decoding="async" className="w-full h-full object-cover" data-testid="photo-of-month-image" />
         </div>
         <div className="p-8 flex flex-col justify-center">
           <div className="inline-flex items-center gap-2 text-[10px] tracking-[0.3em] uppercase font-black text-[#D4A94A]"><Award className="w-4 h-4" /> Photo of the Month</div>

@@ -86,7 +86,7 @@ export default function HomeHeroCarousel({ children, className = "", intervalMs 
             scale: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
           }}
           style={{
-            backgroundImage: `url(${cdn(slide.image_url, { w: 1600 })})`,
+            backgroundImage: `url(${cdn(slide.image_url, { w: 1600 })}), url(${cdn(slide.image_url, { w: 48 })})`,
             transformOrigin: i % 2 === 0 ? "center 40%" : "60% 55%",
             filter: "brightness(1.14) contrast(1.22) saturate(1.20)",
             backgroundSize: slide.id === "hero-ardastra" ? "contain" : "cover",

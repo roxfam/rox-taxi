@@ -897,6 +897,13 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Reserve box click tracking: each highlight links to ?book=<id>; POST /api/quickbook-click (daily buckets in quickbook_clicks); admin GET /api/admin/quickbook-clicks → "Most tapped in the last 30 days" in QuickbookSettingsCard with "+ Top pick".
 - Reserve box pauses on touch/scroll (touchstart/move), resumes 5s after finger lifts; mouse hover pause uses pointerType=mouse only.
 - Gift cards: VAT removed; buyer now pays card value + 5% processing fee (e.g. $100 card → $105), balance stays at card value. Backend /api/gift-cards/purchase + GiftCards.jsx breakdown updated.
+- Speed/UX pass (2026-10-27): mobile Home shortened ~17.8k→13.4k px via MobileMore ("See more" collapses dolphin+packages, gift/groups/how-it-works, guest wall on <md; content stays in DOM); eager images 18→8 (loading=lazy/decoding=async); cable-beach-hero.jpg 819→289KB, love-beach.jpg 512→233KB; hero shows tiny blurred preview layer first; trimmed font weights; mobile sticky bar (Taxi · Tours · Call) replaces "Book Now" pill.
+- Pending user: Twilio account inactive (re-requested TWILIO keys); Stripe webhook secret missing on live server.
+- Welcome banner: static short line "Save 10% on your next ride · Sign up" (no marquee).
+- Google reviews: /api/reviews returns write_review_url; GoogleReviews shows "Rode with us? Leave a review" button. Note: Google API only returns 5 reviews per call (relevant + newest already synced); owner can add other reviews manually in admin Reviews.
+- Spanish page /es (SpanishHome.jsx): Spanish hero, why-us, live airport/cruise/Atlantis fares, tours, cruise CTA, FAQ, WhatsApp/call CTAs; html lang=es; hreflang es + sitemap + footer link. Booking flow itself still English.
+
+
 
 
 

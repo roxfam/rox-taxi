@@ -88,6 +88,11 @@ export default function GoogleReviews() {
                 ))}
               </div>
               <div className="text-xs text-[#64748B] mt-1">{data.total}+ reviews on Google</div>
+              {data.write_review_url && (
+                <a href={data.write_review_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#0B3B5C] text-white text-[11px] font-bold px-3 py-1.5 hover:bg-[#D4A94A] hover:text-[#0B3B5C] transition-colors" data-testid="google-write-review-btn">
+                  <Star className="w-3 h-3 fill-current" /> Rode with us? Leave a review
+                </a>
+              )}
             </div>
             <div className="w-14 h-14 rounded-full bg-white border border-[#E2E8F0] flex items-center justify-center shadow-sm">
               <GoogleG size={26} />
@@ -132,7 +137,7 @@ export default function GoogleReviews() {
                   )}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <img src={r.profile_photo_url} alt={r.author_name} className="w-10 h-10 rounded-full border border-[#E2E8F0]" />
+                      <img src={r.profile_photo_url} alt={r.author_name} loading="lazy" decoding="async" className="w-10 h-10 rounded-full border border-[#E2E8F0]" />
                       <div>
                         <div className="text-sm font-semibold text-[#0B3B5C]">{r.author_name}</div>
                         <div className="text-xs text-[#64748B]">{r.relative_time}</div>

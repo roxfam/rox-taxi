@@ -171,6 +171,7 @@ async def list_reviews(limit: int = 60):
         "total": len(reviews),
         "source": "Google",
         "rotation_day": day,
+        "write_review_url": __import__("os").environ.get("GOOGLE_REVIEW_URL") or "https://g.page/r/CYy0V1JN5XwtEAI/review",
         "reviews": reviews,
     }
 

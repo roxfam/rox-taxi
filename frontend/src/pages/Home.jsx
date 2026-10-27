@@ -11,6 +11,7 @@ import { LoveBeachPick } from "../components/LoveBeachPick";
 import { BundleDeals } from "../components/BundleDeals";
 import { CruiseTodayStrip } from "../components/CruiseTodayStrip";
 import { SeoContentBlock } from "../components/SeoContentBlock";
+import { MobileMore } from "../components/MobileMore";
 import GoogleReviews from "../components/GoogleReviews";
 import HomeHeroCarousel from "../components/HomeHeroCarousel";
 import QuickBookWidget from "../components/QuickBookWidget";
@@ -124,10 +125,13 @@ export default function Home() {
       <BundleDeals className="max-w-7xl mx-auto px-6 lg:px-10 py-12" />
 
       {/* DOLPHIN SWIM FEATURE — direct link to Blue Lagoon operator */}
+      <MobileMore id="dolphin" label="More deals: dolphins & packages">
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-12" data-testid="home-dolphin-swim">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B3B5C] via-[#0B3B5C] to-[#0B192C] text-white group">
           <div className="absolute inset-0 opacity-30">
             <img
+              loading="lazy"
+              decoding="async"
               src="https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/pewidk7h_medium.jpg"
               alt="Swim with dolphins at Blue Lagoon Island, Bahamas"
               loading="lazy"
@@ -189,6 +193,7 @@ export default function Home() {
 
       {/* PACKAGE DEALS — bundle & save strip (auto-hides if no active packages) */}
       <PackagesStrip variant="home" />
+      </MobileMore>
 
       {/* FEATURED TOURS */}
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24" data-testid="featured-tours">
@@ -237,6 +242,8 @@ export default function Home() {
             >
               <div className="aspect-[4/5] overflow-hidden">
                 <img
+                  loading="lazy"
+                  decoding="async"
                   src={cdn(t.image_url, { w: 800 })}
                   srcSet={cdnSrcSet(t.image_url, [400, 800, 1200])}
                   sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
@@ -265,6 +272,7 @@ export default function Home() {
         </div>
       </section>
 
+      <MobileMore id="groups" label="Gift cards, groups & how it works">
       <GiftCardPromo />
 
       {/* GROUP & WEDDING CTA */}
@@ -342,6 +350,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      </MobileMore>
 
       <SeoContentBlock />
 
@@ -350,7 +359,9 @@ export default function Home() {
       <GuestPhotoMarquee />
 
       {/* FEATURED GUEST WALL — pinned guest photos surfaced site-wide */}
-      <FeaturedGuestWall />
+      <MobileMore id="guest-wall" label="More guest photos">
+        <FeaturedGuestWall />
+      </MobileMore>
     </div>
   );
 }
@@ -643,6 +654,8 @@ function CableBeachHomePromo() {
                   <source media="(max-width: 640px)" srcSet={s.src_mobile} type="image/webp" />
                 )}
                 <img
+                  loading="lazy"
+                  decoding="async"
                   src={s.src}
                   alt={s.alt || "Cable Beach photo"}
                   loading={i === 0 ? "eager" : "lazy"}

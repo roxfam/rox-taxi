@@ -728,6 +728,7 @@ export default function Layout({ children }) {
               <ul className="space-y-3 text-sm">
                 <li><Link to="/taxi" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Airport &amp; City Taxi</Link></li>
                 <li><Link to="/cruise-schedule" data-testid="footer-cruise-schedule-link" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Cruise Ship Schedule</Link></li>
+                <li><Link to="/es" hrefLang="es" data-testid="footer-spanish-link" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Español — Taxi en Nassau</Link></li>
                 <li><Link to="/tours" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Tours &amp; Excursions</Link></li>
                 <li><Link to="/rentals" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Car Rentals</Link></li>
                 <li><Link to="/track" className="group inline-flex items-center gap-2 text-white/60 hover:text-[#D4A94A] transition-colors"><span className="w-0 group-hover:w-4 h-[1px] bg-[#D4A94A] transition-all" />Track a Booking</Link></li>
@@ -879,23 +880,25 @@ function StickyMobileBookNow({ open, pathname }) {
     <>
       <AnimatePresence>
         {scrolled && (
-          <motion.button
-            initial={{ y: 96, opacity: 0, scale: 0.9 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 96, opacity: 0, scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 320, damping: 26 }}
-            onClick={() => setShowBook(true)}
-            className="lg:hidden fixed bottom-5 right-5 z-[70] inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#E86A3C] to-[#d55a30] text-white pl-4 pr-5 py-3.5 text-sm font-bold shadow-[0_18px_40px_rgba(232,106,60,0.45)] hover:shadow-[0_20px_45px_rgba(232,106,60,0.55)] active:scale-95 transition-all"
-            data-testid="mobile-sticky-book-now"
-            aria-label="Book a ride now"
+          <motion.nav
+            initial={{ y: 96, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 96, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 320, damping: 30 }}
+            className="lg:hidden fixed bottom-3 left-3 right-[92px] z-[70] grid grid-cols-3 rounded-full bg-[#0B192C]/95 backdrop-blur-md border border-white/10 shadow-[0_18px_40px_rgba(11,25,44,0.45)] overflow-hidden"
+            data-testid="mobile-sticky-book-bar"
+            aria-label="Quick booking"
           >
-            <span className="relative flex w-2 h-2">
-              <span className="absolute inset-0 rounded-full bg-white/80 animate-ping" />
-              <span className="relative w-2 h-2 rounded-full bg-white" />
-            </span>
-            Book Now
-            <ChevronDown className="w-4 h-4 -rotate-90" />
-          </motion.button>
+            <Link to="/taxi" className="flex flex-col items-center justify-center py-2.5 text-white text-[11px] font-bold active:bg-white/10 transition-colors" data-testid="mobile-bar-taxi">
+              <Car className="w-4 h-4 text-[#D4A94A] mb-0.5" /> Taxi
+            </Link>
+            <Link to="/tours" className="flex flex-col items-center justify-center py-2.5 text-white text-[11px] font-bold border-x border-white/10 active:bg-white/10 transition-colors" data-testid="mobile-bar-tours">
+              <ShipWheel className="w-4 h-4 text-[#D4A94A] mb-0.5" /> Tours
+            </Link>
+            <a href="tel:+12424322587" className="flex flex-col items-center justify-center py-2.5 bg-[#E86A3C] text-white text-[11px] font-bold active:bg-[#d55a30] transition-colors" data-testid="mobile-bar-call">
+              <Phone className="w-4 h-4 mb-0.5" /> Call
+            </a>
+          </motion.nav>
         )}
       </AnimatePresence>
 

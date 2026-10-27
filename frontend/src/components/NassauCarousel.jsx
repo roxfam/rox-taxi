@@ -147,6 +147,8 @@ export default function BahamasSlider() {
               className={`shrink-0 w-40 sm:w-48 h-24 rounded-xl overflow-hidden relative group transition-transform ${idx === i ? "ring-2 ring-[#D4A94A]" : "opacity-70 hover:opacity-100"}`}
             >
               <img
+                loading="lazy"
+                decoding="async"
                 src={s.img}
                 alt={s.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"

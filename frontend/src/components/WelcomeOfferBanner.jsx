@@ -5,24 +5,16 @@ import { useAuth } from "../lib/auth";
 
 const KEY = "rox_welcome_banner_dismissed";
 
-const Message = ({ hidden }) => (
-  <span className="inline-flex items-center gap-3 px-8 whitespace-nowrap" aria-hidden={hidden || undefined}>
-    <Gift className="w-4 h-4 shrink-0" />
-    <span className="font-semibold">Special offer: save 10% on your next ride when you sign up — limited-time offer.</span>
-    <Link to="/signup" tabIndex={hidden ? -1 : undefined} className="underline font-bold hover:opacity-80" data-testid={hidden ? undefined : "welcome-offer-signup-link"}>Sign up</Link>
-  </span>
-);
-
 export default function WelcomeOfferBanner() {
   const { user, loading } = useAuth();
   const [hidden, setHidden] = useState(() => localStorage.getItem(KEY) === "1");
   if (loading || user || hidden) return null;
   return (
     <div className="bg-[#E86A3C] text-white text-xs sm:text-sm flex items-center" data-testid="welcome-offer-banner">
-      <div className="promo-marquee flex-1 overflow-hidden py-2">
-        <div className="promo-marquee-track welcome-marquee-slow inline-flex">
-          <Message /><Message hidden /><Message hidden /><Message hidden />
-        </div>
+      <div className="flex-1 py-2 px-3 flex items-center justify-center gap-2 text-center">
+        <Gift className="w-4 h-4 shrink-0" />
+        <span className="font-semibold">Save 10% on your next ride</span>
+        <Link to="/signup" className="underline font-bold hover:opacity-80 whitespace-nowrap" data-testid="welcome-offer-signup-link">Sign up</Link>
       </div>
       <button
         type="button"
