@@ -389,7 +389,7 @@ export default function ChatWidget() {
           data-visit-count={visitCount}
           aria-label={isWarmLead ? "Chat with us — welcome back" : "Chat with us"}
           title={isWarmLead ? "Welcome back — chat with us" : "Chat with us"}
-          className="group relative"
+          className="group relative chat-fab-btn"
         >
           <span className={`absolute inset-0 rounded-full bg-[#D4A94A]/40 ${(unread || nudged) && !open ? "animate-ping" : ""}`} />
           {/* Warm-lead amber glow — soft outer halo that fades in/out over

@@ -887,4 +887,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Top welcome-offer banner scroll (.welcome-marquee-slow) 60s → 40s.
 
 - Chat button (ChatWidget chat-fab): hover/focus shows rotating gold conic halo (.chat-fab-halo), soft gold bloom, brighter ring + glow shadow.
+- Chat button hover glow rebuilt in plain CSS (.chat-fab-btn: pulsing gold box-shadow) — Tailwind arbitrary shadow wasn't visible.
+- New taxi route downtown-airport: Downtown Nassau → LPIA $40 (mirrors LPIA → Downtown), airport add-ons.
+- "Humes House @ Hillcrest" added to Taxi page destination cards + pickup/drop-off dropdown; location label renamed.
+- Home QuickBookWidget: live taxi routes / tours / rentals from API, shuffled per visitor session (sessionStorage qb_seed), shows 4 at a time, auto-rotates every 10s (pauses on hover), "Show more options" button; "from $" computed from live prices.
+
+
 

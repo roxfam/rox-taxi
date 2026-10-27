@@ -244,6 +244,18 @@ img:not(.allow-save) {
 @keyframes chat-halo-spin {
     to { transform: rotate(360deg); }
 }
+.chat-fab-btn > span.relative {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.chat-fab-btn:hover > span.relative,
+.chat-fab-btn:focus-visible > span.relative {
+    box-shadow: 0 0 0 3px #F5E1A4, 0 0 22px 8px rgba(245, 225, 164, 0.85), 0 0 60px 22px rgba(212, 169, 74, 0.55);
+    animation: chat-fab-pulse 1.6s ease-in-out infinite;
+}
+@keyframes chat-fab-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px #F5E1A4, 0 0 18px 6px rgba(245, 225, 164, 0.75), 0 0 46px 16px rgba(212, 169, 74, 0.45); }
+    50% { box-shadow: 0 0 0 3px #fff8e1, 0 0 30px 12px rgba(245, 225, 164, 0.95), 0 0 80px 30px rgba(212, 169, 74, 0.65); }
+}
 .guest-photo-marquee {
     animation-duration: 90s;
 }

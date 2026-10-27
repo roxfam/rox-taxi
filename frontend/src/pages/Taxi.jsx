@@ -25,6 +25,7 @@ const NASSAU_DESTINATIONS = [
   { name: "British Colonial Hilton",          area: "Downtown Nassau",          match: "downtown",            Icon: Hotel },
   { name: "Junkanoo Beach",                   area: "West Bay Street",          match: "cable beach",         Icon: Palmtree },
   { name: "Love Beach",                       area: "West Nassau",              match: "love beach",          Icon: Palmtree },
+  { name: "Humes House @ Hillcrest",          area: "Airport transfer",         match: "humes house",         Icon: Hotel },
   { name: "Sandy Toes / Rose Island",         area: "Boat departure · Marina",  match: "hourly",              Icon: Anchor },
   { name: "Custom stop — pick anywhere",      area: "Hourly charter",           match: "hourly",              Icon: MapPin },
 ];
@@ -43,6 +44,7 @@ const LOCATION_OPTIONS = [
   "Paradise Island Beach",
   "Junkanoo Beach",
   "Love Beach",
+  "Humes House @ Hillcrest",
   "Fish Fry — Arawak Cay",
   "Sandy Toes / Rose Island",
 ];

@@ -1,7 +1,47 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Car, ShipWheel, MapPinned, ArrowRight, Check } from "lucide-react";
+import { Car, ShipWheel, MapPinned, ArrowRight, Check, Shuffle } from "lucide-react";
+import { api } from "../lib/api";
+
+const SHOW = 4;
+const ROTATE_MS = 10000;
+const $ = (n) => `$${Number(n).toFixed(Number(n) % 1 ? 2 : 0)}`;
+
+// Per-visit seed: every new session sees a different mix; stable while they browse.
+const sessionSeed = () => {
+  try {
+    let s = sessionStorage.getItem("qb_seed");
+    if (!s) { s = String(Math.floor(Math.random() * 1e9)); sessionStorage.setItem("qb_seed", s); }
+    return Number(s);
+  } catch { return Math.floor(Math.random() * 1e9); }
+};
+const shuffled = (arr, seed) => {
+  const a = [...arr];
+  let s = seed || 1;
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (s * 9301 + 49297) % 233280;
+    const j = Math.floor((s / 233280) * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+// Live catalog → highlight lines for each tab.
+const useLiveHighlights = () => {
+  const [live, setLive] = useState({});
+  useEffect(() => {
+    const seed = sessionSeed();
+    const ok = (x) => x.active !== false && Number(x.price) > 0;
+    Promise.allSettled([api.get("/taxi-services"), api.get("/tours"), api.get("/rentals")]).then(([t, tr, r]) => {
+      const taxi = (t.value?.data || []).filter((x) => ok(x) && /→|↔/.test(x.name)).map((x) => ({ line: `${x.name} ${$(x.price)}`, price: x.price }));
+      const tours = (tr.value?.data || []).filter(ok).map((x) => ({ line: `${x.name} · ${$(x.price)} pp`, price: x.price }));
+      const rentals = (r.value?.data || []).filter(ok).map((x) => ({ line: `${x.name} · ${$(x.price)}/day`, price: x.price }));
+      setLive({ taxi: shuffled(taxi, seed), tours: shuffled(tours, seed + 7), rentals: shuffled(rentals, seed + 13) });
+    });
+  }, []);
+  return live;
+};
 
 // Modern tabbed booking widget for the home hero.
 // Segmented control with an animated pill background (framer-motion layoutId)
@@ -72,6 +112,22 @@ const TABS = [
 export default function QuickBookWidget() {
   const [activeKey, setActiveKey] = useState("taxi");
   const active = TABS.find((t) => t.key === activeKey);
+  const live = useLiveHighlights();
+  const [page, setPage] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const pool = live[activeKey] || [];
+  useEffect(() => { setPage(0); }, [activeKey]);
+  useEffect(() => {
+    if (paused || pool.length <= SHOW) return undefined;
+    const id = setInterval(() => setPage((p) => p + 1), ROTATE_MS);
+    return () => clearInterval(id);
+  }, [paused, pool.length]);
+  const highlights = useMemo(() => {
+    if (!pool.length) return active.highlights;
+    const start = (page * SHOW) % pool.length;
+    return Array.from({ length: Math.min(SHOW, pool.length) }, (_, i) => pool[(start + i) % pool.length].line);
+  }, [pool, page, active]);
+  const fromPrice = pool.length ? `from ${$(Math.min(...pool.map((x) => Number(x.price))))}` : active.price;
 
   return (
     <div
@@ -80,6 +136,8 @@ export default function QuickBookWidget() {
         background: "linear-gradient(155deg, rgba(255,255,255,0.98) 0%, rgba(251,247,239,0.96) 100%)",
       }}
       data-testid="quickbook-widget"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
     >
       {/* subtle top accent bar */}
       <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, transparent, ${active.accent}, transparent)` }} />
@@ -141,8 +199,10 @@ export default function QuickBookWidget() {
             </h3>
             <p className="text-[13px] text-[#64748B] leading-relaxed mt-3 max-w-md">{active.pitch}</p>
 
-            <ul className="mt-5 space-y-2">
-              {active.highlights.map((h) => (
+            <AnimatePresence mode="wait">
+            <motion.ul key={`${activeKey}-${page}`} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3 }}
+              className="mt-5 space-y-2 min-h-[112px]" data-testid={`quickbook-highlights-${active.key}`}>
+              {highlights.map((h) => (
                 <li key={h} className="flex items-start gap-2.5 text-sm text-[#0B3B5C]">
                   <span className="mt-1 w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ background: active.accentSoft, color: active.accent }}>
                     <Check className="w-2.5 h-2.5" strokeWidth={3} />
@@ -150,7 +210,13 @@ export default function QuickBookWidget() {
                   <span className="leading-snug">{h}</span>
                 </li>
               ))}
-            </ul>
+            </motion.ul>
+            </AnimatePresence>
+            {pool.length > SHOW && (
+              <button type="button" onClick={() => setPage((p) => p + 1)} className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider hover:opacity-80 transition-opacity" style={{ color: active.accent }} data-testid={`quickbook-more-${active.key}`}>
+                <Shuffle className="w-3 h-3" /> Show more options
+              </button>
+            )}
 
             <div className="mt-7 flex items-center justify-between gap-3 pt-5 border-t border-[#E2E8F0]/60">
               <div>
@@ -159,7 +225,7 @@ export default function QuickBookWidget() {
                   style={{ backgroundImage: "linear-gradient(135deg,#E86A3C 0%,#F59E0B 55%,#D4A94A 100%)" }}
                   data-testid={`quickbook-price-${active.key}`}
                 >
-                  {active.price}
+                  {fromPrice}
                 </div>
                 <div className="text-[10px] tracking-[0.2em] uppercase text-[#64748B] mt-1 font-semibold">{active.priceNote}</div>
               </div>
