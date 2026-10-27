@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Car, ShipWheel, MapPinned, ArrowRight, Check, Shuffle } from "lucide-react";
+import { Car, ShipWheel, MapPinned, ArrowRight, Check, Shuffle, Star } from "lucide-react";
 import { api } from "../lib/api";
 
 const SHOW = 4;
-const ROTATE_MS = 10000;
 const $ = (n) => `$${Number(n).toFixed(Number(n) % 1 ? 2 : 0)}`;
 
 // Per-visit seed: every new session sees a different mix; stable while they browse.
@@ -27,20 +26,28 @@ const shuffled = (arr, seed) => {
   return a;
 };
 
-// Live catalog → highlight lines for each tab.
+// Live catalog → highlight lines for each tab. Admin-featured picks go first, the rest are shuffled per visit.
 const useLiveHighlights = () => {
   const [live, setLive] = useState({});
+  const [rotateMs, setRotateMs] = useState(10000);
   useEffect(() => {
     const seed = sessionSeed();
     const ok = (x) => x.active !== false && Number(x.price) > 0;
-    Promise.allSettled([api.get("/taxi-services"), api.get("/tours"), api.get("/rentals")]).then(([t, tr, r]) => {
-      const taxi = (t.value?.data || []).filter((x) => ok(x) && /→|↔/.test(x.name)).map((x) => ({ line: `${x.name} ${$(x.price)}`, price: x.price }));
-      const tours = (tr.value?.data || []).filter(ok).map((x) => ({ line: `${x.name} · ${$(x.price)} pp`, price: x.price }));
-      const rentals = (r.value?.data || []).filter(ok).map((x) => ({ line: `${x.name} · ${$(x.price)}/day`, price: x.price }));
-      setLive({ taxi: shuffled(taxi, seed), tours: shuffled(tours, seed + 7), rentals: shuffled(rentals, seed + 13) });
+    Promise.allSettled([api.get("/taxi-services"), api.get("/tours"), api.get("/rentals"), api.get("/quickbook-config")]).then(([t, tr, r, c]) => {
+      const cfg = c.value?.data || {};
+      setRotateMs((cfg.rotate_seconds ?? 10) * 1000);
+      const order = (list, key, s) => {
+        const fav = cfg.featured?.[key] || [];
+        const pinned = fav.map((id) => list.find((x) => x.id === id)).filter(Boolean).map((x) => ({ ...x, featured: true }));
+        return [...pinned, ...shuffled(list.filter((x) => !fav.includes(x.id)), s)];
+      };
+      const taxi = (t.value?.data || []).filter((x) => ok(x) && /→|↔/.test(x.name)).map((x) => ({ id: x.id, line: `${x.name} ${$(x.price)}`, price: x.price }));
+      const tours = (tr.value?.data || []).filter(ok).map((x) => ({ id: x.id, line: `${x.name} · ${$(x.price)} pp`, price: x.price }));
+      const rentals = (r.value?.data || []).filter(ok).map((x) => ({ id: x.id, line: `${x.name} · ${$(x.price)}/day`, price: x.price }));
+      setLive({ taxi: order(taxi, "taxi", seed), tours: order(tours, "tours", seed + 7), rentals: order(rentals, "rentals", seed + 13) });
     });
   }, []);
-  return live;
+  return [live, rotateMs];
 };
 
 // Modern tabbed booking widget for the home hero.
@@ -112,20 +119,20 @@ const TABS = [
 export default function QuickBookWidget() {
   const [activeKey, setActiveKey] = useState("taxi");
   const active = TABS.find((t) => t.key === activeKey);
-  const live = useLiveHighlights();
+  const [live, rotateMs] = useLiveHighlights();
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
   const pool = live[activeKey] || [];
   useEffect(() => { setPage(0); }, [activeKey]);
   useEffect(() => {
-    if (paused || pool.length <= SHOW) return undefined;
-    const id = setInterval(() => setPage((p) => p + 1), ROTATE_MS);
+    if (paused || !rotateMs || pool.length <= SHOW) return undefined;
+    const id = setInterval(() => setPage((p) => p + 1), rotateMs);
     return () => clearInterval(id);
-  }, [paused, pool.length]);
+  }, [paused, pool.length, rotateMs]);
   const highlights = useMemo(() => {
-    if (!pool.length) return active.highlights;
+    if (!pool.length) return active.highlights.map((line) => ({ line }));
     const start = (page * SHOW) % pool.length;
-    return Array.from({ length: Math.min(SHOW, pool.length) }, (_, i) => pool[(start + i) % pool.length].line);
+    return Array.from({ length: Math.min(SHOW, pool.length) }, (_, i) => pool[(start + i) % pool.length]);
   }, [pool, page, active]);
   const fromPrice = pool.length ? `from ${$(Math.min(...pool.map((x) => Number(x.price))))}` : active.price;
 
@@ -200,15 +207,19 @@ export default function QuickBookWidget() {
             <p className="text-[13px] text-[#64748B] leading-relaxed mt-3 max-w-md">{active.pitch}</p>
 
             <AnimatePresence mode="wait">
-            <motion.ul key={`${activeKey}-${page}`} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3 }}
+            <motion.ul key={`${activeKey}-${page}`}
+              initial="hidden" animate="show" exit="out"
+              variants={{ hidden: {}, show: { transition: { staggerChildren: 0.12 } }, out: { opacity: 0, filter: "blur(3px)", transition: { duration: 0.6, ease: [0.4, 0, 0.2, 1] } } }}
               className="mt-5 space-y-2 min-h-[112px]" data-testid={`quickbook-highlights-${active.key}`}>
               {highlights.map((h) => (
-                <li key={h} className="flex items-start gap-2.5 text-sm text-[#0B3B5C]">
+                <motion.li key={h.line}
+                  variants={{ hidden: { opacity: 0, y: 4, filter: "blur(4px)" }, show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.9, ease: [0.22, 1, 0.36, 1] } } }}
+                  className="flex items-start gap-2.5 text-sm text-[#0B3B5C]" data-testid={h.featured ? `quickbook-featured-${h.id}` : undefined}>
                   <span className="mt-1 w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ background: active.accentSoft, color: active.accent }}>
-                    <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                    {h.featured ? <Star className="w-2.5 h-2.5 fill-current" /> : <Check className="w-2.5 h-2.5" strokeWidth={3} />}
                   </span>
-                  <span className="leading-snug">{h}</span>
-                </li>
+                  <span className="leading-snug">{h.line}{h.featured && <span className="ml-1.5 text-[9px] uppercase tracking-wider font-black align-middle" style={{ color: active.accent }}>Top pick</span>}</span>
+                </motion.li>
               ))}
             </motion.ul>
             </AnimatePresence>

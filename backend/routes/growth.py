@@ -425,6 +425,34 @@ async def monthly_report(month: Optional[str] = None, _=Depends(_admin)):
     }
 
 
+# ── Home Reserve box (QuickBookWidget) settings ────────────────────────────────
+class QuickbookCfg(BaseModel):
+    rotate_seconds: int = Field(10, ge=0, le=120)
+    featured: dict = Field(default_factory=dict)
+
+
+async def _qb_cfg() -> dict:
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    feat = cfg.get("quickbook_featured") or {}
+    return {"rotate_seconds": int(cfg.get("quickbook_rotate_seconds", 10)),
+            "featured": {k: list(feat.get(k) or []) for k in ("taxi", "tours", "rentals")}}
+
+
+@router.get("/quickbook-config")
+async def quickbook_config():
+    return await _qb_cfg()
+
+
+@router.put("/admin/quickbook-config")
+async def set_quickbook_config(body: QuickbookCfg, _=Depends(_admin)):
+    if body.rotate_seconds and body.rotate_seconds < 3:
+        raise HTTPException(400, "Use 0 (off) or at least 3 seconds")
+    feat = {k: [str(i)[:80] for i in (body.featured.get(k) or [])][:12] for k in ("taxi", "tours", "rentals")}
+    await _db.site_config.update_one({"_id": "main"}, {"$set": {
+        "quickbook_rotate_seconds": body.rotate_seconds, "quickbook_featured": feat}}, upsert=True)
+    return await _qb_cfg()
+
+
 # ── Return-trip reminder ─────────────────────────────────────
 class ReturnCfg(BaseModel):
     enabled: bool

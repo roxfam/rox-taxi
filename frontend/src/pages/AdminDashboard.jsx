@@ -22,6 +22,7 @@ import MonthlyReportCard from "./admin/MonthlyReportCard";
 import CruiseShipsCard from "./admin/CruiseShipsCard";
 import BundlesCard from "./admin/BundlesCard";
 import ReturnReminderCard from "./admin/ReturnReminderCard";
+import QuickbookSettingsCard from "./admin/QuickbookSettingsCard";
 import IncidentalModal from "./admin/IncidentalModal";
 import ZelleProofCard from "./admin/ZelleProofCard";
 import FlightEventsPanel from "./admin/FlightEventsPanel";
@@ -318,6 +319,7 @@ export default function AdminDashboard() {
         <CruiseShipsCard />
         <BundlesCard />
         <ReturnReminderCard />
+        <QuickbookSettingsCard />
 
         {/* Pending Zelle proof uploads — guests who sent a Zelle screenshot
             and are waiting for admin to Approve → mark paid or Reject.

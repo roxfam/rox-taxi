@@ -891,6 +891,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - New taxi route downtown-airport: Downtown Nassau → LPIA $40 (mirrors LPIA → Downtown), airport add-ons.
 - "Humes House @ Hillcrest" added to Taxi page destination cards + pickup/drop-off dropdown; location label renamed.
 - Home QuickBookWidget: live taxi routes / tours / rentals from API, shuffled per visitor session (sessionStorage qb_seed), shows 4 at a time, auto-rotates every 10s (pauses on hover), "Show more options" button; "from $" computed from live prices.
+- Reserve box admin settings (QuickbookSettingsCard): rotate_seconds (0 = off, else ≥3) + featured ids per taxi/tours/rentals → GET /api/quickbook-config, PUT /api/admin/quickbook-config. Featured show first with "Top pick" star.
+- Reserve box rotation transition softened: staggered blur-fade-in (0.9s) and blur-fade-out (0.6s) instead of quick slide.
+
 
 
 
