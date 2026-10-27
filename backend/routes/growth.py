@@ -202,12 +202,13 @@ async def book_bundle(bid: str, body: BundleBookIn):
         raise HTTPException(400, "The gift email date must be today or later")
     base = round(float(b["bundle_price"]), 2)
     vat = round(base * 0.10, 2)
+    fee = round((base + vat) * 0.05, 2)
     now = datetime.now(timezone.utc).isoformat()
     booking = {
         "id": "BND-" + uuid.uuid4().hex[:7].upper(), "service_type": "bundle", "item_id": b["id"], "item_name": b["name"],
         "bundle_includes": b.get("includes") or [], **body.model_dump(), "booking_date": f"{body.booking_date}T09:00:00-05:00" if body.booking_date else None,
         "passengers": 1, "price": base, "subtotal_before_tax": base, "vat_pct": 0.10, "vat_amount": vat,
-        "total": round(base + vat, 2), "payment_method": "stripe", "payment_status": "pending",
+        "processing_fee": fee, "processing_fee_pct": 0.05, "total": round(base + vat + fee, 2), "payment_method": "stripe", "payment_status": "pending",
         "status": "pending_payment", "created_at": now, "updated_at": now,
     }
     await _db.bookings.insert_one(dict(booking))
@@ -451,6 +452,30 @@ async def set_quickbook_config(body: QuickbookCfg, _=Depends(_admin)):
     await _db.site_config.update_one({"_id": "main"}, {"$set": {
         "quickbook_rotate_seconds": body.rotate_seconds, "quickbook_featured": feat}}, upsert=True)
     return await _qb_cfg()
+
+
+class QbClick(BaseModel):
+    cat: str = Field(..., pattern=r"^(taxi|tours|rentals)$")
+    id: str = Field(..., min_length=1, max_length=80)
+
+
+@router.post("/quickbook-click")
+async def quickbook_click(body: QbClick):
+    day = datetime.now(NASSAU).date().isoformat()
+    await _db.quickbook_clicks.update_one({"_id": f"{body.cat}|{body.id}|{day}"},
+                                          {"$inc": {"count": 1}, "$set": {"cat": body.cat, "item_id": body.id, "day": day}}, upsert=True)
+    return {"ok": True}
+
+
+@router.get("/admin/quickbook-clicks")
+async def quickbook_clicks(days: int = 30, _=Depends(_admin)):
+    since = (datetime.now(NASSAU).date() - timedelta(days=max(1, min(days, 365)))).isoformat()
+    out = {"taxi": [], "tours": [], "rentals": []}
+    pipe = [{"$match": {"day": {"$gte": since}}}, {"$group": {"_id": {"cat": "$cat", "id": "$item_id"}, "count": {"$sum": "$count"}}}, {"$sort": {"count": -1}}]
+    async for r in _db.quickbook_clicks.aggregate(pipe):
+        if len(out[r["_id"]["cat"]]) < 10:
+            out[r["_id"]["cat"]].append({"id": r["_id"]["id"], "count": r["count"]})
+    return {"days": days, **out}
 
 
 # ── Return-trip reminder ─────────────────────────────────────

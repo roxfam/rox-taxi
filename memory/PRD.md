@@ -893,6 +893,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Home QuickBookWidget: live taxi routes / tours / rentals from API, shuffled per visitor session (sessionStorage qb_seed), shows 4 at a time, auto-rotates every 10s (pauses on hover), "Show more options" button; "from $" computed from live prices.
 - Reserve box admin settings (QuickbookSettingsCard): rotate_seconds (0 = off, else ≥3) + featured ids per taxi/tours/rentals → GET /api/quickbook-config, PUT /api/admin/quickbook-config. Featured show first with "Top pick" star.
 - Reserve box rotation transition softened: staggered blur-fade-in (0.9s) and blur-fade-out (0.6s) instead of quick slide.
+- Processing fee wording fixed to 5% everywhere (Taxi, Tours, Car Rental pages, cruise groups FAQ); bundle bookings now add 5% processing fee on (price+VAT).
+- Reserve box click tracking: each highlight links to ?book=<id>; POST /api/quickbook-click (daily buckets in quickbook_clicks); admin GET /api/admin/quickbook-clicks → "Most tapped in the last 30 days" in QuickbookSettingsCard with "+ Top pick".
+- Reserve box pauses on touch/scroll (touchstart/move), resumes 5s after finger lifts; mouse hover pause uses pointerType=mouse only.
+
 
 
 

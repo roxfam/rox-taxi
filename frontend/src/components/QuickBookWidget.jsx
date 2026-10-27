@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Car, ShipWheel, MapPinned, ArrowRight, Check, Shuffle, Star } from "lucide-react";
 import { api } from "../lib/api";
 
 const SHOW = 4;
+const trackClick = (cat, id) => { api.post("/quickbook-click", { cat, id }).catch(() => {}); };
 const $ = (n) => `$${Number(n).toFixed(Number(n) % 1 ? 2 : 0)}`;
 
 // Per-visit seed: every new session sees a different mix; stable while they browse.
@@ -122,6 +123,10 @@ export default function QuickBookWidget() {
   const [live, rotateMs] = useLiveHighlights();
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
+  const resumeTimer = useRef(null);
+  const touchHold = () => { clearTimeout(resumeTimer.current); setPaused(true); };
+  const touchRelease = () => { clearTimeout(resumeTimer.current); resumeTimer.current = setTimeout(() => setPaused(false), 5000); };
+  useEffect(() => () => clearTimeout(resumeTimer.current), []);
   const pool = live[activeKey] || [];
   useEffect(() => { setPage(0); }, [activeKey]);
   useEffect(() => {
@@ -143,8 +148,13 @@ export default function QuickBookWidget() {
         background: "linear-gradient(155deg, rgba(255,255,255,0.98) 0%, rgba(251,247,239,0.96) 100%)",
       }}
       data-testid="quickbook-widget"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      data-paused={paused ? "true" : "false"}
+      onPointerEnter={(e) => { if (e.pointerType === "mouse") setPaused(true); }}
+      onPointerLeave={(e) => { if (e.pointerType === "mouse") setPaused(false); }}
+      onTouchStart={touchHold}
+      onTouchMove={touchHold}
+      onTouchEnd={touchRelease}
+      onTouchCancel={touchRelease}
     >
       {/* subtle top accent bar */}
       <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, transparent, ${active.accent}, transparent)` }} />
@@ -218,7 +228,13 @@ export default function QuickBookWidget() {
                   <span className="mt-1 w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ background: active.accentSoft, color: active.accent }}>
                     {h.featured ? <Star className="w-2.5 h-2.5 fill-current" /> : <Check className="w-2.5 h-2.5" strokeWidth={3} />}
                   </span>
-                  <span className="leading-snug">{h.line}{h.featured && <span className="ml-1.5 text-[9px] uppercase tracking-wider font-black align-middle" style={{ color: active.accent }}>Top pick</span>}</span>
+                  <span className="leading-snug">
+                    {h.id ? (
+                      <Link to={`${active.href}?book=${encodeURIComponent(h.id)}`} onClick={() => trackClick(activeKey, h.id)}
+                        className="hover:underline decoration-[#D4A94A] underline-offset-4" data-testid={`quickbook-item-${activeKey}-${h.id}`}>{h.line}</Link>
+                    ) : h.line}
+                    {h.featured && <span className="ml-1.5 text-[9px] uppercase tracking-wider font-black align-middle" style={{ color: active.accent }}>Top pick</span>}
+                  </span>
                 </motion.li>
               ))}
             </motion.ul>

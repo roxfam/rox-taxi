@@ -151,7 +151,7 @@ export default function CarRental() {
               </span>
             </div>
             <div className="mt-3 text-[11px] text-[#64748B] leading-snug" data-testid="processing-fee-disclosure">
-              Prices include a 3% processing fee that covers card + PayPal fees.
+              Prices include a 5% processing fee that covers card + PayPal fees.
             </div>
           </div>
         </div>

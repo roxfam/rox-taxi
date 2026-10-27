@@ -26,6 +26,7 @@ export const BundleBookDialog = ({ bundle, onClose }) => {
   const [form, setForm] = useState({ customer_name: "", customer_email: "", customer_phone: "", booking_date: "", pickup_location: "", cruise_ship: "", notes: "", is_gift: false, gift_recipient_name: "", gift_recipient_email: "", gift_message: "", gift_send_on: "" });
   const [busy, setBusy] = useState(false);
   const vat = Math.round(bundle.bundle_price * 10) / 100;
+  const fee = Math.round((bundle.bundle_price + vat) * 5) / 100;
   const gift = form.is_gift;
   const field = ([k, l, t, req]) => (
     <label key={k} className={lbl}>{l}
@@ -76,7 +77,8 @@ export const BundleBookDialog = ({ bundle, onClose }) => {
           <div className="rounded-xl bg-[#FBF7EF] p-3 text-sm text-[#0B3B5C] space-y-1" data-testid="bundle-book-summary">
             <div className="flex justify-between"><span>Bundle</span><span className="font-mono">{money(bundle.bundle_price)}</span></div>
             <div className="flex justify-between text-[#64748B]"><span>VAT 10%</span><span className="font-mono">{money(vat)}</span></div>
-            <div className="flex justify-between font-bold"><span>Total</span><span className="font-mono" data-testid="bundle-book-total">{money(bundle.bundle_price + vat)}</span></div>
+            <div className="flex justify-between text-[#64748B]"><span>Processing fee 5%</span><span className="font-mono">{money(fee)}</span></div>
+            <div className="flex justify-between font-bold"><span>Total</span><span className="font-mono" data-testid="bundle-book-total">{money(bundle.bundle_price + vat + fee)}</span></div>
           </div>
           <button type="submit" disabled={busy} className="w-full rounded-full bg-[#0B3B5C] hover:bg-[#082941] text-white font-bold py-3 disabled:opacity-60 transition-colors" data-testid="bundle-book-submit">
             {busy ? "Creating booking…" : gift ? "Continue to pay for gift" : "Continue to payment"}

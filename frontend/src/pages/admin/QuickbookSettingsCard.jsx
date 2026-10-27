@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { LayoutGrid, Star } from "lucide-react";
+import { LayoutGrid, Star, MousePointerClick } from "lucide-react";
 import { api } from "../../lib/api";
 
 const CATS = [["taxi", "Taxi routes", "/taxi-services"], ["tours", "Tours", "/tours"], ["rentals", "Car rentals", "/rentals"]];
@@ -24,7 +24,9 @@ const PickList = ({ items, picked, onToggle, cat }) => (
 export default function QuickbookSettingsCard() {
   const [cfg, setCfg] = useState(null);
   const [cat, setCat] = useState({});
+  const [clicks, setClicks] = useState(null);
   useEffect(() => {
+    api.get("/admin/quickbook-clicks?days=30").then((r) => setClicks(r.data)).catch(() => {});
     api.get("/quickbook-config").then((r) => setCfg(r.data)).catch(() => {});
     CATS.forEach(([k, , url]) => api.get(url).then((r) => setCat((c) => ({ ...c, [k]: (r.data || []).filter((x) => x.active !== false && Number(x.price) > 0 && (k !== "taxi" || /→|↔/.test(x.name))) }))).catch(() => {}));
   }, []);
@@ -61,6 +63,30 @@ export default function QuickbookSettingsCard() {
         ))}
       </div>
       <button onClick={save} className="mt-4 rounded-md bg-[#0B3B5C] text-white text-xs font-semibold px-4 py-2" data-testid="qb-settings-save">Save</button>
+      <div className="mt-6 pt-5 border-t border-[#E2E8F0]" data-testid="qb-clicks">
+        <div className="text-xs font-semibold text-[#0B3B5C] inline-flex items-center gap-1.5"><MousePointerClick className="w-3.5 h-3.5 text-[#D4A94A]" /> Most tapped in the last 30 days</div>
+        <div className="mt-3 grid md:grid-cols-3 gap-4">
+          {CATS.map(([k, label]) => {
+            const rows = clicks?.[k] || [];
+            const name = (id) => (cat[k] || []).find((x) => x.id === id)?.name || id;
+            return (
+              <div key={k} className="rounded-md border border-[#E2E8F0] p-3" data-testid={`qb-clicks-${k}`}>
+                <div className="text-[11px] uppercase tracking-wider text-[#64748B] font-bold mb-2">{label}</div>
+                {rows.length === 0 ? <div className="text-xs text-[#94a3b8]">No taps yet.</div> : rows.map((r) => (
+                  <div key={r.id} className="flex items-center gap-2 text-xs py-0.5">
+                    <span className="text-[#0B3B5C] truncate">{name(r.id)}</span>
+                    <span className="ml-auto font-mono font-bold text-[#0B3B5C]">{r.count}</span>
+                    {!(cfg.featured[k] || []).includes(r.id) && (
+                      <button type="button" onClick={() => toggle(k)(r.id)} className="text-[10px] text-[#D4A94A] font-bold hover:underline" data-testid={`qb-click-pick-${k}-${r.id}`}>+ Top pick</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-[11px] text-[#94a3b8]">Tap "+ Top pick" then Save to pin a popular option.</p>
+      </div>
     </div>
   );
 }

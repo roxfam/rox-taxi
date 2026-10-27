@@ -18,7 +18,7 @@ import { api, BACKEND_URL } from "../lib/api";
 const FAQ = [
   {
     q: "How does the 10% group discount work?",
-    a: "Any per-person Nassau tour (like our Nassau City Tour at $45/adult) automatically discounts 10% off the passenger subtotal the moment you have 6 or more paying passengers in the same booking. Adults and kids ages 4-12 count as paying; toddlers under 3 ride free and don't count toward the 6-pax minimum. The discount is applied before the 3% processing fee, and it stacks with our summer SUMMER10 promo when eligible."
+    a: "Any per-person Nassau tour (like our Nassau City Tour at $45/adult) automatically discounts 10% off the passenger subtotal the moment you have 6 or more paying passengers in the same booking. Adults and kids ages 4-12 count as paying; toddlers under 3 ride free and don't count toward the 6-pax minimum. The discount is applied before the 5% processing fee, and it stacks with our summer SUMMER10 promo when eligible."
   },
   {
     q: "Can you pick our group up right at Prince George Wharf?",

@@ -412,7 +412,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const vatApplies = serviceType !== "taxi";
   const vatAmount = vatApplies ? subtotal * BAHAMAS_VAT_PCT : 0;
 
-  // ── Payment-processing fee (4.5%) — applied to every order ─────────
+  // ── Payment-processing fee (5%) — applied to every order ─────────
   const processingFee = (subtotal + vatAmount) * PROCESSING_FEE_PCT;
 
   // Deposit + tip layer on AFTER VAT/processing so they aren't taxed.
