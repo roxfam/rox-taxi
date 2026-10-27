@@ -438,6 +438,8 @@ class ManualBooking(BaseModel):
     dropoff_location: Optional[str] = Field(None, max_length=300)
     passengers: int = Field(1, ge=1, le=60)
     flight_number: Optional[str] = Field(None, max_length=12)
+    extra_luggage: int = Field(0, ge=0, le=30)
+    luggage_price: float = Field(0, ge=0, le=500)
     notes: Optional[str] = Field(None, max_length=2000)
     total: float = Field(..., ge=0, le=100000)
     payment: str = Field("unpaid", pattern="^(unpaid|cash|zelle|card_offline)$")
@@ -502,6 +504,8 @@ async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_d
         "id": str(uuid.uuid4())[:8].upper(),
         "item_id": req.item_id or "",
         "price": req.total,
+        "luggage_fee": round(req.extra_luggage * req.luggage_price, 2),
+        "tip_enabled": True,
         "status": "confirmed",
         "payment_method": "stripe" if req.payment == "unpaid" else req.payment,
         "payment_status": "paid" if paid else "pending",

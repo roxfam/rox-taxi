@@ -823,6 +823,7 @@ async def admin_send_payment_email(booking_id: str, req: SendPaymentEmailRequest
         {"Thanks for choosing Rox — your invoice is attached and also available online below." if paid else f"Tap the button below to pay <strong>${total:,.2f}</strong> for <strong>{item_name}</strong> (Booking {bid}). Takes about 20 seconds and uses your card securely via Stripe."}
       </p>
       {note_html}
+      {'<p style="color:#0B3B5C;font-size:13px;margin:14px 0 0;background:#F0FDF4;border-radius:8px;padding:10px 14px;">&#128150; Want to thank your driver? You can add a tip on the payment page &mdash; 100% goes to your driver.</p>' if (not paid and booking.get("tip_enabled")) else ""}
       <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:22px;margin-top:18px;text-align:center;">
         <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#64748B;font-weight:700;">Booking</div>
         <div style="font-family:'JetBrains Mono',monospace;font-size:22px;color:#0B3B5C;margin-top:4px;">{bid}</div>

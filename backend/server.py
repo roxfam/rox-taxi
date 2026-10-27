@@ -4849,6 +4849,19 @@ def _site_base_url() -> str:
     return (os.environ.get("SITE_BASE_URL") or "https://roxtaxi.com").rstrip("/")
 
 
+def _is_airport_departure(b: dict) -> bool:
+    """Trip is heading TO the airport (drop-off or route destination is LPIA)."""
+    drop = str(b.get("dropoff_location") or "").lower()
+    if drop:
+        return "airport" in drop or "lpia" in drop
+    name = str(b.get("item_name") or b.get("route") or "").lower()
+    for sep in ("→", "->"):
+        if sep in name:
+            dest = name.split(sep, 1)[1]
+            return "airport" in dest or "lpia" in dest
+    return False
+
+
 def _is_airport_bound(b: dict) -> bool:
     """Heuristic — matches on item_id prefix (`airport-*`), item_name / route
     containing 'airport' or 'LPIA', or an explicit `flight_number`."""
@@ -4875,7 +4888,7 @@ async def _airport_reminder_loop() -> None:
 # Idempotent via `review_followup_sent_at`. Independent of the in-app
 # 5-star growth loop (that only fires for guests who actually rate).
 REVIEW_FOLLOWUP_INTERVAL_SECONDS = int(os.environ.get("REVIEW_FOLLOWUP_INTERVAL_SECONDS", "1800"))  # 30 min
-REVIEW_FOLLOWUP_DELAY_HOURS = int(os.environ.get("REVIEW_FOLLOWUP_DELAY_HOURS", "24"))
+REVIEW_FOLLOWUP_DELAY_HOURS = int(os.environ.get("REVIEW_FOLLOWUP_DELAY_HOURS", "3"))
 REVIEW_FOLLOWUP_WINDOW_HOURS = int(os.environ.get("REVIEW_FOLLOWUP_WINDOW_HOURS", "168"))  # 7-day retro-fill cap
 
 
@@ -5397,10 +5410,11 @@ async def _run_airport_reminder_tick() -> int:
         except Exception:
             continue
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            from zoneinfo import ZoneInfo  # noqa: PLC0415
+            dt = dt.replace(tzinfo=ZoneInfo("America/Nassau"))
         if not (early <= dt <= late):
             continue
-        if not _is_airport_bound(b):
+        if not _is_airport_departure(b):
             continue
         try:
             from notifications import send_airport_pre_pickup_reminder

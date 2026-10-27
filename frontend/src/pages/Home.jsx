@@ -10,6 +10,7 @@ import NassauCarousel from "../components/NassauCarousel";
 import { LoveBeachPick } from "../components/LoveBeachPick";
 import { BundleDeals } from "../components/BundleDeals";
 import { CruiseTodayStrip } from "../components/CruiseTodayStrip";
+import { SeoContentBlock } from "../components/SeoContentBlock";
 import GoogleReviews from "../components/GoogleReviews";
 import HomeHeroCarousel from "../components/HomeHeroCarousel";
 import QuickBookWidget from "../components/QuickBookWidget";
@@ -26,8 +27,8 @@ export default function Home() {
   return (
     <div data-testid="home-page">
       <Seo
-        title="Nassau Taxi Service Bahamas | LPIA Airport & Atlantis Transfers 24/7"
-        description="Nassau taxi service in the Bahamas: LPIA airport transfers, Atlantis, Baha Mar, Cable Beach and cruise-port pickups, Paradise Island tours, Cable Beach days and car rentals. Licensed 24/7 drivers, live GPS tracking. Book online in 60 seconds."
+        title="Nassau Taxi Service Bahamas | Airport Transfers, Tours & Paradise Island 24/7"
+        description="Book a trusted Nassau taxi in the Bahamas: LPIA airport transfers from $35, Atlantis, Paradise Island, Baha Mar, Cable Beach and cruise-port rides, plus Bahamas tours, shore excursions and car rentals. Licensed 24/7 drivers, fixed fares, live GPS tracking."
         canonical="https://roxtaxi.com/"
         keywords="Nassau taxi, Bahamas taxi service, LPIA airport transfer, Atlantis taxi, Paradise Island tours, Cable Beach day, Nassau car rental, Nassau cruise port taxi, Baha Mar transfer, Nassau excursions"
         ogImage="https://roxtaxi.com/og-cover.jpg"
@@ -341,6 +342,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <SeoContentBlock />
 
       {/* GOOGLE REVIEWS */}
       <GoogleReviews />

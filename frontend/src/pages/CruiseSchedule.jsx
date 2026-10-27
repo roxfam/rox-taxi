@@ -57,7 +57,7 @@ export default function CruiseSchedule() {
   const byDay = (ships || []).reduce((acc, s) => ({ ...acc, [s.date]: [...(acc[s.date] || []), s] }), {});
   return (
     <div className="max-w-6xl mx-auto px-6 lg:px-10 py-14" data-testid="cruise-schedule-page">
-      <Seo title="Nassau Cruise Ship Schedule & Shore Trips | Rox Taxi & Tours" description="See which cruise ships are in Nassau port and book a shore excursion or taxi that gets you back before all aboard." />
+      <Seo title="Nassau Cruise Ship Schedule & Shore Trips | Rox Taxi & Tours" description="Nassau, Bahamas cruise ship schedule for Prince George Wharf: see which ships are in port today, then book Nassau shore excursions, island tours and cruise port taxis that get you back before all aboard." />
       <div className="text-xs tracking-[0.3em] uppercase text-[#D4A94A] flex items-center gap-2"><Ship className="w-4 h-4" /> Prince George Wharf · Nassau</div>
       <h1 className="serif text-4xl sm:text-5xl lg:text-6xl text-[#0B3B5C] mt-3 max-w-3xl">Ships in port &amp; shore trips</h1>
       <p className="mt-4 text-[#64748B] max-w-2xl text-sm sm:text-base">Find your ship, check your all-aboard time and pick a tour or taxi. Every shore trip is timed to get you back to the pier early.</p>

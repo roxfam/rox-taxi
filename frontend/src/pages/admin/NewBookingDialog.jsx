@@ -14,6 +14,7 @@ const SERVICES = [
 const EMPTY = {
   service_type: "taxi", item_id: "", item_name: "", customer_name: "", customer_email: "", customer_phone: "",
   booking_date: "", pickup_location: "", dropoff_location: "", passengers: 1, flight_number: "", notes: "",
+  extra_luggage: 0, luggage_price: 3,
   total: "", payment: "unpaid", send_confirmation: true, send_pay_link: true,
 };
 
@@ -21,6 +22,25 @@ const input = "w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm focus
 
 function Field({ label, children }) {
   return <label className="block text-xs text-[#64748B] font-semibold">{label}<div className="mt-1">{children}</div></label>;
+}
+
+const CUSTOM = "__custom__";
+
+// Dropdown of known places + "Custom" for anywhere not listed.
+function LocationSelect({ value, onChange, places, testid }) {
+  const known = places.includes(value);
+  const [custom, setCustom] = useState(!!value && !known);
+  return (
+    <div className="space-y-1.5">
+      <select value={custom ? CUSTOM : value} className={input} data-testid={`${testid}-select`}
+        onChange={(e) => { const v = e.target.value; setCustom(v === CUSTOM); onChange(v === CUSTOM ? "" : v); }}>
+        <option value="">Choose…</option>
+        {places.map((p) => <option key={p} value={p}>{p}</option>)}
+        <option value={CUSTOM}>Custom (not listed)…</option>
+      </select>
+      {custom && <input value={value} onChange={(e) => onChange(e.target.value)} className={input} placeholder="Type the address or place" autoFocus data-testid={`${testid}-custom`} />}
+    </div>
+  );
 }
 
 const SERVICE_KEYS = SERVICES.map((s) => s.key);
@@ -43,8 +63,21 @@ const fromBooking = (b) => ({
 export default function NewBookingDialog({ initial, onClose, onCreated }) {
   const [f, setF] = useState(() => (initial ? fromBooking(initial) : EMPTY));
   const [items, setItems] = useState([]);
+  const [places, setPlaces] = useState([]);
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
+  const luggageFee = Math.round((Number(f.extra_luggage) || 0) * (Number(f.luggage_price) || 0) * 100) / 100;
+  const setLuggage = (k) => (e) => setF((x) => {
+    const next = { ...x, [k]: e.target.value };
+    const oldFee = (Number(x.extra_luggage) || 0) * (Number(x.luggage_price) || 0);
+    const newFee = (Number(next.extra_luggage) || 0) * (Number(next.luggage_price) || 0);
+    if (x.total !== "") next.total = Math.max(0, Math.round((Number(x.total) - oldFee + newFee) * 100) / 100);
+    return next;
+  });
+
+  useEffect(() => {
+    api.get("/taxi/locations").then(({ data }) => setPlaces((data || []).map((l) => l.label))).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const svc = SERVICES.find((s) => s.key === f.service_type);
@@ -66,6 +99,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
     setBusy(true);
     try {
       const body = { ...f, passengers: Number(f.passengers) || 1, total: Number(f.total) || 0,
+        extra_luggage: Number(f.extra_luggage) || 0, luggage_price: Number(f.luggage_price) || 0,
         send_pay_link: f.payment === "unpaid" && f.send_pay_link };
       if (f.service_type === "cable_beach" && !body.item_name) body.item_name = "Cable Beach Day";
       const { data } = await api.post("/admin/bookings/manual", body);
@@ -113,11 +147,13 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
           <Field label="Email"><input type="email" value={f.customer_email} onChange={set("customer_email")} className={input} data-testid="new-booking-email" /></Field>
           <Field label="Phone"><input value={f.customer_phone} onChange={set("customer_phone")} className={input} data-testid="new-booking-phone" /></Field>
           <Field label="Date & time"><input type="datetime-local" value={f.booking_date} onChange={set("booking_date")} className={input} required data-testid="new-booking-date" /></Field>
-          <Field label="Pickup"><input value={f.pickup_location} onChange={set("pickup_location")} className={input} data-testid="new-booking-pickup" /></Field>
-          <Field label="Drop-off"><input value={f.dropoff_location} onChange={set("dropoff_location")} className={input} data-testid="new-booking-dropoff" /></Field>
+          <Field label="Pickup"><LocationSelect value={f.pickup_location} onChange={(v) => setF((x) => ({ ...x, pickup_location: v }))} places={places} testid="new-booking-pickup" /></Field>
+          <Field label="Drop-off"><LocationSelect value={f.dropoff_location} onChange={(v) => setF((x) => ({ ...x, dropoff_location: v }))} places={places} testid="new-booking-dropoff" /></Field>
           <Field label="Passengers"><input type="number" min="1" max="60" value={f.passengers} onChange={set("passengers")} className={input} data-testid="new-booking-passengers" /></Field>
           <Field label="Flight # (optional)"><input value={f.flight_number} onChange={set("flight_number")} className={input} data-testid="new-booking-flight" /></Field>
-          <Field label="Total ($)"><input type="number" step="0.01" min="0" value={f.total} onChange={set("total")} className={input} required data-testid="new-booking-total" /></Field>
+          <Field label="Extra bags"><input type="number" min="0" max="30" value={f.extra_luggage} onChange={setLuggage("extra_luggage")} className={input} data-testid="new-booking-luggage-count" /></Field>
+          <Field label={`Price per bag ($)${luggageFee ? ` · luggage ${luggageFee.toFixed(2)}` : ""}`}><input type="number" min="0" step="0.5" value={f.luggage_price} onChange={setLuggage("luggage_price")} className={input} data-testid="new-booking-luggage-price" /></Field>
+          <Field label="Total ($, includes luggage)"><input type="number" step="0.01" min="0" value={f.total} onChange={set("total")} className={input} required data-testid="new-booking-total" /></Field>
           <Field label="Payment">
             <select value={f.payment} onChange={set("payment")} className={input} data-testid="new-booking-payment">
               <option value="unpaid">Not paid yet (card)</option>
@@ -131,7 +167,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
         <div className="flex flex-col gap-2 text-sm text-[#0B3B5C]">
           <label className="inline-flex items-center gap-2"><input type="checkbox" checked={f.send_confirmation} onChange={set("send_confirmation")} data-testid="new-booking-send-confirmation" /> Email + text the guest a confirmation</label>
           {f.payment === "unpaid" && (
-            <label className="inline-flex items-center gap-2"><input type="checkbox" checked={f.send_pay_link} onChange={set("send_pay_link")} data-testid="new-booking-send-paylink" /> Email the guest a payment link</label>
+            <label className="inline-flex items-center gap-2"><input type="checkbox" checked={f.send_pay_link} onChange={set("send_pay_link")} data-testid="new-booking-send-paylink" /> Email the guest a payment link (with option to add a driver tip)</label>
           )}
         </div>
         <button type="submit" disabled={busy} className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#0B3B5C] text-white py-2.5 text-sm font-bold disabled:opacity-60" data-testid="new-booking-submit">

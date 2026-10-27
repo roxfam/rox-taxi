@@ -227,7 +227,7 @@ h2.serif em, h2.serif i {
     100% { transform: translateX(-50%); }
 }
 .welcome-marquee-slow {
-    animation-duration: 60s;
+    animation-duration: 40s;
 }
 img:not(.allow-save) {
     -webkit-user-drag: none;

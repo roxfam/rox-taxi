@@ -7,6 +7,7 @@ import { PaymentBrandRow } from "../components/PaymentBrands";
 import { Loader2, CreditCard, Copy, XCircle, CheckCircle2, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { GiftCodeBox } from "../components/GiftCodeBox";
+import { TipPicker } from "../components/TipPicker";
 
 // Shareable "Complete Payment" page — one URL per booking that a customer
 // (or the admin, via text/email) can bounce to at any time and finish
@@ -150,6 +151,8 @@ export default function Pay() {
                   />
                 </div>
 
+                {booking.tip_enabled && <TipPicker booking={booking} onChange={(d) => setBooking((b) => ({ ...b, ...d }))} />}
+
                 {/* Stripe */}
                 <button
                   onClick={payStripe}
@@ -170,7 +173,7 @@ export default function Pay() {
 
                 {/* PayPal — official yellow button, opens in a PayPal pop-up */}
                 <div className="mt-4" data-testid="pay-paypal-btn">
-                  <PayPalPayButtons bookingId={booking.id} title={`Pay ${money(total)} with PayPal`}
+                  <PayPalPayButtons key={total} bookingId={booking.id} title={`Pay ${money(total)} with PayPal`}
                     onPaid={() => nav(`/payment/success?provider=paypal&booking_id=${booking.id}`)} />
                 </div>
 

@@ -2804,52 +2804,54 @@ def send_airport_pre_pickup_reminder(booking: dict, prefs: Optional[dict] = None
         </div>
         """
     else:
-        subject = f"1 hour to your Rox airport pickup — Booking {booking['id']}"
+        subject = f"Your airport transfer is in 1 hour — Booking {booking['id']}"
         text = (
-        f"Hi {guest_first},\n\n"
-        f"Your Rox driver arrives in ~1 hour at {pickup} to take you to {dropoff}.\n"
-        f"Pickup time: {when_pretty} (local Nassau time)\n"
+        f"Dear {guest_first},\n\n"
+        f"This is a courtesy reminder that your Rox Taxi airport transfer is scheduled in approximately one hour.\n\n"
+        f"Pickup: {pickup}\n"
+        f"Destination: {dropoff}\n"
+        f"Pickup time: {when_pretty} (Nassau time)\n"
         + (f"Flight: {flight}\n\n" if flight else "\n")
-        + f"Quick pre-departure checklist — takes 2 minutes:\n"
-        f"  [ ] Passport in your carry-on (biggest 'turn around' cause)\n"
-        f"  [ ] All personal belongings collected from the room\n"
-        f"  [ ] Flight status confirmed online — no delays/cancellations\n"
-        f"  [ ] Online check-in complete + boarding pass saved to phone/wallet\n\n"
-        f"Track your driver live: https://roxtaxi.com/track?id={booking['id']}\n"
-        f"Anything wrong? WhatsApp us: +1 (242) 432-2587\n\n"
-        f"Safe travels — see you soon.\n"
-        f"— Rox Taxi Service & Tours"
+        + f"Before your driver arrives, please take a moment to:\n"
+        f"  - Keep your passport and travel documents with you, not in checked luggage\n"
+        f"  - Secure your personal items: wallet, phone, chargers, jewellery and medication\n"
+        f"  - Check your room, safe, drawers and bathroom so nothing is left behind\n"
+        f"  - Confirm your flight status and complete online check-in\n\n"
+        f"Track your driver: https://roxtaxi.com/track?id={booking['id']}\n"
+        f"Need assistance? Call or WhatsApp +1 (242) 432-2587.\n\n"
+        f"Thank you for choosing Rox Taxi Service & Tours. We wish you a safe journey.\n"
+        f"— Rox Taxi Service & Tours, Nassau, Bahamas"
     )
     html = f"""
     <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#FAF9F6;">
       <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#D4A94A;font-weight:700;">1 hour to pickup</div>
       <h1 style="font-family:Georgia,serif;color:#0B3B5C;margin:8px 0 4px;font-size:26px;line-height:1.15;">
-        Hi {_html_escape(guest_first)}, your Rox airport pickup is in ~1 hour.
+        Dear {_html_escape(guest_first)}, your airport transfer is in about one hour.
       </h1>
       <p style="color:#64748B;font-size:14px;margin:12px 0 0;">
         We'll be at <strong style="color:#0B3B5C;">{_html_escape(pickup)}</strong> to take you to <strong style="color:#0B3B5C;">{_html_escape(dropoff)}</strong> around <strong style="color:#0B3B5C;">{_html_escape(when_pretty)}</strong>.{f' Flight <strong style="color:#0B3B5C;">{_html_escape(flight)}</strong>.' if flight else ''}
       </p>
 
       <div style="background:#fff;border:2px solid #D4A94A;border-radius:16px;padding:22px;margin-top:20px;">
-        <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Pre-departure checklist</div>
-        <div style="font-family:Georgia,serif;color:#0B3B5C;font-size:18px;margin-top:4px;">2 minutes to check — saves the trip</div>
+        <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Before your driver arrives</div>
+        <div style="font-family:Georgia,serif;color:#0B3B5C;font-size:18px;margin-top:4px;">Please make sure you have everything with you</div>
 
         <table style="width:100%;margin-top:16px;border-collapse:collapse;font-size:14px;color:#0B3B5C;">
           <tr>
             <td style="vertical-align:top;padding:8px 0;width:32px;font-size:20px;">🛂</td>
-            <td style="padding:8px 0;"><strong>Passport</strong> — in your carry-on, not the checked bag. Biggest cause of "turn around" calls.</td>
+            <td style="padding:8px 0;"><strong>Passport &amp; travel documents</strong> — keep them with you, not in your checked luggage.</td>
           </tr>
           <tr>
             <td style="vertical-align:top;padding:8px 0;font-size:20px;">🧳</td>
-            <td style="padding:8px 0;"><strong>All belongings collected</strong> — check drawers, safe, bathroom, charger sockets.</td>
+            <td style="padding:8px 0;"><strong>Personal items secured</strong> — wallet, phone, chargers, jewellery and medication. Please check your room, safe, drawers and bathroom.</td>
           </tr>
           <tr>
             <td style="vertical-align:top;padding:8px 0;font-size:20px;">✈️</td>
-            <td style="padding:8px 0;"><strong>Flight status confirmed</strong> — check your airline app or FlightAware. Delays / cancellations happen.</td>
+            <td style="padding:8px 0;"><strong>Flight status confirmed</strong> — please check your airline app for any schedule changes.</td>
           </tr>
           <tr>
             <td style="vertical-align:top;padding:8px 0;font-size:20px;">📱</td>
-            <td style="padding:8px 0;"><strong>Online check-in done</strong> — boarding pass in Apple Wallet / Google Wallet. Skip the airline counter.</td>
+            <td style="padding:8px 0;"><strong>Online check-in complete</strong> — have your boarding pass ready on your phone.</td>
           </tr>
         </table>
       </div>
@@ -2864,7 +2866,8 @@ def send_airport_pre_pickup_reminder(booking: dict, prefs: Optional[dict] = None
         <a href="https://roxtaxi.com/track?id={booking['id']}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:800;padding:12px 22px;border-radius:999px;font-size:14px;">Track driver live →</a>
         <a href="https://wa.me/12424322587" style="display:inline-block;margin-left:8px;background:#25D366;color:#fff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:999px;font-size:13px;">WhatsApp us</a>
       </div>
-      <p style="color:#94a3b8;font-size:11px;margin-top:22px;">Safe travels. — Rox Taxi Service &amp; Tours · Nassau, Bahamas</p>
+      <p style="color:#64748B;font-size:13px;margin-top:22px;">Thank you for choosing Rox Taxi Service &amp; Tours. We wish you a safe journey.</p>
+      <p style="color:#94a3b8;font-size:11px;margin-top:6px;">Rox Taxi Service &amp; Tours · Nassau, Bahamas · +1 (242) 432-2587</p>
     </div>
     """
 
@@ -2881,10 +2884,10 @@ def send_airport_pre_pickup_reminder(booking: dict, prefs: Optional[dict] = None
             )
         else:
             checklist_sms = (
-                f"Rox Taxi: 1hr to pickup at {pickup}. Quick check — Passport ✓ "
-                f"Belongings ✓ Flight confirmed ✓ Checked in online ✓"
-                + (f" Flight {flight}." if flight else "")
-                + f" Track: roxtaxi.com/track?id={booking['id']}"
+                f"Rox Taxi: Dear {guest_first}, your airport transfer is in about 1 hour "
+                f"(pickup {when_pretty[11:16] or when_pretty} at {pickup}). Before your driver arrives, please "
+                f"have your passport and travel documents with you and secure all personal items and belongings. "
+                f"Track your driver: roxtaxi.com/track?id={booking['id']} · Help: +1 242 432 2587. Safe travels."
             )
         report["sms"].update(send_sms(booking["customer_phone"], checklist_sms))
     else:

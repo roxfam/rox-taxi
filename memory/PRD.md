@@ -872,3 +872,17 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 ## 2026-10-27 — Daily Google review rotation
 - GET /api/reviews now loads all active 4★/5★ reviews and shuffles them with a Nassau-date seed (same order all day, new mix daily); returns rotation_day. Hourly Google sync unchanged (Places API returns max 5 per call, pool grows over time).
 
+
+## 2026-10-27 — Review timing, gift reminder, manual booking luggage/locations/tip
+- Existing review follow-up (SMS + email to Google review) now fires 3h after trip completed (REVIEW_FOLLOWUP_DELAY_HOURS default 3).
+- Gift reminder email 7 days after gift email if friend hasn't scheduled (once, gift_reminder_sent_at).
+- Admin manual booking: pickup/drop-off dropdown from /api/taxi/locations + "Custom (not listed)" text; extra bags × price per bag auto-added to total (luggage_fee stored); tip_enabled=True.
+- POST /api/bookings/{id}/tip (tip_enabled, unpaid only) adjusts total; Pay page TipPicker (No tip/10/15/20%/custom); pay-link email mentions tip.
+
+
+## 2026-10-27 — Airport alarms, guest airport reminder, SEO, banner speed
+- Owner early-airport alarms (growth.send_early_airport_alarms, 5-min loop): airport trips with pickup before 7 AM Nassau or booked <12h ahead → immediate short-notice text + call; 9 PM night-before text (pre-7AM pickups); 90-min-before text + Twilio voice call. Each stage once per booking.
+- Guest T-60 airport reminder now only for trips going TO the airport (_is_airport_departure), naive pickup times read as Nassau time (was UTC), professional wording (passport/documents, secure personal items, belongings) via SMS + email.
+- SEO: fixed outdated "$32" fares → "$35", stronger Home title/description, new visible SeoContentBlock on Home with Nassau/Bahamas keywords + internal links, /cruise-schedule in sitemap.
+- Top welcome-offer banner scroll (.welcome-marquee-slow) 60s → 40s.
+

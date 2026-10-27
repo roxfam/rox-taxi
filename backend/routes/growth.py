@@ -307,10 +307,59 @@ async def gift_schedule(bid: str, body: GiftScheduleIn):
     return _gift_info({**b, **upd})
 
 
+async def send_gift_reminders() -> int:
+    """Friend hasn't picked a date a week after the gift email → one reminder email."""
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    from notifications import send_email  # noqa: PLC0415
+    n = 0
+    async for b in _db.bookings.find({"is_gift": True, "payment_status": "paid", "gift_sent_at": {"$lte": week_ago},
+                                       "gift_scheduled_at": None, "gift_reminder_sent_at": None,
+                                       "status": {"$ne": "cancelled"}}).limit(50):
+        claim = await _db.bookings.update_one({"id": b["id"], "gift_reminder_sent_at": None},
+                                              {"$set": {"gift_reminder_sent_at": datetime.now(timezone.utc).isoformat()}})
+        if not claim.modified_count:
+            continue
+        link = f"{_site}/gift-schedule?id={b['id']}&t={_gift_token(b['id'])}"
+        to, giver = b["gift_recipient_name"].split()[0], b.get("customer_name", "A friend")
+        body = (f"<div style='font-family:Georgia,serif;max-width:560px;margin:auto;color:#0B3B5C'>"
+                f"<p style='letter-spacing:3px;font-size:11px;color:#D4A94A;text-transform:uppercase'>Your gift is waiting</p>"
+                f"<h1 style='font-size:28px;margin:8px 0'>Hi {_esc(to)}, don't forget your {_esc(b['item_name'])}!</h1>"
+                f"<p style='font-family:Arial;font-size:14px'>{_esc(giver)} sent you this Bahamas gift. Pick a date and pickup whenever you're ready — it takes a minute.</p>"
+                f"<p><a href='{link}' style='display:inline-block;background:#0B3B5C;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:bold;font-family:Arial'>Pick your date &amp; pickup</a></p>"
+                f"<p style='font-family:Arial;font-size:13px;color:#64748B'>Gift reference {b['id']} · Questions? WhatsApp +1 242 432 2587.</p></div>")
+        try:
+            send_email(b["gift_recipient_email"], f"Reminder: your gift from {giver} is waiting", body, category="confirmation")
+            n += 1
+        except Exception as e:  # noqa: BLE001
+            log.warning("gift reminder err: %s", e)
+    return n
+
+
+class TipIn(BaseModel):
+    tip_amount: float = Field(..., ge=0, le=500)
+
+
+@router.post("/bookings/{bid}/tip")
+async def set_booking_tip(bid: str, body: TipIn):
+    """Guest picks a driver tip on the pay page before paying (manual bookings)."""
+    b = await _db.bookings.find_one({"id": bid})
+    if not b or not b.get("tip_enabled"):
+        raise HTTPException(404, "Tips aren't available for this booking")
+    if b.get("payment_status") == "paid" or b.get("status") == "cancelled":
+        raise HTTPException(400, "This booking can't be changed")
+    old = float(b.get("tip_amount") or 0)
+    tip = round(body.tip_amount, 2)
+    total = round(float(b.get("total") or 0) - old + tip, 2)
+    await _db.bookings.update_one({"id": bid}, {"$set": {"tip_amount": tip, "total": total,
+                                                        "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"tip_amount": tip, "total": total}
+
+
 async def send_due_gifts() -> int:
     now = datetime.now(NASSAU)
     if now.hour < 8:
         return 0
+    await send_gift_reminders()
     n = 0
     async for b in _db.bookings.find({"is_gift": True, "payment_status": "paid", "gift_sent_at": None,
                                        "gift_send_on": {"$lte": now.date().isoformat(), "$nin": [None, ""]}}).limit(50):
@@ -430,11 +479,99 @@ async def send_due_return_reminders() -> int:
     return sent
 
 
+def _owner_call(message: str) -> int:
+    """Ring every owner number with a spoken alarm (Twilio Voice)."""
+    from notifications import _owner_sms_numbers, get_secret  # noqa: PLC0415
+    sid, token, from_num = (get_secret(k, "").strip() for k in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER"))
+    if not (sid and token and from_num):
+        return 0
+    from twilio.rest import Client  # noqa: PLC0415
+    say = html.escape(message)
+    twiml = f"<Response><Say voice='alice'>{say}</Say><Pause length='1'/><Say voice='alice'>{say}</Say></Response>"
+    n = 0
+    for num in _owner_sms_numbers():
+        try:
+            Client(sid, token).calls.create(to=num, from_=from_num, twiml=twiml)
+            n += 1
+        except Exception as e:  # noqa: BLE001
+            log.warning("owner alarm call err: %s", e)
+    return n
+
+
+def _pickup_dt(b: dict) -> Optional[datetime]:
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    try:
+        dt = datetime.fromisoformat(str(b.get("booking_date") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt.replace(tzinfo=ZoneInfo("America/Nassau")) if dt.tzinfo is None else dt
+
+
+def _is_early_airport(b: dict, pick: datetime) -> Optional[str]:
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    from server import _is_airport_bound  # noqa: PLC0415
+    if not _is_airport_bound(b):
+        return None
+    if pick.astimezone(ZoneInfo("America/Nassau")).hour < 7:
+        return "before 7 AM"
+    try:
+        created = datetime.fromisoformat(str(b.get("created_at")).replace("Z", "+00:00"))
+        if (pick - created).total_seconds() < 12 * 3600:
+            return "booked under 12 hours ahead"
+    except ValueError:
+        pass
+    return None
+
+
+async def send_early_airport_alarms() -> int:
+    """Owner alarms for early airport trips: new short-notice alert, 9 PM night-before text, 90-min text + call."""
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    from notifications import send_owner_sms  # noqa: PLC0415
+    nas = ZoneInfo("America/Nassau")
+    now = datetime.now(timezone.utc)
+    now_local = now.astimezone(nas)
+    fired = 0
+    async for b in _db.bookings.find({"status": {"$nin": ["cancelled", "completed", "no_show", "pending_payment"]},
+                                       "booking_date": {"$nin": [None, ""]}, "owner_alarm_done": {"$ne": True}}):
+        pick = _pickup_dt(b)
+        if not pick or pick < now - timedelta(minutes=10) or pick > now + timedelta(hours=36):
+            continue
+        why = _is_early_airport(b, pick)
+        if not why:
+            continue
+        local = pick.astimezone(nas)
+        when = local.strftime("%a %-I:%M %p")
+        info = (f"{b.get('customer_name', 'Guest')} · {b.get('pickup_location') or '?'} → {b.get('dropoff_location') or b.get('item_name', '')} "
+                f"· {b.get('passengers', 1)} pax · booking {b['id']}")
+        mins = (pick - now).total_seconds() / 60
+        stages = []
+        if why.startswith("booked") and not b.get("owner_alarm_new_at"):
+            stages.append(("owner_alarm_new_at", f"⏰ ROX ALERT — SHORT-NOTICE AIRPORT RIDE {when}: {info}", True))
+        night_before = local.date() == (now_local + timedelta(days=1)).date() and now_local.hour >= 21
+        if local.hour < 7 and (night_before or mins <= 10 * 60) and not b.get("owner_alarm_night_at"):
+            stages.append(("owner_alarm_night_at", f"⏰ ROX ALERT — EARLY AIRPORT RIDE TOMORROW {when}: {info}. Set your alarm!", False))
+        if mins <= 90 and not b.get("owner_alarm_90_at"):
+            stages.append(("owner_alarm_90_at", f"⏰ ROX ALARM — AIRPORT PICKUP IN {int(mins)} MIN ({when}): {info}", True))
+        for field, msg, call in stages:
+            claim = await _db.bookings.update_one({"id": b["id"], field: None}, {"$set": {field: now.isoformat()}})
+            if not claim.modified_count:
+                continue
+            send_owner_sms(msg[:600], kind="booking", force_priority=True)
+            if call:
+                spoken = f"Rox Taxi alarm. Airport pickup {when} for {b.get('customer_name', 'a guest')} at {b.get('pickup_location') or 'the pickup point'}. Booking {' '.join(b['id'])}."
+                await asyncio.to_thread(_owner_call, spoken)
+            fired += 1
+        if b.get("owner_alarm_90_at") or any(s[0] == "owner_alarm_90_at" for s in stages):
+            await _db.bookings.update_one({"id": b["id"]}, {"$set": {"owner_alarm_done": True}})
+    return fired
+
+
 async def return_reminder_loop():
     while True:
         try:
             await send_due_return_reminders()
             await send_due_gifts()
+            await send_early_airport_alarms()
         except Exception as e:  # noqa: BLE001
             log.warning("return reminder loop err: %s", e)
         await asyncio.sleep(300)
