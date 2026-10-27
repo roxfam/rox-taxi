@@ -886,3 +886,5 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - SEO: fixed outdated "$32" fares → "$35", stronger Home title/description, new visible SeoContentBlock on Home with Nassau/Bahamas keywords + internal links, /cruise-schedule in sitemap.
 - Top welcome-offer banner scroll (.welcome-marquee-slow) 60s → 40s.
 
+- Chat button (ChatWidget chat-fab): hover/focus shows rotating gold conic halo (.chat-fab-halo), soft gold bloom, brighter ring + glow shadow.
+

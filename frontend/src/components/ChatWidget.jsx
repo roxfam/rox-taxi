@@ -406,7 +406,12 @@ export default function ChatWidget() {
               }}
             />
           )}
-          <span className="relative w-16 h-16 rounded-full bg-gradient-to-br from-[#0B192C] via-[#0B3B5C] to-[#0B192C] ring-2 ring-[#D4A94A]/60 group-hover:ring-[#D4A94A] group-hover:scale-105 active:scale-95 transition-all duration-200 shadow-[0_16px_40px_rgba(11,25,44,0.55)] flex items-center justify-center overflow-hidden">
+          {/* Fancy hover glow: rotating gold halo + soft bloom */}
+          <span aria-hidden data-testid="chat-fab-hover-glow"
+            className="chat-fab-halo absolute -inset-[5px] rounded-full pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-300" />
+          <span aria-hidden
+            className="absolute -inset-4 rounded-full pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-500 blur-xl bg-[radial-gradient(circle,rgba(245,225,164,0.75)_0%,rgba(212,169,74,0.35)_45%,rgba(212,169,74,0)_72%)]" />
+          <span className="relative w-16 h-16 rounded-full bg-gradient-to-br from-[#0B192C] via-[#0B3B5C] to-[#0B192C] ring-2 ring-[#D4A94A]/60 group-hover:ring-[#F5E1A4] group-hover:scale-105 group-hover:shadow-[0_0_28px_rgba(245,225,164,0.7),0_16px_40px_rgba(11,25,44,0.55)] active:scale-95 transition-[transform,box-shadow] duration-300 shadow-[0_16px_40px_rgba(11,25,44,0.55)] flex items-center justify-center overflow-hidden">
             {open ? (
               <X className="w-6 h-6 text-white" />
             ) : (

@@ -234,6 +234,16 @@ img:not(.allow-save) {
     -webkit-touch-callout: none;
     user-select: none;
 }
+.chat-fab-halo {
+    background: conic-gradient(from 0deg, #D4A94A, #F5E1A4, #fff8e1, #E86A3C, #D4A94A);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+    animation: chat-halo-spin 2.4s linear infinite;
+    filter: drop-shadow(0 0 6px rgba(245, 225, 164, 0.9));
+}
+@keyframes chat-halo-spin {
+    to { transform: rotate(360deg); }
+}
 .guest-photo-marquee {
     animation-duration: 90s;
 }
