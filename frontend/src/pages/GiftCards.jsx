@@ -40,8 +40,8 @@ export default function GiftCards() {
   const cancelled = params.get("cancelled");
 
   const finalAmount = custom ? Number(custom) : amount;
-  const giftVat = Math.round((finalAmount || 0) * 10) / 100;
-  const giftTotal = (finalAmount || 0) + giftVat;
+  const giftFee = Math.round((finalAmount || 0) * 5) / 100;
+  const giftTotal = (finalAmount || 0) + giftFee;
   const activeTheme = THEMES.find((t) => t.id === theme) || THEMES[0];
 
   const submit = async (e) => {
@@ -173,7 +173,7 @@ export default function GiftCards() {
             </div>
             <div className="mt-4 space-y-1 text-sm text-[#0B3B5C]" data-testid="gift-price-breakdown">
               <div className="flex justify-between"><span>Card value</span><span data-testid="gift-card-value">{money(finalAmount || 0)}</span></div>
-              <div className="flex justify-between text-[#64748B]"><span>Bahamas VAT 10%</span><span data-testid="gift-vat">{money(giftVat)}</span></div>
+              <div className="flex justify-between text-[#64748B]"><span>Processing fee 5%</span><span data-testid="gift-processing-fee">{money(giftFee)}</span></div>
               <div className="flex justify-between font-black border-t border-[#EFE7D5] pt-1"><span>Total today</span><span data-testid="gift-total">{money(giftTotal)}</span></div>
             </div>
             <label className="mt-3 flex items-start gap-2 text-[11px] text-[#0B3B5C] cursor-pointer">

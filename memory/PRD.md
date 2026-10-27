@@ -896,6 +896,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Processing fee wording fixed to 5% everywhere (Taxi, Tours, Car Rental pages, cruise groups FAQ); bundle bookings now add 5% processing fee on (price+VAT).
 - Reserve box click tracking: each highlight links to ?book=<id>; POST /api/quickbook-click (daily buckets in quickbook_clicks); admin GET /api/admin/quickbook-clicks → "Most tapped in the last 30 days" in QuickbookSettingsCard with "+ Top pick".
 - Reserve box pauses on touch/scroll (touchstart/move), resumes 5s after finger lifts; mouse hover pause uses pointerType=mouse only.
+- Gift cards: VAT removed; buyer now pays card value + 5% processing fee (e.g. $100 card → $105), balance stays at card value. Backend /api/gift-cards/purchase + GiftCards.jsx breakdown updated.
+
 
 
 

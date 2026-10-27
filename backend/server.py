@@ -1889,11 +1889,12 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
         except Exception:  # noqa: BLE001
             scheduled_at_iso = None
     card_value = round(float(req.amount), 2)
-    vat = round(card_value * BAHAMAS_VAT_PCT, 2)
-    charged = round(card_value + vat, 2)
+    fee = round(card_value * PROCESSING_FEE_PCT, 2)
+    charged = round(card_value + fee, 2)
     doc = {
         "code": code,
-        "vat_amount": vat,
+        "vat_amount": 0.0,
+        "processing_fee": fee,
         "total_charged": charged,
         "amount": round(float(req.amount), 2),
         "balance": round(float(req.amount), 2),
@@ -1913,7 +1914,7 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
     }
     await db.gift_cards.insert_one(doc)
     if req.pay_with == "paypal":
-        return {"code": code, "vat_amount": vat, "total_charged": charged, "pay_with": "paypal"}
+        return {"code": code, "processing_fee": fee, "total_charged": charged, "pay_with": "paypal"}
 
     host_url = str(request.base_url).rstrip("/")
     webhook_url = f"{host_url}/api/webhook/stripe"
@@ -1925,7 +1926,7 @@ async def gift_card_purchase(req: GiftCardPurchaseRequest, request: Request):
         metadata={"gift_code": code, "type": "gift_card", "buyer_email": req.buyer_email},
     ))
     await db.gift_cards.update_one({"code": code}, {"$set": {"stripe_session_id": session.session_id, "updated_at": now_iso()}})
-    return {"checkout_url": session.url, "code": code, "vat_amount": vat, "total_charged": charged}
+    return {"checkout_url": session.url, "code": code, "processing_fee": fee, "total_charged": charged}
 
 
 def _price_addons(catalog: list, ids: list, qty: Optional[dict], pax: int):
