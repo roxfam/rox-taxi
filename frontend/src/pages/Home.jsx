@@ -11,7 +11,6 @@ import { LoveBeachPick } from "../components/LoveBeachPick";
 import { BundleDeals } from "../components/BundleDeals";
 import { CruiseTodayStrip } from "../components/CruiseTodayStrip";
 import { SeoContentBlock } from "../components/SeoContentBlock";
-import { MobileMore } from "../components/MobileMore";
 import GoogleReviews from "../components/GoogleReviews";
 import HomeHeroCarousel from "../components/HomeHeroCarousel";
 import QuickBookWidget from "../components/QuickBookWidget";
@@ -125,7 +124,6 @@ export default function Home() {
       <BundleDeals className="max-w-7xl mx-auto px-6 lg:px-10 py-12" />
 
       {/* DOLPHIN SWIM FEATURE — direct link to Blue Lagoon operator */}
-      <MobileMore id="dolphin" label="More deals: dolphins & packages">
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-12" data-testid="home-dolphin-swim">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B3B5C] via-[#0B3B5C] to-[#0B192C] text-white group">
           <div className="absolute inset-0 opacity-30">
@@ -193,7 +191,6 @@ export default function Home() {
 
       {/* PACKAGE DEALS — bundle & save strip (auto-hides if no active packages) */}
       <PackagesStrip variant="home" />
-      </MobileMore>
 
       {/* FEATURED TOURS */}
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-24" data-testid="featured-tours">
@@ -272,7 +269,6 @@ export default function Home() {
         </div>
       </section>
 
-      <MobileMore id="groups" label="Gift cards, groups & how it works">
       <GiftCardPromo />
 
       {/* GROUP & WEDDING CTA */}
@@ -350,7 +346,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-      </MobileMore>
 
       <SeoContentBlock />
 
@@ -359,9 +354,7 @@ export default function Home() {
       <GuestPhotoMarquee />
 
       {/* FEATURED GUEST WALL — pinned guest photos surfaced site-wide */}
-      <MobileMore id="guest-wall" label="More guest photos">
-        <FeaturedGuestWall />
-      </MobileMore>
+      <FeaturedGuestWall />
     </div>
   );
 }
