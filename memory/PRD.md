@@ -907,6 +907,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - 2026-10-31: New taxi routes airport-palmcay (LPIA → Palm Cay $85) and palmcay-airport (Palm Cay → LPIA $85); base fare for 2 guests, standard +$5/extra guest, luggage policy, processing fee and airport add-ons apply.
 - 2026-10-31: New taxi routes palmcay-paradise / paradise-palmcay ($45) and palmcay-cablebeach / cablebeach-palmcay ($75), both directions; 2-guest base, standard extras. Twilio account status checked: active.
 - 2026-10-31: Google reviews rotate every 5.5s (was 8s); header shows the real Google review count (17) from last sync. Newest-reviews sync blocked: Google key is referrer-restricted, which the "newest" reviews endpoint refuses; Places (New) only returns the 5 "most relevant" reviews.
+- 2026-10-31: Review rotation set to 7s. Optional GOOGLE_PLACES_SERVER_KEY env (preferred over GOOGLE_PLACES_API_KEY for review sync). Review-request text/email (3h delay) now also covers confirmed trips whose pickup time was 4h+ ago, since trips are rarely marked "completed".
+
 
 
 

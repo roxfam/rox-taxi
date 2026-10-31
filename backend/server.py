@@ -4943,9 +4943,18 @@ async def _run_review_followup_tick() -> int:
         ],
     })
 
+    # Most trips are never marked "completed", so also treat confirmed trips whose pickup was 4h+ ago as finished.
+    ended_before = (now - timedelta(hours=REVIEW_FOLLOWUP_DELAY_HOURS + 1)).isoformat()
+    past_trips = await db.bookings.find({
+        "status": {"$in": ["confirmed", "driver_assigned", "en_route", "arrived"]},
+        "booking_date": {"$gte": oldest, "$lte": ended_before},
+        "review_followup_sent_at": {"$exists": False},
+    }).to_list(200)
+    candidates = await cur.to_list(500) + past_trips
+
     from notifications import notify_guest_review_followup  # noqa: PLC0415
     sent = 0
-    async for b in cur:
+    for b in candidates:
         if not b.get("customer_email") and not b.get("customer_phone"):
             continue
         try:

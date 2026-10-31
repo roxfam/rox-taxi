@@ -204,7 +204,7 @@ async def _sync_google_reviews_bg() -> None:
     convenience.
     """
     try:
-        env_key = (os.environ.get("GOOGLE_PLACES_API_KEY") or "").strip()
+        env_key = (os.environ.get("GOOGLE_PLACES_SERVER_KEY") or os.environ.get("GOOGLE_PLACES_API_KEY") or "").strip()
         env_place = (os.environ.get("GOOGLE_PLACE_ID") or "").strip()
 
         cfg = await _db.site_config.find_one({"_id": "main"}) or {}
