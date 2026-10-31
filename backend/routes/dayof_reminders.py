@@ -445,6 +445,7 @@ class ManualBooking(BaseModel):
     payment: str = Field("unpaid", pattern="^(unpaid|cash|zelle|card_offline)$")
     send_confirmation: bool = True
     send_pay_link: bool = False
+    text_pay_link: bool = False
 
 
 @router.get("/admin/bookings/{booking_id}/guest-history")
@@ -499,7 +500,9 @@ async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_d
     if (req.send_confirmation or req.send_pay_link) and not (req.customer_email or "").strip():
         raise HTTPException(400, "Guest email is required to send a confirmation or pay link")
     paid = req.payment != "unpaid"
-    doc = {k: v for k, v in req.model_dump().items() if k not in ("payment", "send_confirmation", "send_pay_link")}
+    if req.text_pay_link and req.payment == "unpaid" and not (req.customer_phone or "").strip():
+        raise HTTPException(400, "Guest phone is required to text a pay link")
+    doc = {k: v for k, v in req.model_dump().items() if k not in ("payment", "send_confirmation", "send_pay_link", "text_pay_link")}
     doc.update({
         "id": str(uuid.uuid4())[:8].upper(),
         "item_id": req.item_id or "",
@@ -528,7 +531,44 @@ async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_d
             report["pay_link"] = await admin_send_payment_email(doc["id"], SendPaymentEmailRequest(), admin)
         except HTTPException as he:
             report["pay_link"] = {"sent": False, "error": he.detail}
+    if req.text_pay_link and not paid:
+        try:
+            report["pay_text"] = await admin_text_pay_link(doc["id"], admin)
+        except HTTPException as he:
+            report["pay_text"] = {"sent": False, "error": he.detail}
     return {"created": True, "booking": doc, "report": report}
+
+
+@router.post("/admin/bookings/{booking_id}/text-pay-link")
+async def admin_text_pay_link(booking_id: str, admin: str = Depends(_admin_dep)):
+    b = await _db.bookings.find_one({"id": booking_id.upper()}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    phone = (b.get("customer_phone") or "").strip()
+    if not phone:
+        raise HTTPException(400, "No guest phone on this booking")
+    if (b.get("payment_status") or "").lower() == "paid":
+        raise HTTPException(400, "This booking is already paid")
+    last = b.get("pay_text_last_sent_at")
+    if last:
+        delta = (datetime.now(timezone.utc) - datetime.fromisoformat(last.replace("Z", "+00:00"))).total_seconds()
+        if delta < 60:
+            raise HTTPException(429, f"Pay link texted {int(delta)}s ago, try again in {60 - int(delta)}s")
+    local = _local_dt(b.get("booking_date") or "")
+    when = f" on {local.strftime('%a %b %d, %I:%M %p').replace(' 0', ' ')}" if local else ""
+    first = (b.get("customer_name") or "there").split(" ")[0]
+    total = float(b.get("total") or b.get("price") or 0)
+    url = f"{_site_url()}/pay?id={b['id']}"
+    body = (f"Hi {first}, it's Rox Taxi. Your {b.get('item_name') or 'booking'}{when} is ready: ${total:,.2f}. "
+            f"Tap to pay securely (add a driver tip if you like): {url}")
+    from notifications import send_sms  # noqa: PLC0415
+    r = await asyncio.to_thread(send_sms, phone, body)
+    await _db.bookings.update_one({"id": b["id"]}, {
+        "$set": {"pay_text_last_sent_at": _now_iso()},
+        "$push": {"status_history": {"status": b.get("status"), "at": _now_iso(), "by": admin,
+                                     "note": "Pay link texted" if r.get("sent") else f"Pay link text failed: {r.get('error')}"}},
+    })
+    return {"sent": bool(r.get("sent")), "to": phone, "url": url, "error": r.get("error")}
 
 
 class BookingCancel(BaseModel):

@@ -15,7 +15,7 @@ const EMPTY = {
   service_type: "taxi", item_id: "", item_name: "", customer_name: "", customer_email: "", customer_phone: "",
   booking_date: "", pickup_location: "", dropoff_location: "", passengers: 1, flight_number: "", notes: "",
   extra_luggage: 0, luggage_price: 3,
-  total: "", payment: "unpaid", send_confirmation: true, send_pay_link: true,
+  total: "", payment: "unpaid", send_confirmation: true, send_pay_link: true, text_pay_link: true,
 };
 
 const input = "w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#0B3B5C]";
@@ -100,12 +100,15 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
     try {
       const body = { ...f, passengers: Number(f.passengers) || 1, total: Number(f.total) || 0,
         extra_luggage: Number(f.extra_luggage) || 0, luggage_price: Number(f.luggage_price) || 0,
-        send_pay_link: f.payment === "unpaid" && f.send_pay_link };
+        send_pay_link: f.payment === "unpaid" && f.send_pay_link,
+        text_pay_link: f.payment === "unpaid" && !!f.text_pay_link && !!f.customer_phone.trim() };
       if (f.service_type === "cable_beach" && !body.item_name) body.item_name = "Cable Beach Day";
       const { data } = await api.post("/admin/bookings/manual", body);
       const extra = [];
       if (data.report?.confirmation?.email?.sent) extra.push("confirmation sent");
       if (data.report?.pay_link?.sent) extra.push("pay link sent");
+      if (data.report?.pay_text?.sent) extra.push("pay link texted");
+      else if (data.report?.pay_text?.error) toast.error(`Pay link text failed: ${data.report.pay_text.error}`);
       toast.success(`Booking ${data.booking.id} created${extra.length ? ` · ${extra.join(" · ")}` : ""}`);
       onCreated(data.booking);
     } catch (err) {
@@ -168,6 +171,9 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
           <label className="inline-flex items-center gap-2"><input type="checkbox" checked={f.send_confirmation} onChange={set("send_confirmation")} data-testid="new-booking-send-confirmation" /> Email + text the guest a confirmation</label>
           {f.payment === "unpaid" && (
             <label className="inline-flex items-center gap-2"><input type="checkbox" checked={f.send_pay_link} onChange={set("send_pay_link")} data-testid="new-booking-send-paylink" /> Email the guest a payment link (with option to add a driver tip)</label>
+          )}
+          {f.payment === "unpaid" && (
+            <label className="inline-flex items-center gap-2"><input type="checkbox" checked={!!f.text_pay_link} onChange={set("text_pay_link")} data-testid="new-booking-text-paylink" /> Text the guest a tap-to-pay link {!f.customer_phone?.trim() && <span className="text-xs text-[#94a3b8]">(add a phone number)</span>}</label>
           )}
         </div>
         <button type="submit" disabled={busy} className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#0B3B5C] text-white py-2.5 text-sm font-bold disabled:opacity-60" data-testid="new-booking-submit">
