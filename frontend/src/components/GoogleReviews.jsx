@@ -15,7 +15,7 @@ import { api } from "../lib/api";
  * hourly cron surface without a page reload.
  */
 const VISIBLE_COUNT = 3;      // cards shown at once (matches lg:grid-cols-3)
-const ROTATE_MS = 8000;       // dwell time per rotation
+const ROTATE_MS = 5500;       // dwell time per rotation
 const REFETCH_MS = 5 * 60000; // silent refetch to catch new syncs
 
 export default function GoogleReviews() {

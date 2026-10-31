@@ -906,6 +906,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - New taxi routes: downtown-palmcay (Downtown Nassau → Palm Cay $55) and palmcay-downtown (Palm Cay → Downtown $55); location tag palm_cay; "Palm Cay" in Taxi page dropdown + destination cards.
 - 2026-10-31: New taxi routes airport-palmcay (LPIA → Palm Cay $85) and palmcay-airport (Palm Cay → LPIA $85); base fare for 2 guests, standard +$5/extra guest, luggage policy, processing fee and airport add-ons apply.
 - 2026-10-31: New taxi routes palmcay-paradise / paradise-palmcay ($45) and palmcay-cablebeach / cablebeach-palmcay ($75), both directions; 2-guest base, standard extras. Twilio account status checked: active.
+- 2026-10-31: Google reviews rotate every 5.5s (was 8s); header shows the real Google review count (17) from last sync. Newest-reviews sync blocked: Google key is referrer-restricted, which the "newest" reviews endpoint refuses; Places (New) only returns the 5 "most relevant" reviews.
+
 
 
 

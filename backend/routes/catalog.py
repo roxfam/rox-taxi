@@ -165,10 +165,11 @@ async def list_reviews(limit: int = 60):
     random.Random(day).shuffle(reviews)
     reviews = reviews[:limit]
     avg = sum(int(r.get("rating") or 0) for r in reviews) / len(reviews)
+    run = await _db.cron_runs.find_one({"kind": "google_reviews", "last_upstream_count": {"$exists": True}}) or {}
     return {
         "place": "Rox Taxi Service & Tours",
         "rating": round(avg, 1),
-        "total": len(reviews),
+        "total": max(len(reviews), int(run.get("last_upstream_count") or 0)),
         "source": "Google",
         "rotation_day": day,
         "reviews": reviews,
