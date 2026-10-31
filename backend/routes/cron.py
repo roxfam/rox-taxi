@@ -9,6 +9,7 @@ Every endpoint here MUST:
 
 Wired up in server.py via configure() + include_router().
 """
+import asyncio
 import hmac
 import logging
 import os
@@ -283,6 +284,8 @@ async def _sync_google_reviews_bg() -> None:
                 upsert=True,
             )
             upserted += 1
+            if rating >= 5 and not existing:
+                await _alert_new_five_star(doc)
             # Draft an owner reply the first time we see a fresh 5-star
             # review. Existing rows keep whatever draft the owner has
             # tweaked; regeneration is exposed as a separate button.
@@ -318,6 +321,20 @@ async def _sync_google_reviews_bg() -> None:
             )
         except Exception:  # noqa: BLE001
             pass
+
+
+async def _alert_new_five_star(review: dict) -> None:
+    """Text the owner when a brand-new 5★ Google review lands, so they can thank the guest."""
+    try:
+        from notifications import send_owner_sms  # noqa: PLC0415
+        snippet = (review.get("text") or "").strip().replace("\n", " ")
+        snippet = (snippet[:140] + "…") if len(snippet) > 140 else snippet
+        body = (f"⭐⭐⭐⭐⭐ New Google review from {review.get('author_name') or 'a guest'}!\n"
+                + (f"\"{snippet}\"\n" if snippet else "")
+                + "Thank them: roxtaxi.com/admin/manage (Reviews tab)")
+        await asyncio.to_thread(send_owner_sms, body, "review")
+    except Exception as ex:  # noqa: BLE001
+        logging.warning("new 5-star alert err: %s", ex)
 
 
 async def _sync_newest_legacy(api_key: str, place_id: str, referer: str) -> int:
@@ -367,6 +384,8 @@ async def _sync_newest_legacy(api_key: str, place_id: str, referer: str) -> int:
                 "created_at": _now_iso(),
             })
             added += 1
+            if rating >= 5:
+                await _alert_new_five_star({"author_name": author, "text": body})
         await _db.cron_runs.update_one(
             {"kind": "google_reviews_newest"},
             {"$set": {"last_success_at": _now_iso(), "last_added": added}}, upsert=True)

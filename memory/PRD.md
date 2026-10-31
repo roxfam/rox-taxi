@@ -912,6 +912,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - 2026-10-31: "Text pay link" — POST /api/admin/bookings/{id}/text-pay-link (admin, 60s rate limit, unpaid only) SMS with {site}/pay?id=…; manual booking dialog checkbox "Text the guest a tap-to-pay link"; green "Text pay link" button next to "Resend pay link" in admin bookings table.
 - 2026-10-31: Paid Text Alert — owner payment SMS now starts "🚕 PAID FROM YOUR LINK · ready to dispatch" when the booking had a texted/emailed pay link, and bypasses quiet hours (force_priority). Google key (…MbF0) still has a website referrer restriction → review sync blocked until removed.
 - 2026-10-31: GOOGLE_PLACES_SERVER_KEY added (unrestricted, Places API + New) → newest-reviews sync working; reviews grew 6 → 11 (Linnea Lemon, Melanie B, Ramy Sydhom, Jonnique Smith, King Juice added).
+- 2026-10-31: New Review Alert — owner SMS (kind "review", respects quiet hours) the first time a 5★ Google review is synced (both Places New and newest-legacy paths), with snippet + link to admin Reviews tab (AI reply draft already generated there).
+
 
 
 
