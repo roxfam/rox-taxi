@@ -6,8 +6,10 @@ and avoid circular deps.
 """
 from typing import Optional, Dict, Any, List
 from pathlib import Path
+import asyncio
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -1574,6 +1576,79 @@ async def admin_regenerate_reply_draft(review_id: str, _: str = Depends(_admin_d
 
 class ReplyDraftUpdate(BaseModel):
     owner_reply_draft: str
+
+
+def _name_regex(author: str) -> Optional[str]:
+    parts = [p for p in re.split(r"\s+", (author or "").strip()) if p.isalpha() or len(p) > 1]
+    if not parts:
+        return None
+    first = re.escape(parts[0].strip("."))
+    if len(parts) == 1:
+        return f"^{first}\\b"
+    last = parts[-1].strip(".")
+    return f"^{first}\\b.*\\b{re.escape(last[0])}" if len(last) == 1 else f"^{first}\\b.*\\b{re.escape(last)}\\b"
+
+
+@router.get("/admin/reviews/{review_id}/thank-you/matches")
+async def admin_thank_you_matches(review_id: str, q: Optional[str] = None, _: str = Depends(_admin_dep)):
+    rev = await _db.reviews.find_one({"id": review_id}, {"_id": 0, "author_name": 1})
+    if not rev:
+        raise HTTPException(404, "Review not found")
+    q = (q or "").strip()[:60]
+    if q:
+        digits = re.sub(r"\D", "", q)
+        who = ({"customer_phone": {"$regex": re.escape(digits[-7:])}} if len(digits) >= 4
+               else {"$or": [{"customer_name": {"$regex": re.escape(q), "$options": "i"}}, {"id": q.upper()}]})
+    else:
+        rx = _name_regex(rev.get("author_name") or "")
+        if not rx:
+            return {"matches": []}
+        who = {"customer_name": {"$regex": rx, "$options": "i"}}
+    rows = await _db.bookings.find(
+        {**who, "customer_phone": {"$nin": [None, ""]}, "status": {"$ne": "cancelled"}},
+        {"_id": 0, "id": 1, "customer_name": 1, "customer_phone": 1, "item_name": 1, "booking_date": 1},
+    ).sort("booking_date", -1).to_list(5)
+    return {"matches": rows}
+
+
+class ThankYouReq(BaseModel):
+    booking_id: str
+    message: Optional[str] = Field(None, max_length=600)
+
+
+async def _thank_you_ctx(review_id: str, booking_id: str):
+    rev = await _db.reviews.find_one({"id": review_id}, {"_id": 0})
+    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not rev or not b:
+        raise HTTPException(404, "Review or booking not found")
+    if not (b.get("customer_phone") or "").strip():
+        raise HTTPException(400, "That booking has no phone number")
+    return rev, b
+
+
+@router.post("/admin/reviews/{review_id}/thank-you/draft")
+async def admin_thank_you_draft(review_id: str, req: ThankYouReq, _: str = Depends(_admin_dep)):
+    from routes.cron import generate_thank_you_text  # noqa: PLC0415
+    rev, b = await _thank_you_ctx(review_id, req.booking_id)
+    return {"message": await generate_thank_you_text(rev, b)}
+
+
+@router.post("/admin/reviews/{review_id}/thank-you/send")
+async def admin_thank_you_send(review_id: str, req: ThankYouReq, admin: str = Depends(_admin_dep)):
+    msg = (req.message or "").strip()
+    if not msg:
+        raise HTTPException(400, "Message is empty")
+    rev, b = await _thank_you_ctx(review_id, req.booking_id)
+    if rev.get("thank_you_sent_at"):
+        raise HTTPException(409, "A thank-you was already texted for this review")
+    from notifications import send_sms  # noqa: PLC0415
+    r = await asyncio.to_thread(send_sms, b["customer_phone"], msg)
+    if not r.get("sent"):
+        raise HTTPException(502, f"Text failed: {r.get('error') or 'unknown'}")
+    await _db.reviews.update_one({"id": review_id}, {"$set": {
+        "thank_you_sent_at": _now_iso(), "thank_you_booking_id": b["id"],
+        "thank_you_to": b.get("customer_name"), "thank_you_text": msg, "thank_you_by": admin}})
+    return {"sent": True, "to": b["customer_phone"]}
 
 
 @router.put("/admin/reviews/{review_id}/reply-draft")

@@ -123,6 +123,44 @@ async def generate_review_reply_draft(review: dict) -> str:
         return static[:240]
 
 
+async def generate_thank_you_text(review: dict, booking: dict) -> str:
+    """Personal, professional thank-you SMS to a reviewer, tailored to what they wrote and their trip."""
+    first = (booking.get("customer_name") or review.get("author_name") or "there").split()[0]
+    static = (f"Hi {first}, thank you for your kind Google review of your Rox trip. "
+              "It truly means a lot to our team, and we'd be honoured to welcome you back to Nassau. — Rox Taxi & Tours")
+    llm_key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+    text = (review.get("text") or "").strip()
+    if not _LLM_AVAILABLE or not llm_key:
+        return static
+    try:
+        prompt = (
+            "You are the owner of Rox Taxi Service & Tours in Nassau, Bahamas, texting a guest who just left a Google review.\n"
+            "Write ONE personal, professional thank-you SMS.\n"
+            "RULES:\n"
+            "  1. Under 300 characters total, plain text, no hashtags, at most one emoji.\n"
+            "  2. Greet them by first name.\n"
+            "  3. Refer to something SPECIFIC from their review (a moment, the driver, the place) so it feels written just for them; never copy their words verbatim.\n"
+            "  4. If a driver is named, thank on the driver's behalf too.\n"
+            "  5. Mention their trip naturally if helpful. Do not offer discounts or ask for anything.\n"
+            "  6. Warm but polished tone, like a boutique hotel manager.\n"
+            "  7. End with ' — Rox Taxi & Tours'.\n"
+            "Return ONLY the message.\n\n"
+            f"Guest first name: {first}\n"
+            f"Rating: {review.get('rating', 5)} stars\n"
+            f"Trip: {booking.get('item_name') or 'a ride with us'}\n"
+            f"Review: {text[:800] or '(no text, star rating only)'}"
+        )
+        chat = LlmChat(
+            api_key=llm_key,
+            session_id=f"thank-you-{review.get('id', 'x')}-{booking.get('id', 'x')}",
+            system_message="You write short, individual, professional thank-you text messages for a Bahamas taxi & tour company.",
+        ).with_model("anthropic", "claude-sonnet-4-6")
+        reply = (str(await chat.send_message(UserMessage(text=prompt))) or "").strip().strip('"')
+        return reply[:480] or static
+    except Exception:  # noqa: BLE001
+        return static
+
+
 def _hard_cap_240(text: str) -> str:
     """Trim a reply to <=240 chars while keeping the ' — Rox' sign-off
     when possible. Falls back to a hard slice if we can't find a clean

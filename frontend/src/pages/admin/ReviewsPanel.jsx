@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Star, Trash2, Plus, Save, X, Info, ExternalLink, RefreshCw, Copy, Sparkles, Trophy, Link2, Unplug, Send, CheckCircle2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { F } from "./shared";
+import ThankYouText from "./ThankYouText";
 
 // Admin panel — paste real Google Business reviews so the public
 // /reviews section stops showing seed data. Rating + total are
@@ -316,6 +317,7 @@ function ReviewRow({ review, editing, onEdit, onCancel, onSave, onDelete }) {
         {review.rating >= 5 && (
           <OwnerReplyDraft review={review} testSlug={testSlug} />
         )}
+        <ThankYouText review={review} testSlug={testSlug} />
       </div>
       <div className="flex gap-1 shrink-0">
         <button
