@@ -26,6 +26,7 @@ const NASSAU_DESTINATIONS = [
   { name: "Junkanoo Beach",                   area: "West Bay Street",          match: "cable beach",         Icon: Palmtree },
   { name: "Love Beach",                       area: "West Nassau",              match: "love beach",          Icon: Palmtree },
   { name: "Humes House @ Hillcrest",          area: "Airport transfer",         match: "humes house",         Icon: Hotel },
+  { name: "Palm Cay",                         area: "East Nassau",              match: "palm cay",            Icon: Palmtree },
   { name: "Sandy Toes / Rose Island",         area: "Boat departure · Marina",  match: "hourly",              Icon: Anchor },
   { name: "Custom stop — pick anywhere",      area: "Hourly charter",           match: "hourly",              Icon: MapPin },
 ];
@@ -45,6 +46,7 @@ const LOCATION_OPTIONS = [
   "Junkanoo Beach",
   "Love Beach",
   "Humes House @ Hillcrest",
+  "Palm Cay",
   "Fish Fry — Arawak Cay",
   "Sandy Toes / Rose Island",
 ];

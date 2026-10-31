@@ -412,8 +412,8 @@ export default function Tours() {
                   <img
                     src={a.hero_image}
                     alt={a.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    style={{ filter: "brightness(1.02) saturate(1.08)" }}
+                    className="photo-enhance w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    style={{ filter: "brightness(1.04) contrast(1.05) saturate(1.12)" }}
                     loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0B192C] via-[#0B192C]/25 to-transparent" />

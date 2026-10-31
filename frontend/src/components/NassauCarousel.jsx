@@ -151,7 +151,7 @@ export default function BahamasSlider() {
                 decoding="async"
                 src={s.img}
                 alt={s.name}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                className="photo-enhance w-full h-full object-cover group-hover:scale-105 transition-transform"
                 style={{ filter: "brightness(1.14) contrast(1.20) saturate(1.18)" }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />

@@ -128,12 +128,11 @@ export default function Home() {
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B3B5C] via-[#0B3B5C] to-[#0B192C] text-white group">
           <div className="absolute inset-0 opacity-30">
             <img
-              loading="lazy"
               decoding="async"
               src="https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/pewidk7h_medium.jpg"
               alt="Swim with dolphins at Blue Lagoon Island, Bahamas"
               loading="lazy"
-              className="w-full h-full object-cover"
+              className="photo-enhance w-full h-full object-cover"
             />
           </div>
           <div className="absolute inset-0 bg-gradient-to-r from-[#0B192C]/90 via-[#0B192C]/50 to-transparent" />
@@ -239,15 +238,13 @@ export default function Home() {
             >
               <div className="aspect-[4/5] overflow-hidden">
                 <img
-                  loading="lazy"
-                  decoding="async"
                   src={cdn(t.image_url, { w: 800 })}
                   srcSet={cdnSrcSet(t.image_url, [400, 800, 1200])}
                   sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
                   alt={t.name}
                   loading="lazy"
                   decoding="async"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className="photo-enhance w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
               </div>
               <div className="p-5">
@@ -647,7 +644,6 @@ function CableBeachHomePromo() {
                   <source media="(max-width: 640px)" srcSet={s.src_mobile} type="image/webp" />
                 )}
                 <img
-                  loading="lazy"
                   decoding="async"
                   src={s.src}
                   alt={s.alt || "Cable Beach photo"}

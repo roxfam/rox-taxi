@@ -218,7 +218,7 @@ export default function CarRental() {
               <img
                 src={r.image_url}
                 alt={r.name}
-                className={`w-full h-full opacity-95 group-hover:scale-105 transition-transform duration-500 ${
+                className={`photo-enhance w-full h-full opacity-95 group-hover:scale-105 transition-transform duration-500 ${
                   r.category === "mini-van" ? "object-contain p-3" : "object-cover"
                 }`}
               />

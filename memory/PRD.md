@@ -902,6 +902,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Welcome banner: static short line "Save 10% on your next ride · Sign up" (no marquee).
 - Google reviews: /api/reviews returns write_review_url; GoogleReviews shows "Rode with us? Leave a review" button. Note: Google API only returns 5 reviews per call (relevant + newest already synced); owner can add other reviews manually in admin Reviews.
 - Spanish page /es (SpanishHome.jsx): Spanish hero, why-us, live airport/cruise/Atlantis fares, tours, cruise CTA, FAQ, WhatsApp/call CTAs; html lang=es; hreflang es + sitemap + footer link. Booking flow itself still English.
+- Photo enhance + speed (2026-10-31): local public/images re-processed (colour 1.08, contrast 1.05, brightness 1.02, light sharpen, recompressed; cable-beach-slide-2.webp 488→236KB). Originals backed up in /app/frontend/image_originals/. `.photo-enhance` CSS filter (saturate 1.1, contrast 1.05, brightness 1.03) on tour/package/carousel/rental/home featured-tour images (hero already had its own filter). Fixed duplicate loading/decoding props in Home.jsx.
+- New taxi routes: downtown-palmcay (Downtown Nassau → Palm Cay $55) and palmcay-downtown (Palm Cay → Downtown $55); location tag palm_cay; "Palm Cay" in Taxi page dropdown + destination cards.
+
 
 
 
