@@ -344,7 +344,7 @@ export default function DriverShare() {
           )}
 
           <div className="mt-3 text-[10px] text-white/40 leading-relaxed text-center">
-            Tapping "I've arrived" auto-sends an SMS + email to the guest.
+            Tapping "I've arrived" auto-sends an SMS + email to the guest. "Trip done" texts them a rating + Google review link right away.
           </div>
         </div>
       )}

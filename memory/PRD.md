@@ -908,6 +908,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - 2026-10-31: New taxi routes palmcay-paradise / paradise-palmcay ($45) and palmcay-cablebeach / cablebeach-palmcay ($75), both directions; 2-guest base, standard extras. Twilio account status checked: active.
 - 2026-10-31: Google reviews rotate every 5.5s (was 8s); header shows the real Google review count (17) from last sync. Newest-reviews sync blocked: Google key is referrer-restricted, which the "newest" reviews endpoint refuses; Places (New) only returns the 5 "most relevant" reviews.
 - 2026-10-31: Review rotation set to 7s. Optional GOOGLE_PLACES_SERVER_KEY env (preferred over GOOGLE_PLACES_API_KEY for review sync). Review-request text/email (3h delay) now also covers confirmed trips whose pickup time was 4h+ ago, since trips are rarely marked "completed".
+- 2026-10-31: Driver "Trip done" now one tap from confirmed/assigned/en route (not only after "arrived"); completion text+email now includes Google review link and marks review_followup_sent_at (no duplicate 3h nudge). Admin Site content → "Google review link" field + "Test it" button; default link built from Place ID (search.google.com/local/writereview?placeid=…); /api/site-config exposes google_review_url_effective. All review prompts share _google_review_url().
+
 
 
 

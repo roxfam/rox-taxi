@@ -215,6 +215,7 @@ export default function SiteConfigPanel() {  const [cfg, setCfg] = useState({ fa
             <F l="Google Cloud API key (starts with AIza…)" v={cfg.google_places_api_key || ""} on={(v) => setCfg({ ...cfg, google_places_api_key: v })} testid="google-places-api-key" />
             <F l="Google Place ID (starts with ChIJ…)" v={cfg.google_place_id || ""} on={(v) => setCfg({ ...cfg, google_place_id: v })} testid="google-place-id" />
           </div>
+          <ReviewLinkCheck cfg={cfg} setCfg={setCfg} />
         </div>
 
         {/* ─── Warm-lead discount nudge (returning-visitor promo) ───
@@ -514,3 +515,26 @@ function BackupDriverRoster({ drivers, onChange }) {
     </div>
   );
 }
+
+function ReviewLinkCheck({ cfg, setCfg }) {
+  const link = (cfg.google_review_url || "").trim() || cfg.google_review_url_effective || "";
+  return (
+    <div className="mt-4 rounded-lg border border-[#E2E8F0] bg-[#FBF7EF] p-4" data-testid="review-link-check">
+      <F l="Google review link guests receive" v={cfg.google_review_url || ""} on={(v) => setCfg({ ...cfg, google_review_url: v })} testid="google-review-url" />
+      <div className="mt-2 text-[11px] text-[#64748B] break-all" data-testid="google-review-url-effective">
+        In use now: <span className="font-mono text-[#0B3B5C]">{link || "—"}</span>
+      </div>
+      <a
+        href={link}
+        target="_blank"
+        rel="noreferrer"
+        data-testid="google-review-url-test"
+        className="mt-3 inline-flex items-center rounded-full bg-[#4285F4] text-white text-xs font-bold px-4 py-2 hover:bg-[#3367D6] active:scale-95 transition-colors"
+      >
+        Test it ↗
+      </a>
+      <div className="mt-2 text-[10.5px] text-[#94a3b8]">Opens the page guests land on from review texts. Leave blank to use your Google listing automatically. Click Save after changing.</div>
+    </div>
+  );
+}
+

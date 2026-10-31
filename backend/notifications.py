@@ -673,7 +673,8 @@ def notify_guest_google_review_prompt(booking: dict, review_url: str,
 
 
 def notify_guest_trip_complete(booking: dict, prefs: Optional[dict] = None,
-                                rating_link: str = "", tip_link: str = "") -> dict:
+                                rating_link: str = "", tip_link: str = "",
+                                review_url: str = "") -> dict:
     """Fires when the driver marks the ride `completed`.
 
     Sends the guest a "How was it?" SMS + email with a 1-tap rating
@@ -698,7 +699,8 @@ def notify_guest_trip_complete(booking: dict, prefs: Optional[dict] = None,
         f"Hi {who},\n\n"
         f"You just wrapped up {item} with {driver}. Thanks for riding with Rox!\n\n"
         f"Rate the trip in one tap: {rating_link}\n"
-        f"Bump {driver}'s tip: {tip_link}\n\n"
+        + (f"Loved it? Share it on Google (30 sec): {review_url}\n" if review_url else "")
+        + f"Bump {driver}'s tip: {tip_link}\n\n"
         f"— Rox Taxi Service & Tours"
     )
     html = f"""
@@ -713,6 +715,7 @@ def notify_guest_trip_complete(booking: dict, prefs: Optional[dict] = None,
         <div style="font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#64748B;font-weight:700;">Rate this ride</div>
         <div style="font-size:32px;margin:12px 0 4px;letter-spacing:6px;color:#D4A94A;">☆ ☆ ☆ ☆ ☆</div>
         <a href="{rating_link}" style="display:inline-block;background:#0B3B5C;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;font-size:13px;margin-top:12px;">Tap to rate →</a>
+        {f'<div style="margin-top:14px;"><a href="{review_url}" style="display:inline-block;background:#4285F4;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;font-size:13px;">Leave a Google review →</a></div>' if review_url else ''}
       </div>
 
       <div style="background:#0B3B5C;color:#fff;border-radius:16px;padding:20px;margin-top:16px;text-align:center;">
@@ -734,7 +737,8 @@ def notify_guest_trip_complete(booking: dict, prefs: Optional[dict] = None,
     if sms_enabled and booking.get("customer_phone"):
         sms = (
             f"Rox: 🎉 Thanks for riding with {driver}! Rate in 1 tap: {rating_link}"
-            f" · Bump the tip: {tip_link}"
+            + (f" · Review us on Google: {review_url}" if review_url else "")
+            + f" · Bump the tip: {tip_link}"
         )
         result = send_sms(booking["customer_phone"], sms)
         report["sms"].update(result)

@@ -2519,6 +2519,7 @@ async def site_config():
         cfg = {"facebook_url": FACEBOOK_URL, "zelle_email": ZELLE_EMAIL, "zelle_phone": ZELLE_PHONE, "phone": ""}
     else:
         cfg.pop("_id", None)
+    cfg["google_review_url_effective"] = _google_review_url(cfg)
     # Auto-derive Messenger deep link (m.me/<slug>) from the Facebook page URL if the
     # admin hasn't set one explicitly. Handoff-to-Messenger button uses this.
     if not cfg.get("messenger_url"):
@@ -4644,9 +4645,9 @@ async def driver_location_ping(req: DriverPing):
 # without passing through the intermediate states so the guest's Track
 # page always tells the truth.
 _DRIVER_STATUS_FLOW: Dict[str, set] = {
-    "confirmed":       {"driver_assigned", "en_route"},
-    "driver_assigned": {"en_route", "arrived"},
-    "en_route":        {"arrived", "no_show"},
+    "confirmed":       {"driver_assigned", "en_route", "completed"},
+    "driver_assigned": {"en_route", "arrived", "completed"},
+    "en_route":        {"arrived", "no_show", "completed"},
     "arrived":         {"completed", "no_show"},
     "completed":       set(),
     "cancelled":       set(),
@@ -4722,11 +4723,13 @@ async def _fire_trip_complete_ping(fresh: dict) -> None:
 
     report = await asyncio.to_thread(
         notify_guest_trip_complete, dict(fresh), prefs, rating_link, tip_link,
+        _google_review_url(prefs_doc),
     )
     await db.bookings.update_one(
         {"id": booking_id},
         {"$set": {"trip_complete_notification": report,
-                  "trip_complete_notified_at": now_iso()}},
+                  "trip_complete_notified_at": now_iso(),
+                  "review_followup_sent_at": now_iso()}},
     )
 
 
@@ -4894,6 +4897,16 @@ REVIEW_FOLLOWUP_DELAY_HOURS = int(os.environ.get("REVIEW_FOLLOWUP_DELAY_HOURS", 
 REVIEW_FOLLOWUP_WINDOW_HOURS = int(os.environ.get("REVIEW_FOLLOWUP_WINDOW_HOURS", "168"))  # 7-day retro-fill cap
 
 
+def _google_review_url(cfg: dict) -> str:
+    place_id = (cfg.get("google_place_id") or os.environ.get("GOOGLE_PLACE_ID") or "").strip()
+    return (
+        (cfg.get("google_review_url") or "").strip()
+        or os.environ.get("GOOGLE_REVIEW_URL")
+        or (f"https://search.google.com/local/writereview?placeid={place_id}" if place_id else "")
+        or "https://g.page/r/CYy0V1JN5XwtEAI/review"
+    )
+
+
 async def _review_followup_loop() -> None:
     log = logging.getLogger("rox.review_followup")
     while True:
@@ -4922,11 +4935,7 @@ async def _run_review_followup_tick() -> int:
         "notify_email_enabled": cfg.get("notify_email_enabled", True),
         "notify_sms_enabled":   cfg.get("notify_sms_enabled",   True),
     }
-    review_url = (
-        cfg.get("google_review_url")
-        or os.environ.get("GOOGLE_REVIEW_URL")
-        or "https://g.page/r/CYy0V1JN5XwtEAI/review"
-    )
+    review_url = _google_review_url(cfg)
 
     cur = db.bookings.find({
         "status": "completed",
@@ -5764,11 +5773,7 @@ async def rate_booking(booking_id: str, req: RatingSubmit, t: str):
     if int(req.stars) >= 5 and not b.get("google_review_prompt_sent_at"):
         try:
             cfg = await db.site_config.find_one({"_id": "main"}) or {}
-            review_url = (
-                cfg.get("google_reviews_url")
-                or cfg.get("google_business_url")
-                or "https://g.page/r/CYy0V1JN5XwtEAI/review"
-            )
+            review_url = _google_review_url(cfg)
             prefs = {
                 "notify_email_enabled": cfg.get("notify_email_enabled", True),
                 "notify_sms_enabled": cfg.get("notify_sms_enabled", True),

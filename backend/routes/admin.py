@@ -1410,6 +1410,7 @@ class SiteConfigUpdate(BaseModel):
     # set; otherwise the sync path stays dormant with no upstream call.
     google_places_api_key: Optional[str] = None
     google_place_id: Optional[str] = None
+    google_review_url: Optional[str] = None
     # ─── Warm-lead discount nudge (returning-visitor promo) ──────────
     # Surfaced inside the chat panel when a visitor's session count is 3+
     # (see ChatWidget.jsx warm-lead logic). All four fields are optional;
