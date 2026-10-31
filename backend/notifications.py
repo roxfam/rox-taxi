@@ -892,14 +892,16 @@ def notify_owner_payment_received(booking: dict, provider: str = "stripe") -> di
     report = {"sms": {"sent": False, "provider": "none", "error": None},
               "email": {"sent": False, "provider": "none", "error": None}}
 
+    from_link = bool(booking.get("pay_text_last_sent_at") or booking.get("payment_email_last_sent_at"))
     body_text = (
-        f"💰 PAYMENT RECEIVED {_fmt_money(booking.get('total',0))} via {provider.upper()}\n"
+        ("🚕 PAID FROM YOUR LINK · ready to dispatch\n" if from_link else "")
+        + f"💰 PAYMENT RECEIVED {_fmt_money(booking.get('total',0))} via {provider.upper()}\n"
         f"Booking  : {booking['id']}\n"
         f"{_booking_details_for_owner(booking)}\n"
         f"👉 roxtaxi.com/admin/bookings/{booking['id']}"
     )
 
-    report["sms"].update(send_owner_sms(body_text, kind="payment"))
+    report["sms"].update(send_owner_sms(body_text, kind="payment", force_priority=from_link))
 
     if owner_email:
         subject = f"💰 Payment received · {_fmt_money(booking.get('total',0))} · {booking['id']}"
