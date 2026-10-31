@@ -913,6 +913,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - 2026-10-31: Paid Text Alert — owner payment SMS now starts "🚕 PAID FROM YOUR LINK · ready to dispatch" when the booking had a texted/emailed pay link, and bypasses quiet hours (force_priority). Google key (…MbF0) still has a website referrer restriction → review sync blocked until removed.
 - 2026-10-31: GOOGLE_PLACES_SERVER_KEY added (unrestricted, Places API + New) → newest-reviews sync working; reviews grew 6 → 11 (Linnea Lemon, Melanie B, Ramy Sydhom, Jonnique Smith, King Juice added).
 - 2026-10-31: New Review Alert — owner SMS (kind "review", respects quiet hours) the first time a 5★ Google review is synced (both Places New and newest-legacy paths), with snippet + link to admin Reviews tab (AI reply draft already generated there).
+- 2026-10-31: Review Thank-You Text — admin Reviews tab "Text a thank-you" per review: auto-matches bookings by reviewer name (first + last/initial), fallback search by name/phone/booking code; Claude Sonnet writes a unique professional SMS from the review text + trip (editable, Rewrite); send once per review (thank_you_sent_at). Endpoints: GET /api/admin/reviews/{id}/thank-you/matches?q=, POST …/thank-you/draft, POST …/thank-you/send.
+
 
 
 
