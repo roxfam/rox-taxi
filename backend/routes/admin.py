@@ -1411,6 +1411,7 @@ class SiteConfigUpdate(BaseModel):
     # Populated by the owner. The 6-hourly cron only fires when BOTH are
     # set; otherwise the sync path stays dormant with no upstream call.
     google_places_api_key: Optional[str] = None
+    google_places_server_key: Optional[str] = None
     google_place_id: Optional[str] = None
     google_review_url: Optional[str] = None
     # ─── Warm-lead discount nudge (returning-visitor promo) ──────────
@@ -3228,11 +3229,39 @@ async def delete_catalog_image(name: str, _: str = Depends(_admin_dep)):
 @router.put("/admin/site-config")
 async def admin_update_site(req: SiteConfigUpdate, _: str = Depends(_admin_dep)):
     payload = {k: v for k, v in req.model_dump().items() if v is not None}
+    for secret in ("google_places_api_key", "google_places_server_key"):
+        if secret in payload:
+            payload[secret] = payload[secret].strip()
+            if not payload[secret]:
+                payload.pop(secret)  # blank = keep the saved key
+    for flag in ("google_places_api_key_set", "google_places_server_key_set", "gbp_tokens_set", "google_review_url_effective"):
+        payload.pop(flag, None)
     if payload:
         await _db.site_config.update_one({"_id": "main"}, {"$set": payload}, upsert=True)
     cfg = await _db.site_config.find_one({"_id": "main"})
     cfg.pop("_id", None)
+    for secret in ("google_places_api_key", "google_places_server_key", "gbp_tokens"):
+        cfg[f"{secret}_set"] = bool(cfg.pop(secret, None))
     return cfg
+
+
+@router.post("/admin/reviews/test-google-key")
+async def admin_test_google_key(_: str = Depends(_admin_dep)):
+    from routes.cron import _google_credentials  # noqa: PLC0415
+    import httpx  # noqa: PLC0415
+    api_key, place_id, source = await _google_credentials()
+    if not api_key or not place_id:
+        return {"ok": False, "source": source, "error": "No Google key or Place ID saved yet."}
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        r = await client.get("https://maps.googleapis.com/maps/api/place/details/json",
+                             params={"place_id": place_id, "fields": "reviews,user_ratings_total",
+                                     "reviews_sort": "newest", "key": api_key})
+    d = r.json()
+    if d.get("status") != "OK":
+        return {"ok": False, "source": source, "error": f"{d.get('status')}: {d.get('error_message') or 'Google refused the key'}"}
+    res = d.get("result") or {}
+    return {"ok": True, "source": source, "total_on_google": res.get("user_ratings_total"),
+            "newest": [x.get("author_name") for x in (res.get("reviews") or [])]}
 
 
 # ═══════════════════════════════════════════════════════════════════════════

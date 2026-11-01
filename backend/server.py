@@ -2521,6 +2521,8 @@ async def site_config():
         cfg = {"facebook_url": FACEBOOK_URL, "zelle_email": ZELLE_EMAIL, "zelle_phone": ZELLE_PHONE, "phone": ""}
     else:
         cfg.pop("_id", None)
+    for _secret in ("google_places_api_key", "google_places_server_key", "gbp_tokens"):
+        cfg[f"{_secret}_set"] = bool(cfg.pop(_secret, None))
     cfg["google_review_url_effective"] = _google_review_url(cfg)
     # Auto-derive Messenger deep link (m.me/<slug>) from the Facebook page URL if the
     # admin hasn't set one explicitly. Handoff-to-Messenger button uses this.

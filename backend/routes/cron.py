@@ -243,12 +243,8 @@ async def _sync_google_reviews_bg() -> None:
     convenience.
     """
     try:
-        env_key = (os.environ.get("GOOGLE_PLACES_SERVER_KEY") or os.environ.get("GOOGLE_PLACES_API_KEY") or "").strip()
-        env_place = (os.environ.get("GOOGLE_PLACE_ID") or "").strip()
-
+        api_key, place_id, _src = await _google_credentials()
         cfg = await _db.site_config.find_one({"_id": "main"}) or {}
-        api_key = env_key or (cfg.get("google_places_api_key") or "").strip()
-        place_id = env_place or (cfg.get("google_place_id") or "").strip()
         if not api_key or not place_id:
             return  # dormant — neither env nor site_config has credentials
 
@@ -359,6 +355,20 @@ async def _sync_google_reviews_bg() -> None:
             )
         except Exception:  # noqa: BLE001
             pass
+
+
+async def _google_credentials() -> tuple:
+    """(api_key, place_id, source). Admin-saved review key wins so self-hosted owners never edit .env."""
+    cfg = await _db.site_config.find_one({"_id": "main"}) or {}
+    options = [
+        ("admin panel review key", cfg.get("google_places_server_key")),
+        ("server review key", os.environ.get("GOOGLE_PLACES_SERVER_KEY")),
+        ("server key", os.environ.get("GOOGLE_PLACES_API_KEY")),
+        ("admin panel key", cfg.get("google_places_api_key")),
+    ]
+    source, api_key = next(((s, (k or "").strip()) for s, k in options if (k or "").strip()), ("none", ""))
+    place_id = ((os.environ.get("GOOGLE_PLACE_ID") or "").strip() or (cfg.get("google_place_id") or "").strip())
+    return api_key, place_id, source
 
 
 async def _alert_new_five_star(review: dict) -> None:

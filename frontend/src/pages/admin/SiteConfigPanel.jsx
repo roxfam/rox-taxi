@@ -4,6 +4,7 @@ import { Settings, Upload, FolderOpen, Calendar, Trash2, Plus } from "lucide-rea
 import { api } from "../../lib/api";
 import { F, Toggle } from "./shared";
 import ImagePickerModal from "./ImagePickerModal";
+import GoogleReviewKey from "./GoogleReviewKey";
 
 // Central site-wide configuration — brand logo, social links, Zelle details,
 // contact phone, and notification (email/SMS) toggles.
@@ -212,7 +213,7 @@ export default function SiteConfigPanel() {  const [cfg, setCfg] = useState({ fa
             Paste both values below and a cron pulls your latest 5 Google Business reviews every 6 hours — you never have to paste manually again. Get the key from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="underline">Google Cloud Console</a> (enable "Places API (New)") and your Place ID from <a href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank" rel="noreferrer" className="underline">the finder tool</a>.
           </div>
           <div className="space-y-3">
-            <F l="Google Cloud API key (starts with AIza…)" v={cfg.google_places_api_key || ""} on={(v) => setCfg({ ...cfg, google_places_api_key: v })} testid="google-places-api-key" />
+            <GoogleReviewKey cfg={cfg} setCfg={setCfg} />
             <F l="Google Place ID (starts with ChIJ…)" v={cfg.google_place_id || ""} on={(v) => setCfg({ ...cfg, google_place_id: v })} testid="google-place-id" />
           </div>
           <ReviewLinkCheck cfg={cfg} setCfg={setCfg} />
