@@ -219,6 +219,27 @@ export default function SiteConfigPanel() {  const [cfg, setCfg] = useState({ fa
           <ReviewLinkCheck cfg={cfg} setCfg={setCfg} />
         </div>
 
+        {/* ─── Online booking discount ─── */}
+        <div className="pt-4 mt-4 border-t border-[#E2E8F0]" data-testid="online-discount-settings">
+          <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold mb-1">Online booking discount</div>
+          <div className="text-[11px] text-[#94a3b8] mb-3 leading-relaxed">
+            Money off taxi + tour bookings made on the website. Never stacks with other discounts — guests get whichever saves more. Click Save after changing.
+          </div>
+          <div className="space-y-3">
+            <Toggle
+              label="Give guests money off when they book online"
+              hint="When OFF, the discount and the green badge on the Taxi and Tours pages disappear."
+              checked={cfg.online_discount_enabled !== false}
+              onChange={(v) => setCfg({ ...cfg, online_discount_enabled: v })}
+              testid="online-discount-toggle"
+            />
+            <div className="grid sm:grid-cols-2 gap-3">
+              <F l="Discount amount ($)" type="number" v={cfg.online_discount_usd ?? 5} on={(v) => setCfg({ ...cfg, online_discount_usd: v === "" ? null : Math.max(0, Number(v)) })} testid="online-discount-amount" />
+              <F l="Minimum booking ($)" type="number" v={cfg.online_discount_min_usd ?? 40} on={(v) => setCfg({ ...cfg, online_discount_min_usd: v === "" ? null : Math.max(0, Number(v)) })} testid="online-discount-min" />
+            </div>
+          </div>
+        </div>
+
         {/* ─── Warm-lead discount nudge (returning-visitor promo) ───
             Shown inside the chat panel when a visitor's session count is 3+.
             Toggle off to hide the promo card entirely; empty code = hidden too. */}

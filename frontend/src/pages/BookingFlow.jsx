@@ -147,8 +147,6 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const BABY_SEAT_FREE_AFTER_DAYS = 14;
   const BAHAMAS_VAT_PCT = 0.10;
   const PROCESSING_FEE_PCT = 0.05;
-  const ONLINE_DISCOUNT = 5;
-  const ONLINE_DISCOUNT_MIN = 40;
   const [payMethod, setPayMethod] = useState("stripe");
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
   const quoteMode = isQuoteMode();
@@ -422,7 +420,9 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const acctDiscount = activeDiscount(authUser);
   const discountPct = acctDiscount ? Number(acctDiscount.pct || 10) : 0;
   const welcomeAmt = acctDiscount ? Math.round(Math.max(0, total - rentalDeposit - tipAmount) * discountPct) / 100 : 0;
-  const onlineEligible = (serviceType === "taxi" || serviceType === "tour") && (total - rentalDeposit - tipAmount) >= ONLINE_DISCOUNT_MIN;
+  const ONLINE_DISCOUNT = siteCfg.online_discount_enabled === false ? 0 : Number(siteCfg.online_discount_usd ?? 5);
+  const ONLINE_DISCOUNT_MIN = Number(siteCfg.online_discount_min_usd ?? 40);
+  const onlineEligible = ONLINE_DISCOUNT > 0 && (serviceType === "taxi" || serviceType === "tour") && (total - rentalDeposit - tipAmount) >= ONLINE_DISCOUNT_MIN;
   const onlineAmt = onlineEligible && welcomeAmt <= ONLINE_DISCOUNT ? ONLINE_DISCOUNT : 0;
   const discountAmt = onlineAmt ? 0 : welcomeAmt;
   const giftAmt = gift ? Math.min(gift.balance, Math.max(0, total - discountAmt - onlineAmt)) : 0;
@@ -1231,8 +1231,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
               </div>
 
               {!onlineAmt && <DiscountBadge variant="checkout" />}
-              {(serviceType === "taxi" || serviceType === "tour") && !onlineAmt && !discountAmt && (
-                <div className="text-[11px] text-[#64748B]" data-testid="online-discount-hint">Bookings of $40+ save $5 when booked online.</div>
+              {(serviceType === "taxi" || serviceType === "tour") && ONLINE_DISCOUNT > 0 && !onlineAmt && !discountAmt && (
+                <div className="text-[11px] text-[#64748B]" data-testid="online-discount-hint">Bookings of ${ONLINE_DISCOUNT_MIN}+ save ${ONLINE_DISCOUNT} when booked online.</div>
               )}
 
               <GiftCodeBox applied={gift ? { code: gift.code, amount: giftAmt } : null} onChange={setGift} />
@@ -1363,7 +1363,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   <div className="min-w-0">
                     <div className="text-[9px] sm:text-[10px] tracking-[0.22em] sm:tracking-[0.24em] uppercase text-[#D4A94A] font-bold">Order total</div>
                     <div className="serif text-2xl sm:text-3xl mt-0.5 sm:mt-1 leading-none" data-testid="checkout-grand-total">{money(Math.max(0, total - onlineAmt - discountAmt))}</div>
-                    {onlineAmt > 0 && <div className="text-[10px] sm:text-[11px] text-[#6EE7B7] font-semibold mt-0.5" data-testid="checkout-online-discount">$5 online discount applied</div>}
+                    {onlineAmt > 0 && <div className="text-[10px] sm:text-[11px] text-[#6EE7B7] font-semibold mt-0.5" data-testid="checkout-online-discount">{money(onlineAmt)} online discount applied</div>}
                     <div className="hidden sm:block text-[11px] text-white/60 mt-0.5">{vatApplies ? "Includes 10% VAT & 5% processing" : "VAT-free taxi fare · includes 5% processing"} · all fees final</div>
                     <div className="sm:hidden text-[10px] text-white/60 mt-0.5">{vatApplies ? "VAT & fees included" : "No VAT on taxi · fees included"}</div>
                   </div>

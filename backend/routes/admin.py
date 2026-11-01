@@ -1377,6 +1377,9 @@ class PriceUpdate(BaseModel):
 
 
 class SiteConfigUpdate(BaseModel):
+    online_discount_enabled: Optional[bool] = None
+    online_discount_usd: Optional[float] = Field(None, ge=0, le=500)
+    online_discount_min_usd: Optional[float] = Field(None, ge=0, le=5000)
     zelle_email: Optional[str] = None
     zelle_phone: Optional[str] = None
     facebook_url: Optional[str] = None

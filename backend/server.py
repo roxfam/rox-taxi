@@ -3057,15 +3057,18 @@ async def create_booking(req: BookingCreate, request: Request):
 
     # ── $5 online-booking discount (taxi + tour, $40+, never stacked) ──
     online_discount = 0.0
-    if req.service_type in ("taxi", "tour"):
+    _od_cfg = await db.site_config.find_one({"_id": "main"}, {"online_discount_enabled": 1, "online_discount_usd": 1, "online_discount_min_usd": 1}) or {}
+    _od_amt = float(_od_cfg.get("online_discount_usd") if _od_cfg.get("online_discount_usd") is not None else ONLINE_DISCOUNT_USD)
+    _od_min = float(_od_cfg.get("online_discount_min_usd") if _od_cfg.get("online_discount_min_usd") is not None else ONLINE_DISCOUNT_MIN_USD)
+    if req.service_type in ("taxi", "tour") and _od_cfg.get("online_discount_enabled", True) and _od_amt > 0:
         pre = round(max(0.0, computed_total + promo_discount - deposit_amount - tip_amount), 2)
-        if pre >= ONLINE_DISCOUNT_MIN_USD and promo_discount < ONLINE_DISCOUNT_USD:
+        if pre >= _od_min and promo_discount < _od_amt:
             if promo_discount > 0:
                 computed_total = round(computed_total + promo_discount, 2)
                 for k in ("promotion_id", "promotion_label", "promotion_discount"):
                     booking.pop(k, None)
                 promo, promo_discount = None, 0.0
-            online_discount = ONLINE_DISCOUNT_USD
+            online_discount = round(min(_od_amt, pre), 2)
             booking["online_discount"] = online_discount
             computed_total = round(computed_total - online_discount, 2)
 
