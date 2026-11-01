@@ -17,6 +17,8 @@ import QuickBookWidget from "../components/QuickBookWidget";
 import PackagesStrip from "../components/PackagesStrip";
 import GiftCardPromo from "../components/GiftCardPromo";
 import GuestPhotoMarquee from "../components/GuestPhotoMarquee";
+import { DolphinSlides } from "../components/DolphinSlides";
+
 
 export default function Home() {
   const [tours, setTours] = useState([]);
@@ -126,16 +128,10 @@ export default function Home() {
       {/* DOLPHIN SWIM FEATURE — direct link to Blue Lagoon operator */}
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-12" data-testid="home-dolphin-swim">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B3B5C] via-[#0B3B5C] to-[#0B192C] text-white group">
-          <div className="absolute inset-0 opacity-30">
-            <img
-              decoding="async"
-              src="https://customer-assets-gfyr7b9c.emergentagent.net/job_bahamas-taxi-tours/artifacts/pewidk7h_medium.jpg"
-              alt="Swim with dolphins at Blue Lagoon Island, Bahamas"
-              loading="lazy"
-              className="photo-enhance w-full h-full object-cover"
-            />
+          <div className="absolute inset-0 opacity-60">
+            <DolphinSlides />
           </div>
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0B192C]/90 via-[#0B192C]/50 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0B192C]/90 via-[#0B192C]/50 to-transparent pointer-events-none" />
           <div className="relative grid md:grid-cols-5 gap-8 p-8 sm:p-12 items-center">
             <div className="md:col-span-3 space-y-4">
               <span className="inline-flex items-center gap-2 rounded-full bg-[#D4A94A]/20 border border-[#D4A94A]/40 px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-[#D4A94A]">
