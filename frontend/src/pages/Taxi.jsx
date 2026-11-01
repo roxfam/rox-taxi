@@ -7,6 +7,7 @@ import FlightTrackerCard from "../components/FlightTrackerCard";
 import Seo from "../components/Seo";
 import { Car, ArrowRight, Plane, Anchor, ShoppingBag, Utensils, Palmtree, MapPin, Ship, Hotel, ChevronDown, Trophy } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
+import { OnlineSaveBadge } from "../components/OnlineSaveBadge";
 
 /**
  * Popular Nassau destinations. Each entry is mapped to the taxi service that
@@ -159,6 +160,7 @@ export default function Taxi() {
           <div>
             <span className="text-xs tracking-[0.3em] uppercase text-[#D4A94A]">Airport &amp; City Rides</span>
             <h1 className="serif text-6xl sm:text-7xl mt-3 leading-[0.9]">Bahamas <em className="italic text-[#F5E1A4]">taxi</em>, done right.</h1>
+            <OnlineSaveBadge testid="taxi-online-save-badge" />
           </div>
           <p className="text-white/80 leading-relaxed max-w-md md:justify-self-end">
             Fixed, transparent pricing for airport transfers, hotel pickups, and hourly charters — driven by

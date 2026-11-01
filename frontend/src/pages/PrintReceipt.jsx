@@ -104,6 +104,7 @@ export default function PrintReceipt() {
             {booking.bridge_toll_fee > 0 && <tr className="border-b border-[#F1F5F9]"><td className="py-2.5">Paradise Island bridge toll</td><td className="py-2.5 text-right mono">{money(booking.bridge_toll_fee)}</td></tr>}
             {booking.deposit_amount > 0 && <tr className="border-b border-[#F1F5F9]"><td className="py-2.5">Refundable security deposit</td><td className="py-2.5 text-right mono">{money(booking.deposit_amount)}</td></tr>}
             {booking.additional_driver_fee > 0 && <tr className="border-b border-[#F1F5F9]"><td className="py-2.5">Additional drivers ({booking.additional_drivers})</td><td className="py-2.5 text-right mono">{money(booking.additional_driver_fee)}</td></tr>}
+            {booking.online_discount > 0 && <tr className="border-b border-[#F1F5F9] text-emerald-700"><td className="py-2.5">Online booking discount</td><td className="py-2.5 text-right mono">−{money(booking.online_discount)}</td></tr>}
             {booking.tip_amount > 0 && <tr className="border-b border-[#F1F5F9]"><td className="py-2.5">Driver gratuity</td><td className="py-2.5 text-right mono">{money(booking.tip_amount)}</td></tr>}
           </tbody>
           <tfoot>

@@ -7,6 +7,7 @@ import { Clock, ArrowRight, ExternalLink, Car, ArrowUpDown, MapPin, Star, Users,
 import { toast } from "sonner";
 import { cdn, cdnSrcSet } from "../lib/img";
 import { PromoPrice } from "../components/PromoPrice";
+import { OnlineSaveBadge } from "../components/OnlineSaveBadge";
 
 // Inject an ItemList of Product schemas per tour so Google can pull them
 // into rich results ("Nassau tours" carousel) with price, rating and image.
@@ -281,6 +282,7 @@ export default function Tours() {
         <div className="max-w-7xl mx-auto px-6 lg:px-10 relative z-10">
           <span className="text-xs tracking-[0.3em] uppercase text-white/80">Bahamas Excursions</span>
           <h1 className="serif text-6xl sm:text-7xl mt-3 leading-[0.9] max-w-4xl">Discover Nassau, <em className="italic">one landmark at a time</em>.</h1>
+          <OnlineSaveBadge testid="tours-online-save-badge" />
           <p className="mt-6 text-white/85 max-w-xl leading-relaxed">
             Explore Nassau's must-see attractions — Ardastra, Atlantis, Blue Lagoon and Baha Mar — then pair with a curated
             excursion. Every taxi and tour is priced up-front by local operators.

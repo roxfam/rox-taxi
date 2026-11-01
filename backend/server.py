@@ -255,6 +255,8 @@ CLOSED_APPLIES_TO = {"taxi", "rental"}
 # Default values; a `weekend_surcharge` dict in `site_config` can override:
 #   {enabled: bool, amount_usd: float, service_types: [str]}
 WEEKEND_SURCHARGE_USD = 15.0
+ONLINE_DISCOUNT_USD = 5.0
+ONLINE_DISCOUNT_MIN_USD = 40.0
 WEEKEND_SURCHARGE_APPLIES_TO = {"taxi", "tour"}
 
 
@@ -3051,6 +3053,20 @@ async def create_booking(req: BookingCreate, request: Request):
             booking["promotion_discount"] = promo_discount
             computed_total = round(computed_total - promo_discount, 2)
 
+    # ── $5 online-booking discount (taxi + tour, $40+, never stacked) ──
+    online_discount = 0.0
+    if req.service_type in ("taxi", "tour"):
+        pre = round(max(0.0, computed_total + promo_discount - deposit_amount - tip_amount), 2)
+        if pre >= ONLINE_DISCOUNT_MIN_USD and promo_discount < ONLINE_DISCOUNT_USD:
+            if promo_discount > 0:
+                computed_total = round(computed_total + promo_discount, 2)
+                for k in ("promotion_id", "promotion_label", "promotion_discount"):
+                    booking.pop(k, None)
+                promo, promo_discount = None, 0.0
+            online_discount = ONLINE_DISCOUNT_USD
+            booking["online_discount"] = online_discount
+            computed_total = round(computed_total - online_discount, 2)
+
     # ── One-time 10% signup welcome discount ────────────────────────────
     if req.quote_only:
         booking["total"] = round(computed_total, 2)
@@ -3062,15 +3078,21 @@ async def create_booking(req: BookingCreate, request: Request):
     _welcome_q.update({"user_id": _customer_user_id} if _customer_user_id else {"email": (req.customer_email or "").lower()})
     _welcome_user = await db.users.find_one(_welcome_q, {"welcome_discount": 1, "user_id": 1})
     if _welcome_user:
-        discountable = round(max(0.0, computed_total - deposit_amount - tip_amount), 2)
+        discountable = round(max(0.0, computed_total + online_discount - deposit_amount - tip_amount), 2)
         pct = float((_welcome_user.get("welcome_discount") or {}).get("pct") or 10)
         welcome_amt = round(discountable * pct / 100.0, 2)
+        if welcome_amt <= online_discount:
+            _welcome_user = None  # $5 online saves more; keep their welcome offer for later
+    if _welcome_user:
         claimed = await db.users.update_one(
             {"_id": _welcome_user["_id"], "welcome_discount.status": "available"},
             {"$set": {"welcome_discount.status": "used", "welcome_discount.used_at": now_iso(),
                       "welcome_discount.booking_id": booking["id"]}},
         )
         if claimed.modified_count and welcome_amt > 0:
+            if online_discount:
+                computed_total = round(computed_total + online_discount, 2)
+                booking.pop("online_discount", None)
             booking["welcome_discount"] = welcome_amt
             booking["welcome_discount_pct"] = pct
             computed_total = round(computed_total - welcome_amt, 2)

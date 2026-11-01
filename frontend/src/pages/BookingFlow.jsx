@@ -147,6 +147,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const BABY_SEAT_FREE_AFTER_DAYS = 14;
   const BAHAMAS_VAT_PCT = 0.10;
   const PROCESSING_FEE_PCT = 0.05;
+  const ONLINE_DISCOUNT = 5;
+  const ONLINE_DISCOUNT_MIN = 40;
   const [payMethod, setPayMethod] = useState("stripe");
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
   const quoteMode = isQuoteMode();
@@ -419,10 +421,13 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const total = subtotal + vatAmount + processingFee + rentalDeposit + tipAmount;
   const acctDiscount = activeDiscount(authUser);
   const discountPct = acctDiscount ? Number(acctDiscount.pct || 10) : 0;
-  const discountAmt = acctDiscount ? Math.round(Math.max(0, total - rentalDeposit - tipAmount) * discountPct) / 100 : 0;
-  const giftAmt = gift ? Math.min(gift.balance, Math.max(0, total - discountAmt)) : 0;
-  const payTotal = Math.max(0, total - discountAmt - giftAmt);
-  const savings = discountAmt + giftAmt;
+  const welcomeAmt = acctDiscount ? Math.round(Math.max(0, total - rentalDeposit - tipAmount) * discountPct) / 100 : 0;
+  const onlineEligible = (serviceType === "taxi" || serviceType === "tour") && (total - rentalDeposit - tipAmount) >= ONLINE_DISCOUNT_MIN;
+  const onlineAmt = onlineEligible && welcomeAmt <= ONLINE_DISCOUNT ? ONLINE_DISCOUNT : 0;
+  const discountAmt = onlineAmt ? 0 : welcomeAmt;
+  const giftAmt = gift ? Math.min(gift.balance, Math.max(0, total - discountAmt - onlineAmt)) : 0;
+  const payTotal = Math.max(0, total - discountAmt - onlineAmt - giftAmt);
+  const savings = discountAmt + onlineAmt + giftAmt;
 
   const taxiTooSoon = serviceType === "taxi" && (() => { const m = minutesUntilNassau(form.booking_date); return m !== null && m < 60; })();
 
@@ -1225,7 +1230,10 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 />
               </div>
 
-              <DiscountBadge variant="checkout" />
+              {!onlineAmt && <DiscountBadge variant="checkout" />}
+              {(serviceType === "taxi" || serviceType === "tour") && !onlineAmt && !discountAmt && (
+                <div className="text-[11px] text-[#64748B]" data-testid="online-discount-hint">Bookings of $40+ save $5 when booked online.</div>
+              )}
 
               <GiftCodeBox applied={gift ? { code: gift.code, amount: giftAmt } : null} onChange={setGift} />
 
@@ -1234,6 +1242,9 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   <div className="text-xs text-[#64748B]">{savings > 0 ? "You pay" : "Total"}</div>
                   {savings > 0 && <div className="mono text-xs text-[#94a3b8] line-through" data-testid="booking-total-original">{money(total)}</div>}
                   <div className="serif text-2xl text-[#0B3B5C]" data-testid="booking-total">{money(payTotal)}</div>
+                  {onlineAmt > 0 && (
+                    <div className="text-[11px] text-[#059669] font-semibold mt-0.5" data-testid="booking-online-discount">Booked online: −{money(onlineAmt)}</div>
+                  )}
                   {discountAmt > 0 && (
                     <div className="text-[11px] text-[#059669] font-semibold mt-0.5" data-testid="booking-savings-discount">{discountPct}% off: −{money(discountAmt)}</div>
                   )}
@@ -1351,7 +1362,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 <div className="flex items-center sm:items-start justify-between gap-3 sm:gap-4">
                   <div className="min-w-0">
                     <div className="text-[9px] sm:text-[10px] tracking-[0.22em] sm:tracking-[0.24em] uppercase text-[#D4A94A] font-bold">Order total</div>
-                    <div className="serif text-2xl sm:text-3xl mt-0.5 sm:mt-1 leading-none" data-testid="checkout-grand-total">{money(total)}</div>
+                    <div className="serif text-2xl sm:text-3xl mt-0.5 sm:mt-1 leading-none" data-testid="checkout-grand-total">{money(Math.max(0, total - onlineAmt - discountAmt))}</div>
+                    {onlineAmt > 0 && <div className="text-[10px] sm:text-[11px] text-[#6EE7B7] font-semibold mt-0.5" data-testid="checkout-online-discount">$5 online discount applied</div>}
                     <div className="hidden sm:block text-[11px] text-white/60 mt-0.5">{vatApplies ? "Includes 10% VAT & 5% processing" : "VAT-free taxi fare · includes 5% processing"} · all fees final</div>
                     <div className="sm:hidden text-[10px] text-white/60 mt-0.5">{vatApplies ? "VAT & fees included" : "No VAT on taxi · fees included"}</div>
                   </div>
@@ -1481,12 +1493,12 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                 <h4 className="serif text-lg text-[#0B3B5C]">Pay via PayPal directly</h4>
                 <p className="text-sm text-[#64748B] mt-2">A PayPal window opened in a new tab. If it didn't:</p>
                 <a
-                  href={(siteCfg.paypal_me_url || "https://www.paypal.com/paypalme/roxtaxiservice") + `/${total.toFixed(2)}`}
+                  href={(siteCfg.paypal_me_url || "https://www.paypal.com/paypalme/roxtaxiservice") + `/${Number(booking.total ?? total).toFixed(2)}`}
                   target="_blank" rel="noreferrer"
                   data-testid="paypal-open-link"
                   className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#003087] text-white px-5 py-3 text-sm font-semibold hover:bg-[#00266b]"
                 >
-                  Open PayPal — {money(total)}
+                  Open PayPal — {money(booking.total ?? total)}
                 </a>
                 <p className="text-xs text-[#64748B] mt-4 leading-relaxed">
                   Add "Booking {booking.id}" in the PayPal note. We'll confirm the moment your payment lands.
