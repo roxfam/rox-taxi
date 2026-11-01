@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Copy, Check, ImageIcon, Upload, Trash2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { fallbackCopy, resolveUrl } from "./shared";
+import DolphinSlidesAdmin from "./DolphinSlidesAdmin";
 
 const GRID_COMPACT = "grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-9 gap-2";
 const GRID_COMFORT = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3";
@@ -75,6 +76,8 @@ export default function ImagesPanel() {
   };
 
   return (
+    <>
+    <DolphinSlidesAdmin />
     <div className="bg-white rounded-xl border border-[#E2E8F0]" data-testid="images-panel">
       <div className="p-4 border-b border-[#E2E8F0] flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 text-sm text-[#64748B]">
@@ -176,5 +179,6 @@ export default function ImagesPanel() {
         )}
       </div>
     </div>
+    </>
   );
 }

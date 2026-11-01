@@ -1377,6 +1377,7 @@ class PriceUpdate(BaseModel):
 
 
 class SiteConfigUpdate(BaseModel):
+    dolphin_slides: Optional[List[str]] = Field(None, max_length=12)
     online_discount_enabled: Optional[bool] = None
     online_discount_usd: Optional[float] = Field(None, ge=0, le=500)
     online_discount_min_usd: Optional[float] = Field(None, ge=0, le=5000)

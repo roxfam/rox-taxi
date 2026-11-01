@@ -919,6 +919,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - 2026-11-01: VPS nightly self-update — scripts/auto-update.sh (fetch; only acts on new commits; pip if requirements changed; frontend built to build.new then swapped so live site never breaks; restarts rox-api; health-checks /api/site-config; auto-rollback to previous commit on any failure; log /var/log/rox-auto-update.log) + scripts/install-auto-update.sh (systemd timer 03:30 America/Nassau). VPS layout per deploy-app.sh: /home/rox/app, service rox-api, backend/venv, nginx serves frontend/build.
 - 2026-11-01: Discount Settings — admin Site Config → "Online booking discount": on/off toggle, amount ($, default 5), minimum booking ($, default 40). Stored as site_config.online_discount_enabled / online_discount_usd / online_discount_min_usd; used by backend pricing, checkout and the Taxi/Tours badge (badge hides when off).
 - 2026-11-01: Home "Signature Experience" dolphin section background is now a 4-photo crossfade slideshow (5s, 1.5s fade) — original Blue Lagoon photo + 3 owner-supplied dolphin photos cropped 16:9 and enhanced (autocontrast, +12% colour, unsharp) saved to frontend/public/images/dolphin/*.webp. Component: components/DolphinSlides.jsx.
+- 2026-11-01: Dolphin slideshow admin (Images tab → "Home page dolphin slideshow": upload, pick from library, reorder ←/→, remove, reset; saves site_config.dolphin_slides, max 12). Guests can swipe left/right or tap the dolphin card on phones (buttons excluded). Fade smoothed: 2.6s cubic-bezier crossfade + slow 6% zoom, 6.5s per photo.
+
 
 
 

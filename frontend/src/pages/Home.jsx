@@ -127,7 +127,7 @@ export default function Home() {
 
       {/* DOLPHIN SWIM FEATURE — direct link to Blue Lagoon operator */}
       <section className="max-w-7xl mx-auto px-6 lg:px-10 py-12" data-testid="home-dolphin-swim">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B3B5C] via-[#0B3B5C] to-[#0B192C] text-white group">
+        <div data-dolphin-card className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B3B5C] via-[#0B3B5C] to-[#0B192C] text-white group">
           <div className="absolute inset-0 opacity-60">
             <DolphinSlides />
           </div>
