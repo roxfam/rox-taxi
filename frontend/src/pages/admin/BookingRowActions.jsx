@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Pencil, Ban, Trash2, Copy, MailCheck } from "lucide-react";
+import { Pencil, Ban, Trash2, Copy, MailCheck, RotateCcw } from "lucide-react";
 import { api } from "../../lib/api";
 import CancelBookingDialog from "./CancelBookingDialog";
+import RefundBookingDialog from "./RefundBookingDialog";
 
 const btn = "inline-flex items-center gap-1 whitespace-nowrap text-[10px] font-semibold px-2 py-1 rounded transition-colors disabled:opacity-50";
 
 export default function BookingRowActions({ booking, onEdit, onRepeat, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
   const cancelled = booking.status === "cancelled";
+  const refundable = ["paid", "partially_refunded"].includes(booking.payment_status);
 
   const sendConfirm = async () => {
     if (!booking.customer_email && !booking.customer_phone) {
@@ -76,11 +79,26 @@ export default function BookingRowActions({ booking, onEdit, onRepeat, onChanged
           <Ban className="w-3 h-3" /> Cancel
         </button>
       )}
+      {refundable && (
+        <button type="button" onClick={() => setRefundOpen(true)} disabled={busy}
+          title="Refund all or part of the card payment"
+          className={`${btn} bg-[#7C3AED]/10 text-[#6D28D9] hover:bg-[#7C3AED] hover:text-white`}
+          data-testid={`admin-row-refund-${booking.id}`}>
+          <RotateCcw className="w-3 h-3" /> Refund
+        </button>
+      )}
       <button type="button" onClick={remove} disabled={busy}
         className={`${btn} bg-[#DC2626]/10 text-[#B91C1C] hover:bg-[#DC2626] hover:text-white`}
         data-testid={`admin-row-delete-${booking.id}`}>
         <Trash2 className="w-3 h-3" /> Delete
       </button>
+      {refundOpen && (
+        <RefundBookingDialog
+          booking={booking}
+          onClose={() => setRefundOpen(false)}
+          onDone={() => { setRefundOpen(false); onChanged(); }}
+        />
+      )}
       {cancelOpen && (
         <CancelBookingDialog
           booking={booking}

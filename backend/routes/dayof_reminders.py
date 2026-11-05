@@ -580,7 +580,7 @@ class BookingCancel(BaseModel):
 
 async def _paid_card_tx(booking_id: str) -> Optional[dict]:
     return await _db.payment_transactions.find_one(
-        {"booking_id": booking_id, "payment_status": "paid", "session_id": {"$nin": [None, ""]},
+        {"booking_id": booking_id, "payment_status": {"$in": ["paid", "partially_refunded"]}, "session_id": {"$nin": [None, ""]},
          "provider": {"$nin": ["zelle", "cash"]}},
         sort=[("updated_at", -1)],
     )
@@ -591,7 +591,7 @@ async def admin_booking_refundable(booking_id: str, _: str = Depends(_admin_dep)
     b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
     if not b:
         raise HTTPException(404, "Booking not found")
-    tx = await _paid_card_tx(booking_id) if b.get("payment_status") == "paid" else None
+    tx = await _paid_card_tx(booking_id) if b.get("payment_status") in ("paid", "partially_refunded") else None
     total = float(b.get("total") or b.get("total_price") or (tx or {}).get("amount") or 0)
     remaining = round(max(0.0, total - float(b.get("refunded_amount") or 0)), 2)
     return {"refundable": bool(tx) and remaining >= 0.01, "amount": remaining,
@@ -657,6 +657,46 @@ async def admin_cancel_booking(booking_id: str, req: BookingCancel, admin: str =
     return {"cancelled": True, "gift_restored": gift_back,
             "guest_notified": bool(notice and (notice["email"].get("sent") or notice["sms"].get("sent"))),
             "refund": refund}
+
+
+class BookingRefund(BaseModel):
+    amount: Optional[float] = Field(None, gt=0)
+    reason: Optional[str] = Field(None, max_length=500)
+    notify_guest: bool = True
+
+
+def _refund_notice(b: dict, amount: float, reason: str) -> dict:
+    from notifications import send_sms  # noqa: PLC0415
+    first = (b.get("customer_name") or "there").split(" ")[0] or "there"
+    item = b.get("item_name") or "your Rox booking"
+    why = f" ({reason})" if reason else ""
+    msg = (f"Hi {first}, Rox Taxi has refunded ${amount:,.2f} for booking {b['id']} ({item}){why}. "
+           "It goes back to the card you paid with and usually shows in 5–10 business days. Questions? WhatsApp +1 (242) 432-2587.")
+    report = {"sms": {"sent": False}}  # refund email is already sent by refund_payment()
+    if b.get("customer_phone"):
+        report["sms"] = send_sms(b["customer_phone"], f"Rox: {msg}"[:600])
+    return report
+
+
+@router.post("/admin/bookings/{booking_id}/refund")
+async def admin_refund_booking(booking_id: str, req: BookingRefund, admin: str = Depends(_admin_dep)):
+    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    tx = await _paid_card_tx(booking_id) if b.get("payment_status") in ("paid", "partially_refunded") else None
+    if not tx:
+        raise HTTPException(400, "No card payment found to refund on this booking")
+    from routes.admin import refund_payment  # noqa: PLC0415
+    reason = (req.reason or "").strip()
+    body = {"reason": reason or "Refund issued by Rox"}
+    if req.amount:
+        body["amount"] = round(req.amount, 2)
+    res = await refund_payment(tx["session_id"], body, admin=admin)
+    ok = bool((res.get("refund") or {}).get("refunded"))
+    notice = None
+    if ok and req.notify_guest:
+        notice = await asyncio.to_thread(_refund_notice, b, float(res.get("amount") or 0), reason)
+    return {**res, "ok": ok, "guest_notified": ok and (bool(b.get("customer_email")) or bool(notice and notice["sms"].get("sent")))}
 
 
 @router.delete("/admin/bookings/{booking_id}")

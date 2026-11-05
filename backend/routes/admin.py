@@ -999,7 +999,7 @@ async def refund_payment(
     if refunded_ok:
         new_status = "refunded" if is_now_fully_refunded else "partially_refunded"
     else:
-        new_status = "refund_pending"
+        new_status = booking.get("payment_status") or tx.get("payment_status") or "paid"  # failed refund: money not moved
 
     await _db.payment_transactions.update_one(
         {"session_id": payment_id},
