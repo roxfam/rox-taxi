@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, money, BACKEND_URL, isAdminAuthed, adminLogout, clearAdminAuth } from "../lib/api";
 import ResendPayLinkButton from "./admin/ResendPayLinkButton";
 import TextPayLinkButton from "./admin/TextPayLinkButton";
+import RefundHistory from "./admin/RefundHistory";
 import BookingRowActions from "./admin/BookingRowActions";
 import BookingCalendar from "./admin/BookingCalendar";
 import QuotesPanel from "./admin/QuotesPanel";
@@ -573,8 +574,8 @@ export default function AdminDashboard() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-1 rounded ${b.payment_status === "paid" ? "bg-[#D4A94A]/10 text-[#D4A94A]" : "bg-[#E86A3C]/10 text-[#E86A3C]"}`}>{b.payment_method} · {b.payment_status}</span>
-                        {!["paid", "refunded"].includes(b.payment_status) && !["cancelled", "completed"].includes(b.status) && (
+                        <span className={`text-xs px-2 py-1 rounded ${b.payment_status === "paid" ? "bg-[#D4A94A]/10 text-[#D4A94A]" : ["refunded", "partially_refunded"].includes(b.payment_status) ? "bg-[#7C3AED]/10 text-[#6D28D9]" : "bg-[#E86A3C]/10 text-[#E86A3C]"}`}>{b.payment_method} · {b.payment_status}</span>
+                        {!["paid", "refunded", "partially_refunded"].includes(b.payment_status) && !["cancelled", "completed"].includes(b.status) && (
                           <div className="flex flex-wrap gap-1"><ResendPayLinkButton booking={b} onSent={load} /><TextPayLinkButton booking={b} onSent={load} /></div>
                         )}
                       </td>
@@ -605,6 +606,7 @@ export default function AdminDashboard() {
                           onRepeat={(bk) => { setRepeatFrom(bk); setNewBookingOpen(true); }}
                           onChanged={load}
                         />
+                        <RefundHistory booking={b} />
                       </td>
                     </tr>
                   );

@@ -382,7 +382,7 @@ async def monthly_report(month: Optional[str] = None, _=Depends(_admin)):
         lo, hi = _month_range(month)
     except ValueError:
         raise HTTPException(400, "Month must be YYYY-MM")
-    q = {"created_at": {"$gte": lo, "$lt": hi}, "payment_status": "paid", "status": {"$ne": "cancelled"}}
+    q = {"created_at": {"$gte": lo, "$lt": hi}, "payment_status": {"$in": ["paid", "partially_refunded", "refunded"]}}
     by_service = defaultdict(lambda: {"count": 0, "revenue": 0.0})
     tours, weekdays, emails = Counter(), Counter(), set()
     tour_rev = defaultdict(float)
@@ -414,8 +414,21 @@ async def monthly_report(month: Optional[str] = None, _=Depends(_admin)):
     for e in emails:
         if await _db.bookings.count_documents({"customer_email": {"$regex": f"^{e}$", "$options": "i"}, "payment_status": "paid"}) > 1:
             repeat += 1
+    refunds, refund_count, refund_rows = 0.0, 0, []
+    async for b in _db.bookings.find({"refund_history": {"$elemMatch": {"ok": True, "at": {"$gte": lo, "$lt": hi}}}},
+                                     {"_id": 0, "id": 1, "customer_name": 1, "item_name": 1, "refund_history": 1}):
+        for r in b.get("refund_history") or []:
+            if r.get("ok") and lo <= (r.get("at") or "") < hi:
+                amt = float(r.get("amount") or 0)
+                refunds += amt
+                refund_count += 1
+                refund_rows.append({"booking_id": b["id"], "name": b.get("customer_name") or "", "item": b.get("item_name") or "",
+                                    "amount": round(amt, 2), "at": r.get("at"), "reason": r.get("reason") or ""})
+    refund_rows.sort(key=lambda r: r["at"], reverse=True)
     return {
         "month": month, "paid_bookings": count, "revenue": round(revenue, 2),
+        "refunds": {"total": round(refunds, 2), "count": refund_count, "recent": refund_rows[:8]},
+        "net_income": round(revenue - refunds, 2),
         "avg_ticket": round(revenue / count, 2) if count else 0,
         "by_service": {k: {"count": v["count"], "revenue": round(v["revenue"], 2)} for k, v in by_service.items()},
         "top_tours": [{"name": n, "count": c, "revenue": round(tour_rev[n], 2)} for n, c in tours.most_common(5)],

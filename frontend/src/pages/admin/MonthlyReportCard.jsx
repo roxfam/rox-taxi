@@ -29,14 +29,19 @@ export default function MonthlyReportCard() {
       <div className="p-5 border-b border-[#E2E8F0] flex items-center justify-between flex-wrap gap-3">
         <div>
           <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[.18em] text-[#D4A94A] font-bold"><CalendarRange className="w-3 h-3" /> Monthly report</div>
-          <h3 className="mt-1 font-[Georgia] text-[#0B3B5C] text-xl">Paid bookings by month</h3>
+          <h3 className="mt-1 font-[Georgia] text-[#0B3B5C] text-xl">Sales, refunds &amp; net income</h3>
         </div>
         <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="text-xs border border-[#E2E8F0] rounded-md px-2 py-1.5 text-[#0B3B5C]" data-testid="monthly-report-month" />
       </div>
       {!d ? <div className="p-5 text-sm text-[#64748B]">Loading…</div> : (
         <>
-          <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Stat id="revenue" label="Revenue" value={money(d.revenue)} />
+          <div className="p-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <Stat id="revenue" label="Gross sales" value={money(d.revenue)} />
+            <Stat id="refunds" label={`Refunds (${d.refunds?.count || 0})`} value={`−${money(d.refunds?.total || 0)}`} />
+            <div className="bg-[#0B3B5C] rounded-lg p-4" data-testid="monthly-net">
+              <div className="text-[10px] uppercase tracking-[.18em] text-[#D4A94A] font-bold">Net income</div>
+              <div className="mt-1 text-2xl font-black text-white font-mono">{money(d.net_income ?? d.revenue)}</div>
+            </div>
             <Stat id="bookings" label="Paid bookings" value={d.paid_bookings} />
             <Stat id="avg" label="Avg ticket" value={money(d.avg_ticket)} />
             <Stat id="repeat" label="Repeat guests" value={`${d.guests.repeat} / ${d.guests.unique}`} />
@@ -53,6 +58,19 @@ export default function MonthlyReportCard() {
               <div className="flex justify-between text-[12px] py-0.5"><span className="text-[#64748B]">Minutes waited</span><span className="font-mono text-[#0B3B5C]">{d.casino.waited_minutes}</span></div>
             </div>
           </div>
+          {d.refunds?.recent?.length > 0 && (
+            <div className="px-5 pb-5">
+              <div className="bg-white rounded-lg p-4 border border-[#E2E8F0]" data-testid="monthly-refund-list">
+                <div className="text-[11px] uppercase tracking-[.16em] text-[#64748B] font-bold mb-3">Refunds this month</div>
+                {d.refunds.recent.map((r) => (
+                  <div key={`${r.booking_id}-${r.at}`} className="flex justify-between gap-3 text-[12px] py-0.5">
+                    <span className="text-[#0B3B5C] truncate"><span className="font-mono font-semibold">{r.booking_id}</span> · {r.name} · {r.item}{r.reason ? ` · ${r.reason}` : ""}</span>
+                    <span className="flex gap-3 shrink-0"><span className="text-[#64748B]">{new Date(r.at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Nassau" })}</span><span className="font-mono text-[#7C3AED] font-bold">−{money(r.amount)}</span></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
