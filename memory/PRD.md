@@ -922,6 +922,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - 2026-11-01: Dolphin slideshow admin (Images tab → "Home page dolphin slideshow": upload, pick from library, reorder ←/→, remove, reset; saves site_config.dolphin_slides, max 12). Guests can swipe left/right or tap the dolphin card on phones (buttons excluded). Fade smoothed: 2.6s cubic-bezier crossfade + slow 6% zoom, 6.5s per photo.
 - 2026-11-01: Admin "Refund" button on paid / partially-refunded bookings (BookingRowActions → RefundBookingDialog): full / half / custom amount, reason, guest text (email already sent by refund_payment). POST /api/admin/bookings/{id}/refund (Stripe or PayPal via existing refund_payment); booking stays active. Partial refunds can be repeated (_paid_card_tx accepts partially_refunded). Failed refunds no longer flip payment_status to "refund_pending". Preview Stripe key is the Emergent test proxy → real refunds only work with the owner's own Stripe key (production/VPS).
 - 2026-11-01: Monthly report now shows Gross sales (paid + partially/fully refunded bookings created that month, incl. later-cancelled paid ones), Refunds (successful refund_history entries dated that month, with count + recent list), and Net income. Booking rows show a purple "Refunded $X" box listing each successful refund (date, reason, amount) — components/admin/RefundHistory.jsx.
+- 2026-11-09: Taxi multi-stop trips — "+ Add a stop" in taxi booking (unlimited, max 25); every leg priced at its standard fixed route rate (per-person routes × pax with route min_pax, flat routes + $5/extra guest over 2). POST /api/taxi/multi-quote; BookingCreate.stops; booking stores stops + trip_legs; round trip disabled with stops; unpriced leg → "WhatsApp us". Per-leg prices shown in checkout, receipt page, PDF receipt, quote page/PDF and owner SMS. New per-person routes ($7, 1-person minimum via min_pax): Junkanoo Beach ↔ Cruise Port, Junkanoo Beach ↔ Fish Fry.
+- 2026-11-09: New flat routes Paradise Island / Atlantis ↔ Junkanoo Beach $25 (2 guests incl., +$5 per extra guest; $2 bridge toll auto-added as on all Paradise trips).
+
+
 
 
 

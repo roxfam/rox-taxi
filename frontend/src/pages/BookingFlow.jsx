@@ -213,7 +213,22 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const setF = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   const ROUND_TRIP_DISCOUNT_PCT = 0.10;
-  const isRoundTrip = serviceType === "taxi" && !!form.round_trip;
+  const stopsList = serviceType === "taxi" ? (form.stops || []) : [];
+  const hasStops = stopsList.length > 0;
+  const [multiQuote, setMultiQuote] = useState(null);
+  const stopsKey = JSON.stringify([form.pickup_location, ...stopsList, form.dropoff_location, form.passengers]);
+  useEffect(() => {
+    if (!hasStops) { setMultiQuote(null); return undefined; }
+    const pts = [form.pickup_location, ...stopsList, form.dropoff_location];
+    if (pts.some((p) => !String(p || "").trim())) { setMultiQuote({ ok: false, error: "Fill in pickup, every stop and dropoff to see the price.", legs: [], total: 0 }); return undefined; }
+    const t = setTimeout(() => {
+      api.post("/taxi/multi-quote", { points: pts, passengers: Number(form.passengers) || 1 })
+        .then((r) => setMultiQuote(r.data)).catch(() => setMultiQuote({ ok: false, error: "Couldn't price this trip.", legs: [], total: 0 }));
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopsKey, hasStops]);
+  const isRoundTrip = serviceType === "taxi" && !!form.round_trip && !hasStops;
   const singleFare = Number(item?.price || 0);
   // Per-person taxi routes (beach runs) — fare × pax instead of flat.
   const isPerPersonTaxi = serviceType === "taxi" && (item?.pricing_mode || "flat").toLowerCase() === "per_person";
@@ -261,7 +276,9 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const perPersonTaxiBase = isPerPersonTaxi
     ? singleFare * perPersonBilledPax
     : null;
-  const rawBase = hasChildPricing
+  const rawBase = hasStops
+    ? Number(multiQuote?.total || 0)
+    : hasChildPricing
     ? perPersonBase
     : serviceType === "rental"
       ? singleFare * Math.max(1, Number(form.days || 1))
@@ -283,7 +300,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   // Extra-passenger surcharge (+$5/pax over 2) only applies to flat-fare
   // taxi routes. Per-person routes skip it because each rider already
   // pays their own share.
-  const passengerFee = serviceType === "taxi" && !hasChildPricing && !isPerPersonTaxi && Number(form.passengers || 0) > PASSENGER_INCLUDED
+  const passengerFee = serviceType === "taxi" && !hasStops && !hasChildPricing && !isPerPersonTaxi && Number(form.passengers || 0) > PASSENGER_INCLUDED
     ? (Number(form.passengers) - PASSENGER_INCLUDED) * PASSENGER_FEE
     : 0;
   const rentalDeposit = serviceType === "rental" ? RENTAL_DEPOSIT : 0;
@@ -454,6 +471,10 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
       toast.error(`Car rentals have a ${RENTAL_MIN_DAYS}-day minimum. Please increase the number of days.`);
       return;
     }
+    if (hasStops && !multiQuote?.ok) {
+      toast.error(multiQuote?.error || "Please check your stops.");
+      return;
+    }
     setLoading(true);
     try {
       const cfg = await api.get("/site-config").then((r) => r.data).catch(() => siteCfg);
@@ -470,6 +491,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         booking_date: form.booking_date,
         pickup_location: form.pickup_location || null,
         dropoff_location: form.dropoff_location || null,
+        stops: hasStops ? stopsList : null,
         passengers: hasChildPricing
           ? (numAdults + numKids + numToddlers)
           : (Number(form.passengers) || 1),
@@ -1062,6 +1084,17 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     <div className="mt-3 text-xs text-[#64748B] flex justify-between border-t border-[#E2E8F0] pt-2">
                       <span>{form.extra_luggage} extra bag(s) × ${LUGGAGE_FEE}</span>
                       <span className="mono font-semibold text-[#E86A3C]">+${(Number(form.extra_luggage) * LUGGAGE_FEE).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {hasStops && (
+                    <div className="mt-2 text-xs border-t border-[#E2E8F0] pt-2 space-y-1" data-testid="multi-stop-legs">
+                      {(multiQuote?.legs || []).map((lg, n) => (
+                        <div key={`${lg.from}-${n}`} className="flex justify-between gap-3" data-testid={`multi-stop-leg-${n}`}>
+                          <span className="text-[#64748B]">Leg {n + 1}: {lg.from} → {lg.to}{lg.per_person ? ` (× ${form.passengers} pax)` : ""}</span>
+                          <span className="mono font-semibold text-[#0B3B5C]">${Number(lg.fare).toFixed(2)}</span>
+                        </div>
+                      ))}
+                      {multiQuote && !multiQuote.ok && <div className="text-[#DC2626] font-semibold" data-testid="multi-stop-error">{multiQuote.error}</div>}
                     </div>
                   )}
                   {passengerFee > 0 && (

@@ -164,6 +164,7 @@ class BookingCreate(BaseModel):
     booking_date: str
     pickup_location: Optional[str] = None
     dropoff_location: Optional[str] = None
+    stops: Optional[List[str]] = Field(None, max_length=25)  # taxi: extra stops between pickup and dropoff
     passengers: int = Field(..., ge=1, le=20)  # mandatory
     days: Optional[int] = 1
     extra_luggage: Optional[int] = 0
@@ -2078,6 +2079,56 @@ async def taxi_locations():
     return TAXI_LOCATIONS
 
 
+def _find_route(from_tag: str, to_tag: str, services: list):
+    for s in services:
+        ep = _service_endpoints(s)
+        if not ep["from_tag"] or not ep["to_tag"]:
+            continue
+        if ep["from_tag"] == from_tag and ep["to_tag"] == to_tag:
+            return s, "forward"
+        if ep["bidirectional"] and ep["from_tag"] == to_tag and ep["to_tag"] == from_tag:
+            return s, "reverse"
+    return None, None
+
+
+def _leg_fare(s: dict, pax: int) -> float:
+    """Standard fare for one leg: per-person routes × pax (route minimum), flat routes + extra-passenger fee."""
+    price = float(s.get("price") or 0)
+    if (s.get("pricing_mode") or "flat").lower() == "per_person":
+        return round(price * max(int(s.get("min_pax") or 2), pax), 2)
+    return round(price + max(0, pax - EXTRA_PASSENGER_INCLUDED) * EXTRA_PASSENGER_FEE_USD, 2)
+
+
+async def _price_multi_stop(points: list, pax: int) -> dict:
+    pts = [str(p or "").strip() for p in points]
+    if any(not p for p in pts):
+        return {"ok": False, "error": "Please fill in every stop.", "legs": [], "total": 0}
+    services = await db.taxi_services.find({}).to_list(300)
+    legs, total = [], 0.0
+    for a, b in zip(pts, pts[1:]):
+        ta, tb = _match_location_tag(a), _match_location_tag(b)
+        s = _find_route(ta, tb, services)[0] if ta and tb and ta != tb else None
+        if not s:
+            return {"ok": False, "legs": legs, "total": round(total, 2),
+                    "error": f"No set fare for {a} → {b} yet. WhatsApp us for a quote on this trip."}
+        fare = _leg_fare(s, pax)
+        total += fare
+        legs.append({"from": a, "to": b, "service_id": s.get("id"), "route": s.get("name"), "fare": fare,
+                     "per_person": (s.get("pricing_mode") or "").lower() == "per_person"})
+    return {"ok": True, "error": None, "legs": legs, "total": round(total, 2)}
+
+
+class MultiStopQuote(BaseModel):
+    points: List[str] = Field(..., min_length=3, max_length=27)
+    passengers: int = Field(1, ge=1, le=20)
+
+
+@api_router.post("/taxi/multi-quote")
+async def taxi_multi_quote(req: MultiStopQuote):
+    """Price a trip with extra stops: every leg is charged at its standard taxi rate."""
+    return await _price_multi_stop(req.points, req.passengers)
+
+
 @api_router.post("/taxi/quote")
 async def taxi_quote(req: TaxiQuoteRequest):
     """Match the user's From + To against known fixed-rate routes."""
@@ -2090,21 +2141,16 @@ async def taxi_quote(req: TaxiQuoteRequest):
         return {"matched": False, "reason": "same_location",
                 "message": "Pickup and dropoff look like the same location."}
 
-    services = await db.taxi_services.find({}).to_list(200)
-    for s in services:
-        ep = _service_endpoints(s)
-        if not ep["from_tag"] or not ep["to_tag"]:
-            continue
-        forward = ep["from_tag"] == from_tag and ep["to_tag"] == to_tag
-        reverse = ep["bidirectional"] and ep["from_tag"] == to_tag and ep["to_tag"] == from_tag
-        if forward or reverse:
-            return {
-                "matched": True,
-                "service": annotate_promo(clean(s)),
-                "direction": "forward" if forward else "reverse",
-                "from_tag": from_tag,
-                "to_tag": to_tag,
-            }
+    services = await db.taxi_services.find({}).to_list(300)
+    s, direction = _find_route(from_tag, to_tag, services)
+    if s:
+        return {
+            "matched": True,
+            "service": annotate_promo(clean(s)),
+            "direction": direction,
+            "from_tag": from_tag,
+            "to_tag": to_tag,
+        }
 
     hourly = await db.taxi_services.find_one({"id": "hourly-charter"})
     return {
@@ -2831,15 +2877,30 @@ async def create_booking(req: BookingCreate, request: Request):
             # 2-person minimum — solo travelers still pay for 2 seats so the
             # driver's trip is economically viable. Mirrors what the Nassau
             # tariff sheet does for its shuttle routes.
-            _pax_billed = max(2, int(req.passengers or 1))
+            _min_pax = int(_svc_doc.get("min_pax") or 2)
+            _pax_billed = max(_min_pax, int(req.passengers or 1))
             base = round(float(req.price) * _pax_billed, 2)
             booking["taxi_pricing_mode"] = "per_person"
             booking["billed_passengers"] = _pax_billed
-            if int(req.passengers or 1) < 2:
+            if int(req.passengers or 1) < _min_pax:
                 booking["notes"] = ((str(req.notes or "").strip() + " · " if req.notes else "")
                                     + "Solo traveler — billed at the 2-person minimum for this route.").strip(" ·")
         if req.flight_number:
             booking["flight_number"] = req.flight_number.strip().upper().replace(" ", "")
+        _stops = [s.strip()[:120] for s in (req.stops or []) if s and s.strip()]
+        if _stops:
+            if req.round_trip:
+                raise HTTPException(400, "Round trips can't have extra stops. Book the return as a separate ride.")
+            _mq = await _price_multi_stop([req.pickup_location or "", *_stops, req.dropoff_location or ""], int(req.passengers or 1))
+            if not _mq["ok"]:
+                raise HTTPException(400, _mq["error"])
+            base = _mq["total"]
+            booking["stops"] = _stops
+            booking["trip_legs"] = _mq["legs"]
+            _route_note = "Stops: " + " → ".join([req.pickup_location or "", *_stops, req.dropoff_location or ""])
+            _prev = str(booking.get("notes") or req.notes or "").strip()
+            booking["notes"] = f"{_prev} · {_route_note}" if _prev else _route_note
+            _per_person_taxi = True  # legs already include passenger pricing
         extra = max(0, min(int(req.extra_luggage or 0), LUGGAGE_MAX))
         luggage_fee = extra * LUGGAGE_FEE_USD
         booking["luggage_fee"] = luggage_fee
@@ -2851,11 +2912,11 @@ async def create_booking(req: BookingCreate, request: Request):
         # bridge to Paradise Island / Atlantis. Detected by keyword match on
         # the service name OR dropoff location so it works for both packaged
         # and free-form routes.
-        _combined = f"{req.item_name} {req.dropoff_location or ''} {req.pickup_location or ''}".lower()
+        _combined = f"{req.item_name} {req.dropoff_location or ''} {req.pickup_location or ''} {' '.join(_stops)}".lower()
         if any(k in _combined for k in ("paradise island", "atlantis", "→ paradise", "-> paradise")):
             bridge_toll_fee = PARADISE_BRIDGE_TOLL_USD
             booking["bridge_toll_fee"] = bridge_toll_fee
-            _existing = str(req.notes or "").strip()
+            _existing = str(booking.get("notes") or req.notes or "").strip()
             _toll_note = f"⚠ Includes ${PARADISE_BRIDGE_TOLL_USD:.0f} Paradise Island bridge toll pass (round-trip). Toll billed to driver at the crossing and reimbursed on this booking."
             booking["notes"] = (_existing + " · " + _toll_note).strip(" ·") if _existing else _toll_note
         # Round-trip: charge the fare twice, then apply 10% off both legs.

@@ -95,7 +95,11 @@ export default function PrintReceipt() {
             </tr>
           </thead>
           <tbody className="text-[#0B3B5C]">
+            {booking.trip_legs?.length > 0 ? booking.trip_legs.map((lg, n) => (
+              <tr key={`${lg.from}-${n}`} className="border-b border-[#F1F5F9]" data-testid={`receipt-leg-${n}`}><td className="py-2.5">Leg {n + 1}: {lg.from} → {lg.to}{lg.per_person ? ` (× ${booking.passengers} pax)` : ""}</td><td className="py-2.5 text-right mono">{money(lg.fare)}</td></tr>
+            )) : (
             <tr className="border-b border-[#F1F5F9]"><td className="py-2.5">{booking.item_name}{booking.days > 1 && ` × ${booking.days} days`}</td><td className="py-2.5 text-right mono">{money(booking.price * (booking.service_type === "rental" ? (booking.days || 1) : 1))}</td></tr>
+            )}
             {booking.round_trip && <tr className="border-b border-[#F1F5F9]"><td className="py-2.5">Return leg — same-day round trip</td><td className="py-2.5 text-right mono">{money(booking.price)}</td></tr>}
             {booking.round_trip_discount > 0 && <tr className="border-b border-[#F1F5F9] text-emerald-700"><td className="py-2.5">Round-trip discount (10%)</td><td className="py-2.5 text-right mono">−{money(booking.round_trip_discount)}</td></tr>}
             {booking.rental_discount > 0 && <tr className="border-b border-[#F1F5F9] text-emerald-700"><td className="py-2.5">Multi-day discount ({Math.round((booking.rental_discount_pct || 0) * 100)}%)</td><td className="py-2.5 text-right mono">−{money(booking.rental_discount)}</td></tr>}

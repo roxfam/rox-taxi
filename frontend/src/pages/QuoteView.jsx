@@ -58,6 +58,7 @@ export default function QuoteView() {
           <Row k="Service" v={q.item_name} />
           <Row k="Date & time" v={(q.booking_date || "").replace("T", " ")} />
           <Row k="Pickup" v={q.pickup_location} />
+          {(q.stops || []).map((s, n) => <Row key={`${s}-${n}`} k={`Stop ${n + 1}`} v={s} />)}
           <Row k="Drop-off" v={q.dropoff_location} />
           <Row k={q.service_type === "rental" ? "Rental days" : "Guests"} v={String(q.service_type === "rental" ? q.days : q.passengers || "")} />
           <div className="mt-6 rounded-2xl bg-[#FBF7EF] p-5" data-testid="quote-lines">

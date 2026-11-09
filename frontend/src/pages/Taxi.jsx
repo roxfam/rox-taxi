@@ -350,8 +350,9 @@ export default function Taxi() {
                   testid="taxi-dropoff"
                 />
               </div>
+              <StopsEditor form={form} setForm={setForm} />
 
-              {!form.round_trip && !selected?.round_trip_price_override && !selected?.round_trip_price_per_pax && (() => {
+              {!form.round_trip && !(form.stops || []).length && !selected?.round_trip_price_override && !selected?.round_trip_price_per_pax && (() => {
                 const pax = Math.max(1, Number(form.passengers || 1));
                 const perPerson = (selected?.pricing_mode || "") === "per_person";
                 const leg = perPerson ? Number(selected?.price || 0) * pax : Number(selected?.price || 0);
@@ -370,6 +371,7 @@ export default function Taxi() {
                 );
               })()}
 
+              {!(form.stops || []).length && (
               <label
                 className={`flex items-center gap-3 rounded-xl border p-4 cursor-pointer transition-colors ${
                   form.round_trip
@@ -396,6 +398,7 @@ export default function Taxi() {
                   Save 10%
                 </span>
               </label>
+              )}
 
               {form.round_trip && (
                 <div
@@ -457,6 +460,39 @@ export default function Taxi() {
  * Dropdown of preset Nassau locations with a "Custom address" escape hatch.
  * Uses a native <select> so it plays nicely with mobile keyboards.
  */
+function StopsEditor({ form, setForm }) {
+  const stops = form.stops || [];
+  const setStops = (next) => setForm({ ...form, stops: next, ...(next.length ? { round_trip: false } : {}) });
+  return (
+    <div className="space-y-3" data-testid="taxi-stops-editor">
+      {stops.map((s, n) => (
+        <div key={n} className="flex gap-2 items-end" data-testid={`taxi-stop-row-${n}`}>
+          <div className="flex-1">
+            <LocationSelect
+              label={`Stop ${n + 1}`}
+              icon={<MapPin className="w-4 h-4 text-[#D4A94A]" />}
+              value={s}
+              onChange={(v) => setStops(stops.map((x, k) => (k === n ? v : x)))}
+              options={LOCATION_OPTIONS}
+              placeholder="Select a stop…"
+              testid={`taxi-stop-${n}`}
+            />
+          </div>
+          <button type="button" onClick={() => setStops(stops.filter((_, k) => k !== n))} aria-label={`Remove stop ${n + 1}`}
+            className="mb-1 w-10 h-10 rounded-full border border-[#E2E8F0] text-[#DC2626] hover:bg-red-50 shrink-0" data-testid={`taxi-stop-remove-${n}`}>×</button>
+        </div>
+      ))}
+      {stops.length < 25 && (
+        <button type="button" onClick={() => setStops([...stops, ""])}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0B3B5C] rounded-full border border-dashed border-[#0B3B5C]/40 px-4 py-2 hover:bg-[#0B3B5C]/5 transition-colors"
+          data-testid="taxi-add-stop">
+          + Add a stop {stops.length === 0 && <span className="font-normal text-[#64748B]">(each leg is charged at the standard taxi rate)</span>}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function LocationSelect({ label, icon, value, onChange, options, placeholder, testid }) {
   const preset = options.includes(value);
   const [mode, setMode] = useState(!value || preset ? "preset" : "custom");

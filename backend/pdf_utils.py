@@ -189,6 +189,8 @@ def build_receipt_pdf(booking: dict) -> bytes:
     rows.append(["Date", str(booking.get("booking_date", ""))])
     if booking.get("pickup_location"):
         rows.append(["Pickup", booking["pickup_location"]])
+    for _i, _stop in enumerate(booking.get("stops") or [], 1):
+        rows.append([f"Stop {_i}", _stop])
     if booking.get("dropoff_location"):
         rows.append(["Dropoff", booking["dropoff_location"]])
     rows.append(["Passengers", str(booking.get("passengers", 1))])
@@ -228,6 +230,9 @@ def build_receipt_pdf(booking: dict) -> bytes:
     subtotal = float(booking.get("subtotal_before_tax", 0) or (base + lug + pax + bridge_toll + additional_driver + baby_seat + airport_dropoff))
     total = float(booking.get("total", 0))
     amt_rows = [["Base fare" if booking.get("service_type") != "rental" else f"Rental × {booking.get('days',1)} day(s)", f"${base:,.2f}"]]
+    if booking.get("trip_legs"):
+        amt_rows = [[f"Leg {_i}: {_lg.get('from')} → {_lg.get('to')}", f"${float(_lg.get('fare') or 0):,.2f}"]
+                    for _i, _lg in enumerate(booking["trip_legs"], 1)]
     if lug:
         amt_rows.append([f"Extra luggage ({booking.get('extra_luggage',0)} × $3)", f"${lug:,.2f}"])
     if pax:
@@ -463,6 +468,8 @@ def build_quote_pdf(q: dict) -> bytes:
             ["Service", q.get("item_name") or ""], ["Date & time", str(q.get("booking_date") or "").replace("T", " ")]]
     if q.get("pickup_location"):
         info.append(["Pickup", q["pickup_location"]])
+    for _i, _stop in enumerate(q.get("stops") or [], 1):
+        info.append([f"Stop {_i}", _stop])
     if q.get("dropoff_location"):
         info.append(["Drop-off", q["dropoff_location"]])
     if q.get("service_type") == "rental" and q.get("days"):

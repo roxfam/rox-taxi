@@ -84,13 +84,22 @@ def _notify(q: dict) -> None:
 async def create_quote(req: QuoteRequest, request: Request):
     res = await _create_booking(_model(req.payload, True), request)
     b = res["booking"]
+    lines = [{"label": lbl, "amount": round(float(b[k]), 2)} for k, lbl in PRICE_KEYS if b.get(k)]
+    legs = b.get("trip_legs") or []
+    if legs:
+        leg_lines = [{"label": f"Leg {n}: {lg['from']} → {lg['to']}", "amount": round(float(lg["fare"]), 2)}
+                     for n, lg in enumerate(legs, 1)]
+        extras = round(float(b.get("subtotal_before_tax") or 0) - sum(x["amount"] for x in leg_lines), 2)
+        rest = [x for x in lines if x["label"] != "Fare / service"]
+        lines = leg_lines + ([{"label": "Luggage, extras & fees", "amount": extras}] if extras > 0 else []) + rest
     return await _save_quote(req.payload, "booking", {
         "service_type": b.get("service_type"), "item_name": b.get("item_name"),
         "customer_name": b.get("customer_name"), "customer_email": b.get("customer_email"),
         "customer_phone": b.get("customer_phone"), "booking_date": b.get("booking_date"),
         "pickup_location": b.get("pickup_location"), "dropoff_location": b.get("dropoff_location"),
+        "stops": b.get("stops") or [], "trip_legs": legs,
         "passengers": b.get("passengers"), "days": b.get("days"),
-        "lines": [{"label": lbl, "amount": round(float(b[k]), 2)} for k, lbl in PRICE_KEYS if b.get(k)],
+        "lines": lines,
         "total": round(float(b.get("total") or 0), 2),
     })
 
