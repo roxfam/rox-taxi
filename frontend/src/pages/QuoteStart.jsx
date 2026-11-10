@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Car, MapPinned, KeyRound, ArrowRight, Search } from "lucide-react";
 
 const OPTIONS = [
-  { to: "/taxi?quote=1", icon: Car, title: "Taxi transfer", text: "Airport, cruise port, hotel and island rides." },
+  { to: "/taxi?quote=1", icon: Car, title: "Taxi transfer", text: "Airport, cruise port, hotel and island rides, with as many stops as you need in one ride." },
   { to: "/tours?quote=1", icon: MapPinned, title: "Tour or beach day", text: "Excursions, Cable Beach days and island adventures." },
   { to: "/rentals?quote=1", icon: KeyRound, title: "Car rental", text: "Explore Nassau at your own pace." },
 ];

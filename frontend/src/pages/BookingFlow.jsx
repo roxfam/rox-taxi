@@ -81,7 +81,7 @@ function isClosedDate(dateStr, days = 1) {
  *  - defaultDays?: number
  *  - onClose: () => void
  */
-export default function BookingModal({ item, serviceType, extraFields, defaultDays = 1, initialDropoff = "", initialPickup = "", initialAddonIds = [], onClose }) {
+export default function BookingModal({ item, serviceType, extraFields, defaultDays = 1, initialDropoff = "", initialPickup = "", initialAddonIds = [], initialStops = [], onClose }) {
   // Deep-link support: /taxi?driver=Reagan pre-checks the "Request
   // Reagan" checkbox on the taxi booking modal so guests coming from
   // the /drivers/reagan spotlight page land in the flow with him
@@ -115,6 +115,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     booking_date: "",
     pickup_location: initialPickup,
     dropoff_location: initialDropoff,
+    stops: initialStops,
     passengers: groupPrefill,
     adults: groupPrefill,
     kids: 0,

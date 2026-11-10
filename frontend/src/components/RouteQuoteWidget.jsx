@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, money } from "../lib/api";
 import { ArrowRight, ArrowLeftRight, Loader2, CheckCircle2, MapPin, Info, Send } from "lucide-react";
 import { toast } from "sonner";
+import { isQuoteMode } from "./QuoteModeBanner";
 
 /**
  * Custom route quote — user picks From + To, we call /api/taxi/quote and
@@ -22,6 +23,10 @@ export default function RouteQuoteWidget({ services, onBook }) {
   // becomes visual noise for returning users. Dismissed immediately once the
   // user actually picks a location (they've clearly engaged).
   const [showSwapHint, setShowSwapHint] = useState(true);
+  const [stops, setStops] = useState([]);
+  const [multi, setMulti] = useState(null);
+  const hasStops = stops.length > 0;
+  const labelOf = (tag) => locations.find((l) => l.tag === tag)?.label || tag;
 
   useEffect(() => {
     api.get("/taxi/locations").then((r) => setLocations(r.data || [])).catch(() => {});
@@ -62,7 +67,27 @@ export default function RouteQuoteWidget({ services, onBook }) {
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (canQuote) runQuote(); }, [from, to]);
+  useEffect(() => { if (canQuote && !hasStops) runQuote(); }, [from, to, hasStops]);
+
+  const stopsKey = JSON.stringify([from, ...stops, to]);
+  useEffect(() => {
+    if (!hasStops) { setMulti(null); return undefined; }
+    if (!from || !to || stops.some((s) => !s)) { setMulti({ ok: false, pending: true }); return undefined; }
+    setMulti({ loading: true });
+    const t = setTimeout(() => {
+      api.post("/taxi/multi-quote", { points: [from, ...stops, to].map(labelOf), passengers: 2 })
+        .then((r) => setMulti(r.data)).catch(() => setMulti({ ok: false, error: "Couldn't price this trip." }));
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopsKey, hasStops, locations]);
+
+  const bookMulti = () => {
+    const legs = multi?.legs || [];
+    const svc = services?.find((s) => legs.some((l) => l.service_id === s.id)) || services?.[0];
+    if (!svc) return;
+    onBook?.({ service: svc, pickup: labelOf(from), dropoff: labelOf(to), stops: stops.map(labelOf) });
+  };
 
   const swap = () => { const a = from; setFrom(to); setTo(a); };
 
@@ -121,6 +146,8 @@ export default function RouteQuoteWidget({ services, onBook }) {
             <LocationSelect label="To" tag="to" value={to} onChange={setTo} locations={locations} exclude={from} />
           </div>
 
+          <RouteStops stops={stops} setStops={setStops} locations={locations} />
+
           {/* First-paint swap-arrow nudge — fades out after 3s. */}
           <div
             aria-hidden={!showSwapHint}
@@ -134,17 +161,18 @@ export default function RouteQuoteWidget({ services, onBook }) {
 
           {/* Result */}
           <div className="mt-6 min-h-[80px]" data-testid="quote-result">
-            {loading && (
+            {hasStops && <MultiResult multi={multi} onBook={bookMulti} />}
+            {!hasStops && loading && (
               <div className="flex items-center gap-2 text-sm text-[#64748B]" data-testid="quote-loading">
                 <Loader2 className="w-4 h-4 animate-spin" /> Fetching your fare…
               </div>
             )}
 
-            {!loading && !canQuote && (
+            {!hasStops && !loading && !canQuote && (
               <div className="text-sm text-[#94a3b8]" data-testid="quote-empty">Pick two locations to see your fare.</div>
             )}
 
-            {!loading && quote?.matched && (
+            {!hasStops && !loading && quote?.matched && (
               <div className="rounded-2xl border border-[#D4A94A]/40 bg-[#D4A94A]/8 p-5 flex flex-wrap items-center justify-between gap-4"
                 style={{ backgroundColor: "rgba(212,169,74,0.08)" }} data-testid="quote-matched">
                 <div className="flex items-start gap-3">
@@ -173,7 +201,7 @@ export default function RouteQuoteWidget({ services, onBook }) {
               </div>
             )}
 
-            {!loading && quote && !quote.matched && quote.distance && (
+            {!hasStops && !loading && quote && !quote.matched && quote.distance && (
               <div className="rounded-2xl border border-[#D4A94A]/40 p-5 flex flex-wrap items-center justify-between gap-4"
                 style={{ backgroundColor: "rgba(212,169,74,0.08)" }} data-testid="quote-distance">
                 <div>
@@ -192,7 +220,7 @@ export default function RouteQuoteWidget({ services, onBook }) {
               </div>
             )}
 
-            {!loading && quote && !quote.matched && !quote.distance && (
+            {!hasStops && !loading && quote && !quote.matched && !quote.distance && (
               <QuoteFallback
                 quote={quote}
                 locations={locations}
@@ -205,6 +233,60 @@ export default function RouteQuoteWidget({ services, onBook }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function RouteStops({ stops, setStops, locations }) {
+  return (
+    <div className="mt-4 space-y-3" data-testid="quote-stops-editor">
+      {stops.map((s, n) => (
+        <div key={n} className="flex gap-2 items-end" data-testid={`quote-stop-row-${n}`}>
+          <div className="flex-1">
+            <LocationSelect label={`Stop ${n + 1}`} tag={`stop-${n}`} value={s} locations={locations}
+              onChange={(v) => setStops(stops.map((x, k) => (k === n ? v : x)))} />
+          </div>
+          <button type="button" onClick={() => setStops(stops.filter((_, k) => k !== n))} aria-label={`Remove stop ${n + 1}`}
+            className="mb-1 w-11 h-11 rounded-full border border-[#EFE7D5] bg-white text-[#DC2626] hover:bg-red-50 shrink-0" data-testid={`quote-stop-remove-${n}`}>×</button>
+        </div>
+      ))}
+      {stops.length < 25 && (
+        <button type="button" onClick={() => setStops([...stops, ""])} data-testid="quote-add-stop"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0B3B5C] rounded-full border border-dashed border-[#0B3B5C]/40 px-4 py-2 hover:bg-[#0B3B5C]/5 transition-colors">
+          + Add a stop {stops.length === 0 && <span className="font-normal text-[#64748B]">(several destinations in one ride, each leg priced)</span>}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function MultiResult({ multi, onBook }) {
+  if (!multi || multi.loading) {
+    return <div className="flex items-center gap-2 text-sm text-[#64748B]" data-testid="quote-multi-loading"><Loader2 className="w-4 h-4 animate-spin" /> Pricing each leg…</div>;
+  }
+  if (multi.pending) return <div className="text-sm text-[#94a3b8]" data-testid="quote-multi-pending">Pick the pickup, every stop and the drop-off to see the full trip price.</div>;
+  if (!multi.ok) return <div className="text-sm text-[#DC2626]" data-testid="quote-multi-error">{multi.error}</div>;
+  return (
+    <div className="rounded-2xl border border-[#D4A94A]/40 p-5" style={{ backgroundColor: "rgba(212,169,74,0.08)" }} data-testid="quote-multi">
+      <div className="text-[10px] tracking-[0.28em] uppercase text-[#8a6b1f] font-black">Multi-stop trip · {multi.legs.length} legs</div>
+      <ul className="mt-3 divide-y divide-[#EFE7D5]">
+        {multi.legs.map((l, i) => (
+          <li key={i} className="flex justify-between gap-4 py-2 text-sm" data-testid={`quote-multi-leg-${i}`}>
+            <span className="text-[#0B3B5C]"><b className="mono text-[#D4A94A] mr-2">{i + 1}</b>{l.from} → {l.to}{String(l.route || "").startsWith("Distance") && <span className="block text-[11px] text-[#64748B] ml-5">{l.route}</span>}</span>
+            <span className="mono font-bold text-[#0B3B5C]">{money(l.fare)}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="mono text-4xl font-black text-[#E86A3C]" data-testid="quote-multi-total">{money(multi.total)}</div>
+          <div className="text-[11px] text-[#64748B]">Up to 2 passengers · extra guests, luggage and car seats added next</div>
+        </div>
+        <button onClick={onBook} data-testid="quote-multi-book-btn"
+          className="btn-shine inline-flex items-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-6 py-3 text-sm font-semibold">
+          {isQuoteMode() ? "Get a quote for this trip" : "Book this trip"} <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
   );
 }
 

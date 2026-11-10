@@ -184,8 +184,8 @@ export default function Taxi() {
       {/* Custom-route instant quote — From/To picker with fallback request form */}
       <RouteQuoteWidget
         services={services}
-        onBook={({ service, pickup, dropoff }) => {
-          setPrefill({ pickup: pickup || "", dropoff: dropoff || "" });
+        onBook={({ service, pickup, dropoff, stops }) => {
+          setPrefill({ pickup: pickup || "", dropoff: dropoff || "", stops: stops || [] });
           setSelected(service);
         }}
       />
@@ -336,6 +336,7 @@ export default function Taxi() {
           initialDropoff={prefill.dropoff}
           initialPickup={prefill.pickup}
           initialAddonIds={prefill.addonIds}
+          initialStops={prefill.stops || []}
           onClose={() => { setSelected(null); setPrefill({ dropoff: "", pickup: "", addonIds: [] }); }}
           extraFields={(form, setForm) => (
             <>

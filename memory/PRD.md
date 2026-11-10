@@ -964,3 +964,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - SEO: localized landing pages /es, /es/taxi, /es/tours, /zh, /ja, /ko, /uk, /uk/taxi, /ca, /ca/taxi (lib/seoLocales.js + pages/LocalLanding.jsx), hreflang on Home/Taxi/Tours + sitemap xhtml:link alternates, og:locale, robots allows Baidu/Sogou/360/Naver, footer "Worldwide" links, Google Translate adds ja/ko; CTA on es/zh/ja/ko pages opens booking pages auto-translated.
 - Backlog: server-side prerender for Baidu (doesn't run JavaScript well); full hand-translated booking flow.
 
+
+
+## 2026-11-10 — Prerendered locale pages, trip pages, multi-stop Get Quote
+- `yarn build` now runs `frontend/scripts/prerender-locales.js`: writes build/<locale path>/index.html with finished text, lang, meta, hreflang, FAQ JSON-LD for all 25 localized pages (Baidu/Sogou/Naver readable). Honors BUILD_PATH (VPS auto-update).
+- Trip pages (es/uk/ca × 5): airport→Atlantis ($45), cruise port→Atlantis ($20), cruise port→Baha Mar/Cable Beach ($25), airport→Baha Mar ($35), airport→Cable Beach ($35); live fare badge from /api/taxi-services; "Book" deep-links /taxi?book=<id>. Sitemap + hreflang clusters `trip:*` (keep seo.py in sync with seoLocales.js).
+- Taxi "Pick your destination" / Get Quote widget: "+ Add a stop" (up to 25), leg-by-leg prices via /api/taxi/multi-quote, "Get a quote for this trip" / "Book this trip" opens booking with stops prefilled (BookingModal `initialStops`).

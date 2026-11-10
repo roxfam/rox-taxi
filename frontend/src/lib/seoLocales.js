@@ -9,7 +9,7 @@ export const CLUSTERS = {
 
 export const alternatesFor = (cluster) =>
   [...Object.entries(CLUSTERS[cluster]).map(([hreflang, path]) => ({ hreflang, href: SITE + path })),
-    { hreflang: "x-default", href: SITE + CLUSTERS[cluster].en }];
+    { hreflang: "x-default", href: SITE + (CLUSTERS[cluster].en || "/taxi") }];
 
 const card = (title, body, to) => ({ title, body, to });
 
@@ -232,6 +232,84 @@ const CA = {
     faq: UK.taxi.faq,
   },
 };
+
+// Popular fixed-fare trips. `price` is the published fare used in static text; the page also shows the live fare.
+const TRIPS = [
+  { key: "airport-atlantis", serviceId: "airport-paradise", price: 45,
+    slug: { es: "aeropuerto-atlantis", uk: "airport-to-atlantis", ca: "airport-to-atlantis" },
+    from: { es: "el aeropuerto LPIA", en: "LPIA Airport" }, to: { es: "Atlantis / Paradise Island", en: "Atlantis / Paradise Island" } },
+  { key: "cruise-port-atlantis", serviceId: "port-paradise", price: 20,
+    slug: { es: "puerto-cruceros-atlantis", uk: "cruise-port-to-atlantis", ca: "cruise-port-to-atlantis" },
+    from: { es: "el puerto de cruceros", en: "Nassau Cruise Port" }, to: { es: "Atlantis / Paradise Island", en: "Atlantis / Paradise Island" } },
+  { key: "cruise-port-cable-beach", serviceId: "port-bahamar", price: 25,
+    slug: { es: "puerto-cruceros-cable-beach", uk: "cruise-port-to-cable-beach", ca: "cruise-port-to-cable-beach" },
+    from: { es: "el puerto de cruceros", en: "Nassau Cruise Port" }, to: { es: "Baha Mar / Cable Beach", en: "Baha Mar / Cable Beach" } },
+  { key: "airport-baha-mar", serviceId: "airport-bahamar", price: 35,
+    slug: { es: "aeropuerto-baha-mar", uk: "airport-to-baha-mar", ca: "airport-to-baha-mar" },
+    from: { es: "el aeropuerto LPIA", en: "LPIA Airport" }, to: { es: "Baha Mar", en: "Baha Mar" } },
+  { key: "airport-cable-beach", serviceId: "airport-cablebeach", price: 35,
+    slug: { es: "aeropuerto-cable-beach", uk: "airport-to-cable-beach", ca: "airport-to-cable-beach" },
+    from: { es: "el aeropuerto LPIA", en: "LPIA Airport" }, to: { es: "Cable Beach", en: "Cable Beach" } },
+];
+
+const tripPath = (lk, t) => `/${lk}/taxi/${t.slug[lk]}`;
+const isPort = (t) => t.key.startsWith("cruise");
+const de = (f) => (f.startsWith("el ") ? `del ${f.slice(3)}` : `de ${f}`);
+
+function tripPageEs(t) {
+  const f = t.from.es, d = t.to.es;
+  const cap = f.charAt(0).toUpperCase() + f.slice(1);
+  return {
+    title: `Taxi ${de(f)} a ${d} | $${t.price} tarifa fija · Nasáu`,
+    description: `Taxi ${de(f)} a ${d} en Nasáu, Bahamas: $${t.price} tarifa fija para dos personas, conductores con licencia 24/7, seguimiento GPS en vivo. Reserva online en español.`,
+    keywords: `taxi ${f.replace("el ", "")} ${d}, precio taxi ${d} Nassau, traslado ${d}, taxi Nassau ${d}`,
+    eyebrow: "Taxi · Nasáu", h1: `Taxi ${de(f)} a ${d}`,
+    intro: `${cap} → ${d} por $${t.price} para los dos primeros pasajeros. Sin taxímetro: ves el precio antes de reservar.${isPort(t) ? " Ideal para cruceristas: te recogemos a la salida del puerto." : " Seguimos tu vuelo por si llega con retraso."}`,
+    cta: `Reservar por $${t.price}`, ctaTo: `/taxi?book=${t.serviceId}`, cta2: "Otras rutas", cta2To: "/es/taxi",
+    serviceId: t.serviceId, priceLabel: "Tarifa actual",
+    cards: TRIPS.filter((x) => x !== t).slice(0, 3).map((x) => card(`${x.from.es.replace("el ", "").replace(/^./, (c) => c.toUpperCase())} → ${x.to.es}`, `Tarifa fija desde $${x.price}.`, tripPath("es", x))),
+    stepsTitle: "Reserva en 1 minuto",
+    steps: ["Pulsa reservar: la ruta ya está elegida.", "Indica fecha, hora, pasajeros y maletas.", "Paga online y recibe tu confirmación."],
+    note: "Primeros dos pasajeros incluidos; cada pasajero adicional tiene un pequeño suplemento. Silla infantil por $2. Precios en USD.",
+    faq: [
+      { q: `¿Cuánto cuesta el taxi ${de(f)} a ${d}?`, a: `$${t.price} para dos personas, con tarifa fija.` },
+      { q: "¿Puedo añadir paradas?", a: "Sí, puedes añadir paradas al reservar; cada tramo se cobra con su tarifa." },
+    ],
+  };
+}
+
+function tripPageEn(lk, t) {
+  const who = lk === "uk" ? "UK" : "Canadian";
+  const f = t.from.en, d = t.to.en;
+  return {
+    title: `${f} to ${d} Taxi | $${t.price} Fixed Fare · Nassau (${lk === "uk" ? "UK" : "Canada"} guests)`,
+    description: `Pre-book your taxi from ${f} to ${d} in Nassau, Bahamas: $${t.price} USD fixed fare for two, licensed 24/7 drivers, live GPS tracking. Pay online with a ${who} card.`,
+    keywords: `${f} to ${d} taxi, ${d} taxi fare, Nassau ${d} transfer, ${f} ${d} price, Bahamas taxi ${lk === "uk" ? "UK" : "Canada"}`,
+    eyebrow: "Taxi · Nassau", h1: `${f} to ${d} taxi`,
+    intro: `${f} → ${d} for $${t.price} USD for the first two passengers. No meter: you see the fare before you book.${isPort(t) ? " Perfect for cruise days, as we meet you outside the terminal." : " We track your flight in case it lands late."}`,
+    cta: `Book for $${t.price}`, ctaTo: `/taxi?book=${t.serviceId}`, cta2: "Other routes", cta2To: `/${lk}/taxi`,
+    serviceId: t.serviceId, priceLabel: "Current fare",
+    cards: TRIPS.filter((x) => x !== t).slice(0, 3).map((x) => card(`${x.from.en} → ${x.to.en}`, `Fixed fare from $${x.price}.`, tripPath(lk, x))),
+    stepsTitle: "Book in a minute",
+    steps: ["Tap book, and the route is already chosen.", "Set date, time, passengers and luggage.", "Pay online and get your confirmation by email."],
+    note: `First two passengers included, with a small fee per extra guest. Child car seats are $2 each. Prices in USD, and ${who} cards work as normal.`,
+    faq: [
+      { q: `How much is a taxi from ${f} to ${d}?`, a: `$${t.price} USD for two people, fixed fare.` },
+      { q: "Can I add stops?", a: "Yes, add stops when you book, and each leg is priced at its own fare." },
+    ],
+  };
+}
+
+TRIPS.forEach((t) => {
+  CLUSTERS[`trip:${t.key}`] = { es: tripPath("es", t), "en-GB": tripPath("uk", t), "en-CA": tripPath("ca", t) };
+  ES[`taxi/${t.slug.es}`] = { ...tripPageEs(t), cluster: `trip:${t.key}` };
+  UK[`taxi/${t.slug.uk}`] = { ...tripPageEn("uk", t), cluster: `trip:${t.key}` };
+  CA[`taxi/${t.slug.ca}`] = { ...tripPageEn("ca", t), cluster: `trip:${t.key}` };
+});
+const popular = (lk, t) => card(lk === "es" ? `${t.from.es.replace("el ", "").replace(/^./, (c) => c.toUpperCase())} → ${t.to.es}` : `${t.from.en} → ${t.to.en}`, `$${t.price}`, tripPath(lk, t));
+ES.taxi.popular = TRIPS.map((t) => popular("es", t));
+UK.taxi.popular = TRIPS.map((t) => popular("uk", t));
+CA.taxi.popular = TRIPS.map((t) => popular("ca", t));
 
 export const LOCALES = {
   es: { lang: "es", hreflang: "es", ogLocale: "es_ES", gt: "es", label: "Español", country: "ES", pages: ES },

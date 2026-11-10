@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Seo from "../components/Seo";
+import { api } from "../lib/api";
 import { LOCALES, SITE, alternatesFor, LOCALE_ROUTES } from "../lib/seoLocales";
 
 const CLUSTER = { "": "home", taxi: "taxi", tours: "tours" };
@@ -48,6 +50,38 @@ function OtherLocales({ current }) {
   );
 }
 
+function LiveFare({ serviceId, label }) {
+  const [price, setPrice] = useState(null);
+  useEffect(() => {
+    api.get("/taxi-services").then((r) => {
+      const s = (r.data || []).find((x) => x.id === serviceId);
+      if (s) setPrice(Number(s.price));
+    }).catch(() => {});
+  }, [serviceId]);
+  if (price == null) return null;
+  return (
+    <div className="mt-8 inline-flex items-baseline gap-3 rounded-2xl bg-white/10 px-5 py-3" data-testid="locale-live-fare">
+      <span className="text-xs uppercase tracking-[0.2em] text-white/60">{label}</span>
+      <span className="mono text-3xl font-black text-[#D4A94A]">${price.toFixed(0)}</span>
+    </div>
+  );
+}
+
+function Popular({ items }) {
+  return (
+    <section className="max-w-6xl mx-auto px-6 lg:px-10 pb-12" data-testid="locale-popular">
+      <div className="flex flex-wrap gap-2">
+        {items.map((c) => (
+          <BookLink key={c.to} gt={null} to={c.to} testid={`locale-popular-${c.to.split("/").pop()}`}
+            className="rounded-full border border-[#0B3B5C]/20 bg-white px-4 py-2 text-sm text-[#0B3B5C] hover:border-[#D4A94A] transition-colors">
+            {c.title} <b className="mono ml-1 text-[#E86A3C]">{c.body}</b>
+          </BookLink>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function LocalLanding({ lk, pk }) {
   const loc = LOCALES[lk];
   const p = loc.pages[pk];
@@ -57,12 +91,13 @@ export default function LocalLanding({ lk, pk }) {
   return (
     <div lang={loc.lang} className="notranslate" translate="no" data-testid={`locale-page-${lk}-${pk || "home"}`}>
       <Seo title={p.title} description={p.description} canonical={url} keywords={p.keywords} ogImage={`${SITE}/og-cover.jpg`}
-        lang={loc.lang} ogLocale={loc.ogLocale} alternates={alternatesFor(CLUSTER[pk])} jsonLd={jsonLd(loc, p, url)} />
+        lang={loc.lang} ogLocale={loc.ogLocale} alternates={alternatesFor(p.cluster || CLUSTER[pk])} jsonLd={jsonLd(loc, p, url)} />
       <section className="bg-[#0B3B5C] text-white">
         <div className="max-w-6xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
           <div className="text-[11px] tracking-[0.3em] uppercase text-[#D4A94A] font-bold mb-5" data-testid="locale-eyebrow">{p.eyebrow}</div>
           <h1 className="serif text-4xl sm:text-5xl lg:text-6xl leading-tight max-w-3xl" data-testid="locale-h1">{p.h1}</h1>
           <p className="mt-6 text-base md:text-lg text-white/75 max-w-2xl">{p.intro}</p>
+          {p.serviceId && <div><LiveFare serviceId={p.serviceId} label={p.priceLabel} /></div>}
           <div className="mt-10 flex flex-wrap gap-3">
             <BookLink gt={loc.gt} to={primaryTo} testid="locale-cta-primary"
               className="rounded-full bg-[#E86A3C] px-7 py-3.5 font-bold hover:-translate-y-0.5 transition-transform">{p.cta}</BookLink>
@@ -81,6 +116,7 @@ export default function LocalLanding({ lk, pk }) {
           </BookLink>
         ))}
       </section>
+      {p.popular && <Popular items={p.popular} />}
       <section className="max-w-6xl mx-auto px-6 lg:px-10 pb-16 grid lg:grid-cols-2 gap-10">
         <div>
           <h2 className="text-base md:text-lg font-semibold text-[#0B3B5C] mb-4">{p.stepsTitle}</h2>

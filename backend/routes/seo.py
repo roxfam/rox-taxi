@@ -86,6 +86,14 @@ _CLUSTERS = {
     "taxi": {"en": "/taxi", "es": "/es/taxi", "en-GB": "/uk/taxi", "en-CA": "/ca/taxi"},
     "tours": {"en": "/tours", "es": "/es/tours"},
 }
+for _key, _es, _en in [
+    ("airport-atlantis", "aeropuerto-atlantis", "airport-to-atlantis"),
+    ("cruise-port-atlantis", "puerto-cruceros-atlantis", "cruise-port-to-atlantis"),
+    ("cruise-port-cable-beach", "puerto-cruceros-cable-beach", "cruise-port-to-cable-beach"),
+    ("airport-baha-mar", "aeropuerto-baha-mar", "airport-to-baha-mar"),
+    ("airport-cable-beach", "aeropuerto-cable-beach", "airport-to-cable-beach"),
+]:
+    _CLUSTERS["trip:" + _key] = {"es": f"/es/taxi/{_es}", "en-GB": f"/uk/taxi/{_en}", "en-CA": f"/ca/taxi/{_en}"}
 _ALT_BY_LOC = {loc: c for c in _CLUSTERS.values() for loc in c.values()}
 _STATIC_URLS += [{"loc": p, "priority": 0.85, "changefreq": "weekly"}
                  for c in _CLUSTERS.values() for lang, p in c.items() if lang != "en"]
@@ -181,7 +189,7 @@ async def sitemap_xml():
         if cluster:
             for lang, p in cluster.items():
                 parts.append(f'    <xhtml:link rel="alternate" hreflang="{lang}" href="{escape(base + p)}"/>')
-            parts.append(f'    <xhtml:link rel="alternate" hreflang="x-default" href="{escape(base + cluster["en"])}"/>')
+            parts.append(f'    <xhtml:link rel="alternate" hreflang="x-default" href="{escape(base + cluster.get("en", "/taxi"))}"/>')
         parts.append("  </url>")
     parts.append("</urlset>")
 
