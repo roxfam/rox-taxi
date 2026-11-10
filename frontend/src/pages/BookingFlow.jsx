@@ -1123,7 +1123,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   {isDistanceRide && (
                     <div className="mt-2 text-xs border-t border-[#E2E8F0] pt-2" data-testid="distance-fare-info">
                       {distQuote?.ok
-                        ? <span className="text-[#0B3B5C]">Distance fare: {distQuote.km} km × $2 + $15 base = <b className="mono">${Number(distQuote.fare).toFixed(2)}</b> (up to 2 guests)</span>
+                        ? <span className="text-[#0B3B5C]">Distance fare: {distQuote.km} km × ${distQuote.per_km} + ${distQuote.base} base = <b className="mono">${Number(distQuote.fare).toFixed(2)}</b> (up to 2 guests)</span>
                         : <span className="text-[#DC2626] font-semibold">{distQuote?.error || "Calculating…"}</span>}
                     </div>
                   )}

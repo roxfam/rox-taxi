@@ -12,6 +12,8 @@ const LANGS = [
   { code: "nl",    label: "Dutch",          native: "Nederlands" },
   { code: "zh-CN", label: "Chinese",        native: "中文" },
   { code: "tr",    label: "Turkish",        native: "Türkçe" },
+  { code: "ja",    label: "Japanese",       native: "日本語" },
+  { code: "ko",    label: "Korean",         native: "한국어" },
 ];
 
 function readCurrent() {

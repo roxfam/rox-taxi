@@ -5,6 +5,7 @@ Distance formula (only for addresses with no fixed route): $15 base + $2 per roa
 import math
 import re
 import logging
+import uuid
 
 import httpx
 
@@ -73,8 +74,26 @@ NASSAU_PLACES = [
 ]
 
 
+_PLACES: list = [(n, la, lo, al, c) for n, la, lo, al, c in NASSAU_PLACES]
+
+
+async def load_places(db) -> None:
+    global _PLACES
+    rows = await db.nassau_places.find({"active": {"$ne": False}}).sort("name", 1).to_list(1000)
+    _PLACES = [(r["name"], float(r["lat"]), float(r["lng"]), list(r.get("aliases") or []), bool(r.get("fixed_endpoint")))
+               for r in rows if r.get("lat") is not None and r.get("lng") is not None]
+
+
+async def get_rates(db) -> tuple:
+    cfg = await db.site_config.find_one({"_id": "main"}, {"custom_base_usd": 1, "custom_per_km_usd": 1}) or {}
+    base = cfg.get("custom_base_usd")
+    per_km = cfg.get("custom_per_km_usd")
+    return (float(base) if base is not None else CUSTOM_BASE_USD,
+            float(per_km) if per_km is not None else CUSTOM_PER_KM_USD)
+
+
 def extra_place_labels() -> list:
-    return [p[0] for p in NASSAU_PLACES if not p[4]]
+    return [p[0] for p in _PLACES if not p[4]]
 
 
 def _norm(text: str) -> str:
@@ -84,7 +103,7 @@ def _norm(text: str) -> str:
 def _known(text: str):
     t = _norm(text)
     best, best_len = None, 0
-    for name, lat, lng, aliases, _core in NASSAU_PLACES:
+    for name, lat, lng, aliases, _core in _PLACES:
         for a in [name.lower(), *aliases]:
             if a in t and len(a) > best_len:
                 best, best_len = (lat, lng), len(a)
@@ -93,7 +112,10 @@ def _known(text: str):
 
 async def seed_places(db) -> None:
     for name, lat, lng, aliases, core in NASSAU_PLACES:
-        await db.nassau_places.update_one({"name": name}, {"$set": {"lat": lat, "lng": lng, "aliases": aliases, "fixed_endpoint": core}}, upsert=True)
+        await db.nassau_places.update_one({"name": name}, {"$setOnInsert": {"lat": lat, "lng": lng, "aliases": aliases, "fixed_endpoint": core, "active": True}}, upsert=True)
+    async for r in db.nassau_places.find({"id": {"$exists": False}}, {"_id": 1}):
+        await db.nassau_places.update_one({"_id": r["_id"]}, {"$set": {"id": uuid.uuid4().hex[:10]}})
+    await load_places(db)
 
 
 async def geocode(text: str, db):
@@ -148,5 +170,6 @@ async def distance_fare(from_text: str, to_text: str, db) -> dict:
     if missing:
         return {"ok": False, "error": f"We couldn't find \"{missing}\" on the Nassau map. Try a nearby landmark or WhatsApp us."}
     km = round(max(0.5, await road_km(a, b)), 1)
-    fare = float(math.floor(CUSTOM_BASE_USD + CUSTOM_PER_KM_USD * km + 0.5))
-    return {"ok": True, "km": km, "fare": fare, "base": CUSTOM_BASE_USD, "per_km": CUSTOM_PER_KM_USD}
+    base, per_km = await get_rates(db)
+    fare = float(math.floor(base + per_km * km + 0.5))
+    return {"ok": True, "km": km, "fare": fare, "base": base, "per_km": per_km}

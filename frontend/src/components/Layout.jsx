@@ -827,6 +827,15 @@ export default function Layout({ children }) {
         </div>
 
         <div className="relative border-t border-white/10">
+          <nav className="max-w-7xl mx-auto px-6 lg:px-10 pt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-white/45 notranslate" translate="no" data-testid="footer-intl-links" aria-label="International">
+            <span className="uppercase tracking-[0.25em] text-white/30">Worldwide</span>
+            <Link to="/uk" hrefLang="en-GB" className="hover:text-[#D4A94A]" data-testid="footer-intl-uk">UK</Link>
+            <Link to="/ca" hrefLang="en-CA" className="hover:text-[#D4A94A]" data-testid="footer-intl-ca">Canada</Link>
+            <Link to="/es" hrefLang="es" className="hover:text-[#D4A94A]" data-testid="footer-intl-es">España</Link>
+            <Link to="/zh" hrefLang="zh-Hans" className="hover:text-[#D4A94A]" data-testid="footer-intl-zh">中文</Link>
+            <Link to="/ja" hrefLang="ja" className="hover:text-[#D4A94A]" data-testid="footer-intl-ja">日本語</Link>
+            <Link to="/ko" hrefLang="ko" className="hover:text-[#D4A94A]" data-testid="footer-intl-ko">한국어</Link>
+          </nav>
           <div className="max-w-7xl mx-auto px-6 lg:px-10 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
             <div className="text-white/40 tracking-wide">
               &copy; {new Date().getFullYear()} <span className="serif italic text-white/60">Rox Taxi Service &amp; Tours Bahamas.</span> All rights reserved.

@@ -957,3 +957,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 
 
+
+## 2026-11-10 — Nassau map admin, distance rate settings, international SEO
+- Admin → Manage catalog → "Nassau Map & Rates" (NassauMapPanel.jsx): edit base fare + per-km (site_config.custom_base_usd / custom_per_km_usd, default 15/2), test a fare, add/edit/remove/restore map places (lookup pin from name). Places with set fares can't be renamed/removed.
+- geo.py now loads places from db.nassau_places (seed is $setOnInsert so admin edits persist); endpoints /api/admin/nassau-places (GET/POST/PUT/DELETE, /lookup), /api/admin/distance-rates, public /api/taxi/distance-rates.
+- SEO: localized landing pages /es, /es/taxi, /es/tours, /zh, /ja, /ko, /uk, /uk/taxi, /ca, /ca/taxi (lib/seoLocales.js + pages/LocalLanding.jsx), hreflang on Home/Taxi/Tours + sitemap xhtml:link alternates, og:locale, robots allows Baidu/Sogou/360/Naver, footer "Worldwide" links, Google Translate adds ja/ko; CTA on es/zh/ja/ko pages opens booking pages auto-translated.
+- Backlog: server-side prerender for Baidu (doesn't run JavaScript well); full hand-translated booking flow.
+

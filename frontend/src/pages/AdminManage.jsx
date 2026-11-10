@@ -20,11 +20,13 @@ import OwnerSmsPanel from "./admin/OwnerSmsPanel";
 import PaymentDigestCard from "./admin/PaymentDigestCard";
 import DayOfRemindersCard from "./admin/DayOfRemindersCard";
 import SmsInboxPanel from "./admin/SmsInboxPanel";
+import NassauMapPanel from "./admin/NassauMapPanel";
 
 const TABS = [
   { key: "home_slides", label: "Home Slides" },
   { key: "tours", label: "Tours" },
   { key: "taxi_services", label: "Taxi Services" },
+  { key: "nassau_map", label: "Nassau Map & Rates" },
   { key: "rentals", label: "Rentals" },
   { key: "licenses", label: "Licenses" },
   { key: "visitors", label: "Visitors" },
@@ -95,6 +97,7 @@ export default function AdminManage() {
           ))}
         </div>
         {tab === "site" ? <SiteConfigPanel />
+          : tab === "nassau_map" ? <NassauMapPanel />
           : tab === "guest_texts" ? <SmsInboxPanel />
           : tab === "owner_sms" ? <><DayOfRemindersCard /><PaymentDigestCard /><OwnerSmsPanel /></>
           : tab === "tokens" ? <TokensPanel />

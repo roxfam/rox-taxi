@@ -179,7 +179,7 @@ export default function RouteQuoteWidget({ services, onBook }) {
                 <div>
                   <div className="text-[10px] tracking-[0.28em] uppercase text-[#8a6b1f] font-black">Distance fare</div>
                   <div className="serif text-xl text-[#0B3B5C] mt-1">{quote.distance.fromLabel} → {quote.distance.toLabel}</div>
-                  <div className="text-xs text-[#64748B] mt-1">{quote.distance.km} km × $2 + $15 base · first 2 passengers · +$5 per extra passenger</div>
+                  <div className="text-xs text-[#64748B] mt-1">{quote.distance.km} km × ${quote.distance.per_km} + ${quote.distance.base} base · first 2 passengers · +$5 per extra passenger</div>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="mono text-4xl font-black text-[#E86A3C]" data-testid="quote-distance-price">{money(quote.distance.fare)}</div>

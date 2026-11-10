@@ -80,6 +80,16 @@ _STATIC_URLS: List[dict] = [
     {"loc": "/attractions/ardastra", "priority": 0.75, "changefreq": "monthly"},
 ]
 
+# hreflang clusters (keep in sync with frontend/src/lib/seoLocales.js)
+_CLUSTERS = {
+    "home": {"en": "/", "es": "/es", "zh-Hans": "/zh", "ja": "/ja", "ko": "/ko", "en-GB": "/uk", "en-CA": "/ca"},
+    "taxi": {"en": "/taxi", "es": "/es/taxi", "en-GB": "/uk/taxi", "en-CA": "/ca/taxi"},
+    "tours": {"en": "/tours", "es": "/es/tours"},
+}
+_ALT_BY_LOC = {loc: c for c in _CLUSTERS.values() for loc in c.values()}
+_STATIC_URLS += [{"loc": p, "priority": 0.85, "changefreq": "weekly"}
+                 for c in _CLUSTERS.values() for lang, p in c.items() if lang != "en"]
+
 
 def _today_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -158,7 +168,8 @@ async def sitemap_xml():
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
-        'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">',
+        'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" '
+        'xmlns:xhtml="http://www.w3.org/1999/xhtml">',
     ]
     for row in all_rows:
         parts.append("  <url>")
@@ -166,6 +177,11 @@ async def sitemap_xml():
         parts.append(f'    <lastmod>{row["lastmod"]}</lastmod>')
         parts.append(f'    <changefreq>{row["changefreq"]}</changefreq>')
         parts.append(f'    <priority>{row["priority"]:.2f}</priority>')
+        cluster = _ALT_BY_LOC.get(row["loc"])
+        if cluster:
+            for lang, p in cluster.items():
+                parts.append(f'    <xhtml:link rel="alternate" hreflang="{lang}" href="{escape(base + p)}"/>')
+            parts.append(f'    <xhtml:link rel="alternate" hreflang="x-default" href="{escape(base + cluster["en"])}"/>')
         parts.append("  </url>")
     parts.append("</urlset>")
 

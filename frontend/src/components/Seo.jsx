@@ -50,7 +50,23 @@ export default function Seo({
   keywords,
   ogImage,
   jsonLd,
+  lang,
+  ogLocale,
+  alternates,
 }) {
+  useEffect(() => {
+    document.documentElement.lang = lang || "en";
+    setMeta("og:locale", ogLocale || "en_US", true);
+    document.head.querySelectorAll('link[rel="alternate"][hreflang]').forEach((n) => n.remove());
+    (alternates || []).forEach(({ hreflang, href }) => {
+      const el = document.createElement("link");
+      el.setAttribute("rel", "alternate");
+      el.setAttribute("hreflang", hreflang);
+      el.setAttribute("href", href);
+      document.head.appendChild(el);
+    });
+  }, [lang, ogLocale, alternates]);
+
   useEffect(() => {
     if (title) document.title = title;
     setMeta("description", description);

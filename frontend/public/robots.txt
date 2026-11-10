@@ -20,6 +20,12 @@ Allow: /gallery
 Allow: /attractions/
 Allow: /contact
 Allow: /about
+Allow: /es
+Allow: /zh
+Allow: /ja
+Allow: /ko
+Allow: /uk
+Allow: /ca
 
 Disallow: /admin
 Disallow: /admin/
@@ -67,6 +73,21 @@ Allow: /
 
 User-agent: Slurp
 Allow: /
+
+# ─── Asia: Baidu (China), Sogou, 360 (China), Naver (Korea) ──────────
+User-agent: Baiduspider
+Allow: /
+Disallow: /admin/
+
+User-agent: Sogou web spider
+Allow: /
+
+User-agent: 360Spider
+Allow: /
+
+User-agent: Yeti
+Allow: /
+Disallow: /admin/
 
 # ─── AI / LLM crawlers we want to be indexed by (visibility) ──────────
 User-agent: GPTBot

@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { lazy, Suspense, useEffect } from "react";
 
 import Layout from "./components/Layout";
+import { LOCALE_ROUTES } from "./lib/seoLocales";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 // Home is the LCP page — keep it in the main bundle so first paint is fast.
 import Home from "./pages/Home";
@@ -24,6 +25,7 @@ const AttendantScan = lazy(() => import("./pages/AttendantScan"));
 const Contact = lazy(() => import("./pages/Contact"));
 const About = lazy(() => import("./pages/About"));
 const Groups = lazy(() => import("./pages/Groups"));
+const LocalLanding = lazy(() => import("./pages/LocalLanding"));
 const GroupsBook = lazy(() => import("./pages/GroupsBook"));
 const ResumeCheckout = lazy(() => import("./pages/ResumeCheckout"));
 const WeddingBuilder = lazy(() => import("./pages/WeddingBuilder"));
@@ -123,6 +125,9 @@ function AppRouter() {
       <Suspense fallback={<RouteSkeleton />}>
       <Routes>
       <Route path="/" element={<CustomerShell><Home /></CustomerShell>} />
+      {LOCALE_ROUTES.map((r) => (
+        <Route key={r.path} path={r.path} element={<CustomerShell><LocalLanding lk={r.lk} pk={r.pk} /></CustomerShell>} />
+      ))}
       <Route path="/taxi" element={<CustomerShell><Taxi /></CustomerShell>} />
       <Route path="/tours" element={<CustomerShell><Tours /></CustomerShell>} />
       <Route path="/rentals" element={<CustomerShell><CarRental /></CustomerShell>} />

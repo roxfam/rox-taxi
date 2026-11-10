@@ -1,4 +1,7 @@
 import Seo from "../components/Seo";
+import { alternatesFor } from "../lib/seoLocales";
+
+const ALT = alternatesFor("home");
 
 import { Link } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
@@ -32,6 +35,7 @@ export default function Home() {
         title="Nassau Taxi Service Bahamas | Airport Transfers, Tours & Paradise Island 24/7"
         description="Book a trusted Nassau taxi in the Bahamas: LPIA airport transfers from $35, Atlantis, Paradise Island, Baha Mar, Cable Beach and cruise-port rides, plus Bahamas tours, shore excursions and car rentals. Licensed 24/7 drivers, fixed fares, live GPS tracking."
         canonical="https://roxtaxi.com/"
+        alternates={ALT}
         keywords="Nassau taxi, Bahamas taxi service, LPIA airport transfer, Atlantis taxi, Paradise Island tours, Cable Beach day, Nassau car rental, Nassau cruise port taxi, Baha Mar transfer, Nassau excursions"
         ogImage="https://roxtaxi.com/og-cover.jpg"
       />

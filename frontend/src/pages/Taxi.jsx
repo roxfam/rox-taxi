@@ -5,6 +5,9 @@ import BookingModal from "./BookingFlow";
 import RouteQuoteWidget from "../components/RouteQuoteWidget";
 import FlightTrackerCard from "../components/FlightTrackerCard";
 import Seo from "../components/Seo";
+import { alternatesFor } from "../lib/seoLocales";
+
+const ALT = alternatesFor("taxi");
 import { Car, ArrowRight, Plane, Anchor, ShoppingBag, Utensils, Palmtree, MapPin, Ship, Hotel, ChevronDown, Trophy } from "lucide-react";
 import { PromoPrice } from "../components/PromoPrice";
 import { OnlineSaveBadge } from "../components/OnlineSaveBadge";
@@ -121,6 +124,7 @@ export default function Taxi() {
         title="Nassau Taxi Service Bahamas | LPIA Airport, Atlantis & Baha Mar Transfers 24/7"
         description="Book a licensed Nassau taxi in the Bahamas — LPIA airport transfers from $35, Atlantis & Paradise Island from $45, Cable Beach, Baha Mar, cruise-port pickups. Fixed Bahamian tariff, live GPS tracking, 24/7 dispatch."
         canonical="https://roxtaxi.com/taxi"
+        alternates={ALT}
         keywords="Nassau taxi service, Nassau taxi Bahamas, LPIA airport taxi, taxi Nassau to Atlantis, Nassau to Paradise Island taxi, Baha Mar taxi, Cable Beach taxi, Nassau cruise port taxi, 24 hour Nassau taxi, licensed Bahamas taxi, book Nassau taxi online, Nassau airport shuttle, Rox Taxi Nassau, travel to Nassau, travel to Nassau Bahamas, Nassau vacation transportation, best way to get around Nassau, getting around Nassau, cruise stopover Nassau, Nassau layover taxi, Nassau day trip taxi, Nassau honeymoon transportation, Nassau family taxi, LPIA to Atlantis fare, Nassau tourist taxi, plan trip to Nassau"
         ogImage="https://roxtaxi.com/og-cover.jpg"
         jsonLd={{

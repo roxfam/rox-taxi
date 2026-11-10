@@ -186,7 +186,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => setF((x) => ({ ...x, stops: [...x.stops, ""], trip_legs: [] }))} className="text-xs font-bold text-[#0B3B5C] rounded-full border border-dashed border-[#0B3B5C]/40 px-3 py-1.5" data-testid="new-booking-add-stop">+ Add a stop</button>
                 <button type="button" onClick={priceRoute} disabled={pricing} className="text-xs font-bold text-white bg-[#0B3B5C] rounded-full px-3 py-1.5 disabled:opacity-60" data-testid="new-booking-price-route">{pricing ? "Pricing…" : "Calculate price"}</button>
-                <span className="text-[11px] text-[#64748B] self-center">Fixed routes use your set fares; other addresses $15 + $2/km.</span>
+                <span className="text-[11px] text-[#64748B] self-center">Fixed routes use your set fares; other addresses use your distance rate.</span>
               </div>
               {f.trip_legs.length > 0 && f.trip_legs.map((lg, n) => (
                 <div key={n} className="flex items-center justify-between gap-2 text-xs" data-testid={`new-booking-leg-${n}`}>

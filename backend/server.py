@@ -2148,6 +2148,113 @@ async def taxi_custom_quote(req: TaxiQuoteRequest):
     return {**df, "service": {**clean(svc), "price": df["fare"]} if svc else None}
 
 
+class NassauPlaceIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    lat: float = Field(ge=24.9, le=25.2)
+    lng: float = Field(ge=-77.6, le=-77.2)
+    aliases: List[str] = Field(default_factory=list, max_length=20)
+    active: bool = True
+
+
+class DistanceRatesIn(BaseModel):
+    base_usd: float = Field(ge=0, le=500)
+    per_km_usd: float = Field(ge=0, le=100)
+
+
+class PlaceLookupIn(BaseModel):
+    q: str = Field(min_length=2, max_length=120)
+
+
+def _place_out(r: dict) -> dict:
+    return {"id": r["id"], "name": r["name"], "lat": r["lat"], "lng": r["lng"], "aliases": r.get("aliases") or [],
+            "fixed_endpoint": bool(r.get("fixed_endpoint")), "active": r.get("active", True) is not False,
+            "updated_at": r.get("updated_at")}
+
+
+async def _check_place_name(name: str, own_id: Optional[str] = None):
+    n = name.strip().lower()
+    if any(loc["label"].strip().lower() == n for loc in TAXI_LOCATIONS):
+        raise HTTPException(400, "That place already has set fares in the drop-down.")
+    dup = await db.nassau_places.find_one({"name": {"$regex": f"^{re.escape(name.strip())}$", "$options": "i"}})
+    if dup and dup.get("id") != own_id:
+        raise HTTPException(400, "A place with that name is already on the map.")
+
+
+@api_router.get("/taxi/distance-rates")
+async def taxi_distance_rates():
+    base, per_km = await geo.get_rates(db)
+    return {"base_usd": base, "per_km_usd": per_km}
+
+
+@api_router.get("/admin/distance-rates")
+async def admin_get_distance_rates(_admin: str = Depends(require_admin)):
+    return await taxi_distance_rates()
+
+
+@api_router.put("/admin/distance-rates")
+async def admin_set_distance_rates(req: DistanceRatesIn, _admin: str = Depends(require_admin)):
+    await db.site_config.update_one({"_id": "main"}, {"$set": {"custom_base_usd": round(req.base_usd, 2), "custom_per_km_usd": round(req.per_km_usd, 2)}}, upsert=True)
+    return await taxi_distance_rates()
+
+
+@api_router.get("/admin/nassau-places")
+async def admin_list_places(_admin: str = Depends(require_admin)):
+    rows = await db.nassau_places.find({}).sort("name", 1).to_list(1000)
+    return [_place_out(r) for r in rows]
+
+
+@api_router.post("/admin/nassau-places/lookup")
+async def admin_lookup_place(req: PlaceLookupIn, _admin: str = Depends(require_admin)):
+    hit = await geo.geocode(req.q, db)
+    if not hit:
+        raise HTTPException(404, "Couldn't find that on the Nassau map. Enter the map pin numbers by hand.")
+    return {"lat": round(hit[0], 5), "lng": round(hit[1], 5)}
+
+
+@api_router.post("/admin/nassau-places")
+async def admin_add_place(req: NassauPlaceIn, _admin: str = Depends(require_admin)):
+    await _check_place_name(req.name)
+    doc = {"id": uuid.uuid4().hex[:10], "name": req.name.strip(), "lat": req.lat, "lng": req.lng,
+           "aliases": [a.strip().lower() for a in req.aliases if a.strip()], "fixed_endpoint": False,
+           "active": req.active, "custom": True, "updated_at": now_iso()}
+    await db.nassau_places.insert_one(doc)
+    await geo.load_places(db)
+    return _place_out(doc)
+
+
+@api_router.put("/admin/nassau-places/{place_id}")
+async def admin_update_place(place_id: str, req: NassauPlaceIn, _admin: str = Depends(require_admin)):
+    cur = await db.nassau_places.find_one({"id": place_id})
+    if not cur:
+        raise HTTPException(404, "Place not found")
+    if cur.get("fixed_endpoint") and req.name.strip() != cur["name"]:
+        raise HTTPException(400, "Places with set fares can't be renamed. You can still move the map pin.")
+    if req.name.strip().lower() != cur["name"].lower():
+        await _check_place_name(req.name, place_id)
+    upd = {"name": req.name.strip(), "lat": req.lat, "lng": req.lng,
+           "aliases": [a.strip().lower() for a in req.aliases if a.strip()],
+           "active": True if cur.get("fixed_endpoint") else req.active, "updated_at": now_iso()}
+    await db.nassau_places.update_one({"id": place_id}, {"$set": upd})
+    await geo.load_places(db)
+    return _place_out({**cur, **upd})
+
+
+@api_router.delete("/admin/nassau-places/{place_id}")
+async def admin_delete_place(place_id: str, _admin: str = Depends(require_admin)):
+    cur = await db.nassau_places.find_one({"id": place_id})
+    if not cur:
+        raise HTTPException(404, "Place not found")
+    if cur.get("fixed_endpoint"):
+        raise HTTPException(400, "Places with set fares can't be removed.")
+    if cur.get("custom"):
+        await db.nassau_places.delete_one({"id": place_id})
+    else:
+        await db.nassau_places.update_one({"id": place_id}, {"$set": {"active": False, "updated_at": now_iso()}})
+    await geo.load_places(db)
+    return {"ok": True}
+
+
+
 @api_router.post("/taxi/multi-quote")
 async def taxi_multi_quote(req: MultiStopQuote):
     """Price a trip with extra stops: every leg is charged at its standard taxi rate."""
