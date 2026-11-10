@@ -96,6 +96,25 @@ def extra_place_labels() -> list:
     return [p[0] for p in _PLACES if not p[4]]
 
 
+_PI_WORDS = ("paradise island", "atlantis", "ocean club", "one&only", "one and only", "marina village", "cabbage beach",
+             "cove atlantis", "royal towers", "harborside", "hurricane hole", "warwick", "riu palace", "versailles",
+             "comfort suites paradise", "paradise harbour", "paradise beach", "pi bridge", "paradise")
+
+
+def _on_paradise(lat: float, lng: float) -> bool:
+    return lat >= 25.083 and -77.345 <= lng <= -77.27
+
+
+def crosses_paradise(*texts) -> bool:
+    """True when any pickup / stop / drop-off is on Paradise Island (needs the $2 bridge toll pass)."""
+    words = set(_PI_WORDS)
+    for name, lat, lng, aliases, _core in _PLACES:
+        if _on_paradise(lat, lng):
+            words.update([name.lower(), *[a.lower() for a in aliases]])
+    blob = " | ".join(_norm(t) for t in texts if t)
+    return any(w in blob for w in words)
+
+
 def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").lower().replace("’", "'")).strip()
 

@@ -441,6 +441,7 @@ class ManualBooking(BaseModel):
     extra_luggage: int = Field(0, ge=0, le=30)
     luggage_price: float = Field(0, ge=0, le=500)
     car_seats: int = Field(0, ge=0, le=4)
+    bridge_toll: bool = False
     stops: List[str] = Field(default_factory=list, max_length=25)
     trip_legs: List[dict] = Field(default_factory=list, max_length=26)
     notes: Optional[str] = Field(None, max_length=2000)
@@ -512,6 +513,7 @@ async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_d
         "price": req.total,
         "luggage_fee": round(req.extra_luggage * req.luggage_price, 2),
         "car_seat_fee": round(req.car_seats * 2.0, 2),
+        "bridge_toll_fee": 2.0 if req.bridge_toll and req.service_type == "taxi" else 0.0,
         "stops": [s.strip()[:120] for s in req.stops if s and s.strip()],
         "trip_legs": [{"from": str(lg.get("from", ""))[:120], "to": str(lg.get("to", ""))[:120],
                        "route": str(lg.get("route", ""))[:120], "fare": round(float(lg.get("fare") or 0), 2)} for lg in req.trip_legs],

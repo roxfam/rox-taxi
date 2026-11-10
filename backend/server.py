@@ -2130,7 +2130,18 @@ async def _price_multi_stop(points: list, pax: int) -> dict:
         total += fare
         legs.append({"from": a, "to": b, "service_id": s.get("id"), "route": s.get("name"), "fare": fare,
                      "per_person": (s.get("pricing_mode") or "").lower() == "per_person"})
-    return {"ok": True, "error": None, "legs": legs, "total": round(total, 2)}
+    return {"ok": True, "error": None, "legs": legs, "total": round(total, 2),
+            "bridge_toll": PARADISE_BRIDGE_TOLL_USD if geo.crosses_paradise(*pts) else 0.0}
+
+
+class BridgeTollCheck(BaseModel):
+    points: List[str] = Field(default_factory=list, max_length=30)
+
+
+@api_router.post("/taxi/bridge-toll")
+async def taxi_bridge_toll(req: BridgeTollCheck):
+    """$2 Paradise Island bridge toll pass applies when any point is on Paradise Island."""
+    return {"toll": PARADISE_BRIDGE_TOLL_USD if geo.crosses_paradise(*req.points) else 0.0}
 
 
 class MultiStopQuote(BaseModel):
@@ -3059,7 +3070,7 @@ async def create_booking(req: BookingCreate, request: Request):
         # the service name OR dropoff location so it works for both packaged
         # and free-form routes.
         _combined = f"{req.item_name} {req.dropoff_location or ''} {req.pickup_location or ''} {' '.join(_stops)}".lower()
-        if any(k in _combined for k in ("paradise island", "atlantis", "→ paradise", "-> paradise")):
+        if geo.crosses_paradise(req.item_name, req.dropoff_location, req.pickup_location, *_stops) or any(k in _combined for k in ("→ paradise", "-> paradise")):
             bridge_toll_fee = PARADISE_BRIDGE_TOLL_USD
             booking["bridge_toll_fee"] = bridge_toll_fee
             _existing = str(booking.get("notes") or req.notes or "").strip()

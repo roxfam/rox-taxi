@@ -12,7 +12,7 @@ from pydantic import BaseModel, ValidationError
 router = APIRouter()
 _db = _now_iso = _create_booking = _Booking = _require_admin = None
 VALID_HOURS = 48
-PRICE_KEYS = [("subtotal_before_tax", "Fare / service"), ("group_discount", "Group discount (included above)"), ("promotion_discount", "Promotion"),
+PRICE_KEYS = [("subtotal_before_tax", "Fare / service"), ("bridge_toll_fee", "Paradise Island bridge toll pass (included above)"), ("group_discount", "Group discount (included above)"), ("promotion_discount", "Promotion"),
               ("vat_amount", "VAT"), ("processing_fee", "Processing fee"), ("deposit_amount", "Refundable deposit"),
               ("tip_amount", "Driver gratuity")]
 
@@ -89,9 +89,11 @@ async def create_quote(req: QuoteRequest, request: Request):
     if legs:
         leg_lines = [{"label": f"Leg {n}: {lg['from']} → {lg['to']}", "amount": round(float(lg["fare"]), 2)}
                      for n, lg in enumerate(legs, 1)]
-        extras = round(float(b.get("subtotal_before_tax") or 0) - sum(x["amount"] for x in leg_lines), 2)
-        rest = [x for x in lines if x["label"] != "Fare / service"]
-        lines = leg_lines + ([{"label": "Luggage, extras & fees", "amount": extras}] if extras > 0 else []) + rest
+        toll = round(float(b.get("bridge_toll_fee") or 0), 2)
+        extras = round(float(b.get("subtotal_before_tax") or 0) - sum(x["amount"] for x in leg_lines) - toll, 2)
+        rest = [x for x in lines if x["label"] not in ("Fare / service", "Paradise Island bridge toll pass (included above)")]
+        lines = leg_lines + ([{"label": "Paradise Island bridge toll pass", "amount": toll}] if toll else []) \
+            + ([{"label": "Luggage, extras & fees", "amount": extras}] if extras > 0 else []) + rest
     return await _save_quote(req.payload, "booking", {
         "service_type": b.get("service_type"), "item_name": b.get("item_name"),
         "customer_name": b.get("customer_name"), "customer_email": b.get("customer_email"),
