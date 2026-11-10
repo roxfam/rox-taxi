@@ -490,6 +490,10 @@ def _booking_details_for_owner(booking: dict) -> str:
         lines.append(f"Dropoff : {booking['dropoff_location']}")
     for n, lg in enumerate(booking.get("trip_legs") or [], 1):
         lines.append(f"Leg {n}   : {lg.get('from')} → {lg.get('to')} ${float(lg.get('fare') or 0):.2f}")
+    if booking.get("car_seats"):
+        lines.append(f"Car seats: {booking['car_seats']} baby seat(s)")
+    if booking.get("distance_km"):
+        lines.append(f"Distance: {booking['distance_km']} km (custom address fare)")
     if booking.get("service_type") == "rental":
         lines.append(f"Days    : {booking.get('days',1)}")
         if booking.get("additional_drivers"):

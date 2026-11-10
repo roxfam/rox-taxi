@@ -4,6 +4,8 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import re
+import geo
 import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
@@ -168,6 +170,7 @@ class BookingCreate(BaseModel):
     passengers: int = Field(..., ge=1, le=20)  # mandatory
     days: Optional[int] = 1
     extra_luggage: Optional[int] = 0
+    car_seats: Optional[int] = Field(0, ge=0, le=4)
     additional_drivers: Optional[int] = Field(0, ge=0, le=4)
     baby_seats: Optional[int] = Field(0, ge=0, le=3)
     notes: Optional[str] = None
@@ -213,6 +216,7 @@ class BookingCreate(BaseModel):
 
 
 LUGGAGE_FEE_USD = 3.0
+CAR_SEAT_FEE_USD = 2.0
 LUGGAGE_MAX = 10
 EXTRA_PASSENGER_FEE_USD = 5.0
 EXTRA_PASSENGER_INCLUDED = 2  # first 2 passengers included in the flat fare; each additional adds the fee
@@ -1603,6 +1607,10 @@ async def _license_maintenance_loop() -> None:
 
 @app.on_event("startup")
 async def seed_db():
+    try:
+        await geo.seed_places(db)
+    except Exception as e:  # noqa: BLE001
+        logging.warning("nassau places seed failed: %s", e)
     # Prime the DB-backed secrets store so get_secret() returns admin-managed
     # overrides from the very first request.
     try:
@@ -2076,7 +2084,8 @@ def _service_endpoints(service: Dict[str, Any]) -> Dict[str, Any]:
 @api_router.get("/taxi/locations")
 async def taxi_locations():
     """Public list of canonical taxi endpoints used by the From/To picker."""
-    return TAXI_LOCATIONS
+    return TAXI_LOCATIONS + [{"tag": "place:" + re.sub(r"[^a-z0-9]+", "-", n.lower()).strip("-"), "label": n, "keywords": [], "distance_priced": True}
+                             for n in geo.extra_place_labels()]
 
 
 def _find_route(from_tag: str, to_tag: str, services: list):
@@ -2109,8 +2118,14 @@ async def _price_multi_stop(points: list, pax: int) -> dict:
         ta, tb = _match_location_tag(a), _match_location_tag(b)
         s = _find_route(ta, tb, services)[0] if ta and tb and ta != tb else None
         if not s:
-            return {"ok": False, "legs": legs, "total": round(total, 2),
-                    "error": f"No set fare for {a} → {b} yet. WhatsApp us for a quote on this trip."}
+            df = await geo.distance_fare(a, b, db)
+            if not df["ok"]:
+                return {"ok": False, "legs": legs, "total": round(total, 2), "error": df["error"]}
+            fare = round(df["fare"] + max(0, pax - EXTRA_PASSENGER_INCLUDED) * EXTRA_PASSENGER_FEE_USD, 2)
+            total += fare
+            legs.append({"from": a, "to": b, "service_id": "custom-ride", "route": f"Distance fare · {df['km']} km",
+                         "fare": fare, "km": df["km"], "per_person": False})
+            continue
         fare = _leg_fare(s, pax)
         total += fare
         legs.append({"from": a, "to": b, "service_id": s.get("id"), "route": s.get("name"), "fare": fare,
@@ -2119,8 +2134,18 @@ async def _price_multi_stop(points: list, pax: int) -> dict:
 
 
 class MultiStopQuote(BaseModel):
-    points: List[str] = Field(..., min_length=3, max_length=27)
+    points: List[str] = Field(..., min_length=2, max_length=27)
     passengers: int = Field(1, ge=1, le=20)
+
+
+@api_router.post("/taxi/custom-quote")
+async def taxi_custom_quote(req: TaxiQuoteRequest):
+    """Distance fare ($15 + $2/km, up to 2 guests) for addresses with no fixed route."""
+    df = await geo.distance_fare(req.from_location, req.to_location, db)
+    if not df["ok"]:
+        return df
+    svc = await db.taxi_services.find_one({"id": "custom-ride"}) or {}
+    return {**df, "service": {**clean(svc), "price": df["fare"]} if svc else None}
 
 
 @api_router.post("/taxi/multi-quote")
@@ -2802,6 +2827,7 @@ async def create_booking(req: BookingCreate, request: Request):
     tip_amount = round(float(req.tip_amount or 0.0), 2)
 
     luggage_fee = 0.0
+    car_seat_fee = 0.0
     passenger_fee = 0.0
     deposit_amount = 0.0
     additional_driver_fee = 0.0
@@ -2873,6 +2899,14 @@ async def create_booking(req: BookingCreate, request: Request):
         _svc_doc = await db.taxi_services.find_one({"id": req.item_id}) or {}
         _pricing_mode = (_svc_doc.get("pricing_mode") or "flat").lower()
         _per_person_taxi = _pricing_mode == "per_person"
+        if _pricing_mode == "distance" and not req.stops:
+            _df = await geo.distance_fare(req.pickup_location or "", req.dropoff_location or "", db)
+            if not _df["ok"]:
+                raise HTTPException(400, _df["error"])
+            base = _df["fare"]
+            booking["taxi_pricing_mode"] = "distance"
+            booking["distance_km"] = _df["km"]
+            booking["price"] = base
         if _per_person_taxi:
             # 2-person minimum — solo travelers still pay for 2 seats so the
             # driver's trip is economically viable. Mirrors what the Nassau
@@ -2905,6 +2939,11 @@ async def create_booking(req: BookingCreate, request: Request):
         luggage_fee = extra * LUGGAGE_FEE_USD
         booking["luggage_fee"] = luggage_fee
         booking["extra_luggage"] = extra
+        _seats = max(0, min(int(req.car_seats or 0), 4))
+        if _seats:
+            car_seat_fee = _seats * CAR_SEAT_FEE_USD
+            booking["car_seats"] = _seats
+            booking["car_seat_fee"] = car_seat_fee
         if not _per_person_taxi and int(req.passengers) > EXTRA_PASSENGER_INCLUDED:
             passenger_fee = (int(req.passengers) - EXTRA_PASSENGER_INCLUDED) * EXTRA_PASSENGER_FEE_USD
         booking["passenger_fee"] = passenger_fee
@@ -3057,7 +3096,7 @@ async def create_booking(req: BookingCreate, request: Request):
 
     subtotal_before_tax = round(
         base + round_trip_fare_addition - round_trip_discount - rental_discount
-        + luggage_fee + passenger_fee + additional_driver_fee
+        + luggage_fee + car_seat_fee + passenger_fee + additional_driver_fee
         + bridge_toll_fee + taxi_addon_fee + taxi_extras_fee
         + airport_dropoff_fee
         + booking.get("baby_seat_fee", 0.0),

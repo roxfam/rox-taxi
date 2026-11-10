@@ -71,6 +71,11 @@ export default function Taxi() {
   const [services, setServices] = useState([]);
   const [selected, setSelected] = useState(null);
   const [prefill, setPrefill] = useState({ dropoff: "", pickup: "", addonIds: [] });
+  const [extraPlaces, setExtraPlaces] = useState([]);
+  const placeOptions = useMemo(() => [...LOCATION_OPTIONS, ...extraPlaces.filter((p) => !LOCATION_OPTIONS.includes(p))], [extraPlaces]);
+  useEffect(() => {
+    api.get("/taxi/locations").then((r) => setExtraPlaces((r.data || []).filter((l) => l.distance_priced).map((l) => l.label))).catch(() => {});
+  }, []);
   const [params, setParams] = useSearchParams();
 
   useEffect(() => {
@@ -336,7 +341,7 @@ export default function Taxi() {
                   icon={<MapPin className="w-4 h-4 text-[#0B3B5C]" />}
                   value={form.pickup_location}
                   onChange={(v) => setForm({ ...form, pickup_location: v })}
-                  options={LOCATION_OPTIONS}
+                  options={placeOptions}
                   placeholder="Select pickup…"
                   testid="taxi-pickup"
                 />
@@ -345,12 +350,12 @@ export default function Taxi() {
                   icon={<ArrowRight className="w-4 h-4 text-[#E86A3C]" />}
                   value={form.dropoff_location}
                   onChange={(v) => setForm({ ...form, dropoff_location: v })}
-                  options={LOCATION_OPTIONS}
+                  options={placeOptions}
                   placeholder="Select dropoff…"
                   testid="taxi-dropoff"
                 />
               </div>
-              <StopsEditor form={form} setForm={setForm} />
+              <StopsEditor form={form} setForm={setForm} options={placeOptions} />
 
               {!form.round_trip && !(form.stops || []).length && !selected?.round_trip_price_override && !selected?.round_trip_price_per_pax && (() => {
                 const pax = Math.max(1, Number(form.passengers || 1));
@@ -460,7 +465,7 @@ export default function Taxi() {
  * Dropdown of preset Nassau locations with a "Custom address" escape hatch.
  * Uses a native <select> so it plays nicely with mobile keyboards.
  */
-function StopsEditor({ form, setForm }) {
+function StopsEditor({ form, setForm, options }) {
   const stops = form.stops || [];
   const setStops = (next) => setForm({ ...form, stops: next, ...(next.length ? { round_trip: false } : {}) });
   return (
@@ -473,7 +478,7 @@ function StopsEditor({ form, setForm }) {
               icon={<MapPin className="w-4 h-4 text-[#D4A94A]" />}
               value={s}
               onChange={(v) => setStops(stops.map((x, k) => (k === n ? v : x)))}
-              options={LOCATION_OPTIONS}
+              options={options}
               placeholder="Select a stop…"
               testid={`taxi-stop-${n}`}
             />

@@ -101,7 +101,7 @@ async def list_taxi_services():
     add-on is decorated with `recommended: True` when its 30-day
     attach rate crosses 25% (min 4 attaches) — surfaces a gold ribbon
     in the frontend chip strip on high-converting extras."""
-    docs = await _db.taxi_services.find({"active": {"$ne": False}}).to_list(200)
+    docs = await _db.taxi_services.find({"active": {"$ne": False}, "pricing_mode": {"$ne": "distance"}}).to_list(200)
     recommended_keys = await _get_recommended_keys()
     out = []
     for d in docs:

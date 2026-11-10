@@ -123,6 +123,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     extra_luggage: 0,
     additional_drivers: 0,
     baby_seats: 0,
+    car_seats: 0,
     round_trip: false,
     return_time: "",
     wait_minutes: 0,
@@ -147,6 +148,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const BABY_SEAT_FREE_AFTER_DAYS = 14;
   const BAHAMAS_VAT_PCT = 0.10;
   const PROCESSING_FEE_PCT = 0.05;
+  const CAR_SEAT_FEE = 2;
   const [payMethod, setPayMethod] = useState("stripe");
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
   const quoteMode = isQuoteMode();
@@ -276,8 +278,25 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const perPersonTaxiBase = isPerPersonTaxi
     ? singleFare * perPersonBilledPax
     : null;
+  const isDistanceRide = serviceType === "taxi" && item?.pricing_mode === "distance" && !hasStops;
+  const [distQuote, setDistQuote] = useState(null);
+  useEffect(() => {
+    if (!isDistanceRide) { setDistQuote(null); return undefined; }
+    const a = String(form.pickup_location || "").trim();
+    const b = String(form.dropoff_location || "").trim();
+    if (!a || !b) { setDistQuote({ ok: false, error: "Enter pickup and dropoff to see the distance fare." }); return undefined; }
+    const t = setTimeout(() => {
+      api.post("/taxi/custom-quote", { from_location: a, to_location: b })
+        .then((r) => setDistQuote(r.data)).catch(() => setDistQuote({ ok: false, error: "Couldn't price this trip." }));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [isDistanceRide, form.pickup_location, form.dropoff_location]);
+  const carSeatCount = serviceType === "taxi" ? Number(form.car_seats || 0) : 0;
+  const carSeatFee = carSeatCount * CAR_SEAT_FEE;
   const rawBase = hasStops
     ? Number(multiQuote?.total || 0)
+    : isDistanceRide
+    ? Number(distQuote?.fare || item?.price || 0)
     : hasChildPricing
     ? perPersonBase
     : serviceType === "rental"
@@ -371,7 +390,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   // gratuity — neither is VAT-taxable).
   const waitMinutes = serviceType === "taxi" ? Number(form.wait_minutes || 0) : 0;
   const waitFee = Math.max(0, waitMinutes - 5);
-  const rawSubtotal = base + luggageFee + passengerFee + additionalDriverFee
+  const rawSubtotal = base + luggageFee + carSeatFee + passengerFee + additionalDriverFee
     + babySeatFee + taxiAddonFee + taxiExtrasFee + rentalAirportDropoffFee + waitFee;
 
   // ── Friend-of-friend referral discount ──────────────────────────────
@@ -475,6 +494,10 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
       toast.error(multiQuote?.error || "Please check your stops.");
       return;
     }
+    if (isDistanceRide && !distQuote?.ok) {
+      toast.error(distQuote?.error || "Please check your addresses.");
+      return;
+    }
     setLoading(true);
     try {
       const cfg = await api.get("/site-config").then((r) => r.data).catch(() => siteCfg);
@@ -504,6 +527,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         taxi_addon_variant: abEnabled ? addonVariant : null,
         days: Number(form.days) || 1,
         extra_luggage: Number(form.extra_luggage) || 0,
+        car_seats: carSeatCount,
         additional_drivers: Number(form.additional_drivers) || 0,
         baby_seats: Number(form.baby_seats) || 0,
         rental_airport_dropoff: !!rentalAirportDropoff,
@@ -1084,6 +1108,23 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     <div className="mt-3 text-xs text-[#64748B] flex justify-between border-t border-[#E2E8F0] pt-2">
                       <span>{form.extra_luggage} extra bag(s) × ${LUGGAGE_FEE}</span>
                       <span className="mono font-semibold text-[#E86A3C]">+${(Number(form.extra_luggage) * LUGGAGE_FEE).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#E2E8F0] pt-3" data-testid="taxi-car-seats">
+                    <span className="text-sm text-[#0B3B5C]">Baby car seats <span className="text-xs text-[#64748B]">+${CAR_SEAT_FEE} each</span></span>
+                    <span className="flex items-center gap-2">
+                      <button type="button" onClick={() => setForm({ ...form, car_seats: Math.max(0, carSeatCount - 1) })} disabled={carSeatCount <= 0}
+                        className="w-8 h-8 rounded-full border border-[#E2E8F0] disabled:opacity-40" data-testid="car-seats-minus">−</button>
+                      <span className="mono w-5 text-center" data-testid="car-seats-count">{carSeatCount}</span>
+                      <button type="button" onClick={() => setForm({ ...form, car_seats: Math.min(4, carSeatCount + 1) })} disabled={carSeatCount >= 4}
+                        className="w-8 h-8 rounded-full border border-[#E2E8F0] disabled:opacity-40" data-testid="car-seats-plus">+</button>
+                    </span>
+                  </div>
+                  {isDistanceRide && (
+                    <div className="mt-2 text-xs border-t border-[#E2E8F0] pt-2" data-testid="distance-fare-info">
+                      {distQuote?.ok
+                        ? <span className="text-[#0B3B5C]">Distance fare: {distQuote.km} km × $2 + $15 base = <b className="mono">${Number(distQuote.fare).toFixed(2)}</b> (up to 2 guests)</span>
+                        : <span className="text-[#DC2626] font-semibold">{distQuote?.error || "Calculating…"}</span>}
                     </div>
                   )}
                   {hasStops && (

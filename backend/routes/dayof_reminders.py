@@ -1,6 +1,6 @@
 """Day-of reminders: at 12:00 AM Nassau, guests get email + SMS for today's
 booking and owners get one SMS + email listing every booking for the day."""
-from typing import Optional
+from typing import List, Optional
 import asyncio
 import html as _html
 import logging
@@ -440,6 +440,9 @@ class ManualBooking(BaseModel):
     flight_number: Optional[str] = Field(None, max_length=12)
     extra_luggage: int = Field(0, ge=0, le=30)
     luggage_price: float = Field(0, ge=0, le=500)
+    car_seats: int = Field(0, ge=0, le=4)
+    stops: List[str] = Field(default_factory=list, max_length=25)
+    trip_legs: List[dict] = Field(default_factory=list, max_length=26)
     notes: Optional[str] = Field(None, max_length=2000)
     total: float = Field(..., ge=0, le=100000)
     payment: str = Field("unpaid", pattern="^(unpaid|cash|zelle|card_offline)$")
@@ -508,6 +511,10 @@ async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_d
         "item_id": req.item_id or "",
         "price": req.total,
         "luggage_fee": round(req.extra_luggage * req.luggage_price, 2),
+        "car_seat_fee": round(req.car_seats * 2.0, 2),
+        "stops": [s.strip()[:120] for s in req.stops if s and s.strip()],
+        "trip_legs": [{"from": str(lg.get("from", ""))[:120], "to": str(lg.get("to", ""))[:120],
+                       "route": str(lg.get("route", ""))[:120], "fare": round(float(lg.get("fare") or 0), 2)} for lg in req.trip_legs],
         "tip_enabled": True,
         "status": "confirmed",
         "payment_method": "stripe" if req.payment == "unpaid" else req.payment,

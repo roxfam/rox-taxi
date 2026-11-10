@@ -45,10 +45,16 @@ export default function RouteQuoteWidget({ services, onBook }) {
     try {
       const fromLoc = locations.find((l) => l.tag === from);
       const toLoc = locations.find((l) => l.tag === to);
+      const fromLabel = fromLoc?.label || from;
+      const toLabel = toLoc?.label || to;
       const { data } = await api.post("/taxi/quote", {
-        from_location: fromLoc?.label || from,
-        to_location: toLoc?.label || to,
+        from_location: fromLabel,
+        to_location: toLabel,
       });
+      if (!data.matched && data.reason !== "same_location") {
+        const { data: dq } = await api.post("/taxi/custom-quote", { from_location: fromLabel, to_location: toLabel }).catch(() => ({ data: null }));
+        if (dq?.ok && dq.service) data.distance = { ...dq, fromLabel, toLabel };
+      }
       setQuote(data);
     } catch {
       toast.error("Couldn't fetch quote. Please try again.");
@@ -167,7 +173,26 @@ export default function RouteQuoteWidget({ services, onBook }) {
               </div>
             )}
 
-            {!loading && quote && !quote.matched && (
+            {!loading && quote && !quote.matched && quote.distance && (
+              <div className="rounded-2xl border border-[#D4A94A]/40 p-5 flex flex-wrap items-center justify-between gap-4"
+                style={{ backgroundColor: "rgba(212,169,74,0.08)" }} data-testid="quote-distance">
+                <div>
+                  <div className="text-[10px] tracking-[0.28em] uppercase text-[#8a6b1f] font-black">Distance fare</div>
+                  <div className="serif text-xl text-[#0B3B5C] mt-1">{quote.distance.fromLabel} → {quote.distance.toLabel}</div>
+                  <div className="text-xs text-[#64748B] mt-1">{quote.distance.km} km × $2 + $15 base · first 2 passengers · +$5 per extra passenger</div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="mono text-4xl font-black text-[#E86A3C]" data-testid="quote-distance-price">{money(quote.distance.fare)}</div>
+                  <button onClick={() => onBook?.({ service: quote.distance.service, pickup: quote.distance.fromLabel, dropoff: quote.distance.toLabel })}
+                    data-testid="quote-distance-book-btn"
+                    className="btn-shine inline-flex items-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-6 py-3 text-sm font-semibold">
+                    Book this ride <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!loading && quote && !quote.matched && !quote.distance && (
               <QuoteFallback
                 quote={quote}
                 locations={locations}

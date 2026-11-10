@@ -294,6 +294,10 @@ TAXI_SERVICES: List[Dict] = [
      "image_url": _TAXI_IMG, "addons": _ADDON_BEACH},
     # Downtown → Junkanoo Beach — the walk-in beach right off Bay Street.
     # Priced per passenger · round-trip math is pax × 2 (auto).
+    {"id": "custom-ride", "name": "Custom Nassau ride (distance fare)", "price": 15.0,
+     "route": "Any Nassau address", "featured": False, "pricing_mode": "distance",
+     "description": f"{_TARIFF_NOTE} For addresses not on our fixed-rate list: $15 base + $2 per km, up to 2 guests (+$5 each extra guest).",
+     "image_url": _TAXI_IMG, "addons": _ADDON_BEACH},
     {"id": "paradise-junkanoo", "name": "Paradise Island / Atlantis → Junkanoo Beach", "price": 25.0,
      "route": "Paradise Island / Atlantis → Junkanoo Beach", "featured": False,
      "description": f"{_TARIFF_NOTE} Atlantis & Paradise Island over the bridge to Junkanoo Beach. $25 for up to 2 guests, +$5 each extra guest.",

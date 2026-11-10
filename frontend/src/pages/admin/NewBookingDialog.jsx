@@ -14,7 +14,7 @@ const SERVICES = [
 const EMPTY = {
   service_type: "taxi", item_id: "", item_name: "", customer_name: "", customer_email: "", customer_phone: "",
   booking_date: "", pickup_location: "", dropoff_location: "", passengers: 1, flight_number: "", notes: "",
-  extra_luggage: 0, luggage_price: 3,
+  extra_luggage: 0, luggage_price: 3, car_seats: 0, stops: [], trip_legs: [],
   total: "", payment: "unpaid", send_confirmation: true, send_pay_link: true, text_pay_link: true,
 };
 
@@ -67,6 +67,27 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const luggageFee = Math.round((Number(f.extra_luggage) || 0) * (Number(f.luggage_price) || 0) * 100) / 100;
+  const seatFee = (Number(f.car_seats) || 0) * 2;
+  const [pricing, setPricing] = useState(false);
+  const priceRoute = async () => {
+    const pts = [f.pickup_location, ...f.stops, f.dropoff_location].map((p) => String(p || "").trim());
+    if (pts.some((p) => !p)) { toast.error("Fill in pickup, every stop and drop-off first"); return; }
+    setPricing(true);
+    try {
+      const { data } = await api.post("/taxi/multi-quote", { points: pts, passengers: Number(f.passengers) || 1 });
+      if (!data.ok) { toast.error(data.error); return; }
+      setF((x) => ({ ...x, trip_legs: data.legs, total: Math.round((data.total + luggageFee + seatFee) * 100) / 100 }));
+    } catch { toast.error("Couldn't price this route"); } finally { setPricing(false); }
+  };
+  const setLeg = (n, fare) => setF((x) => {
+    const legs = x.trip_legs.map((lg, k) => (k === n ? { ...lg, fare: Number(fare) || 0 } : lg));
+    const sum = legs.reduce((s, lg) => s + Number(lg.fare || 0), 0);
+    return { ...x, trip_legs: legs, total: Math.round((sum + luggageFee + seatFee) * 100) / 100 };
+  });
+  const setSeats = (e) => setF((x) => {
+    const v = Math.max(0, Math.min(4, Number(e.target.value) || 0));
+    return { ...x, car_seats: v, total: x.total === "" ? x.total : Math.max(0, Math.round((Number(x.total) - (Number(x.car_seats) || 0) * 2 + v * 2) * 100) / 100) };
+  });
   const setLuggage = (k) => (e) => setF((x) => {
     const next = { ...x, [k]: e.target.value };
     const oldFee = (Number(x.extra_luggage) || 0) * (Number(x.luggage_price) || 0);
@@ -100,6 +121,8 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
     try {
       const body = { ...f, passengers: Number(f.passengers) || 1, total: Number(f.total) || 0,
         extra_luggage: Number(f.extra_luggage) || 0, luggage_price: Number(f.luggage_price) || 0,
+        car_seats: Number(f.car_seats) || 0, stops: f.stops.filter((s) => s && s.trim()),
+        item_name: f.item_name || (f.service_type === "taxi" ? `Taxi: ${f.pickup_location || "pickup"} → ${f.dropoff_location || "drop-off"}` : f.item_name),
         send_pay_link: f.payment === "unpaid" && f.send_pay_link,
         text_pay_link: f.payment === "unpaid" && !!f.text_pay_link && !!f.customer_phone.trim() };
       if (f.service_type === "cable_beach" && !body.item_name) body.item_name = "Cable Beach Day";
@@ -136,8 +159,8 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
           </Field>
           {items.length > 0 ? (
             <Field label="Item">
-              <select value={f.item_id} onChange={pickItem} className={input} data-testid="new-booking-item" required>
-                <option value="">Choose…</option>
+              <select value={f.item_id} onChange={pickItem} className={input} data-testid="new-booking-item">
+                <option value="">Optional — choose or leave blank…</option>
                 {items.map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
               </select>
             </Field>
@@ -152,10 +175,32 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
           <Field label="Date & time"><input type="datetime-local" value={f.booking_date} onChange={set("booking_date")} className={input} required data-testid="new-booking-date" /></Field>
           <Field label="Pickup"><LocationSelect value={f.pickup_location} onChange={(v) => setF((x) => ({ ...x, pickup_location: v }))} places={places} testid="new-booking-pickup" /></Field>
           <Field label="Drop-off"><LocationSelect value={f.dropoff_location} onChange={(v) => setF((x) => ({ ...x, dropoff_location: v }))} places={places} testid="new-booking-dropoff" /></Field>
+          {f.service_type === "taxi" && (
+            <div className="sm:col-span-2 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3 space-y-2" data-testid="new-booking-stops">
+              {f.stops.map((s, n) => (
+                <div key={n} className="flex gap-2 items-start">
+                  <div className="flex-1"><Field label={`Stop ${n + 1}`}><LocationSelect value={s} onChange={(v) => setF((x) => ({ ...x, stops: x.stops.map((y, k) => (k === n ? v : y)), trip_legs: [] }))} places={places} testid={`new-booking-stop-${n}`} /></Field></div>
+                  <button type="button" onClick={() => setF((x) => ({ ...x, stops: x.stops.filter((_, k) => k !== n), trip_legs: [] }))} className="mt-5 w-9 h-9 rounded-full border border-[#E2E8F0] text-[#DC2626]" data-testid={`new-booking-stop-remove-${n}`}>×</button>
+                </div>
+              ))}
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => setF((x) => ({ ...x, stops: [...x.stops, ""], trip_legs: [] }))} className="text-xs font-bold text-[#0B3B5C] rounded-full border border-dashed border-[#0B3B5C]/40 px-3 py-1.5" data-testid="new-booking-add-stop">+ Add a stop</button>
+                <button type="button" onClick={priceRoute} disabled={pricing} className="text-xs font-bold text-white bg-[#0B3B5C] rounded-full px-3 py-1.5 disabled:opacity-60" data-testid="new-booking-price-route">{pricing ? "Pricing…" : "Calculate price"}</button>
+                <span className="text-[11px] text-[#64748B] self-center">Fixed routes use your set fares; other addresses $15 + $2/km.</span>
+              </div>
+              {f.trip_legs.length > 0 && f.trip_legs.map((lg, n) => (
+                <div key={n} className="flex items-center justify-between gap-2 text-xs" data-testid={`new-booking-leg-${n}`}>
+                  <span className="text-[#0B3B5C]">Leg {n + 1}: {lg.from} → {lg.to} <span className="text-[#94a3b8]">({lg.route})</span></span>
+                  <input type="number" step="0.5" min="0" value={lg.fare} onChange={(e) => setLeg(n, e.target.value)} className="w-24 px-2 py-1 border border-[#E2E8F0] rounded text-right" data-testid={`new-booking-leg-fare-${n}`} />
+                </div>
+              ))}
+            </div>
+          )}
           <Field label="Passengers"><input type="number" min="1" max="60" value={f.passengers} onChange={set("passengers")} className={input} data-testid="new-booking-passengers" /></Field>
           <Field label="Flight # (optional)"><input value={f.flight_number} onChange={set("flight_number")} className={input} data-testid="new-booking-flight" /></Field>
           <Field label="Extra bags"><input type="number" min="0" max="30" value={f.extra_luggage} onChange={setLuggage("extra_luggage")} className={input} data-testid="new-booking-luggage-count" /></Field>
           <Field label={`Price per bag ($)${luggageFee ? ` · luggage ${luggageFee.toFixed(2)}` : ""}`}><input type="number" min="0" step="0.5" value={f.luggage_price} onChange={setLuggage("luggage_price")} className={input} data-testid="new-booking-luggage-price" /></Field>
+          {f.service_type === "taxi" && <Field label="Baby car seats ($2 each)"><input type="number" min="0" max="4" value={f.car_seats} onChange={setSeats} className={input} data-testid="new-booking-car-seats" /></Field>}
           <Field label="Total ($, includes luggage)"><input type="number" step="0.01" min="0" value={f.total} onChange={set("total")} className={input} required data-testid="new-booking-total" /></Field>
           <Field label="Payment">
             <select value={f.payment} onChange={set("payment")} className={input} data-testid="new-booking-payment">
