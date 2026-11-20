@@ -291,7 +291,7 @@ export default function Tours() {
             Explore Nassau's must-see attractions — Ardastra, Atlantis, Blue Lagoon and Baha Mar — then pair with a curated
             excursion. Every taxi and tour is priced up-front by local operators.
             <span className="block mt-3 text-[11px] text-white/70 leading-snug" data-testid="processing-fee-disclosure">
-              Prices include a 5% processing fee that covers card + PayPal fees.
+              Bahamas VAT is added at checkout (city tours get a small processing fee instead).
             </span>
           </p>
         </div>

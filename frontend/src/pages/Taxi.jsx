@@ -175,7 +175,7 @@ export default function Taxi() {
             Fixed, transparent pricing for airport transfers, hotel pickups, and hourly charters — driven by
             licensed local operators who know every road.
             <span className="block mt-3 text-[11px] text-white/55 leading-snug" data-testid="processing-fee-disclosure">
-              Prices include a 5% processing fee that covers card + PayPal fees.
+              A small processing fee is added at checkout. No VAT on taxi fares.
             </span>
           </p>
         </div>

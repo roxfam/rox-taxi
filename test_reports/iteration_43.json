@@ -1,0 +1,38 @@
+{
+  "summary": "Tested the processing fee (taxi + city tours) and VAT (all other services) feature end to end. Backend: 15 of 15 pytest cases pass. They cover public booking quotes (quote_only) for taxi, both city tours, Rose Island, rental and cable beach; admin rate edit, validation and auth; admin manual booking for taxi, tour Other, city tour and rental; and admin manual quote fee lines. Frontend: the fee lines in the Taxi, Tours (Nassau City, Atlantis City, Rose Island) and Rental booking modals are correct and the totals add up. The Admin Site Config 'Processing fee & VAT' section saves to /api/site-config, and the New booking FeeNote is correct for taxi, blank tour, city tour, snorkel tour and rental. Fee rates are back at 5/10 and every TEST booking and quote I created has been deleted.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/bundles booking (routes/growth.py ~204)", "issue": "Still hardcodes 10% VAT plus a 5% processing fee charged on (base + VAT), so the two are stacked. This goes against the rule that other services get VAT only, and it ignores the rates set in admin."},
+      {"endpoint": "POST /api/group-bookings/quote (server.py ~4089)", "issue": "Same as bundles: hardcoded 10% VAT plus 5% processing on (subtotal + VAT), stacked, and the admin rates are ignored."},
+      {"endpoint": "Pricing/policy endpoint (server.py ~3457-3465)", "issue": "bahamas_vat_pct, processing_fee_pct and the policy text come from the constants BAHAMAS_VAT_PCT and PROCESSING_FEE_PCT, not from the admin-editable site_config. After an admin changes the rates, these values are out of date."},
+      {"endpoint": "Gift card purchase (server.py ~1905)", "issue": "Uses the constant PROCESSING_FEE_PCT, not the admin rate. This may be intended; please confirm."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SiteConfigPanel fee inputs", "issue": "In one Playwright run, filling processing-fee-pct and then vat-pct right after each other saved only the VAT change; the processing fee went back to 5. Changing one field at a time saves correctly. A likely cause is the stale-closure pattern setCfg({...cfg, x}); switching to the functional form setCfg(c => ({...c, x})) should fix it. Low priority.", "selector": "[data-testid='processing-fee-pct']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Taxi and Tours page heroes ([data-testid='processing-fee-disclosure'])", "issues": ["The text 'Prices include a 5% processing fee that covers card + PayPal fees.' is wrong. The fee is added on top, not included. On the Tours page most tours get 10% VAT, not a processing fee. The 5% is also hardcoded, so it won't change when an admin edits the rate."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter43_fees_vat.py", "/app/test_reports/pytest/iter43.xml"],
+  "action_items": [
+    "Update the processing-fee-disclosure copy on Taxi.jsx and Tours.jsx so it says the fee is added on top, is 5% for taxi and city tours, and that VAT applies to other tours. Read both rates from site-config.",
+    "Decide whether bundles (growth.py) and the group booking quote (server.py ~4089) should follow the new rules (VAT only, using fees.compute_fees and fee_rates). Right now both stack VAT and a 5% processing fee with hardcoded rates.",
+    "Make the public pricing/policy endpoint read the rates from site_config, not the constants.",
+    "SiteConfigPanel: use functional setCfg updates."
+  ],
+  "critical_code_review_comments": [
+    "fees.is_processing_kind matches on the substring 'city tour' in item_name. This is fragile: renaming a tour changes how it is taxed, and the backend trusts the item_name the client sends in POST /api/bookings, so a client could rename a tour to pay 5% instead of 10%. Consider a flag on the tour document, or looking up the name by item_id.",
+    "The frontend BookingFlow repeats the backend fee logic (same regex). That is acceptable, but the two must stay in sync."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter43_fees_vat.py"],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "seed_data_creation": "None kept. 4 TEST_Manual bookings were deleted through the admin delete endpoint and their archive rows removed from bookings_deleted by id. 2 TEST_Quote quotes were deleted from the quotes collection by id. Rates were reset to 5/10.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Admin API calls need the Bearer token plus an X-CSRF-Token header taken from the admin_csrf cookie, because the session also carries cookies. Booking modal testids: processing-fee-line, vat-line, fees-summary, booking-total. Tour ids: nassau-city-tour ($45), atlantis-tour ($55), snorkel-rose ($75). The rentals route is /rentals. There is no admin endpoint to delete a quote (only cancel)."
+}

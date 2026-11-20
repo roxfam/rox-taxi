@@ -4086,8 +4086,10 @@ async def group_booking_quote(req: GroupQuoteRequest):
                  else 0.0)
 
     subtotal = round(subtotal_pre_surcharge + surcharge, 2)
-    vat = round(subtotal * 0.10, 2)
-    processing = round((subtotal + vat) * 0.05, 2)
+    import fees as fees_module  # noqa: PLC0415
+    _fz = fees_module.compute_fees(subtotal, req.service_type.lower(), getattr(req, "item_name", "") or "",
+                                   await fees_module.fee_rates(db))
+    vat, processing = _fz["vat_amount"], _fz["processing_fee"]
     total = round(subtotal + vat + processing, 2)
     deposit = round(total * cfg["deposit_pct"] / 100.0, 2)
     due_later = round(total - deposit, 2)

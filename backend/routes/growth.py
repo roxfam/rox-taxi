@@ -201,14 +201,16 @@ async def book_bundle(bid: str, body: BundleBookIn):
     if body.gift_send_on and body.gift_send_on < datetime.now(NASSAU).date().isoformat():
         raise HTTPException(400, "The gift email date must be today or later")
     base = round(float(b["bundle_price"]), 2)
-    vat = round(base * 0.10, 2)
-    fee = round((base + vat) * 0.05, 2)
+    import fees as fees_module  # noqa: PLC0415
+    vat_pct = (await fees_module.fee_rates(_db))["vat_pct"] / 100
+    vat = round(base * vat_pct, 2)
+    fee = 0.0
     now = datetime.now(timezone.utc).isoformat()
     booking = {
         "id": "BND-" + uuid.uuid4().hex[:7].upper(), "service_type": "bundle", "item_id": b["id"], "item_name": b["name"],
         "bundle_includes": b.get("includes") or [], **body.model_dump(), "booking_date": f"{body.booking_date}T09:00:00-05:00" if body.booking_date else None,
-        "passengers": 1, "price": base, "subtotal_before_tax": base, "vat_pct": 0.10, "vat_amount": vat,
-        "processing_fee": fee, "processing_fee_pct": 0.05, "total": round(base + vat + fee, 2), "payment_method": "stripe", "payment_status": "pending",
+        "passengers": 1, "price": base, "subtotal_before_tax": base, "vat_pct": vat_pct, "vat_amount": vat,
+        "processing_fee": fee, "processing_fee_pct": 0.0, "total": round(base + vat + fee, 2), "payment_method": "stripe", "payment_status": "pending",
         "status": "pending_payment", "created_at": now, "updated_at": now,
     }
     await _db.bookings.insert_one(dict(booking))

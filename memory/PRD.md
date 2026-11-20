@@ -1009,3 +1009,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 
 
 
+
+## 2026-11-20 — Processing fee vs VAT split
+- Rule: taxi + city tours (tour name contains "city tour") → processing fee only (default 5%); all other services → Bahamas VAT only (default 10%). New bookings/quotes only.
+- backend/fees.py (fee_rates from site_config.processing_fee_pct / vat_pct, compute_fees, fee_line). Used by create_booking, manual quotes, admin manual bookings (fee added on top of entered total), cable beach, group quotes, bundles.
+- Admin Site Config → "Processing fee & VAT" inputs. BookingFlow shows processing-fee-line or vat-line using site-config rates.
+- Open (low): pricing-policy endpoint text uses constants; gift card fee uses constant; SiteConfigPanel setCfg stale-closure on fast consecutive edits.
+
