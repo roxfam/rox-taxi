@@ -26,7 +26,7 @@ const TABS = [
   { key: "home_slides", label: "Home Slides" },
   { key: "tours", label: "Tours" },
   { key: "taxi_services", label: "Taxi Services" },
-  { key: "nassau_map", label: "Nassau Map & Rates" },
+  { key: "nassau_map", label: "Rates, Map & Policy" },
   { key: "rentals", label: "Rentals" },
   { key: "licenses", label: "Licenses" },
   { key: "visitors", label: "Visitors" },

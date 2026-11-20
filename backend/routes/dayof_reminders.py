@@ -587,6 +587,37 @@ class BookingCancel(BaseModel):
     refund_amount: Optional[float] = Field(None, gt=0, le=100000)
     cancellation_fee: Optional[float] = Field(None, ge=0, le=100000)
     send_fee_invoice: bool = False
+    credit_amount: Optional[float] = Field(None, gt=0, le=100000)
+
+
+async def issue_credit(b: dict, amount: float, admin: str) -> dict:
+    """Rox credit instead of cash: a 12-month code (used online like a gift card, also listed in the guest's account)."""
+    from datetime import timedelta  # noqa: PLC0415
+    from server import _new_gift_code, _send_gift_voucher_email  # noqa: PLC0415
+    from notifications import send_sms  # noqa: PLC0415
+    now = datetime.now(timezone.utc)
+    amount = round(amount, 2)
+    gc = {"code": _new_gift_code(), "amount": amount, "balance": amount, "status": "active",
+          "source": "cancellation_credit", "booking_id": b["id"], "theme": "thank_you",
+          "buyer_name": "Rox Taxi & Tours", "buyer_email": "",
+          "recipient_name": b.get("customer_name") or "", "recipient_email": (b.get("customer_email") or "").lower(),
+          "message": f"Credit for cancelled booking {b['id']}. Use it on any Rox taxi, tour or rental.",
+          "created_at": now.isoformat(), "expires_at": (now + timedelta(days=365)).isoformat(),
+          "non_refundable": True, "redemptions": [], "issued_by": admin}
+    await _db.gift_cards.insert_one(dict(gc))
+    out = {"code": gc["code"], "amount": amount, "email": None, "sms": None}
+    if gc["recipient_email"]:
+        try:
+            out["email"] = await _send_gift_voucher_email(gc)
+        except Exception as e:  # noqa: BLE001
+            out["email"] = {"sent": False, "error": str(e)}
+    if b.get("customer_phone"):
+        first = (b.get("customer_name") or "there").split(" ")[0]
+        out["sms"] = await asyncio.to_thread(send_sms, b["customer_phone"],
+            f"Rox: Hi {first}, booking {b['id']} is cancelled and you have ${amount:.2f} Rox credit. Code {gc['code']}, "
+            f"valid 12 months. Use it at checkout on roxtaxi.com or in your account.")
+    await _db.bookings.update_one({"id": b["id"]}, {"$set": {"credit_issued": {"code": gc["code"], "amount": amount, "at": _now_iso()}}})
+    return out
 
 
 async def _fee_invoice(b: dict, fee: float, reason: str, admin: str) -> dict:
@@ -644,6 +675,8 @@ def _cancel_notice(b: dict, reason: str) -> dict:
     first = (b.get("customer_name") or "there").split(" ")[0] or "there"
     item = b.get("item_name") or "your Rox booking"
     why = f" Reason: {reason}." if reason else ""
+    refund_note = (" Any refund due is sent to your original payment method; refunds can take up to 10-14 business days after processing."
+                   if b.get("payment_status") in ("paid", "partially_refunded", "authorized") else "")
     report = {"email": {"sent": False}, "sms": {"sent": False}}
     if b.get("customer_email"):
         e = _html.escape
@@ -653,13 +686,58 @@ def _cancel_notice(b: dict, reason: str) -> dict:
                 f'<h1 style="font-family:Georgia,serif;margin:10px 0 0;font-size:24px;">{e(first)}, your booking {b["id"]} was cancelled.</h1></div>'
                 f'<div style="padding:22px 28px;color:#0B3B5C;font-size:14px;"><p><strong>{e(item)}</strong></p>'
                 f'{"<p>" + e(reason) + "</p>" if reason else ""}'
+                f'{"<p>" + e(refund_note.strip()) + "</p>" if refund_note else ""}'
                 f'<p style="color:#64748B;font-size:12px;">Questions or want to rebook? WhatsApp +1 (242) 432-2587 or reply to this email.</p></div></div>')
-        text = f"Hi {first}, your Rox booking {b['id']} ({item}) was cancelled.{why} Questions? WhatsApp +1 (242) 432-2587."
+        text = f"Hi {first}, your Rox booking {b['id']} ({item}) was cancelled.{why}{refund_note} Questions? WhatsApp +1 (242) 432-2587."
         report["email"] = send_email(b["customer_email"], f"Cancelled: Rox booking {b['id']}", html, text, category="confirmation")
     if b.get("customer_phone"):
         report["sms"] = send_sms(b["customer_phone"],
-                                 f"Rox: Hi {first}, booking {b['id']} ({item}) was cancelled.{why} Questions? WhatsApp +1 (242) 432-2587"[:600])
+                                 f"Rox: Hi {first}, booking {b['id']} ({item}) was cancelled.{why}{refund_note} Questions? WhatsApp +1 (242) 432-2587"[:600])
     return report
+
+
+class PolicyIn(BaseModel):
+    cancel_credit_pct: float = Field(ge=0, le=100)
+
+
+@router.get("/admin/cancellation-policy")
+async def get_policy(_admin: str = Depends(_admin_dep)):
+    cfg = await _db.site_config.find_one({"_id": "main"}, {"cancel_credit_pct": 1}) or {}
+    return {"cancel_credit_pct": cfg.get("cancel_credit_pct") if cfg.get("cancel_credit_pct") is not None else 100, "notice_hours": 24}
+
+
+@router.put("/admin/cancellation-policy")
+async def set_policy(req: PolicyIn, _admin: str = Depends(_admin_dep)):
+    await _db.site_config.update_one({"_id": "main"}, {"$set": {"cancel_credit_pct": round(req.cancel_credit_pct, 1)}}, upsert=True)
+    return await get_policy(_admin)
+
+
+@router.post("/admin/bookings/{booking_id}/no-show")
+async def admin_no_show(booking_id: str, admin: str = Depends(_admin_dep)):
+    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    hold = None
+    if (b.get("card_auth") or {}).get("status") == "held":
+        from routes.payments import capture_card_auth  # noqa: PLC0415
+        try:
+            hold = await capture_card_auth(b, None, admin)
+        except HTTPException as he:
+            hold = {"ok": False, "error": he.detail}
+    await _db.bookings.update_one({"id": booking_id}, {
+        "$set": {"status": "cancelled", "no_show": True, "cancelled_at": _now_iso(), "cancelled_by": admin,
+                 "cancel_reason": "No-show", "updated_at": _now_iso()},
+        "$push": {"status_history": {"status": "cancelled", "at": _now_iso(), "by": admin, "note": "No-show"}},
+    })
+    from notifications import notify_guest_update  # noqa: PLC0415
+    first = (b.get("customer_name") or "there").split(" ")[0]
+    await asyncio.to_thread(lambda: notify_guest_update(
+        b, subject=f"Missed pickup — Rox booking {b['id']}", kicker="No-show",
+        headline=f"{first}, we missed you for booking {b['id']}",
+        lines=[f"Your driver waited but we couldn't find you for {b.get('item_name', 'your trip')}.",
+               "Under our cancellation policy, no-shows are non-refundable. Contact us if something went wrong."],
+        sms=f"Rox: Hi {first}, we missed you for booking {b['id']}. No-shows are non-refundable under our policy. WhatsApp +1 (242) 432-2587 if something went wrong."))
+    return {"no_show": True, "card_hold": hold}
 
 
 @router.post("/admin/bookings/{booking_id}/cancel-request/decline")
@@ -669,6 +747,14 @@ async def admin_decline_cancel_request(booking_id: str, admin: str = Depends(_ad
         raise HTTPException(404, "No pending cancellation request")
     await _db.bookings.update_one({"id": booking_id}, {"$set": {
         "cancel_request.status": "declined", "cancel_request.decided_at": _now_iso(), "cancel_request.decided_by": admin}})
+    from notifications import notify_guest_update  # noqa: PLC0415
+    first = (b.get("customer_name") or "there").split(" ")[0]
+    await asyncio.to_thread(lambda: notify_guest_update(
+        b, subject=f"Your Rox booking {b['id']} is still on", kicker="Cancellation request",
+        headline=f"{first}, your booking {b['id']} is still active",
+        lines=[f"We couldn't approve the cancellation of {b.get('item_name', 'your booking')} under our cancellation policy.",
+               "Please contact us if you'd like to talk about changing the date instead."],
+        sms=f"Rox: Hi {first}, your cancellation request for booking {b['id']} wasn't approved under our policy, so the booking is still on. WhatsApp +1 (242) 432-2587 to change the date."))
     return {"declined": True}
 
 
@@ -724,6 +810,7 @@ async def admin_cancel_booking(booking_id: str, req: BookingCancel, admin: str =
             fee_invoice = await _fee_invoice(b, fee, reason, admin)
             await _db.bookings.update_one({"id": booking_id}, {"$set": {"cancellation_fee_booking_id": fee_invoice["booking_id"]}})
     return {"cancelled": True, "gift_restored": gift_back, "cancellation_fee": round(float(req.cancellation_fee or 0), 2),
+            "credit": (await issue_credit(b, req.credit_amount, admin)) if req.credit_amount else None,
             "fee_invoice": fee_invoice, "card_hold": hold,
             "guest_notified": bool(notice and (notice["email"].get("sent") or notice["sms"].get("sent"))),
             "refund": refund}
@@ -741,7 +828,7 @@ def _refund_notice(b: dict, amount: float, reason: str) -> dict:
     item = b.get("item_name") or "your Rox booking"
     why = f" ({reason})" if reason else ""
     msg = (f"Hi {first}, Rox Taxi has refunded ${amount:,.2f} for booking {b['id']} ({item}){why}. "
-           "It goes back to the card you paid with and usually shows in 5–10 business days. Questions? WhatsApp +1 (242) 432-2587.")
+           "It goes back to the card you paid with. Refunds can take up to 10-14 business days after processing to show. Questions? WhatsApp +1 (242) 432-2587.")
     report = {"sms": {"sent": False}}  # refund email is already sent by refund_payment()
     if b.get("customer_phone"):
         report["sms"] = send_sms(b["customer_phone"], f"Rox: {msg}"[:600])

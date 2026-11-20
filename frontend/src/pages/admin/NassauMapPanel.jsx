@@ -48,6 +48,27 @@ function RatesCard() {
   );
 }
 
+function PolicyCard() {
+  const [pct, setPct] = useState("");
+  useEffect(() => { api.get("/admin/cancellation-policy").then((r) => setPct(String(r.data.cancel_credit_pct))).catch(() => {}); }, []);
+  const save = async () => {
+    try { const { data } = await api.put("/admin/cancellation-policy", { cancel_credit_pct: Number(pct) }); setPct(String(data.cancel_credit_pct)); toast.success("Policy saved"); }
+    catch (e) { toast.error(errMsg(e, "Couldn't save")); }
+  };
+  return (
+    <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 space-y-3" data-testid="cancel-policy-card">
+      <h3 className="font-semibold text-[#0B3B5C]">Cancellation policy</h3>
+      <p className="text-xs text-[#64748B]">Cancel 24+ hours before = Rox credit (12-month code). Within 24 hours or no-show = no refund. You can still choose a card refund in the Cancel window.</p>
+      <div className="flex items-end gap-3">
+        <label className="text-sm">Credit given (% of amount paid)
+          <input type="number" min="0" max="100" value={pct} onChange={(e) => setPct(e.target.value)} className="block mt-1 w-28 border rounded-md px-2 py-1.5" data-testid="cancel-credit-pct-input" />
+        </label>
+        <button onClick={save} className="px-4 py-2 rounded-md bg-[#0B3B5C] text-white text-sm" data-testid="cancel-policy-save">Save</button>
+      </div>
+    </div>
+  );
+}
+
 function PlaceForm({ value, onCancel, onSaved }) {
   const [f, setF] = useState(value);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -117,6 +138,7 @@ export default function NassauMapPanel() {
   return (
     <div className="space-y-6" data-testid="nassau-map-panel">
       <RatesCard />
+      <PolicyCard />
       <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

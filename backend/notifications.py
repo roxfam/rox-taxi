@@ -1020,7 +1020,14 @@ def notify_refund_issued(
     """
     prefs = prefs or {}
     email_enabled = prefs.get("notify_email_enabled", True) is not False
-    report = {"email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled}}
+    report = {"email": {"sent": False, "provider": "none", "error": None, "enabled": email_enabled}, "sms": {"sent": False}}
+    if booking.get("customer_phone") and prefs.get("notify_sms_enabled", True) is not False:
+        _first = (booking.get("customer_name") or "there").split(" ")[0]
+        report["sms"] = send_sms(booking["customer_phone"], (
+            f"Rox: Hi {_first}, a refund of {_fmt_money(amount)} for booking {booking['id']} has been "
+            + ("processed" if ok else "scheduled")
+            + ". Refunds can take up to 10-14 business days after processing to show on your statement. "
+            "Questions? WhatsApp +1 (242) 432-2587"))
     if not email_enabled or not booking.get("customer_email"):
         report["email"]["error"] = "Disabled by admin" if not email_enabled else "No email address"
         return report
@@ -1032,10 +1039,10 @@ def notify_refund_issued(
         "paypal": "your PayPal account",
     }.get((provider or "").lower(), "your original payment method")
     eta_line = (
-        "You'll see it back on " + provider_label + " within 5–10 business days."
+        "Refunds can take up to 10–14 business days after processing to show on " + provider_label + "."
         if ok else
-        "Our team will manually complete the refund to " + provider_label + " within 2 business days — "
-        "we'll email you the moment it clears."
+        "Our team will manually complete the refund to " + provider_label + " within 2 business days. "
+        "Once processed, refunds can take up to 10–14 business days to show."
     )
     status_badge = (
         '<span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#D1FAE5;color:#065F46;font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;">Refund sent</span>'
@@ -1107,6 +1114,28 @@ def notify_refund_issued(
     report["amount"] = amount
     if error:
         report["provider_error"] = error
+    return report
+
+
+def notify_guest_update(person: dict, *, subject: str, kicker: str, headline: str,
+                        lines: list, sms: str, button: Optional[tuple] = None) -> dict:
+    """Email + text the guest a short account update (invoice, cancellation request, card hold)."""
+    import html as _h  # noqa: PLC0415
+    report = {"email": {"sent": False}, "sms": {"sent": False}}
+    if person.get("customer_email"):
+        btn = (f'<p style="margin:24px 0"><a href="{button[1]}" style="background:#E86A3C;color:#fff;text-decoration:none;'
+               f'padding:13px 26px;border-radius:999px;font-weight:bold">{_h.escape(button[0])}</a></p>') if button else ""
+        body = "".join(f"<p>{_h.escape(x)}</p>" for x in lines)
+        html = (f'<div style="font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;background:#FAF9F6;">'
+                f'<div style="background:#0B3B5C;color:#fff;padding:28px;"><div style="font-size:10px;letter-spacing:.3em;'
+                f'text-transform:uppercase;color:#D4A94A;font-weight:800;">{_h.escape(kicker)}</div>'
+                f'<h1 style="font-family:Georgia,serif;margin:10px 0 0;font-size:24px;">{_h.escape(headline)}</h1></div>'
+                f'<div style="padding:22px 28px;color:#0B3B5C;font-size:14px;">{body}{btn}'
+                f'<p style="color:#64748B;font-size:12px;">Questions? WhatsApp +1 (242) 432-2587 or reply to this email.</p></div></div>')
+        text = "\n\n".join([headline, *lines, *([f"{button[0]}: {button[1]}"] if button else [])])
+        report["email"] = send_email(person["customer_email"], subject, html, text, category="payment")
+    if person.get("customer_phone"):
+        report["sms"] = send_sms(person["customer_phone"], sms[:600])
     return report
 
 

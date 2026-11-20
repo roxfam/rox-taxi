@@ -5,6 +5,7 @@ Stripe key and notification callback, then `include_router(router)`.
 """
 from typing import Optional, Dict, Any
 import logging
+import asyncio
 import os
 
 from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
@@ -854,6 +855,16 @@ async def capture_card_auth(b: Dict[str, Any], amount: Optional[float], admin: s
     await _db.bookings.update_one({"id": b["id"]}, {"$set": upd})
     await _db.payment_transactions.update_one({"session_id": auth.get("session_id")},
                                               {"$set": {"payment_status": "paid", "amount": amt, "updated_at": _now_iso()}})
+    from notifications import notify_guest_update  # noqa: PLC0415
+    first = (b.get("customer_name") or "there").split(" ")[0]
+    released = round(auth["amount"] - amt, 2)
+    note = f" The remaining ${released:.2f} hold has been released." if released > 0 else ""
+    await asyncio.to_thread(lambda: notify_guest_update(
+        b, subject=f"Payment of ${amt:.2f} — Rox booking {b['id']}", kicker="Payment received",
+        headline=f"{first}, we've charged ${amt:.2f} for {b.get('item_name', 'your rental')}",
+        lines=[f"Your held card was charged ${amt:.2f} for booking {b['id']}.{note}",
+               "Released holds can take up to 10-14 business days to drop off your statement, depending on your bank." if released > 0 else "Thank you for riding with Rox."],
+        sms=f"Rox: Hi {first}, your card was charged ${amt:.2f} for booking {b['id']}.{note} Thank you!"))
     return {"ok": True, "captured": amt, "status": pi.get("status")}
 
 
@@ -868,6 +879,14 @@ async def release_card_auth(b: Dict[str, Any], admin: str) -> Dict[str, Any]:
     await _db.bookings.update_one({"id": b["id"]}, {"$set": {
         "card_auth.status": "released", "card_auth.released_at": _now_iso(), "card_auth.released_by": admin,
         "payment_status": "hold_released", "updated_at": _now_iso()}})
+    from notifications import notify_guest_update  # noqa: PLC0415
+    first = (b.get("customer_name") or "there").split(" ")[0]
+    await asyncio.to_thread(lambda: notify_guest_update(
+        b, subject=f"Card hold released — Rox booking {b['id']}", kicker="Card hold released",
+        headline=f"{first}, your ${auth['amount']:.2f} hold has been released",
+        lines=[f"You haven't been charged for booking {b['id']}.",
+               "Released holds can take up to 10-14 business days to drop off your statement, depending on your bank."],
+        sms=f"Rox: Hi {first}, the ${auth['amount']:.2f} hold for booking {b['id']} is released, so no charge. It can take up to 10-14 business days to drop off your statement."))
     return {"ok": True, "released": auth["amount"]}
 
 

@@ -74,6 +74,13 @@ def _notify(q: dict) -> None:
         )
     except Exception as e:  # noqa: BLE001
         logging.warning("quote email err: %s", e)
+    if q.get("customer_phone"):
+        try:
+            from notifications import send_sms  # noqa: PLC0415
+            send_sms(q["customer_phone"], f"Rox: Hi {q['customer_name'].split(' ')[0]}, your quote {q['id']} for {q['item_name']} "
+                                           f"is ${q['total']:.2f}, valid until {q['expires_label']}. View, adjust people & pay: {link}")
+        except Exception as e:  # noqa: BLE001
+            logging.warning("quote sms err: %s", e)
     try:
         notify_owner_activity("quote", f"📝 New quote {q['id']}: {q['item_name']} ${q['total']:.2f} · {q['customer_name']} {q.get('customer_phone') or ''}")
     except Exception as e:  # noqa: BLE001
@@ -183,14 +190,6 @@ class AdminQuote(BaseModel):
 @router.post("/admin/quotes")
 async def admin_create_quote(req: AdminQuote, request: Request, admin=Depends(_admin_dep)):
     q = await _save_quote(req.payload, "booking", {**await _price(req.payload, request), "created_by": admin})
-    if req.text_guest and q.get("customer_phone"):
-        from notifications import send_sms  # noqa: PLC0415
-        from routes.payment_digest import _site_url  # noqa: PLC0415
-        first = (q.get("customer_name") or "there").split(" ")[0]
-        r = await asyncio.to_thread(send_sms, q["customer_phone"],
-                                    f"Hi {first}, it's Rox Taxi. Your quote {q['id']} for {q['item_name']} is ${q['total']:.2f}. "
-                                    f"Check the people, then tap to pay: {_site_url()}/quote/{q['id']}")
-        q["text_sent"] = bool(r.get("sent"))
     return q
 
 
@@ -293,6 +292,18 @@ async def book_quote(qid: str, request: Request):
     await _db.quotes.update_one({"id": q["id"]}, {"$set": {"status": "booked", "booking_id": b["id"], "booked_at": _now_iso()}})
     invoice_no = "INV-" + q["id"].split("-", 1)[-1]
     await _db.bookings.update_one({"id": b["id"]}, {"$set": {"quote_id": q["id"], "invoice_number": invoice_no, "invoiced_at": _now_iso()}})
+    from notifications import notify_guest_update  # noqa: PLC0415
+    from routes.payment_digest import _site_url  # noqa: PLC0415
+    pay = f"{_site_url()}/pay/{b['id']}"
+    first = (b.get("customer_name") or "there").split(" ")[0]
+    total = float(b.get("total") or 0)
+    asyncio.get_running_loop().run_in_executor(None, lambda: notify_guest_update(
+        b, subject=f"Invoice {invoice_no} — {b.get('item_name', '')} (${total:.2f})", kicker="Invoice",
+        headline=f"{first}, your invoice {invoice_no} is ready",
+        lines=[f"{b.get('item_name', '')} on {str(b.get('booking_date', '')).replace('T', ' ')}.",
+               f"Amount due: ${total:.2f}. Booking reference {b['id']}."],
+        sms=f"Rox: Hi {first}, invoice {invoice_no} for {b.get('item_name', '')} is ${total:.2f}. Pay securely: {pay}",
+        button=("Pay invoice", pay)))
     return {"booking_id": b["id"], "invoice_number": invoice_no}
 
 

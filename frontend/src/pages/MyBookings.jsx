@@ -129,7 +129,7 @@ export default function MyBookings() {
   }, [user, loading]);
 
   const handleCancel = async (b) => {
-    if (!window.confirm(`Ask to cancel booking ${b.id}? We'll review it and confirm by email or text. With 48+ hours' notice you get a refund minus our cancellation fee; within 48 hours bookings are non-refundable.`)) return;
+    if (!window.confirm(`Ask to cancel booking ${b.id}? Cancel 24+ hours before pickup and the amount paid comes back as Rox credit (valid 12 months). Within 24 hours of pickup, and no-shows, are non-refundable.`)) return;
     setCancelling(b.id);
     try {
       const r = await fetch(`${API}/bookings/${b.id}/cancel`, { method: "POST", credentials: "include" });

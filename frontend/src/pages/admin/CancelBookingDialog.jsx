@@ -7,7 +7,9 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
   const [reason, setReason] = useState("");
   const [notify, setNotify] = useState(true);
   const [refundInfo, setRefundInfo] = useState(null);
-  const [refund, setRefund] = useState(true);
+  const [refund, setRefund] = useState(false);
+  const [credit, setCredit] = useState(true);
+  const [creditAmt, setCreditAmt] = useState("");
   const [amount, setAmount] = useState("");
   const [cfee, setCfee] = useState("");
   const [feeInvoice, setFeeInvoice] = useState(true);
@@ -15,8 +17,16 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
 
   useEffect(() => {
     api.get(`/admin/bookings/${booking.id}/refundable`)
-      .then(({ data }) => { setRefundInfo(data); setAmount(data.amount ? String(data.amount) : ""); })
+      .then(({ data }) => {
+        setRefundInfo(data); setAmount(data.amount ? String(data.amount) : "");
+        const late = booking.cancel_request && booking.cancel_request.hours_notice < 24;
+        const paidish = data.refundable || ["paid", "partially_refunded", "authorized"].includes(booking.payment_status);
+        const sug = paidish ? (booking.cancel_request?.suggested_credit ?? data.amount ?? 0) : 0;
+        setCreditAmt(sug ? String(sug) : "");
+        setCredit(!late && sug > 0);
+      })
       .catch(() => setRefundInfo({ refundable: false }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booking.id]);
 
   const canRefund = !!refundInfo?.refundable;
@@ -42,9 +52,11 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
         reason, notify_guest: notify, refund: canRefund && refund,
         refund_amount: canRefund && refund ? Math.round(amt * 100) / 100 : null,
         cancellation_fee: canRefund && refund ? (fee > 0.004 ? Math.round(fee * 100) / 100 : null) : (Number(cfee) > 0 ? Number(cfee) : null),
+        credit_amount: credit && Number(creditAmt) > 0 ? Math.round(Number(creditAmt) * 100) / 100 : null,
         send_fee_invoice: !canRefund && booking.card_auth?.status !== "held" && feeInvoice && Number(cfee) > 0,
       });
       const parts = [`Cancelled ${booking.id}`];
+      if (data.credit) parts.push(`${money(data.credit.amount)} credit ${data.credit.code} sent`);
       if (data.fee_invoice) parts.push(`fee invoice ${money(data.fee_invoice.amount)} sent`);
       if (data.guest_notified) parts.push("guest notified");
       if (data.refund) {
@@ -79,13 +91,27 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
           <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} data-testid="cancel-dialog-notify" />
           Email + text the guest about the cancellation
         </label>
+        <div className="text-sm text-[#0B3B5C] bg-[#D4A94A]/10 border border-[#D4A94A]/40 rounded-lg p-3 space-y-2" data-testid="cancel-dialog-credit-row">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={credit} onChange={(e) => { setCredit(e.target.checked); if (e.target.checked) setRefund(false); }} data-testid="cancel-dialog-credit" />
+            Give Rox credit instead of cash (12-month code, emailed + texted)
+          </label>
+          {credit && (
+            <div className="flex items-center gap-2 pl-6">
+              <span className="text-xs text-[#64748B]">Credit $</span>
+              <input type="number" step="0.01" min="0.01" value={creditAmt} onChange={(e) => setCreditAmt(e.target.value)}
+                className="w-28 px-2 py-1 border border-[#E2E8F0] rounded text-sm" data-testid="cancel-dialog-credit-amount" />
+            </div>
+          )}
+          {booking.cancel_request && booking.cancel_request.hours_notice < 24 && <div className="text-[11px] text-[#B45309]">Requested within 24 hours of pickup: no refund or credit under your policy.</div>}
+        </div>
         {refundInfo === null ? (
           <div className="text-xs text-[#94a3b8]">Checking payment…</div>
         ) : canRefund ? (
           <div className="text-sm text-[#0B3B5C] bg-[#059669]/5 border border-[#059669]/30 rounded-lg p-3 space-y-2" data-testid="cancel-dialog-refund-row">
             <label className="flex items-center gap-2">
-              <input type="checkbox" checked={refund} onChange={(e) => setRefund(e.target.checked)} data-testid="cancel-dialog-refund" />
-              Refund to the guest's card ({refundInfo.provider}) · paid {money(refundInfo.amount)}
+              <input type="checkbox" checked={refund} onChange={(e) => { setRefund(e.target.checked); if (e.target.checked) setCredit(false); }} data-testid="cancel-dialog-refund" />
+              Card refund instead ({refundInfo.provider}) · paid {money(refundInfo.amount)}
             </label>
             {refund && (
               <div className="flex flex-wrap items-center gap-2 pl-6">

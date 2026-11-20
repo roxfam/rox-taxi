@@ -991,3 +991,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Rentals: with a real Stripe key, /payments/checkout creates a manual-capture Checkout (card_hold.create_hold_checkout); payment_status "authorized" + booking.card_auth {payment_intent, amount, expires_at +7d}. Admin row: Charge (capture, partial allowed) / Release. Admin cancel on a held card: fee → captured from hold, no fee → hold released. With the shared sk_test_emergent key rentals are charged normally (holds need a real key) — UNTESTED in preview.
 - Quotes panel: Send pay link (email + text) and Cancel quote (status "cancelled").
 
+
+## 2026-11-20 — Guest messages, credit cancellation policy, driver dispatch
+- Every quote, invoice, cancellation (request received / declined / approved), payment (incl. rental hold charge/release), no-show and refund is emailed AND texted to the guest (notifications.notify_guest_update). Refund wording everywhere: "Refunds can take up to 10–14 business days after processing".
+- Cancellation policy: 24h+ before pickup → Rox credit (site_config.cancel_credit_pct, default 100%, edit in Admin → Manage catalog → "Rates, Map & Policy"); within 24h or no-show → no refund. Credit = 12-month gift-card code (source "cancellation_credit", recipient_email = guest → also listed in My Bookings gift cards). Cancel dialog defaults to credit for paid bookings; card refund still optional. Public cancel request now uses Nassau time for hours-notice (was UTC).
+- No-show button (admin row): cancels with no refund, captures a held rental card in full, notifies guest.
+- Driver dispatch (routes/driver_dispatch.py): "Send to driver" on each booking row (roster from site_config.backup_drivers, or typed name/phone); trip sheet has no prices; no driver → admin owner SMS. Reminder loop every 60s: night before 8pm, 1h, 15m before pickup (non-rental, booking.driver_nudges); goes to driver_phone or admin number.
+

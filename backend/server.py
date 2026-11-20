@@ -50,6 +50,7 @@ from routes import cable_beach as cable_beach_module
 from routes import team_sms as team_sms_module
 from routes import payment_digest as payment_digest_module
 from routes import dayof_reminders as dayof_module
+from routes import driver_dispatch as driver_dispatch_module
 from routes import welcome_email as welcome_email_module
 from routes import arrival_welcome as arrival_module
 from routes import quotes as quotes_module
@@ -249,8 +250,8 @@ def _rental_discount_pct(days: int) -> float:
     return 0.0
 
 # Days closed (weekly). Python weekday: Monday=0..Sunday=6. Saturday=5.
-CANCELLATION_FEE_PCT = 0.20  # 20% cancellation fee on taxi/tour/excursion (rentals: forfeit deposit only)
-CANCELLATION_NOTICE_HOURS = 48  # 48-hour notice required for eligible refund
+CANCELLATION_FEE_PCT = 0.20  # legacy field kept in /policies output
+CANCELLATION_NOTICE_HOURS = 24  # cancel 24h+ ahead = credit; within 24h or no-show = no refund
 CANCELLATION_APPLIES_TO = {"taxi", "tour", "excursion"}  # rentals handled separately (deposit forfeit)
 
 CLOSED_WEEKDAYS = {5}
@@ -1664,6 +1665,7 @@ async def seed_db():
         logging.warning("dispatcher digest loop start warn: %s", e)
     asyncio.create_task(payment_digest_module.digest_loop())
     asyncio.create_task(dayof_module.dayof_loop())
+    asyncio.create_task(driver_dispatch_module.driver_nudge_loop())
     asyncio.create_task(welcome_email_module.reminder_loop())
     asyncio.create_task(gift_redeem_module.expiry_reminder_loop())
     asyncio.create_task(growth_module.return_reminder_loop())
@@ -3489,11 +3491,10 @@ async def get_fees():
         "cancellation_notice_hours": CANCELLATION_NOTICE_HOURS,
         "cancellation_applies_to": sorted(CANCELLATION_APPLIES_TO),
         "cancellation_policy": (
-            f"Taxi, tour, and excursion bookings: cancellations made at least {CANCELLATION_NOTICE_HOURS} hours "
-            f"before the service are refunded minus a {int(CANCELLATION_FEE_PCT*100)}% cancellation fee. "
-            f"Cancellations within {CANCELLATION_NOTICE_HOURS} hours are non-refundable. "
-            "Car rentals: the base fare is fully refunded outside the notice window; the security deposit is "
-            "always released back."
+            f"Cancel at least {CANCELLATION_NOTICE_HOURS} hours before your trip and the amount paid is returned "
+            "as Rox credit, valid for 12 months on any taxi, tour or rental. Cancellations within "
+            f"{CANCELLATION_NOTICE_HOURS} hours of pickup and no-shows are non-refundable. Approved card refunds "
+            "can take up to 10-14 business days after processing."
         ),
     }
 
@@ -3800,37 +3801,44 @@ async def cancel_booking(booking_id: str):
     except Exception:
         raise HTTPException(400, "Cannot parse booking date")
     if service_dt.tzinfo is None:
-        service_dt = service_dt.replace(tzinfo=timezone.utc)
+        service_dt = service_dt.replace(tzinfo=__import__("zoneinfo").ZoneInfo("America/Nassau"))
 
     hours_until = (service_dt - now_utc()).total_seconds() / 3600.0
     eligible = hours_until >= CANCELLATION_NOTICE_HOURS
 
     total = float(doc.get("total") or 0.0)
-    paid = doc.get("payment_status") == "paid"
-    svc_type = (doc.get("service_type") or "").lower()
-    # Cancellation fee only applies to taxi / tour / excursion. Rentals
-    # always release the deposit + refund the base fare when eligible;
-    # inside the notice window rentals forfeit the base fare only (deposit
-    # still comes back). Keep the existing "non-refundable within window"
-    # behaviour for the other service types.
-    if svc_type in CANCELLATION_APPLIES_TO:
-        fee = round(total * CANCELLATION_FEE_PCT, 2) if eligible else (total if paid else 0.0)
-    else:
-        # Rental — refund the base fare when eligible; forfeit fare (but not deposit) if late.
-        deposit = float(doc.get("deposit_amount") or 0.0)
-        if eligible:
-            fee = 0.0
-        else:
-            fee = round(max(0.0, total - deposit), 2) if paid else 0.0
-    refund = round(max(0.0, total - fee), 2) if paid else 0.0
+    paid = doc.get("payment_status") in ("paid", "authorized")
+    _pol = await db.site_config.find_one({"_id": "main"}, {"cancel_credit_pct": 1}) or {}
+    credit_pct = float(_pol.get("cancel_credit_pct") if _pol.get("cancel_credit_pct") is not None else 100)
+    credit = round(total * credit_pct / 100, 2) if (paid and eligible) else 0.0
+    fee = 0.0
+    refund = 0.0
 
     # Guests only REQUEST a cancellation; the owner approves + refunds from admin.
     if (doc.get("cancel_request") or {}).get("status") == "pending":
         return {"id": doc["id"], "requested": True, "already": True,
                 "message": "Your cancellation request is already with us. We'll confirm by email or text shortly."}
     request_doc = {"status": "pending", "requested_at": now_iso(), "hours_notice": round(hours_until, 2),
-                   "eligible_for_refund": eligible, "suggested_fee": fee, "refund_estimate": refund}
+                   "eligible_for_refund": eligible, "suggested_fee": fee, "refund_estimate": refund,
+                   "suggested_credit": credit}
     await db.bookings.update_one({"id": doc["id"]}, {"$set": {"cancel_request": request_doc, "updated_at": now_iso()}})
+    try:
+        from notifications import notify_guest_update  # noqa: PLC0415
+        _first = (doc.get("customer_name") or "there").split(" ")[0]
+        await asyncio.to_thread(lambda: notify_guest_update(
+            doc, subject=f"We got your cancellation request — booking {doc['id']}", kicker="Cancellation request",
+            headline=f"{_first}, we're reviewing your cancellation",
+            lines=[f"We received your request to cancel {doc.get('item_name', 'your booking')} (booking {doc['id']}).",
+                   (f"You cancelled more than {CANCELLATION_NOTICE_HOURS} hours ahead, so once approved you'll get ${credit:.2f} Rox credit, valid 12 months."
+                    if credit else ("No payment was taken for this booking, so nothing is owed." if not paid
+                    else f"Cancellations within {CANCELLATION_NOTICE_HOURS} hours of pickup are non-refundable under our policy.")),
+                   "We'll confirm by email and text."],
+            sms=(f"Rox: Hi {_first}, we got your request to cancel booking {doc['id']}. "
+                 + (f"Once approved you'll get ${credit:.2f} Rox credit (valid 12 months)." if credit
+                    else ("No payment was taken, so nothing is owed." if not paid
+                          else f"Cancellations within {CANCELLATION_NOTICE_HOURS}h are non-refundable.")) + " We'll confirm shortly.")))
+    except Exception as e:  # noqa: BLE001
+        logging.warning("cancel request guest notice err: %s", e)
     try:
         from notifications import notify_owner_activity  # noqa: PLC0415
         await asyncio.to_thread(
@@ -3843,8 +3851,10 @@ async def cancel_booking(booking_id: str):
         logging.warning("cancel request owner alert err: %s", e)
     return {
         "id": doc["id"], "requested": True, "hours_notice": round(hours_until, 2),
-        "refund_estimate": refund, "cancellation_fee": fee,
-        "message": "Cancellation requested. We'll review it and confirm your refund by email or text.",
+        "refund_estimate": refund, "cancellation_fee": fee, "credit_estimate": credit,
+        "message": (f"Cancellation requested. Once approved you'll receive ${credit:.2f} Rox credit." if credit
+                    else "Cancellation requested. No payment was taken, so nothing is owed." if not paid
+                    else "Cancellation requested. Bookings cancelled within 24 hours of pickup are non-refundable."),
     }
 
 
@@ -6974,9 +6984,11 @@ admin_module.configure(
     upload_dir=UPLOAD_DIR,
 )
 dayof_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
+driver_dispatch_module.configure(db=db, require_admin=require_admin, now_iso=now_iso)
 welcome_email_module.configure(db=db)
 arrival_module.configure(db=db)
 api_router.include_router(dayof_module.router)
+api_router.include_router(driver_dispatch_module.router)
 api_router.include_router(admin_module.router)
 
 # Wire up the public catalog router (tours, rentals, taxi-services, packages,

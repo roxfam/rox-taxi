@@ -75,7 +75,7 @@ export default function Track() {
 
   const cancelBooking = async () => {
     if (!booking) return;
-    if (!window.confirm("Ask to cancel this booking?\n\nWe'll review your request and confirm by email or text. With 48+ hours' notice you get a refund minus our cancellation fee. Within 48 hours, bookings are non-refundable.")) return;
+    if (!window.confirm("Ask to cancel this booking?\n\nCancel 24+ hours before pickup and the amount paid comes back as Rox credit (valid 12 months). Within 24 hours of pickup, and no-shows, are non-refundable. We'll confirm by email and text.")) return;
     setCancelling(true);
     try {
       const { data } = await api.post(`/bookings/${booking.id}/cancel`);
@@ -265,7 +265,7 @@ export default function Track() {
                   <AlertTriangle className="w-5 h-5 text-[#D4A94A] mt-0.5 shrink-0" />
                   <div className="text-sm text-[#334155] leading-relaxed">
                     <div className="font-semibold text-[#0B3B5C]">Need to change your plans?</div>
-                    <div className="text-[#64748B] mt-0.5">Reschedule for free up to 2 hours before pickup. Full cancel: 48+ hr notice = refund minus our <strong>cancellation fee</strong>; within 48 hr = non-refundable. Requests are reviewed by our team.</div>
+                    <div className="text-[#64748B] mt-0.5">Reschedule for free up to 2 hours before pickup. Full cancel: 24+ hr notice = <strong>Rox credit</strong> for the amount paid (valid 12 months); within 24 hr or no-show = non-refundable. Requests are reviewed by our team.</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

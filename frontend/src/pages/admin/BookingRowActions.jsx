@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Pencil, Ban, Trash2, Copy, MailCheck, RotateCcw, CreditCard, Unlock, X } from "lucide-react";
+import { Pencil, Ban, Trash2, Copy, MailCheck, RotateCcw, CreditCard, Unlock, X, Car, UserX } from "lucide-react";
 import { api } from "../../lib/api";
 import CancelBookingDialog from "./CancelBookingDialog";
 import RefundBookingDialog from "./RefundBookingDialog";
+import SendToDriverDialog from "./SendToDriverDialog";
 
 const btn = "inline-flex items-center gap-1 whitespace-nowrap text-[10px] font-semibold px-2 py-1 rounded transition-colors disabled:opacity-50";
 
@@ -35,6 +36,11 @@ export default function BookingRowActions({ booking, onEdit, onRepeat, onChanged
   const decline = () => {
     if (!window.confirm("Decline this cancellation request? The booking stays active.")) return;
     run(() => api.post(`/admin/bookings/${booking.id}/cancel-request/decline`), () => "Request declined");
+  };
+  const [driverOpen, setDriverOpen] = useState(false);
+  const noShow = () => {
+    if (!window.confirm(`Mark ${booking.id} as a no-show? No refund is given and the guest is told by email + text.`)) return;
+    run(() => api.post(`/admin/bookings/${booking.id}/no-show`), () => "Marked as no-show");
   };
 
   const sendConfirm = async () => {
@@ -112,6 +118,22 @@ export default function BookingRowActions({ booking, onEdit, onRepeat, onChanged
         data-testid={`admin-row-repeat-${booking.id}`}>
         <Copy className="w-3 h-3" /> Repeat
       </button>
+      {!cancelled && (
+        <button type="button" onClick={() => setDriverOpen(true)} disabled={busy}
+          title="Text the trip details (no prices) to a driver, or to your admin number"
+          className={`${btn} bg-[#0369A1]/10 text-[#0369A1] hover:bg-[#0369A1] hover:text-white`}
+          data-testid={`admin-row-send-driver-${booking.id}`}>
+          <Car className="w-3 h-3" /> {booking.driver_phone ? `Driver: ${booking.driver_name || "set"}` : "Send to driver"}
+        </button>
+      )}
+      {!cancelled && (
+        <button type="button" onClick={noShow} disabled={busy}
+          className={`${btn} bg-[#64748B]/10 text-[#475569] hover:bg-[#475569] hover:text-white`}
+          data-testid={`admin-row-no-show-${booking.id}`}>
+          <UserX className="w-3 h-3" /> No-show
+        </button>
+      )}
+      {driverOpen && <SendToDriverDialog booking={booking} onClose={() => setDriverOpen(false)} onDone={() => { setDriverOpen(false); onChanged(); }} />}
       {!cancelled && (
         <button type="button" onClick={cancel} disabled={busy}
           className={`${btn} bg-[#E86A3C]/10 text-[#E86A3C] hover:bg-[#E86A3C] hover:text-white`}
