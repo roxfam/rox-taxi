@@ -20,6 +20,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends, Header, Request, UploadFile, File
 from fastapi.responses import Response
 from pydantic import BaseModel, EmailStr, Field
+from phone_utils import Phone
 
 
 # ── shared state wired in by server.py ───────────────────────────────────
@@ -755,7 +756,7 @@ class CableBeachShareClick(BaseModel):
 class CableBeachBookRequest(BaseModel):
     customer_name: str = Field(..., min_length=1, max_length=120)
     customer_email: EmailStr
-    customer_phone: str = Field(..., min_length=5, max_length=40)
+    customer_phone: Phone = Field(..., min_length=5, max_length=40)
     booking_date: str = Field(..., min_length=10, max_length=40)
     pax: int = Field(..., ge=1, le=50)
     transfer_kind: str = Field("none", pattern="^(none|cruise_oneway|cruise_roundtrip|hotel)$")

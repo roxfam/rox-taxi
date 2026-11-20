@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { CreditCard, Wallet, CheckCircle2, Copy, X, AlertTriangle, HandCoins, Calendar, Lock } from "lucide-react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+import { normalizePhone } from "../lib/phone";
 import { api, money, BACKEND_URL } from "../lib/api";
 import { TaxiTooSoonNotice, minutesUntilNassau } from "../components/TaxiTooSoonNotice";
 import { CruiseShipPicker } from "../components/CruiseShipPicker";
@@ -520,7 +521,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
         price: item.price,
         customer_name: form.customer_name,
         customer_email: form.customer_email,
-        customer_phone: form.customer_phone,
+        customer_phone: normalizePhone(form.customer_phone),
         booking_date: form.booking_date,
         pickup_location: form.pickup_location || null,
         dropoff_location: form.dropoff_location || null,
@@ -674,7 +675,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
               <div className="grid sm:grid-cols-2 gap-4">
                 <Field label="Full name *" val={form.customer_name} on={setF("customer_name")} testid="booking-name" />
                 <Field label="Email *" type="email" val={form.customer_email} on={setF("customer_email")} testid="booking-email" />
-                <Field label="Phone *" val={form.customer_phone} on={setF("customer_phone")} testid="booking-phone" />
+                <Field label="Phone * (include country code, e.g. +1 242…)" val={form.customer_phone} on={setF("customer_phone")} testid="booking-phone" />
                 <div>
                   <label className="block text-xs tracking-[0.2em] uppercase text-[#64748B] mb-2">
                     {serviceType === "rental" ? "Pickup date *" : "Date & time *"}
@@ -1368,7 +1369,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                         item_name: item?.name || item?.item_name || "Rox booking",
                         customer_email: form.customer_email,
                         customer_name: form.customer_name,
-                        customer_phone: form.customer_phone,
+                        customer_phone: normalizePhone(form.customer_phone),
                         booking_date: form.booking_date || null,
                         pax: Number(form.passengers || form.adults || 0) || null,
                         total: Number(total || 0),

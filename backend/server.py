@@ -9,6 +9,7 @@ import geo
 import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from phone_utils import Phone
 from typing import List, Optional, Dict, Any
 import uuid
 import asyncio
@@ -163,7 +164,7 @@ class BookingCreate(BaseModel):
     price: float
     customer_name: str
     customer_email: EmailStr
-    customer_phone: str
+    customer_phone: Phone
     booking_date: str
     pickup_location: Optional[str] = None
     dropoff_location: Optional[str] = None
@@ -385,7 +386,7 @@ class CustomerLoginRequest(BaseModel):
 class ContactMessage(BaseModel):
     name: str
     email: EmailStr
-    phone: Optional[str] = None
+    phone: Optional[Phone] = None
     subject: Optional[str] = "General inquiry"
     message: str
 
@@ -412,7 +413,7 @@ class GiftCardPurchaseRequest(BaseModel):
     origin_url: str
     scheduled_send_at: Optional[str] = Field(None, max_length=40)  # ISO datetime — defer delivery (birthday / anniversary)
     theme: str = Field("classic", pattern="^(classic|birthday|honeymoon|thank_you|anniversary|wedding|graduation|holiday|mothers_day|just_because)$")
-    recipient_phone: Optional[str] = Field(None, max_length=40)
+    recipient_phone: Optional[Phone] = Field(None, max_length=40)
     pay_with: str = Field("stripe", pattern="^(stripe|paypal)$")
 
 
@@ -428,7 +429,7 @@ class GroupInquiryCreate(BaseModel):
     budget_range: Optional[str] = None
     customer_name: str
     customer_email: EmailStr
-    customer_phone: str
+    customer_phone: Phone
     notes: Optional[str] = None
     package: Optional[Dict[str, Any]] = None  # wedding-builder structured selection
     estimated_total: Optional[float] = None
@@ -446,7 +447,7 @@ class TaxiCustomQuoteRequest(BaseModel):
     to_location: str = Field(..., min_length=1, max_length=200)
     customer_name: str = Field(..., min_length=1, max_length=100)
     customer_email: EmailStr
-    customer_phone: str = Field(..., min_length=5, max_length=40)
+    customer_phone: Phone = Field(..., min_length=5, max_length=40)
     passengers: int = Field(1, ge=1, le=20)
     when: Optional[str] = None  # optional date/time
     notes: Optional[str] = None
@@ -4331,7 +4332,7 @@ class GroupBookingCheckout(BaseModel):
     booking_date: str
     customer_name: str = Field(..., min_length=1, max_length=120)
     customer_email: EmailStr
-    customer_phone: str = Field(..., min_length=5, max_length=40)
+    customer_phone: Phone = Field(..., min_length=5, max_length=40)
     pickup_location: Optional[str] = None
     dropoff_location: Optional[str] = None
     notes: Optional[str] = None
@@ -4463,7 +4464,7 @@ class CheckoutIntent(BaseModel):
     item_name: str
     customer_email: EmailStr
     customer_name: Optional[str] = None
-    customer_phone: Optional[str] = None
+    customer_phone: Optional[Phone] = None
     booking_date: Optional[str] = None
     pax: Optional[int] = None
     total: float = Field(..., ge=0)
@@ -5805,7 +5806,7 @@ class ReassignBackupRequest(BaseModel):
     # When omitted, falls back to the legacy `BACKUP_DRIVER_PHONE` secret so
     # existing installs keep working before the roster is populated.
     driver_name: Optional[str] = Field(None, max_length=64)
-    driver_phone: Optional[str] = Field(None, max_length=32)
+    driver_phone: Optional[Phone] = Field(None, max_length=32)
 
 
 @api_router.post("/admin/bookings/{booking_id}/reassign-backup")

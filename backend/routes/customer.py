@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from phone_utils import Phone
 
 from emergentintegrations.payments.stripe.checkout import (
     StripeCheckout, CheckoutSessionRequest,
@@ -72,7 +73,7 @@ async def my_bookings(user: dict = _current_user()):
 
 
 class ProfileUpdate(BaseModel):
-    phone: str = Field(..., min_length=7, max_length=40)
+    phone: Phone = Field(..., min_length=7, max_length=40)
     address: str = Field(..., min_length=3, max_length=300)
     city: str = Field(..., min_length=2, max_length=100)
     country: str = Field(..., min_length=2, max_length=100)

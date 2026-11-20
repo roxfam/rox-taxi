@@ -14,6 +14,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
+from phone_utils import Phone
 
 router = APIRouter()
 _db = None
@@ -174,7 +175,7 @@ async def del_bundle(bid: str, _=Depends(_admin)):
 class BundleBookIn(BaseModel):
     customer_name: str = Field(..., min_length=2, max_length=80)
     customer_email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$", max_length=120)
-    customer_phone: str = Field(..., min_length=7, max_length=24)
+    customer_phone: Phone = Field(..., min_length=7, max_length=24)
     booking_date: str = Field("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
     pickup_location: str = Field("", max_length=120)
     cruise_ship: str = Field("", max_length=60)
@@ -287,7 +288,7 @@ class GiftScheduleIn(BaseModel):
     date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
     time: str = Field(..., pattern=r"^\d{2}:\d{2}$")
     pickup_location: str = Field(..., min_length=2, max_length=120)
-    phone: str = Field(..., min_length=7, max_length=24)
+    phone: Phone = Field(..., min_length=7, max_length=24)
     cruise_ship: str = Field("", max_length=60)
 
 

@@ -1027,6 +1027,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Tours: luggage fields hidden in admin dialog; new "Tour drop-off time" (dropoff_time) saved on manual bookings/quotes/catalog quotes → shown in QuoteView, BookingDetailModal, notification summary.
 - Driver trip sheet (send-to-driver + night/1h/15m nudges) now includes "Drop-off time: 3:30 PM" when the booking has dropoff_time.
 
+## 2026-11-20 — Phone auto-formatting
+- backend/phone_utils.py normalize_phone + `Phone` pydantic type (7 digits → +1242…, 10 digits → +1…, 00 → +, keeps +country). Applied to booking, manual booking, quotes/day-of, group, cable beach, gift card, contact, customer profile, owner SMS, driver dispatch models, and inside send_sms (covers old stored numbers).
+- frontend/src/lib/phone.js mirror; formats on blur in admin New booking, Send to driver, profile; BookingFlow normalizes on submit.
+
+
 
 
 - Old conflicting texts fixed (BookingFlow 48h/15%, About, Home, GroupsBook). Guest cancel credit = (total − processing fee) × credit %.

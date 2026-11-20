@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Header, Request, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from phone_utils import Phone
 
 import secrets_store
 
@@ -340,7 +341,7 @@ class SmsReply(BaseModel):
 class BookingEdit(BaseModel):
     customer_name: Optional[str] = Field(None, max_length=120)
     customer_email: Optional[str] = Field(None, max_length=200)
-    customer_phone: Optional[str] = Field(None, max_length=40)
+    customer_phone: Optional[Phone] = Field(None, max_length=40)
     booking_date: Optional[str] = Field(None, max_length=40)
     pickup_location: Optional[str] = Field(None, max_length=300)
     dropoff_location: Optional[str] = Field(None, max_length=300)
@@ -432,7 +433,7 @@ class ManualBooking(BaseModel):
     item_name: str = Field(..., min_length=1, max_length=200)
     customer_name: str = Field(..., min_length=1, max_length=120)
     customer_email: Optional[str] = Field(None, max_length=200)
-    customer_phone: Optional[str] = Field(None, max_length=40)
+    customer_phone: Optional[Phone] = Field(None, max_length=40)
     booking_date: str = Field(..., max_length=40)
     pickup_location: Optional[str] = Field(None, max_length=300)
     dropoff_location: Optional[str] = Field(None, max_length=300)

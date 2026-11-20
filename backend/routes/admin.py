@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Depends, Header, UploadFile, File,
 from fastapi import Path as FPath  # alias to avoid clash with pathlib.Path imported below
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from phone_utils import Phone
 
 
 # ---- shared state populated by server.py ------------------------------------
@@ -2740,7 +2741,7 @@ async def admin_delivery_alerts_check_now(_: str = Depends(_admin_dep)):
 
 # ─── Owner SMS recipients — per-phone subscriptions + quiet-hours ───────
 class OwnerSmsRecipient(BaseModel):
-    phone: str = Field(..., min_length=6, max_length=20)
+    phone: Phone = Field(..., min_length=6, max_length=20)
     label: Optional[str] = Field(None, max_length=60)
     subscriptions: List[str] = Field(default_factory=lambda: ["*"])
     quiet_hours: bool = True

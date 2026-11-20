@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Car, X } from "lucide-react";
+import { normalizePhone } from "../../lib/phone";
 import { api } from "../../lib/api";
 
 export default function SendToDriverDialog({ booking, onClose, onDone }) {
@@ -46,7 +47,7 @@ export default function SendToDriverDialog({ booking, onClose, onDone }) {
         )}
         <div className="grid grid-cols-2 gap-2">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Driver name" className="px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm" data-testid="send-driver-name" />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Driver phone (+1242…)" className="px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm" data-testid="send-driver-phone" />
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={() => setPhone(normalizePhone(phone))} placeholder="Driver phone (+1242…)" className="px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm" data-testid="send-driver-phone" />
         </div>
         <button type="button" onClick={send} disabled={busy} className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#0369A1] text-white py-3 text-sm font-bold disabled:opacity-60" data-testid="send-driver-submit">
           <Car className="w-4 h-4" /> {busy ? "Sending…" : phone ? "Text trip to driver" : "Send to admin number"}

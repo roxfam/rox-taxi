@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
+from phone_utils import Phone
 
 NASSAU = ZoneInfo("America/Nassau")
 ACTIVE = ["confirmed", "driver_assigned", "en_route"]
@@ -73,7 +74,7 @@ async def _deliver(b: dict, body: str) -> dict:
 
 class SendToDriver(BaseModel):
     driver_name: Optional[str] = Field(None, max_length=64)
-    driver_phone: Optional[str] = Field(None, max_length=32)
+    driver_phone: Optional[Phone] = Field(None, max_length=32)
 
 
 @router.get("/admin/drivers")

@@ -268,6 +268,8 @@ def send_sms(to_number: str, body: str) -> dict:
         return {"sent": False, "provider": "twilio", "error": "Twilio not configured"}
     try:
         from twilio.rest import Client
+        from phone_utils import normalize_phone  # noqa: PLC0415
+        to_number = normalize_phone(to_number)
         client = Client(sid, token)
         client.messages.create(from_=from_num, to=to_number, body=body)
         return {"sent": True, "provider": "twilio", "error": None}

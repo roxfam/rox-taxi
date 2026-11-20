@@ -1,4 +1,5 @@
 import { Phone, MapPin, Building2, Globe, Hotel, CalendarDays, Megaphone } from "lucide-react";
+import { normalizePhone } from "../lib/phone";
 
 const COUNTRIES = ["United States", "Canada", "The Bahamas", "United Kingdom", "Germany", "France", "Italy", "Spain", "Netherlands", "Brazil", "Mexico", "Jamaica", "Australia", "Other"];
 const HEARD = ["Google search", "Instagram", "Facebook", "TikTok", "Friend or family", "Hotel or cruise staff", "TripAdvisor", "Returning guest", "Other"];
@@ -22,7 +23,7 @@ export default function ProfileFields({ value, onChange, showOptional = true }) 
   return (
     <div className="space-y-5" data-testid="profile-fields">
       <Row icon={Phone} label="Mobile phone *">
-        <input required type="tel" autoComplete="tel" value={value.phone} onChange={set("phone")} placeholder="+1 242 555 0123" className={cls} data-testid="profile-phone" />
+        <input required type="tel" autoComplete="tel" value={value.phone} onChange={set("phone")} onBlur={() => onChange({ ...value, phone: normalizePhone(value.phone) })} placeholder="+1 242 555 0123" className={cls} data-testid="profile-phone" />
       </Row>
       <Row icon={MapPin} label="Street address *">
         <input required autoComplete="street-address" value={value.address} onChange={set("address")} placeholder="123 Bay Street" className={cls} data-testid="profile-address" />

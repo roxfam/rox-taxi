@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, X } from "lucide-react";
+import { normalizePhone } from "../../lib/phone";
 import { api, money } from "../../lib/api";
 
 const SERVICES = [
@@ -302,7 +303,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
           )}
           <Field label="Guest name"><input value={f.customer_name} onChange={set("customer_name")} className={input} required data-testid="new-booking-name" /></Field>
           <Field label="Email"><input type="email" value={f.customer_email} onChange={set("customer_email")} className={input} data-testid="new-booking-email" /></Field>
-          <Field label="Phone"><input value={f.customer_phone} onChange={set("customer_phone")} className={input} data-testid="new-booking-phone" /></Field>
+          <Field label="Phone"><input value={f.customer_phone} onChange={set("customer_phone")} onBlur={() => setF((x) => ({ ...x, customer_phone: normalizePhone(x.customer_phone) }))} placeholder="+1 242 555 0123" className={input} data-testid="new-booking-phone" /></Field>
           <Field label="Date & time"><input type="datetime-local" value={f.booking_date} onChange={set("booking_date")} className={input} required data-testid="new-booking-date" /></Field>
           <Field label="Pickup"><LocationSelect value={f.pickup_location} onChange={(v) => setF((x) => ({ ...x, pickup_location: v }))} places={places} testid="new-booking-pickup" /></Field>
           <Field label="Drop-off"><LocationSelect value={f.dropoff_location} onChange={(v) => setF((x) => ({ ...x, dropoff_location: v }))} places={places} testid="new-booking-dropoff" /></Field>
