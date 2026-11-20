@@ -34,7 +34,7 @@ export default function SendToDriverDialog({ booking, onClose, onDone }) {
           </div>
           <button type="button" onClick={onClose} className="text-[#64748B]" data-testid="send-driver-close"><X className="w-5 h-5" /></button>
         </div>
-        <p className="text-xs text-[#64748B]">The driver gets the guest name and phone, pickup time, route, passengers, bags, baby seats, flight and notes. Prices and payments are never included. Reminders go out the night before (8 pm), 1 hour and 15 minutes before pickup. With no driver picked, everything goes to your admin number.</p>
+        <p className="text-xs text-[#64748B]">The driver gets the guest name and phone, pickup time, tour drop-off time, route, passengers, bags, baby seats, flight and notes. Prices and payments are never included. Reminders go out the night before (8 pm), 1 hour and 15 minutes before pickup. With no driver picked, everything goes to your admin number.</p>
         {drivers.length > 0 && (
           <div className="flex flex-wrap gap-2" data-testid="send-driver-roster">
             {drivers.map((d) => (

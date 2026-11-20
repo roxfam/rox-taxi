@@ -1025,6 +1025,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 ## 2026-11-20 — Admin "No VAT" + tour drop-off time
 - NewBookingDialog: "No VAT on this quote / booking" checkbox (non-processing services). Backend: ManualBooking.no_vat, manual quote payload no_vat, AdminQuote.no_vat (stored on quote, honored on re-price + conversion via fees.NO_VAT contextvar). Guests can't set it.
 - Tours: luggage fields hidden in admin dialog; new "Tour drop-off time" (dropoff_time) saved on manual bookings/quotes/catalog quotes → shown in QuoteView, BookingDetailModal, notification summary.
+- Driver trip sheet (send-to-driver + night/1h/15m nudges) now includes "Drop-off time: 3:30 PM" when the booking has dropoff_time.
+
 
 
 - Old conflicting texts fixed (BookingFlow 48h/15%, About, Home, GroupsBook). Guest cancel credit = (total − processing fee) × credit %.
