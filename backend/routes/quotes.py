@@ -175,13 +175,21 @@ async def admin_cancel_quote(qid: str, admin=Depends(_admin_dep)):
 
 @router.post("/admin/quotes/{qid}/send-link")
 async def admin_send_quote_link(qid: str, admin=Depends(_admin_dep)):
-    """Text + email the guest the quote link, where they convert it to an invoice and pay by card."""
+    """Text + email (re-send) the guest the quote link + PDF. Expired quotes are re-opened for 48h."""
     q = await _get(qid)
-    if _status(q) != "open":
-        raise HTTPException(400, "Only open quotes can be sent")
+    st = _status(q)
+    if st not in ("open", "expired") or q.get("status") == "booking":
+        raise HTTPException(400, "Only open or expired quotes can be sent")
+    if st == "expired":
+        exp = datetime.now(timezone.utc) + timedelta(hours=VALID_HOURS)
+        reopen = {"expires_at": exp.isoformat(), "status": "open",
+                  "expires_label": exp.astimezone(timezone(timedelta(hours=-4))).strftime("%b %d, %Y %I:%M %p") + " Nassau time"}
+        await _db.quotes.update_one({"id": q["id"]}, {"$set": reopen})
+        q.update(reopen)
     from notifications import send_sms, send_email  # noqa: PLC0415
     from routes.payment_digest import _site_url  # noqa: PLC0415
     link = f"{_site_url()}/quote/{q['id']}"
+    pdf = f"{_site_url()}/api/quotes/{q['id']}/pdf"
     first = (q.get("customer_name") or "there").split(" ")[0]
     out = {"link": link, "text": None, "email": None}
     if q.get("customer_phone"):
@@ -189,7 +197,8 @@ async def admin_send_quote_link(qid: str, admin=Depends(_admin_dep)):
                                               f"Hi {first}, it's Rox Taxi. Your quote {q['id']} for {q['item_name']} is ${q['total']:.2f}. Tap to pay online: {link}")
     if q.get("customer_email"):
         html = (f"<p>Hi {first},</p><p>Your quote <b>{q['id']}</b> for {q['item_name']} is <b>${q['total']:.2f}</b>.</p>"
-                f"<p><a href='{link}' style='display:inline-block;padding:12px 20px;background:#E86A3C;color:#fff;border-radius:999px;text-decoration:none'>View quote &amp; pay</a></p>")
+                f"<p><a href='{link}' style='display:inline-block;padding:12px 20px;background:#E86A3C;color:#fff;border-radius:999px;text-decoration:none'>View quote &amp; pay</a></p>"
+                f"<p style='font-size:13px'><a href='{pdf}'>Download quote PDF</a> · valid until {q.get('expires_label', '')}</p>")
         out["email"] = await asyncio.to_thread(send_email, q["customer_email"], f"Your Rox quote {q['id']} — pay online", html)
     await _db.quotes.update_one({"id": q["id"]}, {"$set": {"link_sent_at": _now_iso()}})
     return out
@@ -418,8 +427,15 @@ async def admin_edit_quote(qid: str, body: dict, request: Request, admin=Depends
     q = await _get(qid)
     if _status(q) in ("booked", "cancelled") or q.get("status") == "booking":
         raise HTTPException(400, "Only open or expired quotes can be edited")
-    if q.get("kind") not in ("manual", "booking"):
+    if q.get("kind") not in ("manual", "booking", "cable_beach"):
         raise HTTPException(400, "This quote type can't be edited — create a new one")
+    if q["kind"] == "cable_beach":
+        from phone_utils import normalize_phone as _np  # noqa: PLC0415
+        ch = {k: v for k, v in body.items() if k in ("customer_name", "customer_email", "customer_phone", "notes")}
+        if ch.get("customer_phone"):
+            ch["customer_phone"] = _np(ch["customer_phone"])
+        await _db.quotes.update_one({"id": q["id"]}, {"$set": {**ch, "updated_at": _now_iso(), "edited_by": admin}})
+        return {**q, **ch, "status": _status(q)}
     ch = {k: v for k, v in body.items() if k in EDITABLE}
     p = {**q["payload"]}
     from phone_utils import normalize_phone  # noqa: PLC0415

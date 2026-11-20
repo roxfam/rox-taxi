@@ -14,11 +14,11 @@ function QuoteActions({ q, onChanged }) {
     try { const { data } = await api.post(path); toast.success(ok(data)); onChanged(); }
     catch (e) { toast.error(e?.response?.data?.detail || "Something went wrong"); } finally { setBusy(false); }
   };
-  if (q.status !== "open") return null;
-  const sent = (d) => `Pay link sent by ${[d.email?.sent && "email", d.text?.sent && "text"].filter(Boolean).join(" + ") || "nothing (check email/SMS settings)"}`;
+  if (!["open", "expired"].includes(q.status)) return null;
+  const sent = (d) => `Quote sent by ${[d.email?.sent && "email", d.text?.sent && "text"].filter(Boolean).join(" + ") || "nothing (check email/SMS settings)"}`;
   return (
     <div className="inline-flex gap-2">
-      <button type="button" disabled={busy} onClick={() => act(`/admin/quotes/${q.id}/send-link`, sent)} className="underline text-[#E86A3C] font-semibold" data-testid={`admin-quote-send-link-${q.id}`}>Send pay link</button>
+      <button type="button" disabled={busy} onClick={() => act(`/admin/quotes/${q.id}/send-link`, sent, q.status === "expired" ? `Re-open quote ${q.id} for 48 hours and resend it?` : null)} className="underline text-[#E86A3C] font-semibold" data-testid={`admin-quote-send-link-${q.id}`}>Resend quote</button>
       <button type="button" disabled={busy} onClick={() => act(`/admin/quotes/${q.id}/cancel`, () => `Quote ${q.id} cancelled`, `Cancel quote ${q.id}? The guest can no longer pay it.`)} className="underline text-[#DC2626]" data-testid={`admin-quote-cancel-${q.id}`}>Cancel</button>
     </div>
   );
@@ -55,7 +55,7 @@ export default function QuotesPanel() {
       </div>
       {editId && <EditQuoteDialog qid={editId} onClose={() => setEditId(null)} onSaved={() => { setEditId(null); load(); }} />}
       {shown.length === 0 ? <p className="text-xs text-[#64748B] mt-2">No quotes found.</p> : (
-        <div className="mt-3 overflow-x-auto max-h-[28rem]">
+        <div className="mt-3 overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="text-left text-[10px] uppercase tracking-widest text-[#64748B]">
               <tr><th className="py-1.5">Quote</th><th>Guest</th><th>Service</th><th>Trip date</th><th>Total</th><th>Status</th><th /></tr>
@@ -70,7 +70,8 @@ export default function QuotesPanel() {
                   <td className="mono">{money(q.total)}</td>
                   <td className={`font-semibold capitalize ${TONE[q.status] || ""}`}>{q.status}{q.booking_id ? ` · ${q.booking_id}` : ""}</td>
                   <td className="whitespace-nowrap">
-                    <button type="button" onClick={() => setEditId(q.id)} className="underline text-[#0B3B5C] font-semibold mr-2" data-testid={`admin-quote-edit-${q.id}`}>{["open", "expired"].includes(q.status) && q.kind !== "cable_beach" ? "View / Edit" : "View"}</button>
+                    <button type="button" onClick={() => setEditId(q.id)} className="underline text-[#0B3B5C] font-semibold mr-2" data-testid={`admin-quote-edit-${q.id}`}>{["open", "expired"].includes(q.status) ? "View / Edit" : "View"}</button>
+                    <a href={`${process.env.REACT_APP_BACKEND_URL}/api/quotes/${q.id}/pdf`} target="_blank" rel="noreferrer" className="underline text-[#0B3B5C] mr-2" data-testid={`admin-quote-pdf-${q.id}`}>PDF</a>
                     <QuoteActions q={q} onChanged={load} />
                   </td>
                 </tr>

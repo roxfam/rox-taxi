@@ -46,6 +46,7 @@ const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminManage = lazy(() => import("./pages/AdminManage"));
 const AdminGroups = lazy(() => import("./pages/AdminGroups"));
+const AdminQuotes = lazy(() => import("./pages/AdminQuotes"));
 const MyBookings = lazy(() => import("./pages/MyBookings"));
 const Login = lazy(() => import("./pages/Login"));
 const Signup = lazy(() => import("./pages/Signup"));
@@ -187,6 +188,7 @@ function AppRouter() {
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/admin/manage" element={<AdminManage />} />
       <Route path="/admin/groups" element={<AdminGroups />} />
+      <Route path="/admin/quotes" element={<AdminQuotes />} />
     </Routes>
     </Suspense>
     </AppErrorBoundary>

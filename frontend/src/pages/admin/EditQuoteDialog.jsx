@@ -25,7 +25,8 @@ export default function EditQuoteDialog({ qid, onClose, onSaved }) {
   }, [qid, onClose]);
   if (!q || !f) return null;
   const manual = q.kind === "manual";
-  const editable = ["open", "expired"].includes(q.status) && ["manual", "booking"].includes(q.kind);
+  const cb = q.kind === "cable_beach";
+  const editable = ["open", "expired"].includes(q.status) && ["manual", "booking", "cable_beach"].includes(q.kind);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
 
   const save = async () => {
@@ -58,28 +59,30 @@ export default function EditQuoteDialog({ qid, onClose, onSaved }) {
           <div className="flex justify-between font-bold text-[#0B3B5C] pt-1 border-t border-[#E2E8F0]"><span>Total</span><span className="mono" data-testid="edit-quote-total">{money(q.total)}</span></div>
         </div>
         {!editable ? (
-          <p className="text-xs text-[#94a3b8]" data-testid="edit-quote-readonly">This quote is {q.status === "open" || q.status === "expired" ? "a Cable Beach quote" : q.status} and can only be viewed.</p>
+          <p className="text-xs text-[#94a3b8]" data-testid="edit-quote-readonly">This quote is {q.status}{q.status === "booked" ? " — edit its invoice from the Invoices list below or in Bookings" : ""} and can only be viewed.</p>
         ) : (
           <>
             <div className="grid sm:grid-cols-2 gap-3">
               <Field label="Guest name"><input value={f.customer_name} onChange={set("customer_name")} className={inp} data-testid="edit-quote-name" /></Field>
               <Field label="Email"><input value={f.customer_email} onChange={set("customer_email")} className={inp} data-testid="edit-quote-email" /></Field>
               <Field label="Phone"><input value={f.customer_phone} onChange={set("customer_phone")} onBlur={() => setF({ ...f, customer_phone: normalizePhone(f.customer_phone) })} className={inp} data-testid="edit-quote-phone" /></Field>
-              <Field label="Date & time"><input type="datetime-local" value={f.booking_date} onChange={set("booking_date")} className={inp} data-testid="edit-quote-date" /></Field>
-              <Field label="Pickup"><input value={f.pickup_location} onChange={set("pickup_location")} className={inp} data-testid="edit-quote-pickup" /></Field>
-              <Field label="Drop-off"><input value={f.dropoff_location} onChange={set("dropoff_location")} className={inp} data-testid="edit-quote-dropoff" /></Field>
-              <Field label="People"><input type="number" min="1" value={f.passengers} onChange={set("passengers")} className={inp} data-testid="edit-quote-pax" /></Field>
+              {!cb && <Field label="Date & time"><input type="datetime-local" value={f.booking_date} onChange={set("booking_date")} className={inp} data-testid="edit-quote-date" /></Field>}
+              {!cb && <Field label="Pickup"><input value={f.pickup_location} onChange={set("pickup_location")} className={inp} data-testid="edit-quote-pickup" /></Field>}
+              {!cb && <Field label="Drop-off"><input value={f.dropoff_location} onChange={set("dropoff_location")} className={inp} data-testid="edit-quote-dropoff" /></Field>}
+              {!cb && <Field label="People"><input type="number" min="1" value={f.passengers} onChange={set("passengers")} className={inp} data-testid="edit-quote-pax" /></Field>}
               {q.service_type === "tour" && <Field label="Tour drop-off time"><input type="time" value={f.dropoff_time} onChange={set("dropoff_time")} className={inp} data-testid="edit-quote-dropoff-time" /></Field>}
               {manual && <Field label="Trip name"><input value={f.item_name} onChange={set("item_name")} className={inp} data-testid="edit-quote-item" /></Field>}
               {manual && <Field label="Trip cost ($)"><input type="number" min="0" step="0.01" value={f.trip_cost} onChange={set("trip_cost")} className={inp} data-testid="edit-quote-cost" /></Field>}
               {manual && <Field label="Deposit %"><input type="number" min="0" max="90" value={f.deposit_pct} onChange={set("deposit_pct")} className={inp} data-testid="edit-quote-deposit" /></Field>}
-              <Field label="Gratuity ($)"><input type="number" min="0" step="0.01" value={f.tip_amount} onChange={set("tip_amount")} className={inp} data-testid="edit-quote-tip" /></Field>
+              {!cb && <Field label="Gratuity ($)"><input type="number" min="0" step="0.01" value={f.tip_amount} onChange={set("tip_amount")} className={inp} data-testid="edit-quote-tip" /></Field>}
             </div>
+            {cb ? <p className="text-[11px] text-[#64748B]">Cable Beach quotes: only guest details can change here. Create a new quote to change the price.</p> : (
             <div className="flex flex-wrap gap-4 text-sm text-[#0B3B5C]">
               {manual && <label className="flex items-center gap-2"><input type="checkbox" checked={f.per_person} onChange={set("per_person")} data-testid="edit-quote-per-person" />Price per person</label>}
               <label className="flex items-center gap-2"><input type="checkbox" checked={f.no_vat} onChange={set("no_vat")} data-testid="edit-quote-no-vat" />No VAT</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={f.processing_fee_on ?? (q.lines || []).some((l) => /processing/i.test(l.label))} onChange={(e) => setF({ ...f, processing_fee_on: e.target.checked })} data-testid="edit-quote-processing" />Processing fee</label>
             </div>
+            )}
             <Field label="Notes"><textarea value={f.notes} onChange={set("notes")} rows={2} className={inp} data-testid="edit-quote-notes" /></Field>
             <p className="text-[11px] text-[#64748B]">Saving re-prices the quote and gives it another 48 hours. The guest&apos;s quote link stays the same.</p>
             <button type="button" onClick={save} disabled={busy} className="w-full rounded-full bg-[#0B3B5C] text-white py-2.5 text-sm font-bold disabled:opacity-60" data-testid="edit-quote-save">{busy ? "Saving\u2026" : "Save quote"}</button>

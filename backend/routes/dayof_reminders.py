@@ -348,6 +348,8 @@ class BookingEdit(BaseModel):
     passengers: Optional[int] = Field(None, ge=1, le=60)
     notes: Optional[str] = Field(None, max_length=2000)
     total: Optional[float] = Field(None, ge=0, le=100000)
+    item_name: Optional[str] = Field(None, max_length=200)
+    dropoff_time: Optional[str] = Field(None, max_length=10)
     notify_guest: bool = True
 
 

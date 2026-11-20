@@ -4,6 +4,7 @@ import { Save, X } from "lucide-react";
 import { api } from "../../lib/api";
 
 const FIELDS = [
+  { key: "item_name", label: "Service / invoice item" },
   { key: "customer_name", label: "Guest name" },
   { key: "customer_email", label: "Email", type: "email" },
   { key: "customer_phone", label: "Phone" },
@@ -12,6 +13,7 @@ const FIELDS = [
   { key: "dropoff_location", label: "Drop-off" },
   { key: "passengers", label: "Passengers", type: "number" },
   { key: "total", label: "Total ($)", type: "number" },
+  { key: "dropoff_time", label: "Tour drop-off time", type: "time" },
 ];
 
 const toLocalInput = (iso) => (iso ? String(iso).replace("Z", "").slice(0, 16) : "");
@@ -20,6 +22,8 @@ export default function BookingEditForm({ booking, onSaved, onCancel }) {
   const [form, setForm] = useState({
     customer_name: booking.customer_name || "",
     customer_email: booking.customer_email || "",
+    item_name: booking.item_name || "",
+    dropoff_time: booking.dropoff_time || "",
     customer_phone: booking.customer_phone || "",
     booking_date: toLocalInput(booking.booking_date),
     pickup_location: booking.pickup_location || "",
