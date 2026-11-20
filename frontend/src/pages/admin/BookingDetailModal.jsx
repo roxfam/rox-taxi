@@ -222,6 +222,7 @@ export default function BookingDetailModal({ booking: bookingProp, initialEdit =
             <InfoCard title="Route">
               {booking.pickup_location && <Row icon={MapPin} label="Pickup">{booking.pickup_location}</Row>}
               {booking.dropoff_location && <Row icon={MapPin} label="Drop">{booking.dropoff_location}</Row>}
+              {booking.dropoff_time && <Row icon={MapPin} label="Drop-off time">{booking.dropoff_time}</Row>}
             </InfoCard>
           )}
 

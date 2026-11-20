@@ -488,6 +488,8 @@ def _booking_details_for_owner(booking: dict) -> str:
         lines.append(f"Pickup  : {booking['pickup_location']}")
     if booking.get("dropoff_location"):
         lines.append(f"Dropoff : {booking['dropoff_location']}")
+    if booking.get("dropoff_time"):
+        lines.append(f"Drop-off time : {booking['dropoff_time']}")
     for n, lg in enumerate(booking.get("trip_legs") or [], 1):
         lines.append(f"Leg {n}   : {lg.get('from')} → {lg.get('to')} ${float(lg.get('fare') or 0):.2f}")
     if booking.get("car_seats"):

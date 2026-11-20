@@ -155,7 +155,11 @@ async def quote_people(qid: str, req: QuotePeople, request: Request):
         raise HTTPException(400, "Enter the number of people")
     p.pop("processing_fee", None)
     p.pop("group_discount", None)
-    fields = await _price(p, request)
+    tok = fees_module.NO_VAT.set(bool(q.get("no_vat")))
+    try:
+        fields = await _price(p, request)
+    finally:
+        fees_module.NO_VAT.reset(tok)
     await _db.quotes.update_one({"id": q["id"]}, {"$set": {**fields, "payload": p, "updated_at": _now_iso()}})
     return _public({**q, **fields})
 
@@ -208,7 +212,7 @@ def _manual_fields(p: dict, rates: dict) -> dict:
               ("Paradise Island bridge toll pass", 2.0 if p.get("bridge_toll") and p.get("service_type") == "taxi" else 0.0)]
     lines += [{"label": k, "amount": v} for k, v in extras if v]
     sub = round(sum(x["amount"] for x in lines), 2)
-    fz = fees_module.compute_fees(sub, rates["processing"], rates)
+    fz = fees_module.compute_fees(sub, rates["processing"], rates, no_vat=bool(p.get("no_vat")))
     lines += fees_module.fee_line(fz)
     total = round(sub + fz["vat_amount"] + fz["processing_fee"], 2)
     p["total"] = total
@@ -219,6 +223,7 @@ def _manual_fields(p: dict, rates: dict) -> dict:
             "customer_phone": p.get("customer_phone"), "booking_date": p.get("booking_date"),
             "pickup_location": p.get("pickup_location"), "dropoff_location": p.get("dropoff_location"),
             "stops": p.get("stops") or [], "trip_legs": p.get("trip_legs") or [], "passengers": pax,
+            "dropoff_time": p.get("dropoff_time") or None, "no_vat": bool(p.get("no_vat")),
             "per_person": per, "trip_cost": cost, "lines": lines, "total": total,
             "deposit_pct": dep_pct, "deposit_due": deposit, "balance_later": round(total - deposit, 2) if deposit else 0.0}
 
@@ -239,11 +244,19 @@ async def admin_manual_quote(payload: dict, admin=Depends(_admin_dep)):
 class AdminQuote(BaseModel):
     payload: dict
     text_guest: bool = False
+    no_vat: bool = False
+    dropoff_time: Optional[str] = Field(None, max_length=10)
 
 
 @router.post("/admin/quotes")
 async def admin_create_quote(req: AdminQuote, request: Request, admin=Depends(_admin_dep)):
-    q = await _save_quote(req.payload, "booking", {**await _price(req.payload, request), "created_by": admin})
+    tok = fees_module.NO_VAT.set(req.no_vat)
+    try:
+        fields = await _price(req.payload, request)
+    finally:
+        fees_module.NO_VAT.reset(tok)
+    q = await _save_quote(req.payload, "booking", {**fields, "created_by": admin, "no_vat": req.no_vat,
+                                                    "dropoff_time": req.dropoff_time or None})
     return q
 
 
@@ -342,13 +355,19 @@ async def book_quote(qid: str, request: Request):
             from routes.dayof_reminders import ManualBooking, admin_create_booking  # noqa: PLC0415
             b = (await admin_create_booking(ManualBooking(**q["payload"]), q.get("created_by") or "quote"))["booking"]
         else:
-            b = await _create_booking(_model(q["payload"], False), request)
+            tok = fees_module.NO_VAT.set(bool(q.get("no_vat")))
+            try:
+                b = await _create_booking(_model(q["payload"], False), request)
+            finally:
+                fees_module.NO_VAT.reset(tok)
     except Exception:
         await _db.quotes.update_one({"id": q["id"]}, {"$set": {"status": "open"}})
         raise
     await _db.quotes.update_one({"id": q["id"]}, {"$set": {"status": "booked", "booking_id": b["id"], "booked_at": _now_iso()}})
     invoice_no = "INV-" + q["id"].split("-", 1)[-1]
     inv = {"quote_id": q["id"], "invoice_number": invoice_no, "invoiced_at": _now_iso()}
+    if q.get("dropoff_time"):
+        inv["dropoff_time"] = q["dropoff_time"]
     if q.get("deposit_due"):
         inv.update({"is_group_booking": True, "group_pay_mode": "deposit", "balance_due": q["balance_later"],
                     "quote_deposit": q["deposit_due"]})

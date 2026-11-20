@@ -1,6 +1,9 @@
 """Processing fee for taxi + city tours, VAT for everything else (rates editable in admin)."""
+import contextvars
+
 DEFAULT_PROCESSING_PCT = 5.0
 DEFAULT_VAT_PCT = 10.0
+NO_VAT = contextvars.ContextVar("no_vat", default=False)  # set only by admin-created quotes/bookings
 
 
 async def fee_rates(db) -> dict:
@@ -22,11 +25,11 @@ async def is_processing(db, service_type: str, item_id: str = "", item_name: str
     return "city tour" in (item_name or "").lower()
 
 
-def compute_fees(subtotal: float, processing: bool, rates: dict) -> dict:
+def compute_fees(subtotal: float, processing: bool, rates: dict, no_vat: bool = False) -> dict:
     if processing:
         pct = rates["processing_pct"]
         return {"vat_amount": 0.0, "vat_pct": 0.0, "processing_fee": round(subtotal * pct / 100, 2), "processing_fee_pct": pct / 100}
-    pct = rates["vat_pct"]
+    pct = 0.0 if (no_vat or NO_VAT.get()) else rates["vat_pct"]
     return {"vat_amount": round(subtotal * pct / 100, 2), "vat_pct": pct / 100, "processing_fee": 0.0, "processing_fee_pct": 0.0}
 
 

@@ -1022,6 +1022,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - New public page /refund-policy (8 sections: payments final, 24h+ = Rox credit minus processing fee (12 months, no cash value), <24h/no-show/30+ min late = nothing, free reschedule, non-refundable fees/tips/gift cards/deposits, our cancellation = new date or full credit, rentals, chargebacks). Linked in footer, Track page and checkout ("By paying you agree").
 - Reworded /refund-policy, checkout note, About and /api/fees policy text to be professional and guest-friendly ("Rox travel credit", at-a-glance cards); same protective terms.
 
+## 2026-11-20 — Admin "No VAT" + tour drop-off time
+- NewBookingDialog: "No VAT on this quote / booking" checkbox (non-processing services). Backend: ManualBooking.no_vat, manual quote payload no_vat, AdminQuote.no_vat (stored on quote, honored on re-price + conversion via fees.NO_VAT contextvar). Guests can't set it.
+- Tours: luggage fields hidden in admin dialog; new "Tour drop-off time" (dropoff_time) saved on manual bookings/quotes/catalog quotes → shown in QuoteView, BookingDetailModal, notification summary.
+
+
 - Old conflicting texts fixed (BookingFlow 48h/15%, About, Home, GroupsBook). Guest cancel credit = (total − processing fee) × credit %.
 
 

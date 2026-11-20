@@ -136,6 +136,7 @@ export default function QuoteView() {
           <Row k="Pickup" v={q.pickup_location} />
           {(q.stops || []).map((s, n) => <Row key={`${s}-${n}`} k={`Stop ${n + 1}`} v={s} />)}
           <Row k="Drop-off" v={q.dropoff_location} />
+          {q.dropoff_time && <Row k="Drop-off time" v={q.dropoff_time} />}
           <Row k={q.service_type === "rental" ? "Rental days" : "Guests"} v={String(q.service_type === "rental" ? q.days : q.passengers || "")} />
           <RouteMap q={q} />
           {q.status === "open" && (q.kind === "booking" || (q.kind === "manual" && q.per_person)) && <PeopleEditor key={q.total} q={q} onChange={setQ} />}

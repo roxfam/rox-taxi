@@ -448,6 +448,8 @@ class ManualBooking(BaseModel):
     total: float = Field(..., ge=0, le=100000)
     trip_cost: Optional[float] = Field(None, ge=0, le=100000)
     per_person: bool = False
+    no_vat: bool = False
+    dropoff_time: Optional[str] = Field(None, max_length=10)
     payment: str = Field("unpaid", pattern="^(unpaid|cash|zelle|card_offline)$")
     send_confirmation: bool = True
     send_pay_link: bool = False
@@ -512,7 +514,7 @@ async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_d
     import fees as fees_module  # noqa: PLC0415
     fz = fees_module.compute_fees(round(req.total, 2),
                                   await fees_module.is_processing(_db, req.service_type, req.item_id or "", req.item_name or ""),
-                                  await fees_module.fee_rates(_db))
+                                  await fees_module.fee_rates(_db), no_vat=req.no_vat)
     doc.update({**fz, "subtotal_before_tax": round(req.total, 2),
                 "total": round(req.total + fz["vat_amount"] + fz["processing_fee"], 2)})
     doc.update({

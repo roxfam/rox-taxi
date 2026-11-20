@@ -16,6 +16,7 @@ const EMPTY = {
   booking_date: "", pickup_location: "", dropoff_location: "", passengers: 1, flight_number: "", notes: "",
   extra_luggage: 0, luggage_price: 3, car_seats: 0, bridge_toll: false, stops: [], trip_legs: [],
   trip_cost: "", per_person: false, deposit_pct: "", total: "", payment: "unpaid", send_confirmation: true, send_pay_link: true, text_pay_link: true,
+  no_vat: false, dropoff_time: "",
 };
 
 const input = "w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#0B3B5C]";
@@ -61,7 +62,7 @@ const fromBooking = (b) => ({
   bridge_toll: Number(b.bridge_toll_fee || 0) > 0,
 });
 
-function FeeNote({ f, items }) {
+function FeeNote({ f, setF, items }) {
   const [rates, setRates] = useState({ p: 5, v: 10 });
   useEffect(() => {
     api.get("/site-config").then((r) => setRates({ p: Number(r.data.processing_fee_pct ?? 5), v: Number(r.data.vat_pct ?? 10) })).catch(() => {});
@@ -69,11 +70,21 @@ function FeeNote({ f, items }) {
   const t = Number(f.total) || 0;
   const it = (items || []).find((x) => x.id === f.item_id);
   const proc = f.service_type === "taxi" || (f.service_type === "tour" && (it?.city_tour ?? /city tour/i.test(f.item_name || "")));
-  const pct = proc ? rates.p : rates.v;
-  if (!t || !pct) return null;
+  const pct = proc ? rates.p : f.no_vat ? 0 : rates.v;
   return (
-    <div className="text-[11px] text-[#64748B] mt-1" data-testid="new-booking-fee-note">
-      + {proc ? "processing fee" : "VAT"} {pct}% ({money(t * pct / 100)}) · guest pays {money(t * (1 + pct / 100))}
+    <div className="mt-1 space-y-1">
+      {!proc && (
+        <label className="flex items-center gap-2 text-xs text-[#0B3B5C] font-normal" data-testid="new-booking-no-vat">
+          <input type="checkbox" checked={!!f.no_vat} onChange={(e) => setF((x) => ({ ...x, no_vat: e.target.checked }))} data-testid="new-booking-no-vat-checkbox" />
+          No VAT on this quote / booking
+        </label>
+      )}
+      {t > 0 && pct > 0 && (
+        <div className="text-[11px] text-[#64748B]" data-testid="new-booking-fee-note">
+          + {proc ? "processing fee" : "VAT"} {pct}% ({money(t * pct / 100)}) · guest pays {money(t * (1 + pct / 100))}
+        </div>
+      )}
+      {t > 0 && !proc && f.no_vat && <div className="text-[11px] text-[#047857]" data-testid="new-booking-no-vat-note">VAT removed · guest pays {money(t)}</div>}
     </div>
   );
 }
@@ -224,7 +235,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
         extra_luggage: Number(f.extra_luggage) || 0, car_seats: Number(f.car_seats) || 0, days: 1,
         notes: f.notes || null, payment_method: "stripe", tip_amount: 0,
       };
-      const { data } = await api.post("/admin/quotes", { payload, text_guest: !!f.customer_phone?.trim() });
+      const { data } = await api.post("/admin/quotes", { payload, text_guest: !!f.customer_phone?.trim(), no_vat: !!f.no_vat, dropoff_time: f.service_type === "tour" ? f.dropoff_time || null : null });
       toast.success(`Quote ${data.id} sent · ${money(data.total)}${data.text_sent ? " · texted" : ""}`);
       onClose();
     } catch (err) {
@@ -273,7 +284,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
         </div>
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Service">
-            <select value={f.service_type} onChange={(e) => setF((x) => ({ ...x, service_type: e.target.value, item_id: "", item_name: "" }))} className={input} data-testid="new-booking-service">
+            <select value={f.service_type} onChange={(e) => setF((x) => ({ ...x, service_type: e.target.value, item_id: "", item_name: "", extra_luggage: e.target.value === "tour" ? 0 : x.extra_luggage, dropoff_time: e.target.value === "tour" ? x.dropoff_time : "" }))} className={input} data-testid="new-booking-service">
               {SERVICES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
           </Field>
@@ -318,8 +329,14 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
           )}
           <Field label="Passengers"><input type="number" min="1" max="60" value={f.passengers} onChange={set("passengers")} className={input} data-testid="new-booking-passengers" /></Field>
           <Field label="Flight # (optional)"><input value={f.flight_number} onChange={set("flight_number")} className={input} data-testid="new-booking-flight" /></Field>
-          <Field label="Extra bags"><input type="number" min="0" max="30" value={f.extra_luggage} onChange={setLuggage("extra_luggage")} className={input} data-testid="new-booking-luggage-count" /></Field>
-          <Field label={`Price per bag ($)${luggageFee ? ` · luggage ${luggageFee.toFixed(2)}` : ""}`}><input type="number" min="0" step="0.5" value={f.luggage_price} onChange={setLuggage("luggage_price")} className={input} data-testid="new-booking-luggage-price" /></Field>
+          {f.service_type === "tour" ? (
+            <Field label="Tour drop-off time"><input type="time" value={f.dropoff_time} onChange={set("dropoff_time")} className={input} data-testid="new-booking-dropoff-time" /></Field>
+          ) : (
+            <>
+              <Field label="Extra bags"><input type="number" min="0" max="30" value={f.extra_luggage} onChange={setLuggage("extra_luggage")} className={input} data-testid="new-booking-luggage-count" /></Field>
+              <Field label={`Price per bag ($)${luggageFee ? ` · luggage ${luggageFee.toFixed(2)}` : ""}`}><input type="number" min="0" step="0.5" value={f.luggage_price} onChange={setLuggage("luggage_price")} className={input} data-testid="new-booking-luggage-price" /></Field>
+            </>
+          )}
           {f.service_type === "taxi" && <Field label="Baby car seats ($2 each)"><input type="number" min="0" max="4" value={f.car_seats} onChange={setSeats} className={input} data-testid="new-booking-car-seats" /></Field>}
           {f.service_type === "taxi" && (
             <label className="flex items-center gap-2 text-sm text-[#0B3B5C] self-end pb-2" data-testid="new-booking-bridge-toll">
@@ -345,7 +362,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
               )}
             </Field>
           )}
-          <Field label="Total before fee/VAT ($, includes luggage)"><input type="number" step="0.01" min="0" value={f.total} onChange={set("total")} className={input} required data-testid="new-booking-total" /><FeeNote f={f} items={items} /></Field>
+          <Field label="Total before fee/VAT ($, includes luggage)"><input type="number" step="0.01" min="0" value={f.total} onChange={set("total")} className={input} required data-testid="new-booking-total" /><FeeNote f={f} setF={setF} items={items} /></Field>
           <Field label="Payment">
             <select value={f.payment} onChange={set("payment")} className={input} data-testid="new-booking-payment">
               <option value="unpaid">Not paid yet (card)</option>
