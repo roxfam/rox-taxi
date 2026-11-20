@@ -1381,6 +1381,8 @@ class SiteConfigUpdate(BaseModel):
     online_discount_enabled: Optional[bool] = None
     online_discount_usd: Optional[float] = Field(None, ge=0, le=500)
     online_discount_min_usd: Optional[float] = Field(None, ge=0, le=5000)
+    processing_fee_pct: Optional[float] = Field(None, ge=0, le=30)
+    vat_pct: Optional[float] = Field(None, ge=0, le=30)
     zelle_email: Optional[str] = None
     zelle_phone: Optional[str] = None
     facebook_url: Optional[str] = None

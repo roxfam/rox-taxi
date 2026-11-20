@@ -705,8 +705,9 @@ async def cable_beach_quote(req: CableBeachQuoteRequest):
                 break
     subtotal = round(max(0.0, subtotal - combo_discount), 2)
 
-    vat = round(subtotal * 0.10, 2)
-    processing = round((subtotal + vat) * 0.05, 2)
+    import fees as fees_module  # noqa: PLC0415
+    vat = round(subtotal * (await fees_module.fee_rates(_db))["vat_pct"] / 100, 2)
+    processing = 0.0
     total = round(subtotal + vat + processing, 2)
 
     return {

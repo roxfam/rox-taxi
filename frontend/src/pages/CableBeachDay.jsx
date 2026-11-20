@@ -163,7 +163,7 @@ export default function CableBeachDay() {
         "@type": "Product",
         "@id": `${PAGE_CANONICAL}#product`,
         "name": "Toes in the Sandy Turquoise of Cable Beach, Nassau",
-        "description": "Beach day at Cable Beach (Goodman's Bay), Nassau. Reserved chair and umbrella per guest, optional cruise-port or hotel round-trip transfer, extra beach seats, lunch and drink add-ons. All fares include 10% VAT and 5% processing fee at checkout.",
+        "description": "Beach day at Cable Beach (Goodman's Bay), Nassau. Reserved chair and umbrella per guest, optional cruise-port or hotel round-trip transfer, extra beach seats, lunch and drink add-ons. All fares include 10% VAT at checkout.",
         "image": [`${SITE_URL}${HERO_IMAGE}`],
         "brand": { "@type": "Brand", "name": "Rox Taxi & Tours Bahamas" },
         "category": "Beach day package / Nassau excursion",
@@ -416,8 +416,8 @@ export default function CableBeachDay() {
               )}
               <div className="h-px bg-[#E2E8F0] my-2" />
               <Line label="Subtotal">{money(quote.subtotal)}</Line>
-              <Line label="VAT 10%">{money(quote.vat)}</Line>
-              <Line label="Processing 5%">{money(quote.processing_fee)}</Line>
+              <Line label="VAT">{money(quote.vat)}</Line>
+              {quote.processing_fee > 0 && <Line label="Processing fee">{money(quote.processing_fee)}</Line>}
             </div>
           )}
           <button onClick={book} disabled={!quote || quoting}

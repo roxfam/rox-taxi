@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError
 
+import fees as fees_module
+
 router = APIRouter()
 _db = _now_iso = _create_booking = _Booking = _require_admin = None
 VALID_HOURS = 48
@@ -136,7 +138,7 @@ async def quote_people(qid: str, req: QuotePeople, request: Request):
         if not req.passengers:
             raise HTTPException(400, "Enter the number of people")
         p = {**q["payload"], "passengers": req.passengers}
-        fields = _manual_fields(p)
+        fields = _manual_fields(p, await fees_module.fee_rates(_db))
         await _db.quotes.update_one({"id": q["id"]}, {"$set": {**fields, "payload": p, "updated_at": _now_iso()}})
         return _public({**q, **fields})
     p = dict(q["payload"])
@@ -189,7 +191,7 @@ async def admin_send_quote_link(qid: str, admin=Depends(_admin_dep)):
     return out
 
 
-def _manual_fields(p: dict) -> dict:
+def _manual_fields(p: dict, rates: dict) -> dict:
     """Admin-priced quote: trip cost (optionally × people) + luggage + baby seats + bridge toll."""
     pax = int(p.get("passengers") or 1)
     cost = float(p.get("trip_cost") or 0)
@@ -200,7 +202,10 @@ def _manual_fields(p: dict) -> dict:
               ("Baby car seats", round(int(p.get("car_seats") or 0) * 2.0, 2)),
               ("Paradise Island bridge toll pass", 2.0 if p.get("bridge_toll") and p.get("service_type") == "taxi" else 0.0)]
     lines += [{"label": k, "amount": v} for k, v in extras if v]
-    total = round(sum(x["amount"] for x in lines), 2)
+    sub = round(sum(x["amount"] for x in lines), 2)
+    fz = fees_module.compute_fees(sub, p.get("service_type") or "", p.get("item_name") or "", rates)
+    lines += fees_module.fee_line(fz)
+    total = round(sub + fz["vat_amount"] + fz["processing_fee"], 2)
     p["total"] = total
     dep_pct = max(0.0, min(90.0, float(p.get("deposit_pct") or 0)))
     deposit = round(total * dep_pct / 100, 2) if dep_pct else 0.0
@@ -223,7 +228,7 @@ async def admin_manual_quote(payload: dict, admin=Depends(_admin_dep)):
         raise HTTPException(422, e.errors()[0].get("msg", "Invalid quote")) from e
     if not p.get("trip_cost") or not (p.get("customer_email") or p.get("customer_phone")):
         raise HTTPException(400, "Enter the trip cost and the guest's email or phone")
-    return await _save_quote(p, "manual", {**_manual_fields(p), "created_by": admin})
+    return await _save_quote(p, "manual", {**_manual_fields(p, await fees_module.fee_rates(_db)), "created_by": admin})
 
 
 class AdminQuote(BaseModel):
@@ -240,7 +245,7 @@ async def admin_create_quote(req: AdminQuote, request: Request, admin=Depends(_a
 CB_LINES = [("base", "Beach day package (chairs + umbrella)"), ("extra_seats_total", "Extra seats"),
             ("transfer_total", "Taxi transfer"), ("menu_total", "Lunch & drinks"), ("sides_extra_total", "Extra sides"),
             ("water_sports_total", "Water sports"), ("combo_discount", "Combo discount"),
-            ("loyalty_discount", "Loyalty discount"), ("vat", "VAT 10%"), ("processing_fee", "Processing fee 5%")]
+            ("loyalty_discount", "Loyalty discount"), ("vat", "VAT"), ("processing_fee", "Processing fee")]
 
 
 def _cb_models(payload: dict):

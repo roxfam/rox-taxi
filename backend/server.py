@@ -3223,17 +3223,17 @@ async def create_booking(req: BookingCreate, request: Request):
         2,
     )
 
-    # ── Bahamas VAT (10%) — every order except taxi fares ─────
-    vat_amount = 0.0 if req.service_type == "taxi" else round(subtotal_before_tax * BAHAMAS_VAT_PCT, 2)
-
-    # ── Payment-processing fee (5%) — applied to every order ──────────
-    processing_fee = round((subtotal_before_tax + vat_amount) * PROCESSING_FEE_PCT, 2)
-
+    # ── Processing fee (taxi + city tours) or VAT (everything else) ─────
+    import fees as fees_module  # noqa: PLC0415
+    _fees = fees_module.compute_fees(subtotal_before_tax, req.service_type, req.item_name,
+                                     await fees_module.fee_rates(db))
+    vat_amount = _fees["vat_amount"]
+    processing_fee = _fees["processing_fee"]
     if vat_amount > 0:
         booking["vat_amount"] = vat_amount
-        booking["vat_pct"] = BAHAMAS_VAT_PCT
+        booking["vat_pct"] = _fees["vat_pct"]
     booking["processing_fee"] = processing_fee
-    booking["processing_fee_pct"] = PROCESSING_FEE_PCT
+    booking["processing_fee_pct"] = _fees["processing_fee_pct"]
     booking["subtotal_before_tax"] = subtotal_before_tax
 
     # Deposit + tip layered on AFTER VAT/processing so they aren't taxed
@@ -3456,13 +3456,13 @@ async def get_fees():
         ),
         "bahamas_vat_pct": BAHAMAS_VAT_PCT,
         "bahamas_vat_policy": (
-            f"{int(BAHAMAS_VAT_PCT*100)}% Bahamas VAT is added to every order except point-to-point taxi fares. "
-            "Deposits and driver tips are exempt."
+            f"{int(BAHAMAS_VAT_PCT*100)}% Bahamas VAT is added to tours, rentals and other services "
+            "(not taxi fares or city tours). Deposits and driver tips are exempt."
         ),
         "processing_fee_pct": PROCESSING_FEE_PCT,
         "processing_fee_policy": (
-            f"A {PROCESSING_FEE_PCT*100:g}% payment-processing fee is applied to every order to cover "
-            "credit-card and payout costs."
+            f"A {PROCESSING_FEE_PCT*100:g}% processing fee is added to taxi rides and city tours "
+            "(no VAT on those)."
         ),
         "additional_driver_fee_usd": ADDITIONAL_DRIVER_FEE_USD,
         "additional_driver_max": ADDITIONAL_DRIVER_MAX,

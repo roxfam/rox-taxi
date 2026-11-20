@@ -253,9 +253,9 @@ def build_receipt_pdf(booking: dict) -> bytes:
         if float(booking.get(_dk) or 0):
             amt_rows.append([_dl, f"-${float(booking[_dk]):,.2f}"])
     if vat_amount:
-        amt_rows.append(["Bahamas VAT (10%)", f"${vat_amount:,.2f}"])
+        amt_rows.append([f"Bahamas VAT ({float(booking.get('vat_pct') or 0.10) * 100:g}%)", f"${vat_amount:,.2f}"])
     if processing_fee:
-        amt_rows.append(["Processing fee (5%)", f"${processing_fee:,.2f}"])
+        amt_rows.append([f"Processing fee ({float(booking.get('processing_fee_pct') or 0.05) * 100:g}%)", f"${processing_fee:,.2f}"])
     if deposit:
         amt_rows.append(["Refundable rental deposit (hold)", f"${deposit:,.2f}"])
     if tip:

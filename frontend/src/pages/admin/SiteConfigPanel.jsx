@@ -240,6 +240,17 @@ export default function SiteConfigPanel() {  const [cfg, setCfg] = useState({ fa
           </div>
         </div>
 
+        <div className="pt-4 mt-4 border-t border-[#E2E8F0]" data-testid="fee-rate-settings">
+          <div className="text-xs uppercase tracking-widest text-[#64748B] font-semibold mb-1">Processing fee & VAT</div>
+          <div className="text-[11px] text-[#94a3b8] mb-3 leading-relaxed">
+            Taxi rides and city tours get the processing fee (no VAT). Every other tour, rental and service gets VAT. Applies to new bookings and quotes only. Click Save after changing.
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <F l="Processing fee % (taxi + city tours)" type="number" v={cfg.processing_fee_pct ?? 5} on={(v) => setCfg({ ...cfg, processing_fee_pct: v === "" ? null : Math.min(30, Math.max(0, Number(v))) })} testid="processing-fee-pct" />
+            <F l="VAT % (all other services)" type="number" v={cfg.vat_pct ?? 10} on={(v) => setCfg({ ...cfg, vat_pct: v === "" ? null : Math.min(30, Math.max(0, Number(v))) })} testid="vat-pct" />
+          </div>
+        </div>
+
         {/* ─── Warm-lead discount nudge (returning-visitor promo) ───
             Shown inside the chat panel when a visitor's session count is 3+.
             Toggle off to hide the promo card entirely; empty code = hidden too. */}

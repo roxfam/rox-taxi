@@ -147,8 +147,6 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const BABY_SEAT_FEE = 7;
   const BABY_SEAT_MAX = 3;
   const BABY_SEAT_FREE_AFTER_DAYS = 14;
-  const BAHAMAS_VAT_PCT = 0.10;
-  const PROCESSING_FEE_PCT = 0.05;
   const CAR_SEAT_FEE = 2;
   const [payMethod, setPayMethod] = useState("stripe");
   const [step, setStep] = useState(1); // 1=details, 2=payment, 3=zelle-confirmation
@@ -455,12 +453,13 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
     return subtotal * (pct / 100);
   })();
 
-  // ── Bahamas VAT (10%) — every order except taxi fares (matches backend) ──
-  const vatApplies = serviceType !== "taxi";
+  // Processing fee for taxi + city tours, VAT for everything else (matches backend fees.py)
+  const BAHAMAS_VAT_PCT = Number(siteCfg.vat_pct ?? 10) / 100;
+  const PROCESSING_FEE_PCT = Number(siteCfg.processing_fee_pct ?? 5) / 100;
+  const processingKind = serviceType === "taxi" || (serviceType === "tour" && /city tour/i.test(item?.name || ""));
+  const vatApplies = !processingKind;
   const vatAmount = vatApplies ? subtotal * BAHAMAS_VAT_PCT : 0;
-
-  // ── Payment-processing fee (5%) — applied to every order ─────────
-  const processingFee = (subtotal + vatAmount) * PROCESSING_FEE_PCT;
+  const processingFee = processingKind ? subtotal * PROCESSING_FEE_PCT : 0;
 
   // Deposit + tip layer on AFTER VAT/processing so they aren't taxed.
   const total = subtotal + vatAmount + processingFee + rentalDeposit + tipAmount;
@@ -1172,7 +1171,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
 
               {/* Group discount + processing fee — shown for every booking so
                   customers see the exact total before they hit "Continue to Payment". */}
-              {(groupDiscountActive || processingFee > 0 || referralDiscount > 0) && (
+              {(groupDiscountActive || processingFee > 0 || vatAmount > 0 || referralDiscount > 0) && (
                 <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 space-y-2 text-xs" data-testid="fees-summary">
                   {groupDiscountActive && (
                     <div className="flex justify-between" data-testid="group-discount-line">
@@ -1200,8 +1199,14 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   )}
                   {processingFee > 0 && (
                     <div className="flex justify-between" data-testid="processing-fee-line">
-                      <span className="text-[#64748B]">Processing fee ({Math.round(PROCESSING_FEE_PCT * 100)}%)</span>
+                      <span className="text-[#64748B]">Processing fee ({+(PROCESSING_FEE_PCT * 100).toFixed(2)}%)</span>
                       <span className="mono font-semibold text-[#0B3B5C]">+{money(processingFee)}</span>
+                    </div>
+                  )}
+                  {vatAmount > 0 && (
+                    <div className="flex justify-between" data-testid="vat-line">
+                      <span className="text-[#64748B]">VAT ({+(BAHAMAS_VAT_PCT * 100).toFixed(2)}%)</span>
+                      <span className="mono font-semibold text-[#0B3B5C]">+{money(vatAmount)}</span>
                     </div>
                   )}
                 </div>
@@ -1455,8 +1460,8 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                     <div className="text-[9px] sm:text-[10px] tracking-[0.22em] sm:tracking-[0.24em] uppercase text-[#D4A94A] font-bold">Order total</div>
                     <div className="serif text-2xl sm:text-3xl mt-0.5 sm:mt-1 leading-none" data-testid="checkout-grand-total">{money(Math.max(0, total - onlineAmt - discountAmt))}</div>
                     {onlineAmt > 0 && <div className="text-[10px] sm:text-[11px] text-[#6EE7B7] font-semibold mt-0.5" data-testid="checkout-online-discount">{money(onlineAmt)} online discount applied</div>}
-                    <div className="hidden sm:block text-[11px] text-white/60 mt-0.5">{vatApplies ? "Includes 10% VAT & 5% processing" : "VAT-free taxi fare · includes 5% processing"} · all fees final</div>
-                    <div className="sm:hidden text-[10px] text-white/60 mt-0.5">{vatApplies ? "VAT & fees included" : "No VAT on taxi · fees included"}</div>
+                    <div className="hidden sm:block text-[11px] text-white/60 mt-0.5">{vatApplies ? `Includes ${+(BAHAMAS_VAT_PCT * 100).toFixed(2)}% VAT` : `Includes ${+(PROCESSING_FEE_PCT * 100).toFixed(2)}% processing fee · no VAT`} · all fees final</div>
+                    <div className="sm:hidden text-[10px] text-white/60 mt-0.5">{vatApplies ? "VAT included" : "Processing fee included · no VAT"}</div>
                   </div>
                   <button
                     onClick={submit}

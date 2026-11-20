@@ -509,6 +509,10 @@ async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_d
     if req.text_pay_link and req.payment == "unpaid" and not (req.customer_phone or "").strip():
         raise HTTPException(400, "Guest phone is required to text a pay link")
     doc = {k: v for k, v in req.model_dump().items() if k not in ("payment", "send_confirmation", "send_pay_link", "text_pay_link")}
+    import fees as fees_module  # noqa: PLC0415
+    fz = fees_module.compute_fees(round(req.total, 2), req.service_type, req.item_name or "", await fees_module.fee_rates(_db))
+    doc.update({**fz, "subtotal_before_tax": round(req.total, 2),
+                "total": round(req.total + fz["vat_amount"] + fz["processing_fee"], 2)})
     doc.update({
         "id": str(uuid.uuid4())[:8].upper(),
         "item_id": req.item_id or "",
