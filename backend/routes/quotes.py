@@ -12,7 +12,7 @@ from pydantic import BaseModel, ValidationError
 router = APIRouter()
 _db = _now_iso = _create_booking = _Booking = _require_admin = None
 VALID_HOURS = 48
-PRICE_KEYS = [("subtotal_before_tax", "Fare / service"), ("bridge_toll_fee", "Paradise Island bridge toll pass (included above)"), ("group_discount", "Group discount (included above)"), ("promotion_discount", "Promotion"),
+PRICE_KEYS = [("subtotal_before_tax", "Fare / service"), ("bridge_toll_fee", "Paradise Island bridge toll pass (included above)"), ("group_discount", "Group discount (included above)"), ("promotion_discount", "Promotion"), ("online_discount", "Online booking discount"),
               ("vat_amount", "VAT"), ("processing_fee", "Processing fee"), ("deposit_amount", "Refundable deposit"),
               ("tip_amount", "Driver gratuity")]
 
@@ -84,7 +84,8 @@ def _notify(q: dict) -> None:
 async def create_quote(req: QuoteRequest, request: Request):
     res = await _create_booking(_model(req.payload, True), request)
     b = res["booking"]
-    lines = [{"label": lbl, "amount": round(float(b[k]), 2)} for k, lbl in PRICE_KEYS if b.get(k)]
+    lines = [{"label": lbl, "amount": round(float(b[k]), 2) * (-1 if k in ("online_discount", "promotion_discount") else 1)}
+             for k, lbl in PRICE_KEYS if b.get(k)]
     legs = b.get("trip_legs") or []
     if legs:
         leg_lines = [{"label": f"Leg {n}: {lg['from']} → {lg['to']}", "amount": round(float(lg["fare"]), 2)}

@@ -50,14 +50,14 @@ function OtherLocales({ current }) {
   );
 }
 
-function LiveFare({ serviceId, label }) {
+function LiveFare({ serviceId, label, from = "/taxi-services" }) {
   const [price, setPrice] = useState(null);
   useEffect(() => {
-    api.get("/taxi-services").then((r) => {
+    api.get(from).then((r) => {
       const s = (r.data || []).find((x) => x.id === serviceId);
       if (s) setPrice(Number(s.price));
     }).catch(() => {});
-  }, [serviceId]);
+  }, [serviceId, from]);
   if (price == null) return null;
   return (
     <div className="mt-8 inline-flex items-baseline gap-3 rounded-2xl bg-white/10 px-5 py-3" data-testid="locale-live-fare">
@@ -97,7 +97,7 @@ export default function LocalLanding({ lk, pk }) {
           <div className="text-[11px] tracking-[0.3em] uppercase text-[#D4A94A] font-bold mb-5" data-testid="locale-eyebrow">{p.eyebrow}</div>
           <h1 className="serif text-4xl sm:text-5xl lg:text-6xl leading-tight max-w-3xl" data-testid="locale-h1">{p.h1}</h1>
           <p className="mt-6 text-base md:text-lg text-white/75 max-w-2xl">{p.intro}</p>
-          {p.serviceId && <div><LiveFare serviceId={p.serviceId} label={p.priceLabel} /></div>}
+          {p.serviceId && <div><LiveFare serviceId={p.serviceId} label={p.priceLabel} from={p.priceFrom} /></div>}
           <div className="mt-10 flex flex-wrap gap-3">
             <BookLink gt={loc.gt} to={primaryTo} testid="locale-cta-primary"
               className="rounded-full bg-[#E86A3C] px-7 py-3.5 font-bold hover:-translate-y-0.5 transition-transform">{p.cta}</BookLink>

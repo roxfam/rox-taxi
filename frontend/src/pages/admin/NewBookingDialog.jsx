@@ -14,7 +14,7 @@ const SERVICES = [
 const EMPTY = {
   service_type: "taxi", item_id: "", item_name: "", customer_name: "", customer_email: "", customer_phone: "",
   booking_date: "", pickup_location: "", dropoff_location: "", passengers: 1, flight_number: "", notes: "",
-  extra_luggage: 0, luggage_price: 3, car_seats: 0, stops: [], trip_legs: [],
+  extra_luggage: 0, luggage_price: 3, car_seats: 0, bridge_toll: false, stops: [], trip_legs: [],
   total: "", payment: "unpaid", send_confirmation: true, send_pay_link: true, text_pay_link: true,
 };
 
@@ -58,6 +58,7 @@ const fromBooking = (b) => ({
   passengers: b.passengers || 1,
   notes: b.notes || "",
   total: b.total || b.total_price || "",
+  bridge_toll: Number(b.bridge_toll_fee || 0) > 0,
 });
 
 export default function NewBookingDialog({ initial, onClose, onCreated }) {
@@ -68,6 +69,21 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const luggageFee = Math.round((Number(f.extra_luggage) || 0) * (Number(f.luggage_price) || 0) * 100) / 100;
   const seatFee = (Number(f.car_seats) || 0) * 2;
+  const tollFee = f.service_type === "taxi" && f.bridge_toll ? 2 : 0;
+  const tollPts = JSON.stringify([f.pickup_location, ...f.stops, f.dropoff_location]);
+  useEffect(() => {
+    if (f.service_type !== "taxi") return undefined;
+    const t = setTimeout(() => {
+      api.post("/taxi/bridge-toll", { points: JSON.parse(tollPts).filter(Boolean) }).then(({ data }) => {
+        const on = Number(data?.toll || 0) > 0;
+        setF((x) => (x.bridge_toll === on ? x : { ...x, bridge_toll: on,
+          total: x.total === "" ? x.total : Math.max(0, Math.round((Number(x.total) + (on ? 2 : -2)) * 100) / 100) }));
+      }).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [tollPts, f.service_type]);
+  const setToll = (e) => setF((x) => ({ ...x, bridge_toll: e.target.checked,
+    total: x.total === "" ? x.total : Math.max(0, Math.round((Number(x.total) + (e.target.checked ? 2 : -2)) * 100) / 100) }));
   const [pricing, setPricing] = useState(false);
   const priceRoute = async () => {
     const pts = [f.pickup_location, ...f.stops, f.dropoff_location].map((p) => String(p || "").trim());
@@ -76,13 +92,13 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
     try {
       const { data } = await api.post("/taxi/multi-quote", { points: pts, passengers: Number(f.passengers) || 1 });
       if (!data.ok) { toast.error(data.error); return; }
-      setF((x) => ({ ...x, trip_legs: data.legs, total: Math.round((data.total + luggageFee + seatFee) * 100) / 100 }));
+      setF((x) => ({ ...x, trip_legs: data.legs, total: Math.round((data.total + luggageFee + seatFee + tollFee) * 100) / 100 }));
     } catch { toast.error("Couldn't price this route"); } finally { setPricing(false); }
   };
   const setLeg = (n, fare) => setF((x) => {
     const legs = x.trip_legs.map((lg, k) => (k === n ? { ...lg, fare: Number(fare) || 0 } : lg));
     const sum = legs.reduce((s, lg) => s + Number(lg.fare || 0), 0);
-    return { ...x, trip_legs: legs, total: Math.round((sum + luggageFee + seatFee) * 100) / 100 };
+    return { ...x, trip_legs: legs, total: Math.round((sum + luggageFee + seatFee + tollFee) * 100) / 100 };
   });
   const setSeats = (e) => setF((x) => {
     const v = Math.max(0, Math.min(4, Number(e.target.value) || 0));
@@ -201,6 +217,12 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
           <Field label="Extra bags"><input type="number" min="0" max="30" value={f.extra_luggage} onChange={setLuggage("extra_luggage")} className={input} data-testid="new-booking-luggage-count" /></Field>
           <Field label={`Price per bag ($)${luggageFee ? ` · luggage ${luggageFee.toFixed(2)}` : ""}`}><input type="number" min="0" step="0.5" value={f.luggage_price} onChange={setLuggage("luggage_price")} className={input} data-testid="new-booking-luggage-price" /></Field>
           {f.service_type === "taxi" && <Field label="Baby car seats ($2 each)"><input type="number" min="0" max="4" value={f.car_seats} onChange={setSeats} className={input} data-testid="new-booking-car-seats" /></Field>}
+          {f.service_type === "taxi" && (
+            <label className="flex items-center gap-2 text-sm text-[#0B3B5C] self-end pb-2" data-testid="new-booking-bridge-toll">
+              <input type="checkbox" checked={!!f.bridge_toll} onChange={setToll} data-testid="new-booking-bridge-toll-checkbox" />
+              Paradise Island bridge toll pass (+$2)
+            </label>
+          )}
           <Field label="Total ($, includes luggage)"><input type="number" step="0.01" min="0" value={f.total} onChange={set("total")} className={input} required data-testid="new-booking-total" /></Field>
           <Field label="Payment">
             <select value={f.payment} onChange={set("payment")} className={input} data-testid="new-booking-payment">

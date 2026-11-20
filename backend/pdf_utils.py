@@ -448,12 +448,39 @@ def build_gift_voucher_pdf(gc: dict) -> bytes:
 
 
 
+def _route_map_drawing(q: dict):
+    """Map-style A → B → C route list for multi-stop quotes (None for simple trips)."""
+    from reportlab.graphics.shapes import Drawing, Circle, Line, String  # noqa: PLC0415
+    pts = [p for p in [q.get("pickup_location"), *(q.get("stops") or []), q.get("dropoff_location")] if p]
+    if len(pts) < 3:
+        return None
+    legs = q.get("trip_legs") or []
+    step = 34
+    height = step * (len(pts) - 1) + 24
+    d = Drawing(7.1 * inch, height)
+    for i, p in enumerate(pts):
+        y = height - 12 - i * step
+        if i < len(pts) - 1:
+            d.add(Line(12, y - 9, 12, y - step + 9, strokeColor=GOLD, strokeWidth=1.5, strokeDashArray=[3, 2]))
+            if i < len(legs):
+                d.add(String(360, y - step / 2 - 3, f"Leg {i + 1} · ${float(legs[i].get('fare') or 0):,.2f}",
+                             fontName="Helvetica-Bold", fontSize=8, fillColor=GREY))
+        fill = NAVY if i == 0 else (CORAL if i == len(pts) - 1 else colors.white)
+        d.add(Circle(12, y, 9, fillColor=fill, strokeColor=GOLD if 0 < i < len(pts) - 1 else fill, strokeWidth=1.5))
+        d.add(String(12, y - 3, chr(65 + i) if i < 26 else str(i + 1), fontName="Helvetica-Bold", fontSize=8,
+                     fillColor=colors.white if fill != colors.white else NAVY, textAnchor="middle"))
+        role = "Pickup" if i == 0 else ("Drop-off" if i == len(pts) - 1 else f"Stop {i}")
+        d.add(String(30, y + 1, str(p)[:60], fontName="Helvetica-Bold", fontSize=10, fillColor=NAVY))
+        d.add(String(30, y - 9, role, fontName="Helvetica", fontSize=7, fillColor=GREY))
+    return d
+
+
 def build_quote_pdf(q: dict) -> bytes:
     """Professional, printable price quote (no booking). `q` = public quote dict."""
     buf = BytesIO()
     doc_pdf = SimpleDocTemplate(buf, pagesize=letter, leftMargin=0.7 * inch, rightMargin=0.7 * inch, topMargin=0.6 * inch, bottomMargin=0.6 * inch)
     styles = getSampleStyleSheet()
-    h = ParagraphStyle("qh", parent=styles["Title"], fontName="Times-Bold", fontSize=26, textColor=NAVY, alignment=0, spaceAfter=2)
+    h = ParagraphStyle("qh", parent=styles["Title"], fontName="Times-Bold", fontSize=26, leading=30, textColor=NAVY, alignment=0, spaceAfter=2)
     k = ParagraphStyle("qk", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8, textColor=GOLD, spaceAfter=2)
     n = ParagraphStyle("qn", parent=styles["Normal"], fontName="Helvetica", fontSize=10, textColor=INK, leading=14)
     s = ParagraphStyle("qs", parent=styles["Normal"], fontName="Helvetica", fontSize=8, textColor=GREY, leading=11)
@@ -481,7 +508,10 @@ def build_quote_pdf(q: dict) -> bytes:
                            ("TEXTCOLOR", (0, 0), (0, -1), GREY), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                            ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#E2E8F0"))]))
     story += [t, Spacer(1, 16)]
-    rows = [["Description", "Amount"]] + [[ln["label"], f"${ln['amount']:,.2f}"] for ln in q.get("lines", [])]
+    route_map = _route_map_drawing(q)
+    if route_map is not None:
+        story += [Paragraph("YOUR ROUTE", k), Spacer(1, 4), route_map, Spacer(1, 14)]
+    rows = [["Description", "Amount"]] + [[ln["label"], f"{'-' if ln['amount'] < 0 else ''}${abs(ln['amount']):,.2f}"] for ln in q.get("lines", [])]
     rows.append(["Quote total (USD)", f"${float(q.get('total') or 0):,.2f}"])
     pt = Table(rows, colWidths=[5.3 * inch, 1.8 * inch])
     pt.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), NAVY), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),

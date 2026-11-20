@@ -970,3 +970,10 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - `yarn build` now runs `frontend/scripts/prerender-locales.js`: writes build/<locale path>/index.html with finished text, lang, meta, hreflang, FAQ JSON-LD for all 25 localized pages (Baidu/Sogou/Naver readable). Honors BUILD_PATH (VPS auto-update).
 - Trip pages (es/uk/ca × 5): airport→Atlantis ($45), cruise port→Atlantis ($20), cruise port→Baha Mar/Cable Beach ($25), airport→Baha Mar ($35), airport→Cable Beach ($35); live fare badge from /api/taxi-services; "Book" deep-links /taxi?book=<id>. Sitemap + hreflang clusters `trip:*` (keep seo.py in sync with seoLocales.js).
 - Taxi "Pick your destination" / Get Quote widget: "+ Add a stop" (up to 25), leg-by-leg prices via /api/taxi/multi-quote, "Get a quote for this trip" / "Book this trip" opens booking with stops prefilled (BookingModal `initialStops`).
+
+
+## 2026-11-20 — Bridge toll everywhere, Spanish tour pages, shareable multi-stop quotes
+- $2 Paradise Island bridge toll pass: geo.crosses_paradise() (keywords + map places on PI by coords) used by booking creation; POST /api/taxi/bridge-toll; multi-quote returns bridge_toll. BookingFlow shows "Paradise Island bridge toll pass +$2" line and adds it to total; manual booking dialog auto-ticks "Paradise Island bridge toll pass (+$2)" (bridge_toll → bridge_toll_fee); quotes list the toll as its own line.
+- Quote lines now also show "Online booking discount" (negative) so lines add up to the total.
+- Spanish tour pages: /es/tours/nadar-con-delfines, /es/tours/blue-lagoon, /es/tours/atlantis (live per-person price from /api/tours, book via /tours?book=<id>), hreflang/sitemap clusters tour:*.
+- Quote page: A→B→C route map with leg fares + Share trip / WhatsApp / Copy link; quote PDF has a "Your route" map-style diagram.

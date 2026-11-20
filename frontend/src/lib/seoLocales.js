@@ -9,7 +9,7 @@ export const CLUSTERS = {
 
 export const alternatesFor = (cluster) =>
   [...Object.entries(CLUSTERS[cluster]).map(([hreflang, path]) => ({ hreflang, href: SITE + path })),
-    { hreflang: "x-default", href: SITE + (CLUSTERS[cluster].en || "/taxi") }];
+    { hreflang: "x-default", href: SITE + (CLUSTERS[cluster].en || (cluster.startsWith("tour:") ? "/tours" : "/taxi")) }];
 
 const card = (title, body, to) => ({ title, body, to });
 
@@ -308,6 +308,50 @@ TRIPS.forEach((t) => {
 });
 const popular = (lk, t) => card(lk === "es" ? `${t.from.es.replace("el ", "").replace(/^./, (c) => c.toUpperCase())} → ${t.to.es}` : `${t.from.en} → ${t.to.en}`, `$${t.price}`, tripPath(lk, t));
 ES.taxi.popular = TRIPS.map((t) => popular("es", t));
+
+const ES_TOURS = [
+  { key: "dolphin", slug: "nadar-con-delfines", id: "dolphin-swim-blue-lagoon", price: 265, en: null,
+    name: "Nado con delfines en Blue Lagoon Island",
+    title: "Nadar con delfines en Nasáu, Bahamas | Blue Lagoon Island",
+    description: "Nada con delfines en Blue Lagoon Island, a un corto trayecto en barco desde Nasáu. Ferry, instructores y recogida en hotel o puerto de cruceros. Reserva online en español.",
+    keywords: "nadar con delfines Nassau, delfines Bahamas, Blue Lagoon delfines, excursión delfines Nassau, nadar con delfines crucero Nassau",
+    intro: "Una experiencia que no olvidarás: nadas junto a delfines en las aguas turquesa de Blue Lagoon Island, con instructores que te guían en todo momento.",
+    points: ["Ferry a Blue Lagoon Island incluido", "Instructores y equipo de seguridad", "Recogida en hotel o puerto de cruceros"],
+    faq: [{ q: "¿Hace falta saber nadar?", a: "Llevarás chaleco salvavidas y los instructores te acompañan, pero es necesario sentirse cómodo en el agua." },
+      { q: "¿Sirve para pasajeros de crucero?", a: "Sí, los horarios se ajustan a tu escala y vuelves al puerto a tiempo." }] },
+  { key: "blue-lagoon", slug: "blue-lagoon", id: "blue-lagoon", price: 99, en: "/tours/blue-lagoon",
+    name: "Día de playa en Blue Lagoon Island",
+    title: "Excursión a Blue Lagoon Island desde Nasáu | Día de playa en Bahamas",
+    description: "Día de playa en Blue Lagoon Island: arena blanca, aguas turquesa y ferry desde Nasáu. Ideal para familias y cruceristas. Reserva online en español.",
+    keywords: "Blue Lagoon Island excursión, Blue Lagoon Bahamas, isla Blue Lagoon Nassau, excursión playa Nassau, excursiones crucero Nassau",
+    intro: "Escapa a una isla privada a pocos minutos de Nasáu: playas tranquilas, agua cristalina y tiempo para relajarte.",
+    points: ["Ferry ida y vuelta desde Nasáu", "Playa de arena blanca y aguas tranquilas", "Perfecto para familias y cruceristas"],
+    faq: [{ q: "¿Cuánto dura la excursión?", a: "Es una excursión de día completo; al reservar ves el horario exacto." }] },
+  { key: "atlantis", slug: "atlantis", id: "atlantis-tour", price: 55, en: "/tours/atlantis",
+    name: "Tour de Paradise Island y Atlantis",
+    title: "Tour de Atlantis y Paradise Island | Excursión desde Nasáu",
+    description: "Tour guiado por Paradise Island y el resort Atlantis: acuario, marina y las mejores vistas. También pase de día a Aquaventure. Reserva online en español.",
+    keywords: "tour Atlantis Bahamas, excursión Atlantis Nassau, Paradise Island tour, Aquaventure pase de día, visitar Atlantis crucero",
+    intro: "Descubre el resort más famoso de las Bahamas y Paradise Island con un guía local. ¿Quieres más? Añade el pase de día al parque acuático Aquaventure.",
+    points: ["Guía local por Paradise Island", "Atlantis, marina y acuario", "Visita completa con recogida incluida"],
+    faq: [{ q: "¿Puedo entrar al parque acuático?", a: "Sí, elige el pase de día Atlantis Aquaventure al reservar." }] },
+];
+const esTourPath = (t) => `/es/tours/${t.slug}`;
+ES_TOURS.forEach((t) => {
+  CLUSTERS[`tour:${t.key}`] = t.en ? { en: t.en, es: esTourPath(t) } : { es: esTourPath(t) };
+  ES[`tours/${t.slug}`] = {
+    cluster: `tour:${t.key}`, title: t.title, description: t.description, keywords: t.keywords,
+    eyebrow: "Excursiones · Nasáu", h1: t.name, intro: t.intro,
+    cta: `Reservar desde $${t.price}`, ctaTo: `/tours?book=${t.id}`, cta2: "Todas las excursiones", cta2To: "/es/tours",
+    serviceId: t.id, priceFrom: "/tours", priceLabel: "Precio actual por persona",
+    cards: ES_TOURS.filter((x) => x !== t).map((x) => card(x.name, `Desde $${x.price} por persona.`, esTourPath(x)))
+      .concat([card("Taxi al puerto o al hotel", "Traslados con tarifa fija por todo Nasáu.", "/es/taxi")]),
+    stepsTitle: "Qué incluye", steps: t.points,
+    note: "Precios en dólares (USD) por persona. Plazas limitadas en temporada alta: reserva con antelación.",
+    faq: t.faq,
+  };
+});
+ES.tours.cards = ES_TOURS.map((x) => card(x.name, `Desde $${x.price} por persona.`, esTourPath(x)));
 UK.taxi.popular = TRIPS.map((t) => popular("uk", t));
 CA.taxi.popular = TRIPS.map((t) => popular("ca", t));
 

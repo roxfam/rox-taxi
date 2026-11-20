@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Download, Printer, CalendarCheck, Loader2, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Download, Printer, CalendarCheck, Loader2, Clock, AlertCircle, CheckCircle2, Share2, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { API, api, money } from "../lib/api";
 
@@ -14,6 +14,50 @@ const left = (iso) => {
 const Row = ({ k, v }) => v ? (
   <div className="flex justify-between gap-4 py-2 border-b border-[#F1F5F9] text-sm"><span className="text-[#64748B]">{k}</span><span className="text-[#0B3B5C] font-medium text-right">{v}</span></div>
 ) : null;
+
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+function RouteMap({ q }) {
+  const pts = [q.pickup_location, ...(q.stops || []), q.dropoff_location].filter(Boolean);
+  const legs = q.trip_legs || [];
+  if (pts.length < 3) return null;
+  return (
+    <div className="mt-6 rounded-2xl border border-[#EFE7D5] p-5" data-testid="quote-route-map">
+      <div className="text-[10px] tracking-[0.3em] uppercase font-black text-[#8a6b1f] mb-4">Your route · {pts.length - 1} legs</div>
+      <ol className="relative">
+        {pts.map((p, i) => (
+          <li key={`${p}-${i}`} className="relative pl-12 pb-5 last:pb-0" data-testid={`quote-route-point-${i}`}>
+            {i < pts.length - 1 && <span className="absolute left-[15px] top-8 bottom-0 w-0.5 bg-[repeating-linear-gradient(to_bottom,#D4A94A_0_6px,transparent_6px_10px)]" />}
+            <span className={`absolute left-0 top-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ${i === 0 ? "bg-[#0B3B5C] text-white" : i === pts.length - 1 ? "bg-[#E86A3C] text-white" : "bg-white border-2 border-[#D4A94A] text-[#0B3B5C]"}`}>{LETTERS[i] || i + 1}</span>
+            <div className="text-sm font-semibold text-[#0B3B5C] pt-1.5">{p}</div>
+            <div className="text-[11px] text-[#64748B]">{i === 0 ? "Pickup" : i === pts.length - 1 ? "Drop-off" : `Stop ${i}`}</div>
+            {legs[i] && i < pts.length - 1 && <div className="mt-2 inline-block rounded-full bg-[#FBF7EF] px-3 py-1 text-[11px] mono text-[#0B3B5C]">Leg {i + 1} · {money(legs[i].fare)}</div>}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function ShareTrip({ q }) {
+  const url = typeof window !== "undefined" ? window.location.href : "";
+  const pts = [q.pickup_location, ...(q.stops || []), q.dropoff_location].filter(Boolean);
+  const text = `Our Nassau trip (${pts.join(" → ")}): ${money(q.total)} — quote ${q.id}`;
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(`${text}\n${url}`); toast.success("Trip link copied"); } catch { toast.error("Couldn't copy the link"); }
+  };
+  const share = async () => {
+    if (navigator.share) { try { await navigator.share({ title: `Rox quote ${q.id}`, text, url }); } catch { /* cancelled */ } } else copy();
+  };
+  const btn = "inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] px-6 py-3.5 text-sm font-semibold text-[#0B3B5C] hover:border-[#D4A94A] transition-colors";
+  return (
+    <>
+      <button onClick={share} className={btn} data-testid="quote-share-btn"><Share2 className="w-4 h-4" /> Share trip</button>
+      <a href={`https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`} target="_blank" rel="noreferrer" className={btn} data-testid="quote-whatsapp-share">WhatsApp</a>
+      <button onClick={copy} className={btn} data-testid="quote-copy-link-btn"><Link2 className="w-4 h-4" /> Copy link</button>
+    </>
+  );
+}
 
 export default function QuoteView() {
   const { id } = useParams();
@@ -61,6 +105,7 @@ export default function QuoteView() {
           {(q.stops || []).map((s, n) => <Row key={`${s}-${n}`} k={`Stop ${n + 1}`} v={s} />)}
           <Row k="Drop-off" v={q.dropoff_location} />
           <Row k={q.service_type === "rental" ? "Rental days" : "Guests"} v={String(q.service_type === "rental" ? q.days : q.passengers || "")} />
+          <RouteMap q={q} />
           <div className="mt-6 rounded-2xl bg-[#FBF7EF] p-5" data-testid="quote-lines">
             {q.lines.map((l) => (
               <div key={l.label} className="flex justify-between text-sm py-1"><span className="text-[#64748B]">{l.label}</span><span className="mono text-[#0B3B5C]">{money(l.amount)}</span></div>
@@ -83,6 +128,7 @@ export default function QuoteView() {
         {q.status === "expired" && <Link to="/quote" className="rounded-full bg-[#0B3B5C] text-white px-7 py-3.5 text-sm font-bold" data-testid="quote-new-btn">Get a new quote</Link>}
         <a href={`${API}/quotes/${q.id}/pdf`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] px-6 py-3.5 text-sm font-semibold text-[#0B3B5C] hover:border-[#D4A94A] transition-colors" data-testid="quote-pdf-btn"><Download className="w-4 h-4" /> Download PDF</a>
         <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] px-6 py-3.5 text-sm font-semibold text-[#0B3B5C] hover:border-[#D4A94A] transition-colors" data-testid="quote-print-btn"><Printer className="w-4 h-4" /> Print</button>
+        <ShareTrip q={q} />
       </div>
     </div>
   );

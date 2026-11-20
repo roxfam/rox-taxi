@@ -279,7 +279,7 @@ function MultiResult({ multi, onBook }) {
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="mono text-4xl font-black text-[#E86A3C]" data-testid="quote-multi-total">{money(multi.total)}</div>
-          <div className="text-[11px] text-[#64748B]">Up to 2 passengers · extra guests, luggage and car seats added next</div>
+          <div className="text-[11px] text-[#64748B]">Up to 2 passengers{multi.bridge_toll > 0 ? ` · +${money(multi.bridge_toll)} Paradise Island bridge toll pass added at booking` : ""} · extra guests, luggage and car seats added next</div>
         </div>
         <button onClick={onBook} data-testid="quote-multi-book-btn"
           className="btn-shine inline-flex items-center gap-2 rounded-full bg-[#E86A3C] hover:bg-[#d55a30] text-white px-6 py-3 text-sm font-semibold">

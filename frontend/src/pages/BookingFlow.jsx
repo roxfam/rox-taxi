@@ -219,6 +219,16 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   const stopsList = serviceType === "taxi" ? (form.stops || []) : [];
   const hasStops = stopsList.length > 0;
   const [multiQuote, setMultiQuote] = useState(null);
+  const [bridgeToll, setBridgeToll] = useState(0);
+  const tollKey = serviceType === "taxi" ? JSON.stringify([item?.name, form.pickup_location, form.dropoff_location, ...(form.stops || [])]) : "";
+  useEffect(() => {
+    if (!tollKey) { setBridgeToll(0); return undefined; }
+    const t = setTimeout(() => {
+      api.post("/taxi/bridge-toll", { points: JSON.parse(tollKey).filter(Boolean) })
+        .then((r) => setBridgeToll(Number(r.data?.toll || 0))).catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [tollKey]);
   const stopsKey = JSON.stringify([form.pickup_location, ...stopsList, form.dropoff_location, form.passengers]);
   useEffect(() => {
     if (!hasStops) { setMultiQuote(null); return undefined; }
@@ -391,7 +401,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   // gratuity — neither is VAT-taxable).
   const waitMinutes = serviceType === "taxi" ? Number(form.wait_minutes || 0) : 0;
   const waitFee = Math.max(0, waitMinutes - 5);
-  const rawSubtotal = base + luggageFee + carSeatFee + passengerFee + additionalDriverFee
+  const rawSubtotal = base + luggageFee + carSeatFee + passengerFee + additionalDriverFee + bridgeToll
     + babySeatFee + taxiAddonFee + taxiExtrasFee + rentalAirportDropoffFee + waitFee;
 
   // ── Friend-of-friend referral discount ──────────────────────────────
@@ -1137,6 +1147,12 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                         </div>
                       ))}
                       {multiQuote && !multiQuote.ok && <div className="text-[#DC2626] font-semibold" data-testid="multi-stop-error">{multiQuote.error}</div>}
+                    </div>
+                  )}
+                  {bridgeToll > 0 && (
+                    <div className="mt-2 text-xs text-[#64748B] flex justify-between" data-testid="bridge-toll-line">
+                      <span>Paradise Island bridge toll pass</span>
+                      <span className="mono font-semibold text-[#E86A3C]">+${bridgeToll.toFixed(2)}</span>
                     </div>
                   )}
                   {passengerFee > 0 && (
