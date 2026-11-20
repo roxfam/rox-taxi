@@ -42,7 +42,7 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
         reason, notify_guest: notify, refund: canRefund && refund,
         refund_amount: canRefund && refund ? Math.round(amt * 100) / 100 : null,
         cancellation_fee: canRefund && refund ? (fee > 0.004 ? Math.round(fee * 100) / 100 : null) : (Number(cfee) > 0 ? Number(cfee) : null),
-        send_fee_invoice: !canRefund && feeInvoice && Number(cfee) > 0,
+        send_fee_invoice: !canRefund && booking.card_auth?.status !== "held" && feeInvoice && Number(cfee) > 0,
       });
       const parts = [`Cancelled ${booking.id}`];
       if (data.fee_invoice) parts.push(`fee invoice ${money(data.fee_invoice.amount)} sent`);
@@ -112,7 +112,9 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
                 <button key={p.label} type="button" onClick={() => setFee(String(p.v))} className="text-xs underline text-[#B47F26]" data-testid={`cancel-dialog-fee-${p.label.replace("%", "pct")}`}>{p.label}</button>
               ))}
             </div>
-            {canRefund ? (
+            {booking.card_auth?.status === "held" ? (
+              <div className="text-[11px] text-[#64748B]" data-testid="cancel-dialog-hold-note">Card on hold for {money(booking.card_auth.amount)}: the fee is charged to the held card and the rest is released. No fee = the whole hold is released.</div>
+            ) : canRefund ? (
               <div className="text-[11px] text-[#64748B]">The fee is kept from the Stripe refund, so the guest gets back the rest.</div>
             ) : Number(cfee) > 0 && (
               <label className="flex items-center gap-2 text-xs">

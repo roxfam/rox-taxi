@@ -75,7 +75,7 @@ export default function Track() {
 
   const cancelBooking = async () => {
     if (!booking) return;
-    if (!window.confirm("Cancel this booking?\n\nCancellations 48+ hours before service = refund minus 15% fee.\nCancellations within 48 hours = non-refundable.")) return;
+    if (!window.confirm("Ask to cancel this booking?\n\nWe'll review your request and confirm by email or text. With 48+ hours' notice you get a refund minus our cancellation fee. Within 48 hours, bookings are non-refundable.")) return;
     setCancelling(true);
     try {
       const { data } = await api.post(`/bookings/${booking.id}/cancel`);
@@ -265,7 +265,7 @@ export default function Track() {
                   <AlertTriangle className="w-5 h-5 text-[#D4A94A] mt-0.5 shrink-0" />
                   <div className="text-sm text-[#334155] leading-relaxed">
                     <div className="font-semibold text-[#0B3B5C]">Need to change your plans?</div>
-                    <div className="text-[#64748B] mt-0.5">Reschedule for free up to 2 hours before pickup. Full cancel: 48+ hr notice = refund minus <strong>15%</strong>; within 48 hr = non-refundable.</div>
+                    <div className="text-[#64748B] mt-0.5">Reschedule for free up to 2 hours before pickup. Full cancel: 48+ hr notice = refund minus our <strong>cancellation fee</strong>; within 48 hr = non-refundable. Requests are reviewed by our team.</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -282,7 +282,7 @@ export default function Track() {
                     data-testid="cancel-booking-btn"
                     className="rounded-full bg-white border border-[#E2E8F0] text-[#0B3B5C] px-4 py-2.5 text-sm font-semibold hover:border-red-500 hover:text-red-600 active:scale-95 disabled:opacity-60 inline-flex items-center gap-2"
                   >
-                    <XCircle className="w-4 h-4" /> {cancelling ? "Cancelling…" : "Cancel"}
+                    <XCircle className="w-4 h-4" /> {cancelling ? "Sending…" : booking.cancel_request?.status === "pending" ? "Cancellation requested" : "Request cancellation"}
                   </button>
                 </div>
               </div>

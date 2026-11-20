@@ -27,7 +27,7 @@ export function PaymentSuccess() {
         const { data } = await api.get(`/payments/status/${sessionId}`);
         if (cancelled) return;
         setStatus(data);
-        if (data.payment_status === "paid") {
+        if (data.payment_status === "paid" || data.payment_status === "authorized") {
           const { data: b } = await api.get(`/bookings/${data.booking_id}`);
           if (!cancelled) setBooking(b);
           // Meta Pixel — Stripe payment succeeded. Guarded so React
@@ -76,7 +76,8 @@ export function PaymentSuccess() {
     })();
   }, [isPayPal, paypalBookingId, paypalToken]);
 
-  const paid = status.payment_status === "paid";
+  const held = status.payment_status === "authorized";
+  const paid = status.payment_status === "paid" || held;
   const failed = status.payment_status === "failed";
   const shareUrl = booking ? `${window.location.origin}/pay/${booking.id}` : "";
   const copyShare = async () => {
@@ -98,7 +99,8 @@ export function PaymentSuccess() {
       </div>
       <h1 className="serif text-5xl text-[#0B3B5C]">{paid ? "You're all set!" : failed ? "Payment not completed" : "Confirming payment…"}</h1>
       <p className="mt-4 text-[#64748B] leading-relaxed">
-        {paid ? "Your booking is confirmed. We've emailed your receipt and your driver will be assigned shortly."
+        {held ? "Your rental is confirmed. Your card is on hold for the total, so nothing is charged yet. We charge it after your rental and email you a receipt."
+          : paid ? "Your booking is confirmed. We've emailed your receipt and your driver will be assigned shortly."
           : failed ? <>Your booking is reserved but not paid yet. {paypalBookingId && <Link to={`/pay/${paypalBookingId}`} className="text-[#E86A3C] font-semibold underline" data-testid="payment-retry-link">Try paying again</Link>}</>
           : `Hang tight — we're confirming your payment with ${isPayPal ? "PayPal" : "Stripe"}.`}
       </p>

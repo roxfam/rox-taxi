@@ -85,6 +85,21 @@ async def create_checkout(req: CheckoutRequest, request: Request):
     success_url = f"{req.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{req.origin_url}/payment/cancel?booking_id={booking['id']}"
 
+    # Rentals: authorise (hold) the card now, charge after the trip. Needs a real Stripe key.
+    amount = float(booking.get("total") or booking.get("total_price") or 0)
+    if (booking.get("service_type") or "").lower() == "rental" and _real_key():
+        try:
+            s = await _card_hold.create_hold_checkout(_key(), booking, int(round(amount * 100)), success_url, cancel_url)
+        except Exception as e:  # noqa: BLE001
+            logging.warning("rental hold checkout failed for %s: %s", booking["id"], e)
+            raise HTTPException(502, "Card checkout is temporarily unavailable. Please try again in a minute.") from e
+        await _db.payment_transactions.insert_one({
+            "session_id": s["id"], "booking_id": booking["id"], "amount": amount, "currency": "usd",
+            "status": "initiated", "payment_status": "pending", "pay_mode": "hold",
+            "created_at": _now_iso(), "updated_at": _now_iso(),
+        })
+        return {"checkout_url": s.get("url"), "session_id": s["id"], "hold": True}
+
     checkout_req = CheckoutSessionRequest(
         amount=float(booking.get("total") or booking.get("total_price") or 0),
         currency="usd",
@@ -251,11 +266,64 @@ async def _mark_paid(session_id: str, booking_id: Optional[str]):
             await _fire_paid_in_full(booking_id, deposit_paid=0.0, balance_paid=total_amt)
 
 
+def _real_key() -> bool:
+    return _key().lower() not in ("", "sk_test_emergent")
+
+
+async def _sync_hold(session_id: str, booking_id: Optional[str]) -> str:
+    """Rental hold session: when Stripe says the card is authorised, mark the booking held + confirmed."""
+    s = await _card_hold.retrieve_session_with_intent(_key(), session_id)
+    pi = s.get("payment_intent") or {}
+    if not isinstance(pi, dict) or pi.get("status") != "requires_capture" or not booking_id:
+        return "pending"
+    card = ((pi.get("payment_method") or {}).get("card") or {}) if isinstance(pi.get("payment_method"), dict) else {}
+    from datetime import datetime, timedelta, timezone  # noqa: PLC0415
+    auth = {
+        "status": "held", "payment_intent": pi["id"], "session_id": session_id,
+        "amount": round(int(pi.get("amount_capturable") or pi.get("amount") or 0) / 100, 2),
+        "card_brand": card.get("brand"), "card_last4": card.get("last4"),
+        "authorized_at": _now_iso(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+    }
+    await _db.payment_transactions.update_one({"session_id": session_id}, {"$set": {
+        "status": "completed", "payment_status": "authorized", "updated_at": _now_iso()}})
+    res = await _db.bookings.update_one(
+        {"id": booking_id, "payment_status": {"$nin": ["paid", "authorized"]}},
+        {"$set": {"payment_status": "authorized", "status": "confirmed", "card_auth": auth,
+                  "stripe_session_id": session_id, "updated_at": _now_iso()}},
+    )
+    if res.modified_count:
+        booking = await _db.bookings.find_one({"id": booking_id})
+        try:
+            prefs = await _db.site_config.find_one({"_id": "main"}) or {}
+            report = _notify(_clean(dict(booking)), prefs)
+            await _db.bookings.update_one({"id": booking_id}, {"$set": {"notification_status": report, "notified_at": _now_iso()}})
+        except Exception as e:  # noqa: BLE001
+            logging.warning("hold notify err: %s", e)
+        try:
+            from notifications import notify_owner_activity  # noqa: PLC0415
+            notify_owner_activity("card_hold", f"Card held ${auth['amount']:.2f} for rental {booking_id} "
+                                  f"({booking.get('customer_name', '')}). Charge it in admin within 7 days.")
+        except Exception as e:  # noqa: BLE001
+            logging.warning("hold owner alert err: %s", e)
+    return "authorized"
+
+
 @router.get("/payments/status/{session_id}")
 async def payment_status(session_id: str, request: Request):
     record = await _db.payment_transactions.find_one({"session_id": session_id})
     if not record:
         raise HTTPException(404, "Transaction not found")
+
+    if record.get("pay_mode") == "hold":
+        if record.get("payment_status") != "authorized":
+            try:
+                await _sync_hold(session_id, record["booking_id"])
+            except Exception as e:  # noqa: BLE001
+                logging.warning("hold status err: %s", e)
+            record = await _db.payment_transactions.find_one({"session_id": session_id})
+        return {"session_id": session_id, "booking_id": record["booking_id"],
+                "status": record["status"], "payment_status": record["payment_status"], "hold": True}
 
     if record.get("payment_status") != "paid":
         host_url = str(request.base_url)
@@ -334,7 +402,9 @@ async def _process_stripe_event(event: dict) -> None:
             payment_status = (data.get("payment_status") or "").lower()
             metadata = data.get("metadata") or {}
             booking_id = metadata.get("booking_id")
-            if payment_status == "paid":
+            if metadata.get("purpose") == "rental_hold":
+                await _sync_hold(session_id, booking_id)
+            elif payment_status == "paid":
                 await _mark_paid(session_id, booking_id)
                 # Gift-card provisioning — activates the card + sends the
                 # branded voucher PDF to the recipient (or schedules it).
@@ -762,6 +832,59 @@ class CardHoldCreateRequest(BaseModel):
 class CardHoldChargeRequest(BaseModel):
     amount: float
     reason: str
+
+
+class CardAuthCapture(BaseModel):
+    amount: Optional[float] = None
+
+
+async def capture_card_auth(b: Dict[str, Any], amount: Optional[float], admin: str) -> Dict[str, Any]:
+    auth = b.get("card_auth") or {}
+    if auth.get("status") != "held":
+        raise HTTPException(400, "There's no card hold on this booking")
+    amt = round(float(amount if amount is not None else auth["amount"]), 2)
+    if amt <= 0 or amt > auth["amount"] + 0.001:
+        raise HTTPException(400, f"Charge between $0.01 and ${auth['amount']:.2f}")
+    try:
+        pi = await _card_hold.capture_intent(_key(), auth["payment_intent"], int(round(amt * 100)))
+    except RuntimeError as e:
+        raise HTTPException(502, str(e)) from e
+    upd = {"card_auth.status": "captured", "card_auth.captured_amount": amt, "card_auth.captured_at": _now_iso(),
+           "card_auth.captured_by": admin, "payment_status": "paid", "amount_paid": amt, "updated_at": _now_iso()}
+    await _db.bookings.update_one({"id": b["id"]}, {"$set": upd})
+    await _db.payment_transactions.update_one({"session_id": auth.get("session_id")},
+                                              {"$set": {"payment_status": "paid", "amount": amt, "updated_at": _now_iso()}})
+    return {"ok": True, "captured": amt, "status": pi.get("status")}
+
+
+async def release_card_auth(b: Dict[str, Any], admin: str) -> Dict[str, Any]:
+    auth = b.get("card_auth") or {}
+    if auth.get("status") != "held":
+        raise HTTPException(400, "There's no card hold on this booking")
+    try:
+        await _card_hold.cancel_intent(_key(), auth["payment_intent"])
+    except RuntimeError as e:
+        raise HTTPException(502, str(e)) from e
+    await _db.bookings.update_one({"id": b["id"]}, {"$set": {
+        "card_auth.status": "released", "card_auth.released_at": _now_iso(), "card_auth.released_by": admin,
+        "payment_status": "hold_released", "updated_at": _now_iso()}})
+    return {"ok": True, "released": auth["amount"]}
+
+
+@router.post("/admin/bookings/{booking_id}/card-auth/capture")
+async def admin_capture_card_auth(booking_id: str, req: CardAuthCapture, admin: str = Depends(_admin_dep)):
+    b = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    return await capture_card_auth(b, req.amount, admin)
+
+
+@router.post("/admin/bookings/{booking_id}/card-auth/release")
+async def admin_release_card_auth(booking_id: str, admin: str = Depends(_admin_dep)):
+    b = await _db.bookings.find_one({"id": booking_id.upper()})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    return await release_card_auth(b, admin)
 
 
 @router.post("/admin/bookings/{booking_id}/card-hold/create")

@@ -99,3 +99,58 @@ async def charge_saved_card(
     if r.status_code >= 400:
         raise RuntimeError(f"Stripe charge failed ({r.status_code}): {r.text[:300]}")
     return r.json()
+
+
+
+async def create_hold_checkout(stripe_key: str, booking: Dict[str, Any], amount_cents: int,
+                               success_url: str, cancel_url: str) -> Dict[str, Any]:
+    """Checkout Session that only AUTHORISES the card (manual capture) — used for rentals."""
+    data = {
+        "mode": "payment",
+        "payment_method_types[]": "card",
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "line_items[0][quantity]": "1",
+        "line_items[0][price_data][currency]": "usd",
+        "line_items[0][price_data][unit_amount]": str(amount_cents),
+        "line_items[0][price_data][product_data][name]": f"Rox rental {booking['id']}: {booking.get('item_name', '')}"[:250],
+        "payment_intent_data[capture_method]": "manual",
+        "payment_intent_data[metadata][booking_id]": booking["id"],
+        "payment_intent_data[description]": f"Rox rental hold {booking['id']}",
+        "metadata[booking_id]": booking["id"],
+        "metadata[purpose]": "rental_hold",
+    }
+    email = (booking.get("customer_email") or "").strip()
+    if email:
+        data["customer_email"] = email
+    async with httpx.AsyncClient(timeout=30.0) as c:
+        r = await c.post(f"{STRIPE_API}/checkout/sessions", auth=(stripe_key, ""), data=data)
+    if r.status_code >= 400:
+        raise RuntimeError(f"Stripe hold-session failed ({r.status_code}): {r.text[:300]}")
+    return r.json()
+
+
+async def retrieve_session_with_intent(stripe_key: str, session_id: str) -> Dict[str, Any]:
+    async with httpx.AsyncClient(timeout=20.0) as c:
+        r = await c.get(f"{STRIPE_API}/checkout/sessions/{session_id}", auth=(stripe_key, ""),
+                        params={"expand[]": "payment_intent.payment_method"})
+    if r.status_code >= 400:
+        raise RuntimeError(f"Stripe retrieve-session failed ({r.status_code}): {r.text[:300]}")
+    return r.json()
+
+
+async def capture_intent(stripe_key: str, payment_intent: str, amount_cents: int) -> Dict[str, Any]:
+    async with httpx.AsyncClient(timeout=30.0) as c:
+        r = await c.post(f"{STRIPE_API}/payment_intents/{payment_intent}/capture", auth=(stripe_key, ""),
+                         data={"amount_to_capture": str(amount_cents)})
+    if r.status_code >= 400:
+        raise RuntimeError(f"Stripe capture failed ({r.status_code}): {r.text[:300]}")
+    return r.json()
+
+
+async def cancel_intent(stripe_key: str, payment_intent: str) -> Dict[str, Any]:
+    async with httpx.AsyncClient(timeout=30.0) as c:
+        r = await c.post(f"{STRIPE_API}/payment_intents/{payment_intent}/cancel", auth=(stripe_key, ""))
+    if r.status_code >= 400:
+        raise RuntimeError(f"Stripe release failed ({r.status_code}): {r.text[:300]}")
+    return r.json()

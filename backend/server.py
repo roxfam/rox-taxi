@@ -3785,9 +3785,8 @@ async def guest_reschedule(booking_id: str, req: GuestRescheduleRequest):
 
 @api_router.post("/bookings/{booking_id}/cancel")
 async def cancel_booking(booking_id: str):
-    """Public cancel endpoint. Applies 15% fee when ≥48hr notice, else no refund.
-    When eligible AND payment was via Stripe or PayPal, automatically fires the
-    provider's refund API. Zelle refunds must be handled manually by owner."""
+    """Public cancel REQUEST. Works out the policy fee / refund estimate (48h notice rule) and
+    records it for the owner to approve and refund from admin; nothing is cancelled here."""
     doc = await db.bookings.find_one({"id": booking_id.upper()})
     if not doc:
         raise HTTPException(404, "Booking not found")
@@ -3825,85 +3824,27 @@ async def cancel_booking(booking_id: str):
             fee = round(max(0.0, total - deposit), 2) if paid else 0.0
     refund = round(max(0.0, total - fee), 2) if paid else 0.0
 
-    # ── AUTO-REFUND — fire provider API when eligible + paid ───────────────
-    refund_result: Dict[str, Any] = {"attempted": False}
-    pay_method = (doc.get("payment_method") or "").lower()
-    if paid and eligible and refund > 0.01:
-        refund_result["attempted"] = True
-        refund_result["method"] = pay_method
-        try:
-            if pay_method == "stripe" and doc.get("stripe_session_id"):
-                async with httpx.AsyncClient(timeout=15.0) as ac:
-                    # Stripe: retrieve session to get payment_intent, then refund
-                    s = await ac.get(
-                        f"https://api.stripe.com/v1/checkout/sessions/{doc['stripe_session_id']}",
-                        auth=(secrets_store.get_secret("STRIPE_API_KEY", ""), ""),
-                    )
-                    intent_id = (s.json() or {}).get("payment_intent")
-                    if intent_id:
-                        r = await ac.post(
-                            "https://api.stripe.com/v1/refunds",
-                            data={"payment_intent": intent_id, "amount": str(int(refund * 100))},
-                            auth=(secrets_store.get_secret("STRIPE_API_KEY", ""), ""),
-                        )
-                        j = r.json()
-                        refund_result.update({"ok": r.status_code == 200, "id": j.get("id"), "status": j.get("status")})
-            elif pay_method in ("paypal_checkout", "paypal") and doc.get("paypal_capture_id"):
-                # PayPal refund via REST — /v2/payments/captures/{id}/refund
-                try:
-                    from paypal_client import _base_url as _pp_base, _access_token
-                    async with httpx.AsyncClient(timeout=15.0) as ac:
-                        tok = await _access_token()
-                        r = await ac.post(
-                            f"{_pp_base()}/v2/payments/captures/{doc['paypal_capture_id']}/refund",
-                            headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json"},
-                            json={"amount": {"value": f"{refund:.2f}", "currency_code": "USD"}, "note_to_payer": "Rox Taxi — booking cancellation refund"},
-                        )
-                        j = r.json()
-                        refund_result.update({"ok": r.status_code in (200, 201), "id": j.get("id"), "status": j.get("status")})
-                except Exception as e:  # noqa: BLE001
-                    refund_result.update({"ok": False, "error": f"paypal client err: {e}"})
-            else:
-                refund_result.update({"ok": False, "reason": "Manual refund required (Zelle or unsupported method)"})
-        except Exception as e:  # noqa: BLE001
-            # Log full error internally, expose only sanitised summary to public.
-            logging.getLogger(__name__).warning("refund err on %s: %s", doc.get("id"), e)
-            refund_result.update({"ok": False, "error": "Refund could not be processed automatically — owner will refund manually."})
-
-    await db.bookings.update_one(
-        {"id": doc["id"]},
-        {"$set": {
-            "status": "cancelled",
-            "cancellation": {
-                "cancelled_at": now_iso(),
-                "hours_notice": round(hours_until, 2),
-                "eligible_for_refund": eligible,
-                "fee": fee,
-                "refund_estimate": refund,
-                "fee_pct": CANCELLATION_FEE_PCT,
-                "refund_result": refund_result,
-            },
-            "updated_at": now_iso(),
-        }},
-    )
-    gift_back = await gift_redeem_module.restore_for_booking(doc)
+    # Guests only REQUEST a cancellation; the owner approves + refunds from admin.
+    if (doc.get("cancel_request") or {}).get("status") == "pending":
+        return {"id": doc["id"], "requested": True, "already": True,
+                "message": "Your cancellation request is already with us. We'll confirm by email or text shortly."}
+    request_doc = {"status": "pending", "requested_at": now_iso(), "hours_notice": round(hours_until, 2),
+                   "eligible_for_refund": eligible, "suggested_fee": fee, "refund_estimate": refund}
+    await db.bookings.update_one({"id": doc["id"]}, {"$set": {"cancel_request": request_doc, "updated_at": now_iso()}})
+    try:
+        from notifications import notify_owner_activity  # noqa: PLC0415
+        await asyncio.to_thread(
+            notify_owner_activity, "cancel_request",
+            f"Cancel request: {doc['id']} {doc.get('customer_name', '')} ({doc.get('item_name', '')}) "
+            f"{round(hours_until, 1)}h before trip. Approve in admin.",
+            f"Cancellation request — booking {doc['id']}",
+        )
+    except Exception as e:  # noqa: BLE001
+        logging.warning("cancel request owner alert err: %s", e)
     return {
-        "id": doc["id"],
-        "status": "cancelled",
-        "gift_restored": gift_back,
-        "hours_notice": round(hours_until, 2),
-        "eligible_for_refund": eligible,
-        "cancellation_fee": fee,
-        "refund_estimate": refund,
-        "refund_result": refund_result,
-        "payment_status": doc.get("payment_status"),
-        "message": (
-            f"Cancelled with {round(hours_until,1)}h notice. Refund estimate: ${refund:.2f} (fee ${fee:.2f})."
-            if paid and eligible else
-            "Cancelled. Refund not eligible — booking was within the 48-hour window."
-            if paid and not eligible else
-            "Cancelled. No payment had been received."
-        ),
+        "id": doc["id"], "requested": True, "hours_notice": round(hours_until, 2),
+        "refund_estimate": refund, "cancellation_fee": fee,
+        "message": "Cancellation requested. We'll review it and confirm your refund by email or text.",
     }
 
 

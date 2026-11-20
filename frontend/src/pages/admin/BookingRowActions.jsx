@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Pencil, Ban, Trash2, Copy, MailCheck, RotateCcw } from "lucide-react";
+import { Pencil, Ban, Trash2, Copy, MailCheck, RotateCcw, CreditCard, Unlock, X } from "lucide-react";
 import { api } from "../../lib/api";
 import CancelBookingDialog from "./CancelBookingDialog";
 import RefundBookingDialog from "./RefundBookingDialog";
@@ -13,6 +13,29 @@ export default function BookingRowActions({ booking, onEdit, onRepeat, onChanged
   const [refundOpen, setRefundOpen] = useState(false);
   const cancelled = booking.status === "cancelled";
   const refundable = ["paid", "partially_refunded"].includes(booking.payment_status);
+  const held = booking.card_auth?.status === "held";
+  const request = booking.cancel_request?.status === "pending" && !cancelled;
+
+  const run = async (fn, ok) => {
+    setBusy(true);
+    try { const r = await fn(); toast.success(ok(r.data)); onChanged(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Something went wrong"); }
+    finally { setBusy(false); }
+  };
+
+  const charge = () => {
+    const v = window.prompt(`Charge the held card (up to $${booking.card_auth.amount.toFixed(2)}):`, booking.card_auth.amount.toFixed(2));
+    if (v === null) return;
+    run(() => api.post(`/admin/bookings/${booking.id}/card-auth/capture`, { amount: Number(v) }), (d) => `Charged $${d.captured.toFixed(2)}`);
+  };
+  const release = () => {
+    if (!window.confirm(`Release the $${booking.card_auth.amount.toFixed(2)} hold? The guest won't be charged.`)) return;
+    run(() => api.post(`/admin/bookings/${booking.id}/card-auth/release`), () => "Hold released");
+  };
+  const decline = () => {
+    if (!window.confirm("Decline this cancellation request? The booking stays active.")) return;
+    run(() => api.post(`/admin/bookings/${booking.id}/cancel-request/decline`), () => "Request declined");
+  };
 
   const sendConfirm = async () => {
     if (!booking.customer_email && !booking.customer_phone) {
@@ -53,6 +76,23 @@ export default function BookingRowActions({ booking, onEdit, onRepeat, onChanged
 
   return (
     <div className="mt-1.5 flex flex-wrap gap-1" data-testid={`admin-row-actions-${booking.id}`}>
+      {request && (
+        <div className="w-full flex flex-wrap items-center gap-1 rounded bg-[#FEF3C7] px-2 py-1 text-[10px] text-[#92400E]" data-testid={`admin-row-cancel-request-${booking.id}`}>
+          <span className="font-bold">Guest asked to cancel</span>
+          <span>{booking.cancel_request.hours_notice}h before · policy fee ${Number(booking.cancel_request.suggested_fee || 0).toFixed(2)}</span>
+          <button type="button" onClick={() => setCancelOpen(true)} disabled={busy} className="underline font-bold" data-testid={`admin-row-approve-cancel-${booking.id}`}>Approve &amp; refund</button>
+          <button type="button" onClick={decline} disabled={busy} className="inline-flex items-center underline" data-testid={`admin-row-decline-cancel-${booking.id}`}><X className="w-3 h-3" />Decline</button>
+        </div>
+      )}
+      {held && (
+        <div className="w-full flex flex-wrap items-center gap-1 rounded bg-[#E0F2FE] px-2 py-1 text-[10px] text-[#075985]" data-testid={`admin-row-hold-${booking.id}`}>
+          <span className="font-bold">Card held ${booking.card_auth.amount.toFixed(2)}</span>
+          <span>{booking.card_auth.card_brand} {booking.card_auth.card_last4 && `••${booking.card_auth.card_last4}`} · expires {(booking.card_auth.expires_at || "").slice(0, 10)}</span>
+          <button type="button" onClick={charge} disabled={busy} className="inline-flex items-center gap-0.5 underline font-bold" data-testid={`admin-row-hold-charge-${booking.id}`}><CreditCard className="w-3 h-3" />Charge</button>
+          <button type="button" onClick={release} disabled={busy} className="inline-flex items-center gap-0.5 underline" data-testid={`admin-row-hold-release-${booking.id}`}><Unlock className="w-3 h-3" />Release</button>
+        </div>
+      )}
+
       <button type="button" onClick={() => onEdit(booking)} disabled={busy}
         className={`${btn} bg-[#D4A94A]/10 text-[#B47F26] hover:bg-[#D4A94A] hover:text-white`}
         data-testid={`admin-row-edit-${booking.id}`}>

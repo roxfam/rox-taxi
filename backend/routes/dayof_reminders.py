@@ -662,6 +662,16 @@ def _cancel_notice(b: dict, reason: str) -> dict:
     return report
 
 
+@router.post("/admin/bookings/{booking_id}/cancel-request/decline")
+async def admin_decline_cancel_request(booking_id: str, admin: str = Depends(_admin_dep)):
+    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b or (b.get("cancel_request") or {}).get("status") != "pending":
+        raise HTTPException(404, "No pending cancellation request")
+    await _db.bookings.update_one({"id": booking_id}, {"$set": {
+        "cancel_request.status": "declined", "cancel_request.decided_at": _now_iso(), "cancel_request.decided_by": admin}})
+    return {"declined": True}
+
+
 @router.post("/admin/bookings/{booking_id}/cancel")
 async def admin_cancel_booking(booking_id: str, req: BookingCancel, admin: str = Depends(_admin_dep)):
     b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
@@ -672,7 +682,8 @@ async def admin_cancel_booking(booking_id: str, req: BookingCancel, admin: str =
     reason = (req.reason or "").strip()
     await _db.bookings.update_one({"id": booking_id}, {
         "$set": {"status": "cancelled", "cancelled_at": _now_iso(), "cancelled_by": admin,
-                 "cancel_reason": reason, "updated_at": _now_iso()},
+                 "cancel_reason": reason, "updated_at": _now_iso(),
+                 **({"cancel_request.status": "approved", "cancel_request.decided_at": _now_iso()} if b.get("cancel_request") else {})},
         "$push": {"status_history": {"status": "cancelled", "at": _now_iso(), "by": admin, "note": reason}},
     })
     notice = None
@@ -697,12 +708,23 @@ async def admin_cancel_booking(booking_id: str, req: BookingCancel, admin: str =
     gift_back = await restore_for_booking(b)
     fee = round(float(req.cancellation_fee or 0), 2)
     fee_invoice = None
+    hold = None
+    if (b.get("card_auth") or {}).get("status") == "held":
+        from routes.payments import capture_card_auth, release_card_auth  # noqa: PLC0415
+        try:
+            hold = await (capture_card_auth(b, fee, admin) if fee > 0 else release_card_auth(b, admin))
+        except HTTPException as he:
+            hold = {"ok": False, "error": he.detail}
+        if fee > 0:
+            await _db.bookings.update_one({"id": booking_id}, {"$set": {"cancellation_fee": fee}})
+        fee = 0.0 if hold.get("ok") else fee
     if fee > 0:
         await _db.bookings.update_one({"id": booking_id}, {"$set": {"cancellation_fee": fee}})
         if req.send_fee_invoice and b.get("payment_status") not in ("paid", "partially_refunded"):
             fee_invoice = await _fee_invoice(b, fee, reason, admin)
             await _db.bookings.update_one({"id": booking_id}, {"$set": {"cancellation_fee_booking_id": fee_invoice["booking_id"]}})
-    return {"cancelled": True, "gift_restored": gift_back, "cancellation_fee": fee, "fee_invoice": fee_invoice,
+    return {"cancelled": True, "gift_restored": gift_back, "cancellation_fee": round(float(req.cancellation_fee or 0), 2),
+            "fee_invoice": fee_invoice, "card_hold": hold,
             "guest_notified": bool(notice and (notice["email"].get("sent") or notice["sms"].get("sent"))),
             "refund": refund}
 

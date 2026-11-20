@@ -28,8 +28,8 @@ async def _admin_dep(request: Request, authorization: Optional[str] = Header(Non
 
 
 def _status(q: dict) -> str:
-    if q.get("status") == "booked":
-        return "booked"
+    if q.get("status") in ("booked", "cancelled"):
+        return q["status"]
     return "expired" if q["expires_at"] <= datetime.now(timezone.utc).isoformat() else "open"
 
 
@@ -142,6 +142,37 @@ async def quote_people(qid: str, req: QuotePeople, request: Request):
     fields = await _price(p, request)
     await _db.quotes.update_one({"id": q["id"]}, {"$set": {**fields, "payload": p, "updated_at": _now_iso()}})
     return _public({**q, **fields})
+
+
+@router.post("/admin/quotes/{qid}/cancel")
+async def admin_cancel_quote(qid: str, admin=Depends(_admin_dep)):
+    q = await _get(qid)
+    if q.get("status") == "booked":
+        raise HTTPException(400, "This quote is already booked. Cancel the booking instead.")
+    await _db.quotes.update_one({"id": q["id"]}, {"$set": {"status": "cancelled", "cancelled_at": _now_iso(), "cancelled_by": admin}})
+    return {"cancelled": True}
+
+
+@router.post("/admin/quotes/{qid}/send-link")
+async def admin_send_quote_link(qid: str, admin=Depends(_admin_dep)):
+    """Text + email the guest the quote link, where they convert it to an invoice and pay by card."""
+    q = await _get(qid)
+    if _status(q) != "open":
+        raise HTTPException(400, "Only open quotes can be sent")
+    from notifications import send_sms, send_email  # noqa: PLC0415
+    from routes.payment_digest import _site_url  # noqa: PLC0415
+    link = f"{_site_url()}/quote/{q['id']}"
+    first = (q.get("customer_name") or "there").split(" ")[0]
+    out = {"link": link, "text": None, "email": None}
+    if q.get("customer_phone"):
+        out["text"] = await asyncio.to_thread(send_sms, q["customer_phone"],
+                                              f"Hi {first}, it's Rox Taxi. Your quote {q['id']} for {q['item_name']} is ${q['total']:.2f}. Tap to pay online: {link}")
+    if q.get("customer_email"):
+        html = (f"<p>Hi {first},</p><p>Your quote <b>{q['id']}</b> for {q['item_name']} is <b>${q['total']:.2f}</b>.</p>"
+                f"<p><a href='{link}' style='display:inline-block;padding:12px 20px;background:#E86A3C;color:#fff;border-radius:999px;text-decoration:none'>View quote &amp; pay</a></p>")
+        out["email"] = await asyncio.to_thread(send_email, q["customer_email"], f"Your Rox quote {q['id']} — pay online", html)
+    await _db.quotes.update_one({"id": q["id"]}, {"$set": {"link_sent_at": _now_iso()}})
+    return out
 
 
 class AdminQuote(BaseModel):

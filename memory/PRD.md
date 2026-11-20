@@ -985,3 +985,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Admin: POST /api/admin/quotes (email + optional SMS link); NewBookingDialog "Send as quote instead" for taxi/tour/rental items (needs name, email, phone, date).
 - Cancel dialog: cancellation fee ($ or 10/25/50%). Paid card bookings → fee kept from the Stripe refund (booking.cancellation_fee). Unpaid → optional fee invoice (new booking source "cancellation_fee", parent_booking_id) with Stripe pay link by email + text.
 - Note: tours without child_price are priced as one flat price whatever the group size (existing behaviour) — the people editor only changes price for per-person/child-priced items.
+
+## 2026-11-20 — Guest cancel requests, rental card holds, quote pay links
+- Public POST /api/bookings/{id}/cancel now only records `cancel_request` (policy fee/refund estimate, owner alert); admin row shows "Guest asked to cancel" → Approve & refund (CancelBookingDialog) or Decline (/admin/bookings/{id}/cancel-request/decline).
+- Rentals: with a real Stripe key, /payments/checkout creates a manual-capture Checkout (card_hold.create_hold_checkout); payment_status "authorized" + booking.card_auth {payment_intent, amount, expires_at +7d}. Admin row: Charge (capture, partial allowed) / Release. Admin cancel on a held card: fee → captured from hold, no fee → hold released. With the shared sk_test_emergent key rentals are charged normally (holds need a real key) — UNTESTED in preview.
+- Quotes panel: Send pay link (email + text) and Cancel quote (status "cancelled").
+
