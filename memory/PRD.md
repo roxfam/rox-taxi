@@ -1049,6 +1049,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Invoice edit: BookingEdit now also accepts item_name + dropoff_time.
 
 - Send invoice: POST /admin/bookings/{id}/send-invoice (email with PDF link + pay link if unpaid, SMS with links; logs invoice_sends). Buttons: Invoices list "Send", post-edit "Send invoice?" prompt, Booking detail "Send invoice" (was email-only re-send).
+- Unpaid invoice reminder: cron `send-unpaid-invoice-reminders` (hourly :20, .emergent/crons.yml) → POST /api/cron/send-unpaid-invoice-reminders (Bearer WEBHOOK_CRON_SECRET, background task). Trips 23–25h out, payment not paid/refunded/authorized, not cancelled/completed, no card hold, total>0 → one email + SMS with pay + PDF links (shared _send_invoice_notice). Idempotent via unpaid_reminded_at.
+
 
 
 

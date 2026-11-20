@@ -68,3 +68,10 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/sync-cruise-ships"
     method: POST
     enabled: true
+
+  - name: send-unpaid-invoice-reminders
+    description: "Hourly: bookings with an unpaid invoice whose trip is 23-25h away get one email + text reminder with the pay link. Idempotent via `unpaid_reminded_at`."
+    cron: "20 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/send-unpaid-invoice-reminders"
+    method: POST
+    enabled: true
