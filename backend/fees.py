@@ -80,3 +80,18 @@ def fee_line(fees: dict) -> list:
     if fees["processing_fee"]:
         out.append({"label": f"Processing fee ({fees['processing_fee_pct'] * 100:g}%)", "amount": fees["processing_fee"]})
     return out
+
+
+
+def guard_saturday(date_str: str) -> None:
+    """Saturdays are an off day: only admin-created bookings may use them."""
+    from datetime import date as _date  # noqa: PLC0415
+    from fastapi import HTTPException  # noqa: PLC0415
+    if ADMIN_MADE.get():
+        return
+    try:
+        d = _date.fromisoformat((date_str or "")[:10])
+    except ValueError:
+        return
+    if d.weekday() == 5:
+        raise HTTPException(400, "We're closed on Saturdays. Please choose another day, or WhatsApp us for special requests.")

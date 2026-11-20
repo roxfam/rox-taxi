@@ -806,6 +806,8 @@ async def share_cable_beach_click(req: CableBeachShareClick):
 @router.post("/cable-beach/book")
 async def cable_beach_book(req: CableBeachBookRequest):
     """Create a real booking record for the Cable Beach day package."""
+    import fees as fees_module  # noqa: PLC0415
+    fees_module.guard_saturday(req.booking_date)
     cfg = await _cable_beach_cfg()
     if not cfg.get("active", True):
         raise HTTPException(503, "Cable Beach package is not currently available.")

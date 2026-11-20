@@ -189,6 +189,8 @@ class BundleBookIn(BaseModel):
 
 @router.post("/bundles/{bid}/book")
 async def book_bundle(bid: str, body: BundleBookIn):
+    import fees as fees_module  # noqa: PLC0415
+    fees_module.guard_saturday(body.booking_date or "")
     b = await _db.bundles.find_one({"id": bid, "active": True})
     if not b:
         raise HTTPException(404, "This deal is no longer available")

@@ -491,9 +491,9 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
       toast.error("Please enter the number of passengers.");
       return;
     }
-    // Block Saturdays for taxi + rental
-    if (["taxi", "rental"].includes(serviceType) && isClosedDate(form.booking_date, Number(form.days) || 1)) {
-      toast.error("We are closed on Saturdays for pickup. Saturday drop-off is fine — please choose a different pickup date.");
+    // Saturdays are an off day for every online booking
+    if (isClosedDate(form.booking_date, serviceType === "rental" ? Number(form.days) || 1 : 1)) {
+      toast.error("We're closed on Saturdays. Please choose another day, or WhatsApp us for special requests.");
       return;
     }
     // Enforce rental 2-day minimum
@@ -960,12 +960,12 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
 
               {taxiTooSoon && <TaxiTooSoonNotice />}
 
-              {["taxi", "rental"].includes(serviceType) && isClosedDate(form.booking_date, Number(form.days) || 1) && (
+              {isClosedDate(form.booking_date, serviceType === "rental" ? Number(form.days) || 1 : 1) && (
                 <div className="rounded-xl border border-[#E86A3C]/30 bg-[#E86A3C]/10 text-[#7a2d10] px-4 py-3 flex items-start gap-2 text-sm" data-testid="closed-saturday-warning">
                   <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-[#E86A3C]" />
                   <div>
-                    <div className="font-semibold">We're closed on Saturdays for pickup.</div>
-                    <div className="text-xs text-[#78716c] mt-0.5">Rental drop-offs on Saturday ARE allowed — feel free to keep the car through Saturday.</div>
+                    <div className="font-semibold">We're closed on Saturdays.</div>
+                    <div className="text-xs text-[#78716c] mt-0.5">Please pick another day. {serviceType === "rental" ? "Rental drop-offs on Saturday ARE allowed. " : ""}WhatsApp us for special requests.</div>
                     <div>Please pick a different date — this booking cannot be completed on a Saturday.</div>
                   </div>
                 </div>

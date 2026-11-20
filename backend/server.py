@@ -314,6 +314,8 @@ def _validate_open_day(service_type: str, booking_date: str, days: int = 1):
     Taxi rides always have days=1 so this is a single-day check.
     Also honours admin-managed `blackout_dates` in site_config.
     """
+    import fees as fees_module  # noqa: PLC0415
+    fees_module.guard_saturday(booking_date)  # Saturday off day applies to every service
     if service_type not in CLOSED_APPLIES_TO:
         return
     try:
@@ -321,7 +323,6 @@ def _validate_open_day(service_type: str, booking_date: str, days: int = 1):
     except Exception:
         return
     d = start.date()
-    import fees as fees_module  # noqa: PLC0415
     if d.weekday() in CLOSED_WEEKDAYS and not fees_module.ADMIN_MADE.get():
         raise HTTPException(
             400,
@@ -3498,8 +3499,8 @@ async def get_fees():
         ],
         "closed_weekdays": sorted(CLOSED_WEEKDAYS),
         "closed_weekdays_labels": ["Saturday"],
-        "closed_policy": "Taxi service and car-rental pickups are closed on Saturdays. Rental drop-offs on Saturdays ARE allowed.",
-        "closed_applies_to": sorted(CLOSED_APPLIES_TO),
+        "closed_policy": "We're closed on Saturdays for all online bookings (taxi, tours, rentals, groups). Rental drop-offs on Saturdays ARE allowed. Saturday trips can only be arranged directly by our team.",
+        "closed_applies_to": ["all"],
         "cancellation_fee_pct": CANCELLATION_FEE_PCT,
         "cancellation_notice_hours": CANCELLATION_NOTICE_HOURS,
         "cancellation_applies_to": sorted(CANCELLATION_APPLIES_TO),
@@ -3697,6 +3698,8 @@ async def guest_reschedule(booking_id: str, req: GuestRescheduleRequest):
         raise HTTPException(400, "new_pickup must be an ISO-8601 datetime")
     if new_dt.tzinfo is None:
         new_dt = new_dt.replace(tzinfo=timezone.utc)
+    import fees as fees_module  # noqa: PLC0415
+    fees_module.guard_saturday(req.new_pickup)
 
     now = datetime.now(timezone.utc)
     if (new_dt - now).total_seconds() < 2 * 3600:
@@ -4358,6 +4361,8 @@ async def group_booking_checkout(req: GroupBookingCheckout):
     the balance is captured as a second checkout once the trip date is
     close (admin triggers it via the Payments panel).
     """
+    import fees as fees_module  # noqa: PLC0415
+    fees_module.guard_saturday(req.booking_date)
     quote = await group_booking_quote(GroupQuoteRequest(
         service_type=req.service_type, item_id=req.item_id,
         base_price=req.base_price, pax=req.pax,
