@@ -1038,6 +1038,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Quotes panel: search, status filter, View/Edit dialog (EditQuoteDialog) → PUT /admin/quotes/{qid} re-prices and restarts 48h; GET /admin/quotes/{qid}.
 - Open (minor): catalog tours without child_price price flat regardless of people; Booking.tip_amount max 1000 vs manual 10000.
 - Admin catalog tour quotes (POST /admin/quotes, service tour) set quote.per_person_tour → fees.TOUR_PER_PERSON makes create_booking price flat tours (no child_price) as price × people; applies on create, admin edit, guest people change and conversion. Public website pricing unchanged.
+- Saturday closure override: admin-created quotes/bookings (fees.ADMIN_MADE contextvar set in admin quote create/edit and in re-price/convert of quotes with created_by) skip the Saturday check in _validate_open_day. Public site + public quotes still blocked. Blackout dates still apply to everyone. Manual bookings never had the check.
+
 
 
 

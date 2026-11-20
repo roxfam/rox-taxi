@@ -321,7 +321,8 @@ def _validate_open_day(service_type: str, booking_date: str, days: int = 1):
     except Exception:
         return
     d = start.date()
-    if d.weekday() in CLOSED_WEEKDAYS:
+    import fees as fees_module  # noqa: PLC0415
+    if d.weekday() in CLOSED_WEEKDAYS and not fees_module.ADMIN_MADE.get():
         raise HTTPException(
             400,
             f"We are closed on Saturdays for pickup. Please choose a different pickup date (requested {d.isoformat()}). Saturday drop-off is fine.",

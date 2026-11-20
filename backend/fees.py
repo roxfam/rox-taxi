@@ -7,17 +7,20 @@ DEFAULT_VAT_PCT = 10.0
 NO_VAT = contextvars.ContextVar("no_vat", default=False)  # set only by admin-created quotes/bookings
 FEE_ON = contextvars.ContextVar("fee_on", default=None)  # admin override: force processing fee on/off
 TOUR_PER_PERSON = contextvars.ContextVar("tour_per_person", default=False)  # admin quotes: flat tours × people
+ADMIN_MADE = contextvars.ContextVar("admin_made", default=False)  # admin-created: may book on Saturday closure
 
 
 @contextlib.contextmanager
-def admin_overrides(no_vat: bool = False, fee_on=None, tour_per_person: bool = False):
+def admin_overrides(no_vat: bool = False, fee_on=None, tour_per_person: bool = False, admin_made: bool = False):
     t1, t2, t3 = NO_VAT.set(bool(no_vat)), FEE_ON.set(fee_on), TOUR_PER_PERSON.set(bool(tour_per_person))
+    t4 = ADMIN_MADE.set(bool(admin_made))
     try:
         yield
     finally:
         NO_VAT.reset(t1)
         FEE_ON.reset(t2)
         TOUR_PER_PERSON.reset(t3)
+        ADMIN_MADE.reset(t4)
 
 
 async def fee_rates(db) -> dict:
