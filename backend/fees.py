@@ -1,9 +1,21 @@
 """Processing fee for taxi + city tours, VAT for everything else (rates editable in admin)."""
+import contextlib
 import contextvars
 
 DEFAULT_PROCESSING_PCT = 5.0
 DEFAULT_VAT_PCT = 10.0
 NO_VAT = contextvars.ContextVar("no_vat", default=False)  # set only by admin-created quotes/bookings
+FEE_ON = contextvars.ContextVar("fee_on", default=None)  # admin override: force processing fee on/off
+
+
+@contextlib.contextmanager
+def admin_overrides(no_vat: bool = False, fee_on=None):
+    t1, t2 = NO_VAT.set(bool(no_vat)), FEE_ON.set(fee_on)
+    try:
+        yield
+    finally:
+        NO_VAT.reset(t1)
+        FEE_ON.reset(t2)
 
 
 async def fee_rates(db) -> dict:
@@ -25,17 +37,19 @@ async def is_processing(db, service_type: str, item_id: str = "", item_name: str
     return "city tour" in (item_name or "").lower()
 
 
-def compute_fees(subtotal: float, processing: bool, rates: dict, no_vat: bool = False) -> dict:
-    if processing:
-        pct = rates["processing_pct"]
-        return {"vat_amount": 0.0, "vat_pct": 0.0, "processing_fee": round(subtotal * pct / 100, 2), "processing_fee_pct": pct / 100}
-    pct = 0.0 if (no_vat or NO_VAT.get()) else rates["vat_pct"]
-    return {"vat_amount": round(subtotal * pct / 100, 2), "vat_pct": pct / 100, "processing_fee": 0.0, "processing_fee_pct": 0.0}
+def compute_fees(subtotal: float, processing: bool, rates: dict, no_vat: bool = False, fee_on=None) -> dict:
+    on = fee_on if fee_on is not None else FEE_ON.get()
+    on = processing if on is None else bool(on)
+    vat_pct = 0.0 if (processing or no_vat or NO_VAT.get()) else rates["vat_pct"]
+    fee_pct = rates["processing_pct"] if on else 0.0
+    return {"vat_amount": round(subtotal * vat_pct / 100, 2), "vat_pct": vat_pct / 100,
+            "processing_fee": round(subtotal * fee_pct / 100, 2), "processing_fee_pct": fee_pct / 100}
 
 
 def fee_line(fees: dict) -> list:
-    if fees["processing_fee"]:
-        return [{"label": f"Processing fee ({fees['processing_fee_pct'] * 100:g}%)", "amount": fees["processing_fee"]}]
+    out = []
     if fees["vat_amount"]:
-        return [{"label": f"VAT ({fees['vat_pct'] * 100:g}%)", "amount": fees["vat_amount"]}]
-    return []
+        out.append({"label": f"VAT ({fees['vat_pct'] * 100:g}%)", "amount": fees["vat_amount"]})
+    if fees["processing_fee"]:
+        out.append({"label": f"Processing fee ({fees['processing_fee_pct'] * 100:g}%)", "amount": fees["processing_fee"]})
+    return out

@@ -155,11 +155,8 @@ async def quote_people(qid: str, req: QuotePeople, request: Request):
         raise HTTPException(400, "Enter the number of people")
     p.pop("processing_fee", None)
     p.pop("group_discount", None)
-    tok = fees_module.NO_VAT.set(bool(q.get("no_vat")))
-    try:
+    with fees_module.admin_overrides(bool(q.get("no_vat")), q.get("processing_fee_on")):
         fields = await _price(p, request)
-    finally:
-        fees_module.NO_VAT.reset(tok)
     await _db.quotes.update_one({"id": q["id"]}, {"$set": {**fields, "payload": p, "updated_at": _now_iso()}})
     return _public({**q, **fields})
 
@@ -212,10 +209,13 @@ def _manual_fields(p: dict, rates: dict) -> dict:
               ("Paradise Island bridge toll pass", 2.0 if p.get("bridge_toll") and p.get("service_type") == "taxi" else 0.0)]
     lines += [{"label": k, "amount": v} for k, v in extras if v]
     sub = round(sum(x["amount"] for x in lines), 2)
-    fz = fees_module.compute_fees(sub, rates["processing"], rates, no_vat=bool(p.get("no_vat")))
+    fz = fees_module.compute_fees(sub, rates["processing"], rates, no_vat=bool(p.get("no_vat")), fee_on=p.get("processing_fee_on"))
     lines += fees_module.fee_line(fz)
-    total = round(sub + fz["vat_amount"] + fz["processing_fee"], 2)
-    p["total"] = total
+    tip = round(max(0.0, float(p.get("tip_amount") or 0)), 2)
+    if tip:
+        lines.append({"label": "Gratuity", "amount": tip})
+    total = round(sub + fz["vat_amount"] + fz["processing_fee"] + tip, 2)
+    p["total"] = sub  # pre-fee, pre-tip: the booking re-adds VAT/fee/gratuity on conversion
     dep_pct = max(0.0, min(90.0, float(p.get("deposit_pct") or 0)))
     deposit = round(total * dep_pct / 100, 2) if dep_pct else 0.0
     return {"service_type": p.get("service_type"), "item_name": p.get("item_name"),
@@ -245,17 +245,16 @@ class AdminQuote(BaseModel):
     payload: dict
     text_guest: bool = False
     no_vat: bool = False
+    processing_fee_on: Optional[bool] = None
     dropoff_time: Optional[str] = Field(None, max_length=10)
 
 
 @router.post("/admin/quotes")
 async def admin_create_quote(req: AdminQuote, request: Request, admin=Depends(_admin_dep)):
-    tok = fees_module.NO_VAT.set(req.no_vat)
-    try:
+    with fees_module.admin_overrides(req.no_vat, req.processing_fee_on):
         fields = await _price(req.payload, request)
-    finally:
-        fees_module.NO_VAT.reset(tok)
     q = await _save_quote(req.payload, "booking", {**fields, "created_by": admin, "no_vat": req.no_vat,
+                                                    "processing_fee_on": req.processing_fee_on,
                                                     "dropoff_time": req.dropoff_time or None})
     return q
 
@@ -355,11 +354,8 @@ async def book_quote(qid: str, request: Request):
             from routes.dayof_reminders import ManualBooking, admin_create_booking  # noqa: PLC0415
             b = (await admin_create_booking(ManualBooking(**q["payload"]), q.get("created_by") or "quote"))["booking"]
         else:
-            tok = fees_module.NO_VAT.set(bool(q.get("no_vat")))
-            try:
+            with fees_module.admin_overrides(bool(q.get("no_vat")), q.get("processing_fee_on")):
                 b = await _create_booking(_model(q["payload"], False), request)
-            finally:
-                fees_module.NO_VAT.reset(tok)
     except Exception:
         await _db.quotes.update_one({"id": q["id"]}, {"$set": {"status": "open"}})
         raise
@@ -394,5 +390,54 @@ async def book_quote(qid: str, request: Request):
 
 @router.get("/admin/quotes")
 async def admin_quotes(_admin=Depends(_admin_dep)):
-    docs = await _db.quotes.find({}, {"_id": 0, "payload": 0}).sort("created_at", -1).to_list(100)
+    docs = await _db.quotes.find({}, {"_id": 0, "payload": 0}).sort("created_at", -1).to_list(1000)
     return [{**d, "status": _status(d)} for d in docs]
+
+
+@router.get("/admin/quotes/{qid}")
+async def admin_quote_detail(qid: str, _admin=Depends(_admin_dep)):
+    q = await _get(qid)
+    return {**q, "status": _status(q)}
+
+
+EDITABLE = ("customer_name", "customer_email", "customer_phone", "booking_date", "pickup_location", "dropoff_location",
+            "passengers", "notes", "dropoff_time", "trip_cost", "per_person", "deposit_pct", "no_vat",
+            "processing_fee_on", "tip_amount", "item_name")
+
+
+@router.put("/admin/quotes/{qid}")
+async def admin_edit_quote(qid: str, body: dict, request: Request, admin=Depends(_admin_dep)):
+    """Edit an open/expired quote; it is re-priced and its 48h validity restarts."""
+    q = await _get(qid)
+    if _status(q) in ("booked", "cancelled") or q.get("status") == "booking":
+        raise HTTPException(400, "Only open or expired quotes can be edited")
+    if q.get("kind") not in ("manual", "booking"):
+        raise HTTPException(400, "This quote type can't be edited — create a new one")
+    ch = {k: v for k, v in body.items() if k in EDITABLE}
+    p = {**q["payload"]}
+    from phone_utils import normalize_phone  # noqa: PLC0415
+    if ch.get("customer_phone"):
+        ch["customer_phone"] = normalize_phone(ch["customer_phone"])
+    no_vat = bool(ch.pop("no_vat", q.get("no_vat")))
+    fee_on = ch.pop("processing_fee_on", q.get("processing_fee_on"))
+    drop = ch.pop("dropoff_time", q.get("dropoff_time"))
+    if q["kind"] == "manual":
+        p.update({**ch, "no_vat": no_vat, "processing_fee_on": fee_on, "dropoff_time": drop})
+        fields = _manual_fields(p, await _manual_rates(p))
+    else:
+        for k in ("trip_cost", "per_person", "deposit_pct"):
+            ch.pop(k, None)
+        if "passengers" in ch and p.get("adults") is not None:
+            p.update({"adults": ch["passengers"], "kids": 0, "toddlers": 0})
+        p.update(ch)
+        p.pop("processing_fee", None)
+        p.pop("group_discount", None)
+        with fees_module.admin_overrides(no_vat, fee_on):
+            fields = await _price(p, request)
+        fields.update({"dropoff_time": drop or None})
+    exp = datetime.now(timezone.utc) + timedelta(hours=VALID_HOURS)
+    upd = {**fields, "payload": p, "no_vat": no_vat, "processing_fee_on": fee_on, "updated_at": _now_iso(),
+           "edited_by": admin, "status": "open", "expires_at": exp.isoformat(),
+           "expires_label": exp.astimezone(timezone(timedelta(hours=-4))).strftime("%b %d, %Y %I:%M %p") + " Nassau time"}
+    await _db.quotes.update_one({"id": q["id"]}, {"$set": upd})
+    return {**q, **upd, "status": "open"}

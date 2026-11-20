@@ -963,7 +963,7 @@ async def refund_payment(
 
     already = float(booking.get("refunded_amount") or 0.0)
     amt = float(booking.get("total") or tx.get("amount") or 0.0)
-    amt = round(amt - float(booking.get("processing_fee") or 0.0), 2)  # processing fee is non-refundable
+    amt = round(amt - float(booking.get("processing_fee") or 0.0) - float(booking.get("tip_amount") or 0.0), 2)  # fee + tip non-refundable
     remaining = round(max(0.0, amt - already), 2)
     if remaining < 0.01:
         raise HTTPException(409, "Nothing left to refund on this booking")

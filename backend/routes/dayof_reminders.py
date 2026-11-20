@@ -450,6 +450,8 @@ class ManualBooking(BaseModel):
     trip_cost: Optional[float] = Field(None, ge=0, le=100000)
     per_person: bool = False
     no_vat: bool = False
+    processing_fee_on: Optional[bool] = None
+    tip_amount: float = Field(0, ge=0, le=10000)
     dropoff_time: Optional[str] = Field(None, max_length=10)
     payment: str = Field("unpaid", pattern="^(unpaid|cash|zelle|card_offline)$")
     send_confirmation: bool = True
@@ -515,9 +517,10 @@ async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_d
     import fees as fees_module  # noqa: PLC0415
     fz = fees_module.compute_fees(round(req.total, 2),
                                   await fees_module.is_processing(_db, req.service_type, req.item_id or "", req.item_name or ""),
-                                  await fees_module.fee_rates(_db), no_vat=req.no_vat)
-    doc.update({**fz, "subtotal_before_tax": round(req.total, 2),
-                "total": round(req.total + fz["vat_amount"] + fz["processing_fee"], 2)})
+                                  await fees_module.fee_rates(_db), no_vat=req.no_vat, fee_on=req.processing_fee_on)
+    tip = round(req.tip_amount or 0, 2)
+    doc.update({**fz, "subtotal_before_tax": round(req.total, 2), "tip_amount": tip,
+                "total": round(req.total + fz["vat_amount"] + fz["processing_fee"] + tip, 2)})
     doc.update({
         "id": str(uuid.uuid4())[:8].upper(),
         "item_id": req.item_id or "",
@@ -673,15 +676,43 @@ async def _paid_card_tx(booking_id: str) -> Optional[dict]:
 
 @router.get("/admin/bookings/{booking_id}/refundable")
 async def admin_booking_refundable(booking_id: str, _: str = Depends(_admin_dep)):
-    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    b = await _db.bookings.find_one({"id": booking_id.strip().upper()}, {"_id": 0})
     if not b:
         raise HTTPException(404, "Booking not found")
-    tx = await _paid_card_tx(booking_id) if b.get("payment_status") in ("paid", "partially_refunded") else None
+    tx = await _paid_card_tx(b["id"]) if b.get("payment_status") in ("paid", "partially_refunded") else None
     total = float(b.get("total") or b.get("total_price") or (tx or {}).get("amount") or 0)
-    kept = round(float(b.get("processing_fee") or 0), 2)
+    kept = round(float(b.get("processing_fee") or 0) + float(b.get("tip_amount") or 0), 2)
     remaining = round(max(0.0, total - kept - float(b.get("refunded_amount") or 0)), 2)
     return {"refundable": bool(tx) and remaining >= 0.01, "amount": remaining, "fee_kept": kept,
-            "provider": (tx or {}).get("provider") or ("stripe" if tx else None)}
+            "provider": (tx or {}).get("provider") or ("stripe" if tx else None),
+            "booking_id": b["id"], "customer_name": b.get("customer_name"), "item_name": b.get("item_name"),
+            "total": total, "payment_status": b.get("payment_status"),
+            "manual_max": remaining if b.get("payment_status") in ("paid", "partially_refunded") else 0.0}
+
+
+class ManualRefundIn(BaseModel):
+    amount: float = Field(..., gt=0, le=100000)
+    method: str = Field("cash", pattern="^(cash|zelle|bank_transfer|other)$")
+    reason: Optional[str] = Field(None, max_length=500)
+
+
+@router.post("/admin/bookings/{booking_id}/refund-manual")
+async def admin_manual_refund(booking_id: str, req: ManualRefundIn, admin: str = Depends(_admin_dep)):
+    """Record a refund paid outside Stripe/PayPal (cash, Zelle, bank transfer)."""
+    info = await admin_booking_refundable(booking_id, admin)
+    amt = round(req.amount, 2)
+    if amt > info["manual_max"] + 0.001:
+        raise HTTPException(400, f"Refund can't be more than ${info['manual_max']:.2f}")
+    b = await _db.bookings.find_one({"id": info["booking_id"]}, {"_id": 0, "refunded_amount": 1})
+    new_total = round(float(b.get("refunded_amount") or 0) + amt, 2)
+    full = amt >= info["manual_max"] - 0.001
+    now = _now_iso()
+    await _db.bookings.update_one({"id": info["booking_id"]}, {
+        "$set": {"refunded_amount": new_total, "refunded_at": now, "updated_at": now,
+                 "payment_status": "refunded" if full else "partially_refunded"},
+        "$push": {"refund_history": {"at": now, "amount": amt, "actor": admin, "provider": req.method,
+                                     "manual": True, "ok": True, "status": "recorded", "reason": req.reason}}})
+    return {"ok": True, "amount": amt, "refunded_total": new_total}
 
 
 def _cancel_notice(b: dict, reason: str) -> dict:

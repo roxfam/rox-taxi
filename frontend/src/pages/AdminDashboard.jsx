@@ -40,6 +40,7 @@ import CableBeachPackageCard from "./admin/CableBeachPackageCard";
 import CableBeachCarouselCard from "./admin/CableBeachCarouselCard";
 import AdminArrivalsCard from "./admin/AdminArrivalsCard";
 import TeamSmsCard from "./admin/TeamSmsCard";
+import ManualRefundButton from "./admin/ManualRefundButton";
 
 const STATUSES = ["pending_payment", "confirmed", "driver_assigned", "en_route", "arrived", "completed", "cancelled"];
 
@@ -418,6 +419,7 @@ export default function AdminDashboard() {
         <div className="mt-8 bg-white rounded-xl border border-[#E2E8F0] overflow-hidden">
           <div className="p-4 border-b border-[#E2E8F0] flex flex-wrap gap-2 items-center">
             <button onClick={() => { setRepeatFrom(null); setNewBookingOpen(true); }} className="text-xs px-3 py-1.5 rounded-md bg-[#E86A3C] text-white font-semibold inline-flex items-center gap-1 hover:bg-[#d65a2c] transition-colors" data-testid="admin-new-booking-btn">+ Add booking</button>
+            <ManualRefundButton onDone={load} />
             <input
               type="search"
               value={search}

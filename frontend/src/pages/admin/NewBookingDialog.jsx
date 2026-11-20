@@ -17,7 +17,7 @@ const EMPTY = {
   booking_date: "", pickup_location: "", dropoff_location: "", passengers: 1, flight_number: "", notes: "",
   extra_luggage: 0, luggage_price: 3, car_seats: 0, bridge_toll: false, stops: [], trip_legs: [],
   trip_cost: "", per_person: false, deposit_pct: "", total: "", payment: "unpaid", send_confirmation: true, send_pay_link: true, text_pay_link: true,
-  no_vat: false, dropoff_time: "",
+  no_vat: false, dropoff_time: "", processing_fee_on: null, tip_pct: null, tip_amount: "",
 };
 
 const input = "w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#0B3B5C]";
@@ -63,29 +63,60 @@ const fromBooking = (b) => ({
   bridge_toll: Number(b.bridge_toll_fee || 0) > 0,
 });
 
+const TIP_PCTS = [10, 15, 18, 20];
+
+function GratuityPicker({ f, setF, base }) {
+  const pick = (p) => setF((x) => ({ ...x, tip_pct: x.tip_pct === p ? null : p, tip_amount: x.tip_pct === p ? "" : (base * p / 100).toFixed(2) }));
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="new-booking-gratuity">
+      <span className="text-[#0B3B5C]">Gratuity:</span>
+      {TIP_PCTS.map((p) => (
+        <button key={p} type="button" onClick={() => pick(p)} data-testid={`new-booking-tip-${p}`}
+          className={`px-2 py-0.5 rounded-full border ${f.tip_pct === p ? "bg-[#0B3B5C] text-white border-[#0B3B5C]" : "border-[#E2E8F0] text-[#0B3B5C]"}`}>{p}%</button>
+      ))}
+      <span className="text-[#64748B]">or $</span>
+      <input type="number" min="0" step="0.01" value={f.tip_amount} onChange={(e) => setF((x) => ({ ...x, tip_pct: null, tip_amount: e.target.value }))}
+        className="w-20 px-2 py-0.5 border border-[#E2E8F0] rounded" data-testid="new-booking-tip-amount" />
+    </div>
+  );
+}
+
 function FeeNote({ f, setF, items }) {
   const [rates, setRates] = useState({ p: 5, v: 10 });
   useEffect(() => {
     api.get("/site-config").then((r) => setRates({ p: Number(r.data.processing_fee_pct ?? 5), v: Number(r.data.vat_pct ?? 10) })).catch(() => {});
   }, []);
-  const t = Number(f.total) || 0;
   const it = (items || []).find((x) => x.id === f.item_id);
+  const pax = Number(f.passengers) || 1;
+  const t = Number(f.total) || (f.trip_cost !== "" ? Number(f.trip_cost) * (f.per_person ? pax : 1) : Number(it?.price || 0) * (f.service_type === "tour" ? pax : 1)) || 0;
   const proc = f.service_type === "taxi" || (f.service_type === "tour" && (it?.city_tour ?? /city tour/i.test(f.item_name || "")));
-  const pct = proc ? rates.p : f.no_vat ? 0 : rates.v;
+  const feeOn = f.processing_fee_on ?? proc;
+  const vat = proc || f.no_vat ? 0 : t * rates.v / 100;
+  const fee = feeOn ? t * rates.p / 100 : 0;
+  const tip = Number(f.tip_amount) || 0;
+  useEffect(() => {
+    if (f.tip_pct) setF((x) => ({ ...x, tip_amount: (t * x.tip_pct / 100).toFixed(2) }));
+  }, [t, f.tip_pct, setF]);
   return (
-    <div className="mt-1 space-y-1">
-      {!proc && (
-        <label className="flex items-center gap-2 text-xs text-[#0B3B5C] font-normal" data-testid="new-booking-no-vat">
-          <input type="checkbox" checked={!!f.no_vat} onChange={(e) => setF((x) => ({ ...x, no_vat: e.target.checked }))} data-testid="new-booking-no-vat-checkbox" />
-          No VAT on this quote / booking
+    <div className="mt-1 space-y-1.5">
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {!proc && (
+          <label className="flex items-center gap-2 text-xs text-[#0B3B5C] font-normal" data-testid="new-booking-no-vat">
+            <input type="checkbox" checked={!!f.no_vat} onChange={(e) => setF((x) => ({ ...x, no_vat: e.target.checked }))} data-testid="new-booking-no-vat-checkbox" />
+            No VAT
+          </label>
+        )}
+        <label className="flex items-center gap-2 text-xs text-[#0B3B5C] font-normal" data-testid="new-booking-processing">
+          <input type="checkbox" checked={feeOn} onChange={(e) => setF((x) => ({ ...x, processing_fee_on: e.target.checked }))} data-testid="new-booking-processing-checkbox" />
+          Processing fee ({rates.p}%)
         </label>
-      )}
-      {t > 0 && pct > 0 && (
+      </div>
+      <GratuityPicker f={f} setF={setF} base={t} />
+      {t > 0 && (
         <div className="text-[11px] text-[#64748B]" data-testid="new-booking-fee-note">
-          + {proc ? "processing fee" : "VAT"} {pct}% ({money(t * pct / 100)}) · guest pays {money(t * (1 + pct / 100))}
+          {vat > 0 && `+ VAT ${rates.v}% (${money(vat)}) `}{fee > 0 && `+ processing ${rates.p}% (${money(fee)}) `}{tip > 0 && `+ gratuity ${money(tip)} `}· guest pays {money(t + vat + fee + tip)}
         </div>
       )}
-      {t > 0 && !proc && f.no_vat && <div className="text-[11px] text-[#047857]" data-testid="new-booking-no-vat-note">VAT removed · guest pays {money(t)}</div>}
     </div>
   );
 }
@@ -206,7 +237,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
     try {
       const { data } = await api.post("/admin/quotes/manual", {
         ...f, passengers: pax, trip_cost: Number(f.trip_cost) || 0, extra_luggage: Number(f.extra_luggage) || 0,
-        deposit_pct: Number(f.deposit_pct) || 0,
+        deposit_pct: Number(f.deposit_pct) || 0, tip_amount: Number(f.tip_amount) || 0,
         luggage_price: Number(f.luggage_price) || 0, car_seats: Number(f.car_seats) || 0,
         stops: f.stops.filter((s) => s && s.trim()), customer_email: f.customer_email || null, customer_phone: f.customer_phone || null,
         item_name: f.item_name || (f.service_type === "taxi" ? `Taxi: ${f.pickup_location || "pickup"} → ${f.dropoff_location || "drop-off"}` : "Custom trip"),
@@ -234,9 +265,9 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
         booking_date: f.booking_date, pickup_location: f.pickup_location || null, dropoff_location: f.dropoff_location || null,
         stops: f.stops.filter((s) => s && s.trim()), passengers: pax, adults: f.service_type === "tour" ? pax : undefined,
         extra_luggage: Number(f.extra_luggage) || 0, car_seats: Number(f.car_seats) || 0, days: 1,
-        notes: f.notes || null, payment_method: "stripe", tip_amount: 0,
+        notes: f.notes || null, payment_method: "stripe", tip_amount: Number(f.tip_amount) || 0,
       };
-      const { data } = await api.post("/admin/quotes", { payload, text_guest: !!f.customer_phone?.trim(), no_vat: !!f.no_vat, dropoff_time: f.service_type === "tour" ? f.dropoff_time || null : null });
+      const { data } = await api.post("/admin/quotes", { payload, text_guest: !!f.customer_phone?.trim(), no_vat: !!f.no_vat, processing_fee_on: f.processing_fee_on, dropoff_time: f.service_type === "tour" ? f.dropoff_time || null : null });
       toast.success(`Quote ${data.id} sent · ${money(data.total)}${data.text_sent ? " · texted" : ""}`);
       onClose();
     } catch (err) {
@@ -253,7 +284,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
       const body = { ...f, passengers: Number(f.passengers) || 1, total: Number(f.total) || 0,
         extra_luggage: Number(f.extra_luggage) || 0, luggage_price: Number(f.luggage_price) || 0,
         car_seats: Number(f.car_seats) || 0, stops: f.stops.filter((s) => s && s.trim()),
-        trip_cost: f.trip_cost === "" ? null : Number(f.trip_cost) || 0,
+        trip_cost: f.trip_cost === "" ? null : Number(f.trip_cost) || 0, tip_amount: Number(f.tip_amount) || 0,
         item_name: f.item_name || (f.service_type === "taxi" ? `Taxi: ${f.pickup_location || "pickup"} → ${f.dropoff_location || "drop-off"}` : f.item_name),
         send_pay_link: f.payment === "unpaid" && f.send_pay_link,
         text_pay_link: f.payment === "unpaid" && !!f.text_pay_link && !!f.customer_phone.trim() };
