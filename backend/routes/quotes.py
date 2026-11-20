@@ -130,8 +130,15 @@ class QuotePeople(BaseModel):
 async def quote_people(qid: str, req: QuotePeople, request: Request):
     """Guest changes the number of people on an open quote; it is re-priced with the same rules as a booking."""
     q = await _get(qid)
-    if _status(q) != "open" or q.get("kind") != "booking":
+    if _status(q) != "open" or q.get("kind") not in ("booking", "manual"):
         raise HTTPException(400, "This quote can't be changed any more")
+    if q.get("kind") == "manual":
+        if not req.passengers:
+            raise HTTPException(400, "Enter the number of people")
+        p = {**q["payload"], "passengers": req.passengers}
+        fields = _manual_fields(p)
+        await _db.quotes.update_one({"id": q["id"]}, {"$set": {**fields, "payload": p, "updated_at": _now_iso()}})
+        return _public({**q, **fields})
     p = dict(q["payload"])
     if p.get("adults") is not None and req.adults is not None:
         p.update({"adults": req.adults, "kids": req.kids or 0, "toddlers": req.toddlers or 0})
@@ -180,6 +187,40 @@ async def admin_send_quote_link(qid: str, admin=Depends(_admin_dep)):
         out["email"] = await asyncio.to_thread(send_email, q["customer_email"], f"Your Rox quote {q['id']} — pay online", html)
     await _db.quotes.update_one({"id": q["id"]}, {"$set": {"link_sent_at": _now_iso()}})
     return out
+
+
+def _manual_fields(p: dict) -> dict:
+    """Admin-priced quote: trip cost (optionally × people) + luggage + baby seats + bridge toll."""
+    pax = int(p.get("passengers") or 1)
+    cost = float(p.get("trip_cost") or 0)
+    per = bool(p.get("per_person"))
+    base = round(cost * (pax if per else 1), 2)
+    lines = [{"label": f"Trip cost (${cost:,.2f} × {pax} people)" if per else "Trip cost", "amount": base}]
+    extras = [("Luggage", round(int(p.get("extra_luggage") or 0) * float(p.get("luggage_price") or 0), 2)),
+              ("Baby car seats", round(int(p.get("car_seats") or 0) * 2.0, 2)),
+              ("Paradise Island bridge toll pass", 2.0 if p.get("bridge_toll") and p.get("service_type") == "taxi" else 0.0)]
+    lines += [{"label": k, "amount": v} for k, v in extras if v]
+    total = round(sum(x["amount"] for x in lines), 2)
+    p["total"] = total
+    return {"service_type": p.get("service_type"), "item_name": p.get("item_name"),
+            "customer_name": p.get("customer_name"), "customer_email": p.get("customer_email"),
+            "customer_phone": p.get("customer_phone"), "booking_date": p.get("booking_date"),
+            "pickup_location": p.get("pickup_location"), "dropoff_location": p.get("dropoff_location"),
+            "stops": p.get("stops") or [], "trip_legs": p.get("trip_legs") or [], "passengers": pax,
+            "per_person": per, "trip_cost": cost, "lines": lines, "total": total}
+
+
+@router.post("/admin/quotes/manual")
+async def admin_manual_quote(payload: dict, admin=Depends(_admin_dep)):
+    from routes.dayof_reminders import ManualBooking  # noqa: PLC0415
+    p = {**payload, "total": 0, "payment": "unpaid", "send_confirmation": False, "send_pay_link": False, "text_pay_link": False}
+    try:
+        ManualBooking(**p)
+    except ValidationError as e:
+        raise HTTPException(422, e.errors()[0].get("msg", "Invalid quote")) from e
+    if not p.get("trip_cost") or not (p.get("customer_email") or p.get("customer_phone")):
+        raise HTTPException(400, "Enter the trip cost and the guest's email or phone")
+    return await _save_quote(p, "manual", {**_manual_fields(p), "created_by": admin})
 
 
 class AdminQuote(BaseModel):
@@ -284,6 +325,9 @@ async def book_quote(qid: str, request: Request):
             from routes.cable_beach import cable_beach_book  # noqa: PLC0415
             r, _ = _cb_models(q["payload"])
             b = {"id": (await cable_beach_book(r))["booking_id"]}
+        elif q.get("kind") == "manual":
+            from routes.dayof_reminders import ManualBooking, admin_create_booking  # noqa: PLC0415
+            b = (await admin_create_booking(ManualBooking(**q["payload"]), q.get("created_by") or "quote"))["booking"]
         else:
             b = await _create_booking(_model(q["payload"], False), request)
     except Exception:

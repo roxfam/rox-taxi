@@ -225,7 +225,7 @@ async def _mark_paid(session_id: str, booking_id: Optional[str]):
         return
     res = await _db.bookings.update_one(
         {"id": booking_id, "payment_status": {"$ne": "paid"}},
-        {"$set": {"payment_status": "paid", "status": "confirmed", "updated_at": _now_iso()}},
+        {"$set": {"payment_status": "paid", "status": "confirmed", "payment_method": provider or "stripe", "updated_at": _now_iso()}},
     )
     if res.modified_count:
         booking = await _db.bookings.find_one({"id": booking_id})
@@ -715,7 +715,7 @@ async def paypal_capture_order(order_id: str):
     if capture_id:
         await _db.bookings.update_one(
             {"id": tx["booking_id"]},
-            {"$set": {"paypal_capture_id": capture_id, "payment_provider": "paypal"}},
+            {"$set": {"paypal_capture_id": capture_id, "payment_provider": "paypal", "payment_method": "paypal"}},
         )
     await _mark_paid(order_id, tx["booking_id"])
     booking = await _db.bookings.find_one({"id": tx["booking_id"]}, {"_id": 0})

@@ -15,7 +15,7 @@ const EMPTY = {
   service_type: "taxi", item_id: "", item_name: "", customer_name: "", customer_email: "", customer_phone: "",
   booking_date: "", pickup_location: "", dropoff_location: "", passengers: 1, flight_number: "", notes: "",
   extra_luggage: 0, luggage_price: 3, car_seats: 0, bridge_toll: false, stops: [], trip_legs: [],
-  total: "", payment: "unpaid", send_confirmation: true, send_pay_link: true, text_pay_link: true,
+  trip_cost: "", per_person: false, total: "", payment: "unpaid", send_confirmation: true, send_pay_link: true, text_pay_link: true,
 };
 
 const input = "w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#0B3B5C]";
@@ -82,6 +82,12 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
     }, 400);
     return () => clearTimeout(t);
   }, [tollPts, f.service_type]);
+  const pax = Number(f.passengers) || 1;
+  useEffect(() => {
+    if (f.trip_cost === "") return;
+    const t = Math.round(((Number(f.trip_cost) || 0) * (f.per_person ? pax : 1) + luggageFee + seatFee + tollFee) * 100) / 100;
+    setF((x) => (Number(x.total) === t ? x : { ...x, total: t }));
+  }, [f.trip_cost, f.per_person, pax, luggageFee, seatFee, tollFee]);
   const setToll = (e) => setF((x) => ({ ...x, bridge_toll: e.target.checked,
     total: x.total === "" ? x.total : Math.max(0, Math.round((Number(x.total) + (e.target.checked ? 2 : -2)) * 100) / 100) }));
   const [pricing, setPricing] = useState(false);
@@ -131,7 +137,27 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
     setF((x) => ({ ...x, item_id: it?.id || "", item_name: it?.name || "", total: x.total || (it?.price ?? it?.price_per_day ?? "") }));
   };
 
+  const sendManualQuote = async () => {
+    if (!f.customer_name.trim() || !(f.customer_email.trim() || f.customer_phone.trim()) || !f.booking_date) { toast.error("Guest name, email or phone, and date are needed for a quote"); return; }
+    setBusy(true);
+    try {
+      const { data } = await api.post("/admin/quotes/manual", {
+        ...f, passengers: pax, trip_cost: Number(f.trip_cost) || 0, extra_luggage: Number(f.extra_luggage) || 0,
+        luggage_price: Number(f.luggage_price) || 0, car_seats: Number(f.car_seats) || 0,
+        stops: f.stops.filter((s) => s && s.trim()), customer_email: f.customer_email || null, customer_phone: f.customer_phone || null,
+        item_name: f.item_name || (f.service_type === "taxi" ? `Taxi: ${f.pickup_location || "pickup"} → ${f.dropoff_location || "drop-off"}` : "Custom trip"),
+      });
+      toast.success(`Quote ${data.id} sent · ${money(data.total)}`);
+      onClose();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Couldn't create the quote");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const sendQuote = async () => {
+    if (f.trip_cost !== "" && Number(f.trip_cost) > 0) { sendManualQuote(); return; }
     const it = items.find((x) => x.id === f.item_id);
     if (!it || !["taxi", "tour", "rental"].includes(f.service_type)) { toast.error("Pick a taxi route, tour or car from the list to send a quote"); return; }
     if (!f.customer_name.trim() || !f.customer_email.trim() || !f.customer_phone.trim() || !f.booking_date) { toast.error("Guest name, email, phone and date are needed for a quote"); return; }
@@ -163,6 +189,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
       const body = { ...f, passengers: Number(f.passengers) || 1, total: Number(f.total) || 0,
         extra_luggage: Number(f.extra_luggage) || 0, luggage_price: Number(f.luggage_price) || 0,
         car_seats: Number(f.car_seats) || 0, stops: f.stops.filter((s) => s && s.trim()),
+        trip_cost: f.trip_cost === "" ? null : Number(f.trip_cost) || 0,
         item_name: f.item_name || (f.service_type === "taxi" ? `Taxi: ${f.pickup_location || "pickup"} → ${f.dropoff_location || "drop-off"}` : f.item_name),
         send_pay_link: f.payment === "unpaid" && f.send_pay_link,
         text_pay_link: f.payment === "unpaid" && !!f.text_pay_link && !!f.customer_phone.trim() };
@@ -248,6 +275,13 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
               Paradise Island bridge toll pass (+$2)
             </label>
           )}
+          <Field label="Trip cost ($)">
+            <input type="number" step="0.01" min="0" value={f.trip_cost} onChange={set("trip_cost")} placeholder="Optional: fills the total" className={input} data-testid="new-booking-trip-cost" />
+            <label className="mt-1.5 flex items-center gap-2 text-xs text-[#0B3B5C] font-normal">
+              <input type="checkbox" checked={f.per_person} onChange={set("per_person")} data-testid="new-booking-per-person" />
+              Charge per person ({pax} × {money(Number(f.trip_cost) || 0)})
+            </label>
+          </Field>
           <Field label="Total ($, includes luggage)"><input type="number" step="0.01" min="0" value={f.total} onChange={set("total")} className={input} required data-testid="new-booking-total" /></Field>
           <Field label="Payment">
             <select value={f.payment} onChange={set("payment")} className={input} data-testid="new-booking-payment">
@@ -271,7 +305,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
         <button type="submit" disabled={busy} className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#0B3B5C] text-white py-2.5 text-sm font-bold disabled:opacity-60" data-testid="new-booking-submit">
           <Plus className="w-4 h-4" /> {busy ? "Creating…" : "Create booking"}
         </button>
-        {["taxi", "tour", "rental"].includes(f.service_type) && (
+        {(["taxi", "tour", "rental"].includes(f.service_type) || Number(f.trip_cost) > 0) && (
           <button type="button" onClick={sendQuote} disabled={busy} className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-[#0B3B5C] text-[#0B3B5C] py-2.5 text-sm font-bold disabled:opacity-60" data-testid="new-booking-send-quote">
             Send as quote instead (guest can change people, then pay)
           </button>

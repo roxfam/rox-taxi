@@ -140,7 +140,7 @@ export default function Pay() {
             ) : (
               <>
                 <h2 className="serif text-2xl text-[#0B3B5C]">Choose how to pay</h2>
-                <p className="mt-2 text-sm text-[#64748B]">Card and PayPal confirm instantly. Your QR boarding pass is ready the moment payment lands.</p>
+                <p className="mt-2 text-sm text-[#64748B]">Pick any way you like, even if you chose a different method when booking. Card and PayPal confirm instantly, and your QR boarding pass is ready the moment payment lands.</p>
                 <div className="mt-3"><PaymentBrandRow /></div>
 
                 <div className="mt-5">

@@ -138,7 +138,7 @@ export default function QuoteView() {
           <Row k="Drop-off" v={q.dropoff_location} />
           <Row k={q.service_type === "rental" ? "Rental days" : "Guests"} v={String(q.service_type === "rental" ? q.days : q.passengers || "")} />
           <RouteMap q={q} />
-          {q.status === "open" && q.kind === "booking" && <PeopleEditor key={q.total} q={q} onChange={setQ} />}
+          {q.status === "open" && (q.kind === "booking" || (q.kind === "manual" && q.per_person)) && <PeopleEditor key={q.total} q={q} onChange={setQ} />}
           <div className="mt-6 rounded-2xl bg-[#FBF7EF] p-5" data-testid="quote-lines">
             {q.lines.map((l) => (
               <div key={l.label} className="flex justify-between text-sm py-1"><span className="text-[#64748B]">{l.label}</span><span className="mono text-[#0B3B5C]">{money(l.amount)}</span></div>

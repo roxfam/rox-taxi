@@ -998,3 +998,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - No-show button (admin row): cancels with no refund, captures a held rental card in full, notifies guest.
 - Driver dispatch (routes/driver_dispatch.py): "Send to driver" on each booking row (roster from site_config.backup_drivers, or typed name/phone); trip sheet has no prices; no driver → admin owner SMS. Reminder loop every 60s: night before 8pm, 1h, 15m before pickup (non-rental, booking.driver_nudges); goes to driver_phone or admin number.
 
+## 2026-11-20 — Trip cost / per-person pricing, any-method pay page
+- Manual booking: "Trip cost ($)" + "Charge per person" → total = cost (× passengers) + luggage + baby seats + bridge toll (auto-recalculated); stored as trip_cost / per_person.
+- Admin manual quotes: POST /api/admin/quotes/manual (kind "manual", lines from routes/quotes._manual_fields); guest can change people on per-person manual quotes; Convert to invoice creates the booking via admin_create_booking. "Send as quote" uses this path whenever a trip cost is entered.
+- Pay page: guests can pay by card, PayPal or Zelle whatever was chosen at booking; the paid method is now recorded (payment_method = stripe / paypal) so refunds go to the right provider.
+
+

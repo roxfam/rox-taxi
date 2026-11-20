@@ -446,6 +446,8 @@ class ManualBooking(BaseModel):
     trip_legs: List[dict] = Field(default_factory=list, max_length=26)
     notes: Optional[str] = Field(None, max_length=2000)
     total: float = Field(..., ge=0, le=100000)
+    trip_cost: Optional[float] = Field(None, ge=0, le=100000)
+    per_person: bool = False
     payment: str = Field("unpaid", pattern="^(unpaid|cash|zelle|card_offline)$")
     send_confirmation: bool = True
     send_pay_link: bool = False
@@ -513,6 +515,8 @@ async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_d
         "price": req.total,
         "luggage_fee": round(req.extra_luggage * req.luggage_price, 2),
         "car_seat_fee": round(req.car_seats * 2.0, 2),
+        "trip_cost": req.trip_cost,
+        "per_person": req.per_person,
         "bridge_toll_fee": 2.0 if req.bridge_toll and req.service_type == "taxi" else 0.0,
         "stops": [s.strip()[:120] for s in req.stops if s and s.strip()],
         "trip_legs": [{"from": str(lg.get("from", ""))[:120], "to": str(lg.get("to", ""))[:120],
