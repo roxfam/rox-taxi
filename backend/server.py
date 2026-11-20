@@ -2983,7 +2983,13 @@ async def create_booking(req: BookingCreate, request: Request):
                 group_disc = round(base * 0.10, 2)
                 base = round(base - group_disc, 2)
                 booking["group_discount"] = group_disc
-        # Optional taxi add-on (per-tour toggle + global master switch).
+        elif child_price <= 0:
+            import fees as fees_module  # noqa: PLC0415
+            if fees_module.TOUR_PER_PERSON.get():
+                _ppl = max(1, int(req.adults or req.passengers or 1))
+                base = round(float(req.price) * _ppl, 2)
+                booking["per_person_tour"] = True
+                booking["adults"] = _ppl
         cfg = await db.site_config.find_one({"_id": "main"}) or {}
         master_on = cfg.get("taxi_addon_master_enabled") is not False  # default ON
         tour_addon_on = bool(tour_doc.get("taxi_addon_enabled"))

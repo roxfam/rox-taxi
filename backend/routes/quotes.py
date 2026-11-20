@@ -95,6 +95,9 @@ async def _price(payload: dict, request: Request) -> dict:
     lines = [{"label": lbl, "amount": round(float(b[k]), 2) * (-1 if k in ("online_discount", "promotion_discount") else 1)}
              for k, lbl in PRICE_KEYS if b.get(k)]
     legs = b.get("trip_legs") or []
+    if b.get("per_person_tour"):
+        lines = [{**x, "label": f"Tour (${float(payload.get('price') or 0):,.2f} × {b.get('adults')} people)"}
+                 if x["label"] == "Fare / service" else x for x in lines]
     if legs:
         leg_lines = [{"label": f"Leg {n}: {lg['from']} → {lg['to']}", "amount": round(float(lg["fare"]), 2)}
                      for n, lg in enumerate(legs, 1)]
@@ -155,7 +158,7 @@ async def quote_people(qid: str, req: QuotePeople, request: Request):
         raise HTTPException(400, "Enter the number of people")
     p.pop("processing_fee", None)
     p.pop("group_discount", None)
-    with fees_module.admin_overrides(bool(q.get("no_vat")), q.get("processing_fee_on")):
+    with fees_module.admin_overrides(bool(q.get("no_vat")), q.get("processing_fee_on"), bool(q.get("per_person_tour"))):
         fields = await _price(p, request)
     await _db.quotes.update_one({"id": q["id"]}, {"$set": {**fields, "payload": p, "updated_at": _now_iso()}})
     return _public({**q, **fields})
@@ -252,10 +255,11 @@ class AdminQuote(BaseModel):
 
 @router.post("/admin/quotes")
 async def admin_create_quote(req: AdminQuote, request: Request, admin=Depends(_admin_dep)):
-    with fees_module.admin_overrides(req.no_vat, req.processing_fee_on):
+    ppt = req.payload.get("service_type") == "tour"
+    with fees_module.admin_overrides(req.no_vat, req.processing_fee_on, ppt):
         fields = await _price(req.payload, request)
     q = await _save_quote(req.payload, "booking", {**fields, "created_by": admin, "no_vat": req.no_vat,
-                                                    "processing_fee_on": req.processing_fee_on,
+                                                    "processing_fee_on": req.processing_fee_on, "per_person_tour": ppt,
                                                     "dropoff_time": req.dropoff_time or None})
     return q
 
@@ -355,7 +359,7 @@ async def book_quote(qid: str, request: Request):
             from routes.dayof_reminders import ManualBooking, admin_create_booking  # noqa: PLC0415
             b = (await admin_create_booking(ManualBooking(**q["payload"]), q.get("created_by") or "quote"))["booking"]
         else:
-            with fees_module.admin_overrides(bool(q.get("no_vat")), q.get("processing_fee_on")):
+            with fees_module.admin_overrides(bool(q.get("no_vat")), q.get("processing_fee_on"), bool(q.get("per_person_tour"))):
                 b = await _create_booking(_model(q["payload"], False), request)
     except Exception:
         await _db.quotes.update_one({"id": q["id"]}, {"$set": {"status": "open"}})
@@ -433,7 +437,7 @@ async def admin_edit_quote(qid: str, body: dict, request: Request, admin=Depends
         p.update(ch)
         p.pop("processing_fee", None)
         p.pop("group_discount", None)
-        with fees_module.admin_overrides(no_vat, fee_on):
+        with fees_module.admin_overrides(no_vat, fee_on, bool(q.get("per_person_tour"))):
             fields = await _price(p, request)
         fields.update({"dropoff_time": drop or None})
     exp = datetime.now(timezone.utc) + timedelta(hours=VALID_HOURS)

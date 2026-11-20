@@ -1037,6 +1037,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Admin "Refund" button (booking ID prompt) → RefundBookingDialog; new POST /admin/bookings/{id}/refund-manual records cash/Zelle/bank refunds. Refund max excludes processing fee + gratuity.
 - Quotes panel: search, status filter, View/Edit dialog (EditQuoteDialog) → PUT /admin/quotes/{qid} re-prices and restarts 48h; GET /admin/quotes/{qid}.
 - Open (minor): catalog tours without child_price price flat regardless of people; Booking.tip_amount max 1000 vs manual 10000.
+- Admin catalog tour quotes (POST /admin/quotes, service tour) set quote.per_person_tour → fees.TOUR_PER_PERSON makes create_booking price flat tours (no child_price) as price × people; applies on create, admin edit, guest people change and conversion. Public website pricing unchanged.
+
 
 
 
