@@ -10,12 +10,20 @@ async def fee_rates(db) -> dict:
             "vat_pct": float(DEFAULT_VAT_PCT if v is None else v)}
 
 
-def is_processing_kind(service_type: str, item_name: str = "") -> bool:
-    return service_type == "taxi" or (service_type == "tour" and "city tour" in (item_name or "").lower())
+async def is_processing(db, service_type: str, item_id: str = "", item_name: str = "") -> bool:
+    if service_type == "taxi":
+        return True
+    if service_type != "tour":
+        return False
+    q = {"id": item_id} if item_id else {"name": item_name} if item_name else None
+    doc = await db.tours.find_one(q, {"city_tour": 1}) if q else None
+    if doc and doc.get("city_tour") is not None:
+        return bool(doc["city_tour"])
+    return "city tour" in (item_name or "").lower()
 
 
-def compute_fees(subtotal: float, service_type: str, item_name: str, rates: dict) -> dict:
-    if is_processing_kind(service_type, item_name):
+def compute_fees(subtotal: float, processing: bool, rates: dict) -> dict:
+    if processing:
         pct = rates["processing_pct"]
         return {"vat_amount": 0.0, "vat_pct": 0.0, "processing_fee": round(subtotal * pct / 100, 2), "processing_fee_pct": pct / 100}
     pct = rates["vat_pct"]

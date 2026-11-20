@@ -962,6 +962,7 @@ async def refund_payment(
 
     already = float(booking.get("refunded_amount") or 0.0)
     amt = float(booking.get("total") or tx.get("amount") or 0.0)
+    amt = round(amt - float(booking.get("processing_fee") or 0.0), 2)  # processing fee is non-refundable
     remaining = round(max(0.0, amt - already), 2)
     if remaining < 0.01:
         raise HTTPException(409, "Nothing left to refund on this booking")
@@ -1346,6 +1347,7 @@ class ItemUpsert(BaseModel):
     # (no guest choice); otherwise the guest sees a checkbox.
     # `taxi_addon_price_mode`: "flat" (price applied once) or "per_person"
     # (price × total passengers).
+    city_tour: Optional[bool] = None  # True = processing fee instead of VAT
     taxi_addon_enabled: Optional[bool] = None
     taxi_addon_price: Optional[float] = None
     taxi_addon_price_mode: Optional[str] = None  # "flat" | "per_person"

@@ -61,13 +61,14 @@ const fromBooking = (b) => ({
   bridge_toll: Number(b.bridge_toll_fee || 0) > 0,
 });
 
-function FeeNote({ f }) {
+function FeeNote({ f, items }) {
   const [rates, setRates] = useState({ p: 5, v: 10 });
   useEffect(() => {
     api.get("/site-config").then((r) => setRates({ p: Number(r.data.processing_fee_pct ?? 5), v: Number(r.data.vat_pct ?? 10) })).catch(() => {});
   }, []);
   const t = Number(f.total) || 0;
-  const proc = f.service_type === "taxi" || (f.service_type === "tour" && /city tour/i.test(f.item_name || ""));
+  const it = (items || []).find((x) => x.id === f.item_id);
+  const proc = f.service_type === "taxi" || (f.service_type === "tour" && (it?.city_tour ?? /city tour/i.test(f.item_name || "")));
   const pct = proc ? rates.p : rates.v;
   if (!t || !pct) return null;
   return (
@@ -344,7 +345,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
               )}
             </Field>
           )}
-          <Field label="Total before fee/VAT ($, includes luggage)"><input type="number" step="0.01" min="0" value={f.total} onChange={set("total")} className={input} required data-testid="new-booking-total" /><FeeNote f={f} /></Field>
+          <Field label="Total before fee/VAT ($, includes luggage)"><input type="number" step="0.01" min="0" value={f.total} onChange={set("total")} className={input} required data-testid="new-booking-total" /><FeeNote f={f} items={items} /></Field>
           <Field label="Payment">
             <select value={f.payment} onChange={set("payment")} className={input} data-testid="new-booking-payment">
               <option value="unpaid">Not paid yet (card)</option>

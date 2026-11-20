@@ -16,6 +16,7 @@ export default function BookingRowActions({ booking, onEdit, onRepeat, onChanged
   const refundable = ["paid", "partially_refunded"].includes(booking.payment_status);
   const held = booking.card_auth?.status === "held";
   const request = booking.cancel_request?.status === "pending" && !cancelled;
+  const refundAsk = booking.refund_request?.status === "pending";
 
   const run = async (fn, ok) => {
     setBusy(true);
@@ -36,6 +37,10 @@ export default function BookingRowActions({ booking, onEdit, onRepeat, onChanged
   const decline = () => {
     if (!window.confirm("Decline this cancellation request? The booking stays active.")) return;
     run(() => api.post(`/admin/bookings/${booking.id}/cancel-request/decline`), () => "Request declined");
+  };
+  const declineRefund = () => {
+    if (!window.confirm("Decline this refund request? The guest is told by email + text.")) return;
+    run(() => api.post(`/admin/bookings/${booking.id}/refund-request/decline`), () => "Refund request declined");
   };
   const [driverOpen, setDriverOpen] = useState(false);
   const noShow = () => {
@@ -88,6 +93,14 @@ export default function BookingRowActions({ booking, onEdit, onRepeat, onChanged
           <span>{booking.cancel_request.hours_notice}h before · policy fee ${Number(booking.cancel_request.suggested_fee || 0).toFixed(2)}</span>
           <button type="button" onClick={() => setCancelOpen(true)} disabled={busy} className="underline font-bold" data-testid={`admin-row-approve-cancel-${booking.id}`}>Approve &amp; refund</button>
           <button type="button" onClick={decline} disabled={busy} className="inline-flex items-center underline" data-testid={`admin-row-decline-cancel-${booking.id}`}><X className="w-3 h-3" />Decline</button>
+        </div>
+      )}
+      {refundAsk && (
+        <div className="w-full flex flex-wrap items-center gap-1 rounded bg-[#EDE9FE] px-2 py-1 text-[10px] text-[#5B21B6]" data-testid={`admin-row-refund-request-${booking.id}`}>
+          <span className="font-bold">Guest asked for {booking.refund_request.amount ? `$${Number(booking.refund_request.amount).toFixed(2)}` : "a refund"}</span>
+          <span className="truncate max-w-[220px]">“{booking.refund_request.reason}”</span>
+          {refundable && <button type="button" onClick={() => setRefundOpen(true)} disabled={busy} className="underline font-bold" data-testid={`admin-row-approve-refund-${booking.id}`}>Review &amp; refund</button>}
+          <button type="button" onClick={declineRefund} disabled={busy} className="inline-flex items-center underline" data-testid={`admin-row-decline-refund-${booking.id}`}><X className="w-3 h-3" />Decline</button>
         </div>
       )}
       {held && (

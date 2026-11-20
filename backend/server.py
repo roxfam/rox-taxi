@@ -3225,7 +3225,8 @@ async def create_booking(req: BookingCreate, request: Request):
 
     # ── Processing fee (taxi + city tours) or VAT (everything else) ─────
     import fees as fees_module  # noqa: PLC0415
-    _fees = fees_module.compute_fees(subtotal_before_tax, req.service_type, req.item_name,
+    _fees = fees_module.compute_fees(subtotal_before_tax,
+                                     await fees_module.is_processing(db, req.service_type, req.item_id, req.item_name),
                                      await fees_module.fee_rates(db))
     vat_amount = _fees["vat_amount"]
     processing_fee = _fees["processing_fee"]
@@ -3436,6 +3437,8 @@ async def create_booking(req: BookingCreate, request: Request):
 @api_router.get("/fees")
 async def get_fees():
     """Public fee reference for the frontend."""
+    import fees as fees_module  # noqa: PLC0415
+    _r = await fees_module.fee_rates(db)
     return {
         "luggage_fee_usd": LUGGAGE_FEE_USD,
         "luggage_max": LUGGAGE_MAX,
@@ -3454,14 +3457,14 @@ async def get_fees():
             f"Drop the rental back at LPIA airport for a flat ${RENTAL_AIRPORT_DROPOFF_FEE_USD:.0f} convenience "
             "surcharge — otherwise return at our Nassau depot at no extra charge."
         ),
-        "bahamas_vat_pct": BAHAMAS_VAT_PCT,
+        "bahamas_vat_pct": _r["vat_pct"] / 100,
         "bahamas_vat_policy": (
-            f"{int(BAHAMAS_VAT_PCT*100)}% Bahamas VAT is added to tours, rentals and other services "
+            f"{_r['vat_pct']:g}% Bahamas VAT is added to tours, rentals and other services "
             "(not taxi fares or city tours). Deposits and driver tips are exempt."
         ),
-        "processing_fee_pct": PROCESSING_FEE_PCT,
+        "processing_fee_pct": _r["processing_pct"] / 100,
         "processing_fee_policy": (
-            f"A {PROCESSING_FEE_PCT*100:g}% processing fee is added to taxi rides and city tours "
+            f"A {_r['processing_pct']:g}% processing fee is added to taxi rides and city tours "
             "(no VAT on those)."
         ),
         "additional_driver_fee_usd": ADDITIONAL_DRIVER_FEE_USD,
@@ -4087,8 +4090,9 @@ async def group_booking_quote(req: GroupQuoteRequest):
 
     subtotal = round(subtotal_pre_surcharge + surcharge, 2)
     import fees as fees_module  # noqa: PLC0415
-    _fz = fees_module.compute_fees(subtotal, req.service_type.lower(), getattr(req, "item_name", "") or "",
-                                   await fees_module.fee_rates(db))
+    _fz = fees_module.compute_fees(
+        subtotal, await fees_module.is_processing(db, req.service_type.lower(), req.item_id, getattr(req, "item_name", "") or ""),
+        await fees_module.fee_rates(db))
     vat, processing = _fz["vat_amount"], _fz["processing_fee"]
     total = round(subtotal + vat + processing, 2)
     deposit = round(total * cfg["deposit_pct"] / 100.0, 2)

@@ -4,6 +4,7 @@ import { api, money, STATUS_STEPS, STATUS_INDEX } from "../lib/api";
 import { Check, Search, MapPin, User, Calendar as CalIcon, Loader2, XCircle, AlertTriangle, Signal, CreditCard, CalendarPlus, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import RefundRequestCard from "../components/RefundRequestCard";
 
 function DriverLiveBanner({ bookingId, status }) {
   // Poll driver location every 6 seconds while the trip is active. Hides itself
@@ -287,6 +288,8 @@ export default function Track() {
                 </div>
               </div>
             )}
+
+            {booking.status !== "cancelled" && <RefundRequestCard booking={booking} onDone={() => fetchBooking(booking.id)} />}
 
             {booking.status === "cancelled" && booking.cancellation && (
               <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5" data-testid="cancelled-info">

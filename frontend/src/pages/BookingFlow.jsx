@@ -456,7 +456,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
   // Processing fee for taxi + city tours, VAT for everything else (matches backend fees.py)
   const BAHAMAS_VAT_PCT = Number(siteCfg.vat_pct ?? 10) / 100;
   const PROCESSING_FEE_PCT = Number(siteCfg.processing_fee_pct ?? 5) / 100;
-  const processingKind = serviceType === "taxi" || (serviceType === "tour" && /city tour/i.test(item?.name || ""));
+  const processingKind = serviceType === "taxi" || (serviceType === "tour" && (item?.city_tour ?? /city tour/i.test(item?.name || "")));
   const vatApplies = !processingKind;
   const vatAmount = vatApplies ? subtotal * BAHAMAS_VAT_PCT : 0;
   const processingFee = processingKind ? subtotal * PROCESSING_FEE_PCT : 0;

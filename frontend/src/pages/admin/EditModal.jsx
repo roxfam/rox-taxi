@@ -45,6 +45,7 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
     child_price: initial.child_price ?? 0,
     child_age_max: initial.child_age_max ?? 12,
     child_free_under: initial.child_free_under ?? 3,
+    city_tour: initial.city_tour ?? /city tour/i.test(initial.name || ""),
     // Optional taxi add-on (tours only)
     taxi_addon_enabled: !!initial.taxi_addon_enabled,
     taxi_addon_price: initial.taxi_addon_price ?? 0,
@@ -138,6 +139,7 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
           child_price: parseFloat(form.child_price) || 0,
           child_age_max: parseInt(form.child_age_max) || 12,
           child_free_under: parseInt(form.child_free_under) || 3,
+          ...(!isRental && !isTaxi ? { city_tour: !!form.city_tour } : {}),
           // Optional taxi add-on
           taxi_addon_enabled: !!form.taxi_addon_enabled,
           taxi_addon_price: parseFloat(form.taxi_addon_price) || 0,
@@ -211,6 +213,14 @@ export default function EditModal({ kind, initial, onClose, onSaved }) {
               <F l="Kid max age" type="number" v={form.child_age_max} on={(v) => setForm({ ...form, child_age_max: v })} testid="edit-child-age-max" />
             </div>
           </div>
+        )}
+
+        {!isRental && !isTaxi && (
+          <label className="flex items-start gap-2 text-sm pt-3 border-t border-[#F1F5F9]" data-testid="edit-city-tour-label">
+            <input type="checkbox" className="mt-1" checked={!!form.city_tour}
+              onChange={(e) => setForm({ ...form, city_tour: e.target.checked })} data-testid="edit-city-tour" />
+            <span>This is a city tour<span className="block text-[11px] text-[#94a3b8]">Guests pay the processing fee instead of VAT</span></span>
+          </label>
         )}
 
         {!isRental && !isTaxi && (

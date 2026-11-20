@@ -138,7 +138,7 @@ async def quote_people(qid: str, req: QuotePeople, request: Request):
         if not req.passengers:
             raise HTTPException(400, "Enter the number of people")
         p = {**q["payload"], "passengers": req.passengers}
-        fields = _manual_fields(p, await fees_module.fee_rates(_db))
+        fields = _manual_fields(p, await _manual_rates(p))
         await _db.quotes.update_one({"id": q["id"]}, {"$set": {**fields, "payload": p, "updated_at": _now_iso()}})
         return _public({**q, **fields})
     p = dict(q["payload"])
@@ -191,6 +191,11 @@ async def admin_send_quote_link(qid: str, admin=Depends(_admin_dep)):
     return out
 
 
+async def _manual_rates(p: dict) -> dict:
+    proc = await fees_module.is_processing(_db, p.get("service_type") or "", p.get("item_id") or "", p.get("item_name") or "")
+    return {**await fees_module.fee_rates(_db), "processing": proc}
+
+
 def _manual_fields(p: dict, rates: dict) -> dict:
     """Admin-priced quote: trip cost (optionally × people) + luggage + baby seats + bridge toll."""
     pax = int(p.get("passengers") or 1)
@@ -203,7 +208,7 @@ def _manual_fields(p: dict, rates: dict) -> dict:
               ("Paradise Island bridge toll pass", 2.0 if p.get("bridge_toll") and p.get("service_type") == "taxi" else 0.0)]
     lines += [{"label": k, "amount": v} for k, v in extras if v]
     sub = round(sum(x["amount"] for x in lines), 2)
-    fz = fees_module.compute_fees(sub, p.get("service_type") or "", p.get("item_name") or "", rates)
+    fz = fees_module.compute_fees(sub, rates["processing"], rates)
     lines += fees_module.fee_line(fz)
     total = round(sub + fz["vat_amount"] + fz["processing_fee"], 2)
     p["total"] = total
@@ -228,7 +233,7 @@ async def admin_manual_quote(payload: dict, admin=Depends(_admin_dep)):
         raise HTTPException(422, e.errors()[0].get("msg", "Invalid quote")) from e
     if not p.get("trip_cost") or not (p.get("customer_email") or p.get("customer_phone")):
         raise HTTPException(400, "Enter the trip cost and the guest's email or phone")
-    return await _save_quote(p, "manual", {**_manual_fields(p, await fees_module.fee_rates(_db)), "created_by": admin})
+    return await _save_quote(p, "manual", {**_manual_fields(p, await _manual_rates(p)), "created_by": admin})
 
 
 class AdminQuote(BaseModel):

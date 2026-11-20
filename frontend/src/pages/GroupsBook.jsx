@@ -227,7 +227,7 @@ export default function GroupsBook() {
             <div className="serif text-4xl mt-2" data-testid="groups-total">
               {quoting ? "…" : money(quote?.total || 0)}
             </div>
-            <div className="text-[11px] text-white/60 mt-1">10% VAT & 5% processing included</div>
+            <div className="text-[11px] text-white/60 mt-1">VAT & fees included</div>
 
             {quote && (
               <div className="mt-5 text-[13px] space-y-1.5">
@@ -240,8 +240,8 @@ export default function GroupsBook() {
                 )}
                 <div className="h-px bg-white/10 my-2" />
                 <Row label="Subtotal" value={money(quote.subtotal)} />
-                <Row label="10% VAT" value={money(quote.vat)} />
-                <Row label="5% processing" value={money(quote.processing_fee)} />
+                <Row label="VAT" value={money(quote.vat)} />
+                {quote.processing_fee > 0 && <Row label="Processing fee" value={money(quote.processing_fee)} />}
               </div>
             )}
 

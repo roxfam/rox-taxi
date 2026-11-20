@@ -1015,4 +1015,6 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - backend/fees.py (fee_rates from site_config.processing_fee_pct / vat_pct, compute_fees, fee_line). Used by create_booking, manual quotes, admin manual bookings (fee added on top of entered total), cable beach, group quotes, bundles.
 - Admin Site Config → "Processing fee & VAT" inputs. BookingFlow shows processing-fee-line or vat-line using site-config rates.
 - Open (low): pricing-policy endpoint text uses constants; gift card fee uses constant; SiteConfigPanel setCfg stale-closure on fast consecutive edits.
+- Follow-up: tours have `city_tour` flag (Admin → Manage catalog → Edit item → "This is a city tour"); fees.is_processing() checks the flag, falls back to name match. /api/fees policy text + Taxi/Tours/Groups labels now use admin rates.
+
 

@@ -12,16 +12,21 @@ export default function RefundBookingDialog({ booking, onClose, onDone }) {
 
   useEffect(() => {
     api.get(`/admin/bookings/${booking.id}/refundable`)
-      .then(({ data }) => { setInfo(data); setAmount(data.amount ? String(data.amount) : ""); })
+      .then(({ data }) => {
+        setInfo(data);
+        const asked = Number(booking.refund_request?.status === "pending" && booking.refund_request.amount);
+        setAmount(data.amount ? String(asked > 0 ? Math.min(asked, data.amount) : data.amount) : "");
+      })
       .catch(() => setInfo({ refundable: false }));
   }, [booking.id]);
 
   const amt = Number(amount);
   const bad = !(amt > 0) || amt > (info?.amount || 0) + 0.001;
 
+  const provLabel = info?.provider === "paypal" ? "PayPal" : "Stripe (card)";
   const submit = async () => {
     if (bad) { toast.error(`Refund must be between $0.01 and ${money(info.amount)}`); return; }
-    if (!window.confirm(`Refund ${money(amt)} to ${booking.customer_name || "the guest"}'s card? This can't be undone.`)) return;
+    if (!window.confirm(`Refund ${money(amt)} to ${booking.customer_name || "the guest"} via ${provLabel}? This can't be undone.`)) return;
     setBusy(true);
     try {
       const { data } = await api.post(`/admin/bookings/${booking.id}/refund`, {
@@ -54,11 +59,17 @@ export default function RefundBookingDialog({ booking, onClose, onDone }) {
         {info === null ? (
           <div className="text-xs text-[#94a3b8]">Checking payment…</div>
         ) : !info.refundable ? (
-          <div className="text-sm text-[#94a3b8]" data-testid="refund-dialog-none">Nothing left to refund by card on this booking (cash, Zelle or already refunded).</div>
+          <div className="text-sm text-[#94a3b8]" data-testid="refund-dialog-none">Nothing left to refund on this booking (cash, Zelle or already refunded).</div>
         ) : (
           <>
             <div className="text-sm text-[#0B3B5C] bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-3 space-y-2">
-              <div>Can refund up to <strong data-testid="refund-dialog-max">{money(info.amount)}</strong> via {info.provider === "stripe" ? "Stripe (card)" : info.provider}</div>
+              <div>Can refund up to <strong data-testid="refund-dialog-max">{money(info.amount)}</strong> via {provLabel}</div>
+              {info.fee_kept > 0 && <div className="text-[11px] text-[#64748B]" data-testid="refund-dialog-fee-kept">Processing fee {money(info.fee_kept)} is kept (non-refundable).</div>}
+              {booking.refund_request?.status === "pending" && (
+                <div className="text-[11px] text-[#92400E] bg-[#FEF3C7] rounded px-2 py-1" data-testid="refund-dialog-guest-request">
+                  Guest asked for {booking.refund_request.amount ? money(booking.refund_request.amount) : "a refund"}: “{booking.refund_request.reason}”
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-[#64748B]">Refund $</span>
                 <input type="number" step="0.01" min="0.01" max={info.amount} value={amount} onChange={(e) => setAmount(e.target.value)}
