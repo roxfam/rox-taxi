@@ -86,8 +86,11 @@ async def create_checkout(req: CheckoutRequest, request: Request):
     success_url = f"{req.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{req.origin_url}/payment/cancel?booking_id={booking['id']}"
 
-    # Rentals: authorise (hold) the card now, charge after the trip. Needs a real Stripe key.
     amount = float(booking.get("total") or booking.get("total_price") or 0)
+    # Deposit-first (group / quote deposit) bookings: charge the deposit now, the balance later.
+    if booking.get("is_group_booking") and float(booking.get("balance_due") or 0) > 0:
+        amount = round(amount - float(booking["balance_due"]), 2)
+    # Rentals: authorise (hold) the card now, charge after the trip. Needs a real Stripe key.
     if (booking.get("service_type") or "").lower() == "rental" and _real_key():
         try:
             s = await _card_hold.create_hold_checkout(_key(), booking, int(round(amount * 100)), success_url, cancel_url)
@@ -102,7 +105,7 @@ async def create_checkout(req: CheckoutRequest, request: Request):
         return {"checkout_url": s.get("url"), "session_id": s["id"], "hold": True}
 
     checkout_req = CheckoutSessionRequest(
-        amount=float(booking.get("total") or booking.get("total_price") or 0),
+        amount=amount,
         currency="usd",
         success_url=success_url,
         cancel_url=cancel_url,
@@ -130,7 +133,7 @@ async def create_checkout(req: CheckoutRequest, request: Request):
     await _db.payment_transactions.insert_one({
         "session_id": session.session_id,
         "booking_id": booking["id"],
-        "amount": float(booking.get("total") or booking.get("total_price") or 0),
+        "amount": amount,
         "currency": "usd",
         "status": "initiated",
         "payment_status": "pending",

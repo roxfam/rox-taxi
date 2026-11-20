@@ -700,6 +700,33 @@ def _cancel_notice(b: dict, reason: str) -> dict:
     return report
 
 
+class PresetIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    service_type: str = Field("tour", pattern="^(taxi|tour|rental|other)$")
+    cost: float = Field(gt=0, le=100000)
+    per_person: bool = False
+
+
+@router.get("/admin/trip-presets")
+async def list_presets(_admin: str = Depends(_admin_dep)):
+    cfg = await _db.site_config.find_one({"_id": "main"}, {"trip_presets": 1}) or {}
+    return cfg.get("trip_presets") or []
+
+
+@router.post("/admin/trip-presets")
+async def add_preset(req: PresetIn, _admin: str = Depends(_admin_dep)):
+    import uuid  # noqa: PLC0415
+    doc = {"id": uuid.uuid4().hex[:8], **req.model_dump(), "name": req.name.strip()}
+    await _db.site_config.update_one({"_id": "main"}, {"$push": {"trip_presets": doc}}, upsert=True)
+    return doc
+
+
+@router.delete("/admin/trip-presets/{pid}")
+async def delete_preset(pid: str, _admin: str = Depends(_admin_dep)):
+    await _db.site_config.update_one({"_id": "main"}, {"$pull": {"trip_presets": {"id": pid}}})
+    return {"ok": True}
+
+
 class PolicyIn(BaseModel):
     cancel_credit_pct: float = Field(ge=0, le=100)
 

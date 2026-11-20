@@ -15,7 +15,7 @@ const EMPTY = {
   service_type: "taxi", item_id: "", item_name: "", customer_name: "", customer_email: "", customer_phone: "",
   booking_date: "", pickup_location: "", dropoff_location: "", passengers: 1, flight_number: "", notes: "",
   extra_luggage: 0, luggage_price: 3, car_seats: 0, bridge_toll: false, stops: [], trip_legs: [],
-  trip_cost: "", per_person: false, total: "", payment: "unpaid", send_confirmation: true, send_pay_link: true, text_pay_link: true,
+  trip_cost: "", per_person: false, deposit_pct: "", total: "", payment: "unpaid", send_confirmation: true, send_pay_link: true, text_pay_link: true,
 };
 
 const input = "w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:border-[#0B3B5C]";
@@ -60,6 +60,40 @@ const fromBooking = (b) => ({
   total: b.total || b.total_price || "",
   bridge_toll: Number(b.bridge_toll_fee || 0) > 0,
 });
+
+function PresetBar({ f, setF }) {
+  const [presets, setPresets] = useState([]);
+  const load = () => api.get("/admin/trip-presets").then((r) => setPresets(r.data || [])).catch(() => {});
+  useEffect(() => { load(); }, []);
+  const save = async () => {
+    const name = window.prompt("Name this saved price (e.g. Island tour)", f.item_name || "");
+    if (!name) return;
+    try {
+      await api.post("/admin/trip-presets", { name, service_type: ["taxi", "tour", "rental"].includes(f.service_type) ? f.service_type : "other", cost: Number(f.trip_cost), per_person: !!f.per_person });
+      toast.success("Saved"); load();
+    } catch (e) { toast.error(e?.response?.data?.detail?.[0]?.msg || e?.response?.data?.detail || "Couldn't save"); }
+  };
+  const remove = async (p) => {
+    if (!window.confirm(`Delete saved price "${p.name}"?`)) return;
+    await api.delete(`/admin/trip-presets/${p.id}`).catch(() => {}); load();
+  };
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="trip-presets">
+      {presets.map((p) => (
+        <span key={p.id} className="inline-flex items-center rounded-full border border-[#D4A94A]/50 bg-[#D4A94A]/10 text-[11px] text-[#0B3B5C]">
+          <button type="button" className="pl-2.5 pr-1 py-1" data-testid={`trip-preset-${p.id}`}
+            onClick={() => setF((x) => ({ ...x, item_name: p.name, service_type: p.service_type === "other" ? x.service_type : p.service_type, trip_cost: String(p.cost), per_person: p.per_person }))}>
+            {p.name} · {money(p.cost)}{p.per_person ? "/pp" : ""}
+          </button>
+          <button type="button" onClick={() => remove(p)} className="pr-2 text-[#94a3b8] hover:text-red-600" aria-label={`Delete ${p.name}`} data-testid={`trip-preset-delete-${p.id}`}>×</button>
+        </span>
+      ))}
+      {Number(f.trip_cost) > 0 && (
+        <button type="button" onClick={save} className="text-[11px] font-semibold text-[#E86A3C] underline" data-testid="trip-preset-save">+ Save this price</button>
+      )}
+    </div>
+  );
+}
 
 export default function NewBookingDialog({ initial, onClose, onCreated }) {
   const [f, setF] = useState(() => (initial ? fromBooking(initial) : EMPTY));
@@ -143,6 +177,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
     try {
       const { data } = await api.post("/admin/quotes/manual", {
         ...f, passengers: pax, trip_cost: Number(f.trip_cost) || 0, extra_luggage: Number(f.extra_luggage) || 0,
+        deposit_pct: Number(f.deposit_pct) || 0,
         luggage_price: Number(f.luggage_price) || 0, car_seats: Number(f.car_seats) || 0,
         stops: f.stops.filter((s) => s && s.trim()), customer_email: f.customer_email || null, customer_phone: f.customer_phone || null,
         item_name: f.item_name || (f.service_type === "taxi" ? `Taxi: ${f.pickup_location || "pickup"} → ${f.dropoff_location || "drop-off"}` : "Custom trip"),
@@ -281,7 +316,18 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
               <input type="checkbox" checked={f.per_person} onChange={set("per_person")} data-testid="new-booking-per-person" />
               Charge per person ({pax} × {money(Number(f.trip_cost) || 0)})
             </label>
+            <PresetBar f={f} setF={setF} />
           </Field>
+          {f.trip_cost !== "" && (
+            <Field label="Group deposit % (quotes only)">
+              <input type="number" min="0" max="90" value={f.deposit_pct} onChange={set("deposit_pct")} placeholder="e.g. 30, leave blank for full payment" className={input} data-testid="new-booking-deposit-pct" />
+              {Number(f.deposit_pct) > 0 && Number(f.total) > 0 && (
+                <div className="mt-1 text-[11px] text-[#64748B]" data-testid="new-booking-deposit-preview">
+                  Deposit {money(Number(f.total) * Number(f.deposit_pct) / 100)} now · balance {money(Number(f.total) * (1 - Number(f.deposit_pct) / 100))} before the trip (pay link sent 48h ahead)
+                </div>
+              )}
+            </Field>
+          )}
           <Field label="Total ($, includes luggage)"><input type="number" step="0.01" min="0" value={f.total} onChange={set("total")} className={input} required data-testid="new-booking-total" /></Field>
           <Field label="Payment">
             <select value={f.payment} onChange={set("payment")} className={input} data-testid="new-booking-payment">

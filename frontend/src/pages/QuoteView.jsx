@@ -147,6 +147,12 @@ export default function QuoteView() {
               <span className="font-semibold text-[#0B3B5C]">Quote total (USD)</span>
               <span className="serif text-3xl text-[#E86A3C]" data-testid="quote-total">{money(q.total)}</span>
             </div>
+            {q.deposit_due > 0 && (
+              <div className="mt-2 space-y-1 text-sm" data-testid="quote-deposit-split">
+                <div className="flex justify-between font-semibold text-[#0B3B5C]"><span>Deposit to book ({q.deposit_pct}%)</span><span className="mono" data-testid="quote-deposit-due">{money(q.deposit_due)}</span></div>
+                <div className="flex justify-between text-[#64748B]"><span>Balance before the trip</span><span className="mono" data-testid="quote-balance-later">{money(q.balance_later)}</span></div>
+              </div>
+            )}
           </div>
           <p className="text-xs text-[#64748B] mt-5 leading-relaxed">This is a quote, not a booking. Nothing has been reserved or charged. Prices are held for 48 hours. Discounts and gift cards on your account are applied at checkout. Rox Taxi Service &amp; Tours · Nassau &amp; Paradise Island · Call / WhatsApp +1 (242) 432-2587</p>
         </div>

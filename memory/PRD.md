@@ -1003,4 +1003,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Admin manual quotes: POST /api/admin/quotes/manual (kind "manual", lines from routes/quotes._manual_fields); guest can change people on per-person manual quotes; Convert to invoice creates the booking via admin_create_booking. "Send as quote" uses this path whenever a trip cost is entered.
 - Pay page: guests can pay by card, PayPal or Zelle whatever was chosen at booking; the paid method is now recorded (payment_method = stripe / paypal) so refunds go to the right provider.
 
+## 2026-11-20 — Saved trip prices, group deposit quotes
+- Saved prices: site_config.trip_presets via /api/admin/trip-presets (GET/POST/DELETE); chips under "Trip cost" in the manual booking dialog fill name, service, cost and per-person; "+ Save this price".
+- Group deposit: manual quotes accept deposit_pct (0–90). Quote shows deposit/balance; converting to invoice sets is_group_booking + balance_due, so Stripe/PayPal charge only the deposit and the existing 48h balance-reminder cron sends the balance link. Pay page shows "Deposit due now / Balance before your trip".
+
+
 

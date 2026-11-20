@@ -202,12 +202,15 @@ def _manual_fields(p: dict) -> dict:
     lines += [{"label": k, "amount": v} for k, v in extras if v]
     total = round(sum(x["amount"] for x in lines), 2)
     p["total"] = total
+    dep_pct = max(0.0, min(90.0, float(p.get("deposit_pct") or 0)))
+    deposit = round(total * dep_pct / 100, 2) if dep_pct else 0.0
     return {"service_type": p.get("service_type"), "item_name": p.get("item_name"),
             "customer_name": p.get("customer_name"), "customer_email": p.get("customer_email"),
             "customer_phone": p.get("customer_phone"), "booking_date": p.get("booking_date"),
             "pickup_location": p.get("pickup_location"), "dropoff_location": p.get("dropoff_location"),
             "stops": p.get("stops") or [], "trip_legs": p.get("trip_legs") or [], "passengers": pax,
-            "per_person": per, "trip_cost": cost, "lines": lines, "total": total}
+            "per_person": per, "trip_cost": cost, "lines": lines, "total": total,
+            "deposit_pct": dep_pct, "deposit_due": deposit, "balance_later": round(total - deposit, 2) if deposit else 0.0}
 
 
 @router.post("/admin/quotes/manual")
@@ -335,18 +338,27 @@ async def book_quote(qid: str, request: Request):
         raise
     await _db.quotes.update_one({"id": q["id"]}, {"$set": {"status": "booked", "booking_id": b["id"], "booked_at": _now_iso()}})
     invoice_no = "INV-" + q["id"].split("-", 1)[-1]
-    await _db.bookings.update_one({"id": b["id"]}, {"$set": {"quote_id": q["id"], "invoice_number": invoice_no, "invoiced_at": _now_iso()}})
+    inv = {"quote_id": q["id"], "invoice_number": invoice_no, "invoiced_at": _now_iso()}
+    if q.get("deposit_due"):
+        inv.update({"is_group_booking": True, "group_pay_mode": "deposit", "balance_due": q["balance_later"],
+                    "quote_deposit": q["deposit_due"]})
+        b.update(inv)
+    await _db.bookings.update_one({"id": b["id"]}, {"$set": inv})
     from notifications import notify_guest_update  # noqa: PLC0415
     from routes.payment_digest import _site_url  # noqa: PLC0415
     pay = f"{_site_url()}/pay/{b['id']}"
     first = (b.get("customer_name") or "there").split(" ")[0]
     total = float(b.get("total") or 0)
+    dep = float(q.get("deposit_due") or 0)
+    due_txt = (f"Deposit due now: ${dep:.2f}. Balance ${total - dep:.2f} is due before your trip; we'll send you a link 48 hours ahead."
+               if dep else f"Amount due: ${total:.2f}.")
     asyncio.get_running_loop().run_in_executor(None, lambda: notify_guest_update(
         b, subject=f"Invoice {invoice_no} — {b.get('item_name', '')} (${total:.2f})", kicker="Invoice",
         headline=f"{first}, your invoice {invoice_no} is ready",
         lines=[f"{b.get('item_name', '')} on {str(b.get('booking_date', '')).replace('T', ' ')}.",
-               f"Amount due: ${total:.2f}. Booking reference {b['id']}."],
-        sms=f"Rox: Hi {first}, invoice {invoice_no} for {b.get('item_name', '')} is ${total:.2f}. Pay securely: {pay}",
+               f"{due_txt} Booking reference {b['id']}."],
+        sms=(f"Rox: Hi {first}, invoice {invoice_no} for {b.get('item_name', '')} is ${total:.2f}"
+             + (f" (deposit ${dep:.2f} now, balance before the trip)" if dep else "") + f". Pay securely: {pay}"),
         button=("Pay invoice", pay)))
     return {"booking_id": b["id"], "invoice_number": invoice_no}
 
