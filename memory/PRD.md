@@ -1020,6 +1020,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 ## 2026-11-20 — Company-protective refund policy
 - Guest "ask for a refund" option REMOVED (frontend card + backend endpoints). Refunds are admin-only, at management discretion (Stripe or PayPal, partial allowed, processing fee always kept).
 - New public page /refund-policy (8 sections: payments final, 24h+ = Rox credit minus processing fee (12 months, no cash value), <24h/no-show/30+ min late = nothing, free reschedule, non-refundable fees/tips/gift cards/deposits, our cancellation = new date or full credit, rentals, chargebacks). Linked in footer, Track page and checkout ("By paying you agree").
+- Reworded /refund-policy, checkout note, About and /api/fees policy text to be professional and guest-friendly ("Rox travel credit", at-a-glance cards); same protective terms.
+
 - Old conflicting texts fixed (BookingFlow 48h/15%, About, Home, GroupsBook). Guest cancel credit = (total − processing fee) × credit %.
 
 

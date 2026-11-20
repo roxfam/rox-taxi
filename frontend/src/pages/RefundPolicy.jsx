@@ -1,44 +1,62 @@
 import { Link } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, CalendarCheck, Clock, Gift } from "lucide-react";
 import Seo from "../components/Seo";
 
+const AT_A_GLANCE = [
+  { Icon: CalendarCheck, t: "24+ hours' notice", d: "Your payment becomes Rox travel credit, valid for 12 months." },
+  { Icon: Clock, t: "Under 24 hours or no-show", d: "Your booking is considered used and can't be credited." },
+  { Icon: Gift, t: "Need a new date?", d: "Change it for free on the Track page, up to 2 hours before pickup." },
+];
+
 const SECTIONS = [
-  { t: "1. All payments are final", d: [
-    "We reserve your driver, vehicle or tour seat the moment you pay, and we turn other guests away to hold it. So all payments are final and we don't give cash or card refunds.",
-    "If you cancel in time, you get Rox credit instead (see section 2)."] },
+  { t: "1. Our commitment", d: [
+    "As soon as you book, your driver, vehicle or tour place is reserved just for you, and we turn away other guests to keep it.",
+    "So that we can keep our prices fair and our drivers paid, every booking is final. Instead of cash refunds, we give flexible Rox travel credit so your money is never lost."] },
   { t: "2. Cancelling 24 hours or more before pickup", d: [
-    "You get Rox credit for the amount you paid, minus the non-refundable processing fee.",
-    "The credit comes as a code by email and text, and it also shows in your account. You can use it on any taxi ride, tour or rental.",
-    "The credit lasts 12 months from the day it's issued. It has no cash value and can't be swapped for money.",
-    "Cancellation requests are reviewed and approved by our team."] },
+    "You'll get Rox travel credit for the full amount you paid, minus the payment processing fee. That fee is paid to the card company and we can't get it back.",
+    "Your credit code arrives by email and text and is also saved to your account. You can use it on any taxi ride, tour or car rental.",
+    "Credit is valid for 12 months from the day it's issued. It can be used in part, but it can't be exchanged for cash.",
+    "Our team confirms every cancellation request, usually within one business day."] },
   { t: "3. Cancelling less than 24 hours before, or not showing up", d: [
-    "Cancelling less than 24 hours before pickup, not showing up, or arriving more than 30 minutes late counts as using the booking. You get no refund and no credit.",
-    "The driver and the time slot were already set aside for you."] },
-  { t: "4. Rescheduling instead of cancelling", d: [
-    "You can move your booking to a new date for free on the Track page, up to 2 hours before pickup, if there's space.",
-    "If the new trip costs more, you pay the difference. If it costs less, the difference becomes Rox credit."] },
-  { t: "5. Fees that are never refunded", d: [
-    "Processing fees, driver tips, gift cards, Rox credit, and group or holiday deposits are non-refundable.",
+    "By this point your driver and time slot are fully committed, so we can't offer a refund or credit for late cancellations or no-shows.",
+    "If you're more than 30 minutes late without letting us know, your booking counts as a no-show.",
+    "Running late? Message us on WhatsApp and we'll do our best to wait for you or arrange another pickup."] },
+  { t: "4. Free date changes", d: [
+    "Plans change, and we get it. You can move your booking to another date or time for free on the Track page, up to 2 hours before pickup, if there's space.",
+    "If the new trip costs more, you only pay the difference. If it costs less, we add the difference to your account as Rox credit."] },
+  { t: "5. Non-refundable items", d: [
+    "Payment processing fees, driver tips, gift cards, Rox credit, and group or holiday deposits are non-refundable.",
     "VAT is only returned as part of a Rox credit."] },
-  { t: "6. If we have to cancel", d: [
-    "If we cancel because of bad weather, safety or a problem with a vehicle, we'll offer you a new date or full Rox credit, including fees.",
-    "Card refunds are at the discretion of Rox management. Approved card refunds can take up to 10–14 business days to show after we process them."] },
+  { t: "6. If we need to cancel", d: [
+    "Your safety comes first. If we have to cancel because of severe weather, safety concerns or a vehicle problem, we'll offer you a new date or full Rox credit, including all fees.",
+    "In special cases, our management team may approve a refund to your original card or PayPal. Approved refunds can take 10–14 business days to show on your statement."] },
   { t: "7. Car rentals", d: [
-    "We hold the full rental amount on your card and charge it after the trip.",
-    "We may charge the security deposit for damage, low fuel, late return, tickets or cleaning."] },
-  { t: "8. Card disputes", d: [
-    "By booking, you agree to this policy. Please contact us before you dispute a charge with your bank. Most issues can be fixed quickly with a new date or Rox credit.",
-    "If you file a dispute, we send your bank a copy of the booking, this policy and the trip records."] },
+    "We place a hold for the full rental amount on your card and charge it only after your trip.",
+    "We may charge the security deposit for damage, missing fuel, late return, traffic fines or extra cleaning. We'll always explain any charge."] },
+  { t: "8. Questions about a charge", d: [
+    "We're here to help. If anything about your booking or charge doesn't look right, please contact us first. Most issues are sorted out quickly with a new date or travel credit.",
+    "By booking, you agree to this policy. If a charge is disputed with your bank, we'll share your booking details, this policy and the trip records with them."] },
 ];
 
 export default function RefundPolicy() {
   return (
     <div className="max-w-3xl mx-auto px-5 py-16" data-testid="refund-policy-page">
-      <Seo title="Cancellation & Refund Policy | Rox Taxi Service & Tours" description="Rox Taxi cancellation and refund policy: Rox credit for 24h+ cancellations, no refunds within 24 hours or no-shows." path="/refund-policy" />
-      <div className="flex items-center gap-2 text-[10px] tracking-[0.25em] uppercase text-[#D4A94A] font-black"><ShieldCheck className="w-4 h-4" /> Policy</div>
+      <Seo title="Cancellation & Refund Policy | Rox Taxi Service & Tours" description="Flexible Rox travel credit for cancellations made 24+ hours ahead, free date changes, and clear terms for late cancellations and no-shows." path="/refund-policy" />
+      <div className="flex items-center gap-2 text-[10px] tracking-[0.25em] uppercase text-[#D4A94A] font-black"><ShieldCheck className="w-4 h-4" /> Booking policy</div>
       <h1 className="font-[Georgia] text-4xl sm:text-5xl text-[#0B3B5C] mt-3">Cancellation &amp; Refund Policy</h1>
-      <p className="text-[#64748B] mt-4 leading-relaxed">The short version: cancel 24 hours or more before pickup and you get <strong>Rox credit</strong> (valid 12 months). Cancel less than 24 hours before, or don&apos;t show up, and you get no refund.</p>
-      <div className="mt-10 space-y-8">
+      <p className="text-[#64748B] mt-4 leading-relaxed">We want your time in The Bahamas to be easy, including when plans change. This policy explains what happens if you need to cancel or change a booking.</p>
+
+      <div className="mt-8 grid sm:grid-cols-3 gap-3" data-testid="refund-policy-glance">
+        {AT_A_GLANCE.map(({ Icon, t, d }) => (
+          <div key={t} className="rounded-xl border border-[#E2E8F0] bg-white p-4">
+            <Icon className="w-5 h-5 text-[#D4A94A]" />
+            <div className="mt-2 text-sm font-semibold text-[#0B3B5C]">{t}</div>
+            <div className="mt-1 text-xs text-[#64748B] leading-relaxed">{d}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-12 space-y-8">
         {SECTIONS.map((s, i) => (
           <section key={s.t} data-testid={`refund-policy-section-${i + 1}`}>
             <h2 className="text-base md:text-lg font-semibold text-[#0B3B5C]">{s.t}</h2>
@@ -48,7 +66,7 @@ export default function RefundPolicy() {
           </section>
         ))}
       </div>
-      <p className="mt-12 text-sm text-[#64748B]">Questions? <Link to="/contact" className="underline text-[#0B3B5C]" data-testid="refund-policy-contact">Contact us</Link> before you cancel and we&apos;ll help you find a new date.</p>
+      <p className="mt-12 text-sm text-[#64748B]">Have a question before you cancel? <Link to="/contact" className="underline text-[#0B3B5C]" data-testid="refund-policy-contact">Get in touch</Link> and we&apos;ll gladly help you find the best option.</p>
     </div>
   );
 }

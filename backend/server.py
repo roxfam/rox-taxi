@@ -3494,11 +3494,12 @@ async def get_fees():
         "cancellation_notice_hours": CANCELLATION_NOTICE_HOURS,
         "cancellation_applies_to": sorted(CANCELLATION_APPLIES_TO),
         "cancellation_policy": (
-            "All payments are final; we don't give cash or card refunds. Cancel at least "
-            f"{CANCELLATION_NOTICE_HOURS} hours before your trip and the amount paid (minus the non-refundable "
-            "processing fee) becomes Rox credit, valid 12 months, with no cash value. Cancellations within "
-            f"{CANCELLATION_NOTICE_HOURS} hours of pickup, no-shows and late arrivals over 30 minutes get no refund "
-            "or credit. Tips, gift cards and deposits are non-refundable. Full policy: /refund-policy"
+            "Every booking is final, and instead of cash refunds we offer flexible Rox travel credit. Cancel at least "
+            f"{CANCELLATION_NOTICE_HOURS} hours before your trip and the amount paid (excluding the payment "
+            "processing fee) becomes Rox credit, valid 12 months on any taxi, tour or rental. Late cancellations "
+            f"(under {CANCELLATION_NOTICE_HOURS} hours), no-shows and arrivals over 30 minutes late can't be "
+            "credited. Tips, gift cards and deposits are non-refundable. Free date changes up to 2 hours before "
+            "pickup. Full policy: /refund-policy"
         ),
     }
 

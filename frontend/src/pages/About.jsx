@@ -22,7 +22,7 @@ const GUARANTEES = [
   { icon: DollarSign, t: "Fixed Bahamian Tariff", d: "Every route uses the government-posted rate. No surge, no meter tricks, ever." },
   { icon: Clock,      t: "On-Time or Free Wait",  d: "If we're late for a pre-booked airport pickup, your first 15 minutes of wait time is on us." },
   { icon: MapPin,     t: "Live GPS Tracking",     d: "Watch your driver approach in real time on the Track page — no more guessing where the taxi is." },
-  { icon: RefreshCw,  t: "Transparent Cancel Policy", d: "Cancel 24+ hours before pickup and what you paid becomes Rox credit for 12 months (processing fee kept). Within 24 hours or no-show is non-refundable. Free reschedules up to 2 hours before." },
+  { icon: RefreshCw,  t: "Transparent Cancel Policy", d: "Plans change? Cancel 24+ hours ahead and your payment becomes Rox travel credit for 12 months. Free date changes up to 2 hours before pickup." },
   { icon: Baby,       t: "Kids Ride Included",    d: "Children under 12 count as free-of-charge passengers up to your car's seat capacity." },
   { icon: Wifi,       t: "AC + Wi-Fi Fleet",      d: "Every vehicle: air-conditioning, phone chargers, and free onboard Wi-Fi as standard." },
 ];
