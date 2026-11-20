@@ -784,7 +784,7 @@ export default function Layout({ children }) {
                 <Link to="/pay" title="Pay with Zelle" className="rounded-lg bg-white/[0.05] border border-white/10 hover:border-[#6D1ED4] hover:bg-[#6D1ED4]/25 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/70 hover:text-white transition-all">Zelle</Link>
               </div>
               <p className="serif italic text-xs text-white/45 leading-relaxed">
-                All payments secured &amp; encrypted end-to-end. Refunds honored per our cancellation policy.
+                All payments secured &amp; encrypted end-to-end. See our <Link to="/refund-policy" className="underline hover:text-[#D4A94A]" data-testid="footer-refund-policy-link">cancellation &amp; refund policy</Link>.
               </p>
             </div>
           </div>

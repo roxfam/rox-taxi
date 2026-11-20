@@ -1546,7 +1546,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   update your booking status. You can track progress on the Track page anytime.
                 </p>
                 <p className="text-xs text-[#94a3b8] mt-3 leading-relaxed border-t border-[#E2E8F0] pt-3">
-                  <strong>Cancellation policy:</strong> Cancel 48+ hours before service to receive a refund minus a 15% cancellation fee. Cancellations within 48 hours are non-refundable.
+                  <strong>Cancellation policy:</strong> All payments are final. Cancel 24+ hours before pickup for Rox credit (valid 12 months, processing fee kept). Within 24 hours or no-show: no refund or credit. By paying you agree to our <a href="/refund-policy" target="_blank" rel="noreferrer" className="underline">refund policy</a>.
                 </p>
               </div>
 
@@ -1600,7 +1600,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   Add "Booking {booking.id}" in the PayPal note. We'll confirm the moment your payment lands.
                 </p>
                 <p className="text-xs text-[#94a3b8] mt-3 leading-relaxed border-t border-[#E2E8F0] pt-3">
-                  <strong>Cancellation policy:</strong> Cancel 48+ hours before service to receive a refund minus a 15% cancellation fee. Cancellations within 48 hours are non-refundable.
+                  <strong>Cancellation policy:</strong> All payments are final. Cancel 24+ hours before pickup for Rox credit (valid 12 months, processing fee kept). Within 24 hours or no-show: no refund or credit. By paying you agree to our <a href="/refund-policy" target="_blank" rel="noreferrer" className="underline">refund policy</a>.
                 </p>
               </div>
               <div className="mt-6 flex gap-3 justify-end">
@@ -1677,7 +1677,7 @@ export default function BookingModal({ item, serviceType, extraFields, defaultDa
                   </div>
                 )}
                 <p className="text-xs text-[#94a3b8] mt-4 leading-relaxed border-t border-[#E2E8F0] pt-3">
-                  <strong>Cancellation policy:</strong> Cancel 48+ hours before service to receive a refund minus a 15% cancellation fee. Cancellations within 48 hours are non-refundable.
+                  <strong>Cancellation policy:</strong> All payments are final. Cancel 24+ hours before pickup for Rox credit (valid 12 months, processing fee kept). Within 24 hours or no-show: no refund or credit. By paying you agree to our <a href="/refund-policy" target="_blank" rel="noreferrer" className="underline">refund policy</a>.
                 </p>
               </div>
 

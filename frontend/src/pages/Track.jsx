@@ -4,7 +4,6 @@ import { api, money, STATUS_STEPS, STATUS_INDEX } from "../lib/api";
 import { Check, Search, MapPin, User, Calendar as CalIcon, Loader2, XCircle, AlertTriangle, Signal, CreditCard, CalendarPlus, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import RefundRequestCard from "../components/RefundRequestCard";
 
 function DriverLiveBanner({ bookingId, status }) {
   // Poll driver location every 6 seconds while the trip is active. Hides itself
@@ -266,7 +265,7 @@ export default function Track() {
                   <AlertTriangle className="w-5 h-5 text-[#D4A94A] mt-0.5 shrink-0" />
                   <div className="text-sm text-[#334155] leading-relaxed">
                     <div className="font-semibold text-[#0B3B5C]">Need to change your plans?</div>
-                    <div className="text-[#64748B] mt-0.5">Reschedule for free up to 2 hours before pickup. Full cancel: 24+ hr notice = <strong>Rox credit</strong> for the amount paid (valid 12 months); within 24 hr or no-show = non-refundable. Requests are reviewed by our team.</div>
+                    <div className="text-[#64748B] mt-0.5">Reschedule for free up to 2 hours before pickup. Full cancel: 24+ hr notice = <strong>Rox credit</strong> for the amount paid (valid 12 months); within 24 hr or no-show = non-refundable. Requests are reviewed by our team. <Link to="/refund-policy" className="underline" data-testid="track-refund-policy-link">Full policy</Link></div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -288,8 +287,6 @@ export default function Track() {
                 </div>
               </div>
             )}
-
-            {booking.status !== "cancelled" && <RefundRequestCard booking={booking} onDone={() => fetchBooking(booking.id)} />}
 
             {booking.status === "cancelled" && booking.cancellation && (
               <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5" data-testid="cancelled-info">

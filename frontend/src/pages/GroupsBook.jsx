@@ -328,7 +328,7 @@ export default function GroupsBook() {
 
           <div className="mt-4 flex items-start gap-2 text-[11px] text-[#64748B]">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <span>Full refund if cancelled 72h+ before trip. Balance due 48h before pickup.</span>
+            <span>Deposits are non-refundable. Cancel 24h+ before the trip for Rox credit on amounts paid. Balance due 48h before pickup.</span>
           </div>
         </aside>
       </div>

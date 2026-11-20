@@ -681,59 +681,6 @@ async def admin_booking_refundable(booking_id: str, _: str = Depends(_admin_dep)
             "provider": (tx or {}).get("provider") or ("stripe" if tx else None)}
 
 
-class RefundRequestIn(BaseModel):
-    reason: str = Field(min_length=3, max_length=500)
-    amount: Optional[float] = Field(None, gt=0, le=100000)
-
-
-@router.post("/bookings/{booking_id}/refund-request")
-async def guest_refund_request(booking_id: str, req: RefundRequestIn):
-    b = await _db.bookings.find_one({"id": booking_id.upper()}, {"_id": 0})
-    if not b:
-        raise HTTPException(404, "Booking not found")
-    if b.get("payment_status") not in ("paid", "partially_refunded"):
-        raise HTTPException(400, "Only paid bookings can be refunded")
-    if (b.get("refund_request") or {}).get("status") == "pending":
-        return {"requested": True, "already": True, "message": "Your refund request is already with us."}
-    doc = {"status": "pending", "reason": req.reason.strip(), "amount": round(req.amount, 2) if req.amount else None,
-           "requested_at": _now_iso()}
-    await _db.bookings.update_one({"id": b["id"]}, {"$set": {"refund_request": doc, "updated_at": _now_iso()}})
-    from notifications import notify_guest_update, notify_owner_activity  # noqa: PLC0415
-    first = (b.get("customer_name") or "there").split(" ")[0]
-    amt_txt = f"${doc['amount']:.2f}" if doc["amount"] else "a refund"
-    try:
-        await asyncio.to_thread(lambda: notify_guest_update(
-            b, subject=f"We got your refund request — booking {b['id']}", kicker="Refund request",
-            headline=f"{first}, we're reviewing your refund request",
-            lines=[f"We received your request for {amt_txt} on {b.get('item_name', 'your booking')} (booking {b['id']}).",
-                   "The processing fee is non-refundable. If approved, refunds can take up to 10-14 business days after processing."],
-            sms=f"Rox: Hi {first}, we got your refund request for booking {b['id']}. We'll review it and reply by email/text."))
-        await asyncio.to_thread(notify_owner_activity, "refund_request",
-                                f"Refund request: {b['id']} {b.get('customer_name', '')} asks for {amt_txt}. Reason: {doc['reason'][:120]}",
-                                f"Refund request — booking {b['id']}")
-    except Exception as e:  # noqa: BLE001
-        logging.warning("refund request notice err: %s", e)
-    return {"requested": True, "message": "Refund request sent. We'll reply by email and text."}
-
-
-@router.post("/admin/bookings/{booking_id}/refund-request/decline")
-async def admin_decline_refund_request(booking_id: str, admin: str = Depends(_admin_dep)):
-    b = await _db.bookings.find_one({"id": booking_id}, {"_id": 0})
-    if not b or (b.get("refund_request") or {}).get("status") != "pending":
-        raise HTTPException(404, "No pending refund request")
-    await _db.bookings.update_one({"id": booking_id}, {"$set": {
-        "refund_request.status": "declined", "refund_request.decided_at": _now_iso(), "refund_request.decided_by": admin}})
-    from notifications import notify_guest_update  # noqa: PLC0415
-    first = (b.get("customer_name") or "there").split(" ")[0]
-    await asyncio.to_thread(lambda: notify_guest_update(
-        b, subject=f"About your refund request — booking {b['id']}", kicker="Refund request",
-        headline=f"{first}, we couldn't approve your refund",
-        lines=[f"We reviewed your refund request for booking {b['id']} and couldn't approve it under our policy.",
-               "Please contact us on WhatsApp +1 (242) 432-2587 if you'd like to talk about it."],
-        sms=f"Rox: Hi {first}, we couldn't approve the refund request for booking {b['id']}. WhatsApp +1 (242) 432-2587 to talk about it."))
-    return {"declined": True}
-
-
 def _cancel_notice(b: dict, reason: str) -> dict:
     from notifications import send_email, send_sms  # noqa: PLC0415
     first = (b.get("customer_name") or "there").split(" ")[0] or "there"
@@ -941,9 +888,6 @@ async def admin_refund_booking(booking_id: str, req: BookingRefund, admin: str =
         body["amount"] = round(req.amount, 2)
     res = await refund_payment(tx["session_id"], body, admin=admin)
     ok = bool((res.get("refund") or {}).get("refunded"))
-    if ok and (b.get("refund_request") or {}).get("status") == "pending":
-        await _db.bookings.update_one({"id": booking_id}, {"$set": {
-            "refund_request.status": "approved", "refund_request.decided_at": _now_iso(), "refund_request.decided_by": admin}})
     notice = None
     if ok and req.notify_guest:
         notice = await asyncio.to_thread(_refund_notice, b, float(res.get("amount") or 0), reason)

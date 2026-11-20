@@ -3494,10 +3494,11 @@ async def get_fees():
         "cancellation_notice_hours": CANCELLATION_NOTICE_HOURS,
         "cancellation_applies_to": sorted(CANCELLATION_APPLIES_TO),
         "cancellation_policy": (
-            f"Cancel at least {CANCELLATION_NOTICE_HOURS} hours before your trip and the amount paid is returned "
-            "as Rox credit, valid for 12 months on any taxi, tour or rental. Cancellations within "
-            f"{CANCELLATION_NOTICE_HOURS} hours of pickup and no-shows are non-refundable. Approved card refunds "
-            "can take up to 10-14 business days after processing."
+            "All payments are final; we don't give cash or card refunds. Cancel at least "
+            f"{CANCELLATION_NOTICE_HOURS} hours before your trip and the amount paid (minus the non-refundable "
+            "processing fee) becomes Rox credit, valid 12 months, with no cash value. Cancellations within "
+            f"{CANCELLATION_NOTICE_HOURS} hours of pickup, no-shows and late arrivals over 30 minutes get no refund "
+            "or credit. Tips, gift cards and deposits are non-refundable. Full policy: /refund-policy"
         ),
     }
 
@@ -3813,7 +3814,7 @@ async def cancel_booking(booking_id: str):
     paid = doc.get("payment_status") in ("paid", "authorized")
     _pol = await db.site_config.find_one({"_id": "main"}, {"cancel_credit_pct": 1}) or {}
     credit_pct = float(_pol.get("cancel_credit_pct") if _pol.get("cancel_credit_pct") is not None else 100)
-    credit = round(total * credit_pct / 100, 2) if (paid and eligible) else 0.0
+    credit = round(max(0.0, total - float(doc.get("processing_fee") or 0)) * credit_pct / 100, 2) if (paid and eligible) else 0.0
     fee = 0.0
     refund = 0.0
 

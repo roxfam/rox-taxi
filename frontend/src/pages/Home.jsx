@@ -779,7 +779,7 @@ function CableBeachHomePromo() {
             >
               See what's included
             </Link>
-            <span className="text-[11px] text-white/60 ml-1">Pay Stripe or PayPal · full refund up to 24 h out</span>
+            <span className="text-[11px] text-white/60 ml-1">Pay Stripe or PayPal · cancel 24 h out for Rox credit</span>
           </div>
         </div>
 

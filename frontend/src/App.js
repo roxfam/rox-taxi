@@ -24,6 +24,7 @@ const DriverScan = lazy(() => import("./pages/DriverScan"));
 const AttendantScan = lazy(() => import("./pages/AttendantScan"));
 const Contact = lazy(() => import("./pages/Contact"));
 const About = lazy(() => import("./pages/About"));
+const RefundPolicy = lazy(() => import("./pages/RefundPolicy"));
 const Groups = lazy(() => import("./pages/Groups"));
 const LocalLanding = lazy(() => import("./pages/LocalLanding"));
 const GroupsBook = lazy(() => import("./pages/GroupsBook"));
@@ -139,6 +140,7 @@ function AppRouter() {
       <Route path="/attendant/scan" element={<AttendantScan />} />
       <Route path="/contact" element={<CustomerShell><Contact /></CustomerShell>} />
       <Route path="/about" element={<CustomerShell><About /></CustomerShell>} />
+      <Route path="/refund-policy" element={<CustomerShell><RefundPolicy /></CustomerShell>} />
       <Route path="/groups" element={<CustomerShell><Groups /></CustomerShell>} />
       <Route path="/groups/book" element={<CustomerShell><GroupsBook /></CustomerShell>} />
       <Route path="/resume-checkout" element={<CustomerShell><ResumeCheckout /></CustomerShell>} />
