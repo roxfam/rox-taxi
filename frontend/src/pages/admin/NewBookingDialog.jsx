@@ -284,7 +284,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
         </div>
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Service">
-            <select value={f.service_type} onChange={(e) => setF((x) => ({ ...x, service_type: e.target.value, item_id: "", item_name: "", extra_luggage: e.target.value === "tour" ? 0 : x.extra_luggage, dropoff_time: e.target.value === "tour" ? x.dropoff_time : "" }))} className={input} data-testid="new-booking-service">
+            <select value={f.service_type} onChange={(e) => setF((x) => ({ ...x, service_type: e.target.value, item_id: "", item_name: "", extra_luggage: e.target.value === "tour" ? 0 : x.extra_luggage, flight_number: e.target.value === "tour" ? "" : x.flight_number, dropoff_time: e.target.value === "tour" ? x.dropoff_time : "" }))} className={input} data-testid="new-booking-service">
               {SERVICES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
           </Field>
@@ -328,7 +328,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
             </div>
           )}
           <Field label="Passengers"><input type="number" min="1" max="60" value={f.passengers} onChange={set("passengers")} className={input} data-testid="new-booking-passengers" /></Field>
-          <Field label="Flight # (optional)"><input value={f.flight_number} onChange={set("flight_number")} className={input} data-testid="new-booking-flight" /></Field>
+          {f.service_type !== "tour" && <Field label="Flight # (optional)"><input value={f.flight_number} onChange={set("flight_number")} className={input} data-testid="new-booking-flight" /></Field>}
           {f.service_type === "tour" ? (
             <Field label="Tour drop-off time"><input type="time" value={f.dropoff_time} onChange={set("dropoff_time")} className={input} data-testid="new-booking-dropoff-time" /></Field>
           ) : (
