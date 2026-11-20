@@ -12,7 +12,7 @@ const pick = (q) => ({
   booking_date: (q.booking_date || "").slice(0, 16), pickup_location: q.pickup_location || "", dropoff_location: q.dropoff_location || "",
   passengers: q.passengers || q.payload?.passengers || 1, notes: q.payload?.notes || "", dropoff_time: q.dropoff_time || "",
   item_name: q.item_name || "", trip_cost: q.trip_cost ?? q.payload?.trip_cost ?? "", per_person: !!(q.per_person ?? q.payload?.per_person),
-  deposit_pct: q.deposit_pct ?? q.payload?.deposit_pct ?? "", no_vat: !!q.no_vat, processing_fee_on: q.processing_fee_on ?? null,
+  deposit_pct: q.deposit_pct ?? q.payload?.deposit_pct ?? "", no_vat: !!q.no_vat, processing_fee_on: q.processing_fee_on ?? q.payload?.processing_fee_on ?? ((q.lines || []).some((l) => /processing/i.test(l.label)) || null),
   tip_amount: q.payload?.tip_amount || "",
 });
 
@@ -48,7 +48,7 @@ export default function EditQuoteDialog({ qid, onClose, onSaved }) {
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
-            <div className="text-[10px] tracking-[0.25em] uppercase text-[#D4A94A] font-black">Quote {q.id} \u00b7 {q.status}</div>
+            <div className="text-[10px] tracking-[0.25em] uppercase text-[#D4A94A] font-black">Quote {q.id} · {q.status}</div>
             <h3 className="font-[Georgia] text-xl text-[#0B3B5C] mt-1">{q.item_name}</h3>
           </div>
           <button type="button" onClick={onClose} className="text-[#64748B]" data-testid="edit-quote-close"><X className="w-5 h-5" /></button>

@@ -1,0 +1,40 @@
+{
+  "summary": "Tested gratuity and processing-fee toggles on manual bookings and quotes, the admin Quotes panel (view/edit/search/filter) and the manual Refund button. Backend: 18 of 19 pytest cases pass. UI: the NewBookingDialog fee/VAT/tip maths, creating bookings, sending manual quotes, refund prompt → dialog → recording a cash/Zelle refund, the unknown-ID message, quote search and filter, and the read-only view of booked quotes all work. Found 1 real pricing bug (editing a manual quote silently drops a processing fee the admin had forced on) and 1 display bug (a literal \\u00b7 shows in the edit dialog header).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PUT /api/admin/quotes/{qid} (manual-kind quotes)", "issue": "When a manual quote is created with processing_fee_on=true on a service that has no fee by default (a normal tour), the flag is saved only in payload.processing_fee_on, not on the quote document. _manual_fields does not return it. EditQuoteDialog.pick() reads q.processing_fee_on (undefined → null). The checkbox looks ticked because a Processing line exists, but save sends processing_fee_on:null, and the backend re-prices with the default (off). Repro: create a manual quote 2x$50 with no VAT, fee on and tip 10 = $115. In the UI, change people to 3 without touching the checkbox and save. The quote becomes $160 instead of $167.50. pytest test_edit_untouched_fee_flag_keeps_fee also gets 110 instead of 115.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/admin/quotes (catalog tour quote)", "issue": "For tours without child_price (e.g. snorkel-rose), the base is a flat req.price no matter how many people. A 2-person quote shows Fare $75, and editing to 3 people does not change the fare. Same as the existing public booking engine, but it may not be what the admin expects in 'Send as quote'."},
+      {"endpoint": "Booking model vs ManualBooking", "issue": "Booking.tip_amount allows up to 1000, but ManualBooking allows up to 10000. Editing a catalog quote with gratuity > $1000 will 422."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "EditQuoteDialog header", "issue": "A literal '\\u00b7' shows ('QUOTE Q-EDE5E9 \\U00B7 OPEN') because the JSX text `{q.id} \\u00b7 {q.status}` is not a JS string. Use {\" \\u00b7 \"} or a real '·'.", "selector": "[data-testid='edit-quote-dialog']", "priority": "LOW"},
+      {"component": "EditQuoteDialog processing checkbox", "issue": "Shows ticked (based on the lines) while the state is null, so the save drops the fee. This is the frontend half of the HIGH backend issue.", "selector": "[data-testid='edit-quote-processing']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RefundBookingDialog (cash booking)", "issues": ["The note 'Processing fee and gratuity kept' only shows in the online-refund branch. For cash/Zelle bookings the admin sees 'Up to $100' on a $125 booking with no reason given."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_gratuity_fee_quotes_refund.py", "/app/test_reports/pytest/pytest_iter44.xml"],
+  "action_items": [
+    "Fix quote edit losing the forced processing fee: store processing_fee_on (and tip_amount) on the manual quote document in _manual_fields/admin_manual_quote, OR in admin_edit_quote fall back to q['payload'].get('processing_fee_on') when the body value is None. Also make EditQuoteDialog.pick() use q.processing_fee_on ?? q.payload?.processing_fee_on.",
+    "Fix the '\\u00b7' literal in the EditQuoteDialog header (line 51).",
+    "Optional: show the fee/gratuity kept note in the manual-refund section; line up Booking.tip_amount le=1000 with ManualBooking (10000)."
+  ],
+  "critical_code_review_comments": [
+    "quotes.py admin_edit_quote: fee_on = ch.pop('processing_fee_on', q.get('processing_fee_on')). An explicit null from the UI overrides the stored value, and manual quotes never store it at the top level.",
+    "admin_booking_refundable: manual_max equals the online remaining for card-paid bookings too, so an admin could record a cash refund and then still refund via Stripe up to the old amount only if refunded_amount is not shared. It is shared (refunded_amount), so this is OK.",
+    "dayof_reminders.py is 1018 lines and server.py is 7234 lines. Both are over the 700-line guideline."
+  ],
+  "updated_files": ["/app/backend/tests/test_gratuity_fee_quotes_refund.py"],
+  "success_rate": {"backend": "95% (18/19)", "frontend": "90% (all flows work; edit-quote fee drop + header glyph)"},
+  "seed_data_creation": "Created TEST_ bookings and quotes (example.com emails, no real phones; one catalog quote used the fictional +12025550143). All were deleted by id at the end. Verified 0 TEST_ quotes and 0 TEST_ bookings left.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL=... python -m pytest tests/test_gratuity_fee_quotes_refund.py -n0. test_edit_untouched_fee_flag_keeps_fee should pass after the fix. UI flow verified: login /admin/login → admin-new-booking-btn; admin-manual-refund-btn uses window.prompt (handle the page dialog); admin-quotes-panel edit at admin-quote-edit-{id}. Quote creation emails/SMSes the guest, so use email-only manual quotes.",
+  "rca of the issue": "Repro: POST /api/admin/quotes/manual with service_type=tour, trip_cost=50, per_person, passengers=2, no_vat=true, processing_fee_on=true, tip 10 → total 115. Then PUT /api/admin/quotes/{id} with processing_fee_on:null (which the UI sends when the checkbox is untouched) → total 110 and the fee line is gone. Root cause: the fee override is kept only in the payload and is not read back by the editor or the edit endpoint."
+}

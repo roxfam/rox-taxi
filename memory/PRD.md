@@ -1031,6 +1031,14 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - backend/phone_utils.py normalize_phone + `Phone` pydantic type (7 digits → +1242…, 10 digits → +1…, 00 → +, keeps +country). Applied to booking, manual booking, quotes/day-of, group, cable beach, gift card, contact, customer profile, owner SMS, driver dispatch models, and inside send_sms (covers old stored numbers).
 - frontend/src/lib/phone.js mirror; formats on blur in admin New booking, Send to driver, profile; BookingFlow normalizes on submit.
 
+## 2026-11-20 — Gratuity, processing toggle, manual refund, quote editing
+- Admin New booking dialog: Processing fee tick box (any service, default by service type), No VAT, gratuity 10/15/18/20% or custom $ (never charged a fee). fees.compute_fees(fee_on), fees.admin_overrides(no_vat, fee_on) contextvars for catalog quotes.
+- Manual quote → booking conversion fixed: payload total is pre-fee subtotal (was double-adding VAT).
+- Admin "Refund" button (booking ID prompt) → RefundBookingDialog; new POST /admin/bookings/{id}/refund-manual records cash/Zelle/bank refunds. Refund max excludes processing fee + gratuity.
+- Quotes panel: search, status filter, View/Edit dialog (EditQuoteDialog) → PUT /admin/quotes/{qid} re-prices and restarts 48h; GET /admin/quotes/{qid}.
+- Open (minor): catalog tours without child_price price flat regardless of people; Booking.tip_amount max 1000 vs manual 10000.
+
+
 
 
 

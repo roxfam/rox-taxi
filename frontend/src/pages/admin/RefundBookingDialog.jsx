@@ -117,7 +117,7 @@ export default function RefundBookingDialog({ booking, onClose, onDone }) {
               </select>
               <button type="button" onClick={recordManual} disabled={busy} className="text-xs px-3 py-1.5 rounded-full border border-[#7C3AED] text-[#6D28D9] font-semibold disabled:opacity-60" data-testid="refund-dialog-manual-submit">Record refund</button>
             </div>
-            <div className="text-[11px] text-[#94a3b8]">Up to {money(info.manual_max)}. This only records it; no money is sent.</div>
+            <div className="text-[11px] text-[#94a3b8]">Up to {money(info.manual_max)}{info.fee_kept > 0 ? ` (processing fee and gratuity ${money(info.fee_kept)} are kept)` : ""}. This only records it; no money is sent.</div>
           </div>
         )}
       </div>

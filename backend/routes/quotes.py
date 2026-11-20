@@ -224,6 +224,7 @@ def _manual_fields(p: dict, rates: dict) -> dict:
             "pickup_location": p.get("pickup_location"), "dropoff_location": p.get("dropoff_location"),
             "stops": p.get("stops") or [], "trip_legs": p.get("trip_legs") or [], "passengers": pax,
             "dropoff_time": p.get("dropoff_time") or None, "no_vat": bool(p.get("no_vat")),
+            "processing_fee_on": p.get("processing_fee_on"),
             "per_person": per, "trip_cost": cost, "lines": lines, "total": total,
             "deposit_pct": dep_pct, "deposit_due": deposit, "balance_later": round(total - deposit, 2) if deposit else 0.0}
 
