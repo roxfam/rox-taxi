@@ -46,6 +46,10 @@ def trip_sheet(b: dict, header: str) -> str:
     if b.get("car_seats"):
         extras.append(f"{b['car_seats']} baby seat(s)")
     lines = [header, f"#{b['id']} {b.get('item_name') or ''}", f"Pickup: {when}"]
+    if b.get("admin_saturday"):
+        lines.insert(1, "** SATURDAY - ADMIN BOOKED (special trip) **")
+    if b.get("admin_blackout"):
+        lines.insert(1, "** HOLIDAY/BLACKOUT DAY - ADMIN APPROVED **")
     if b.get("dropoff_time"):
         try:
             drop = datetime.strptime(b["dropoff_time"], "%H:%M").strftime("%I:%M %p").lstrip("0")

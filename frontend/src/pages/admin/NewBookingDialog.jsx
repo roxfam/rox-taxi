@@ -63,6 +63,29 @@ const fromBooking = (b) => ({
   bridge_toll: Number(b.bridge_toll_fee || 0) > 0,
 });
 
+function DayNotice({ f, setF }) {
+  const [blk, setBlk] = useState([]);
+  useEffect(() => {
+    api.get("/site-config").then((r) => setBlk(r.data.blackout_dates || [])).catch(() => {});
+  }, []);
+  const day = (f.booking_date || "").slice(0, 10);
+  if (!day) return null;
+  const sat = new Date(`${day}T12:00:00`).getDay() === 6;
+  const isBlk = blk.includes(day);
+  if (!sat && !isBlk) return null;
+  return (
+    <div className="mt-1 space-y-1 text-[11px]">
+      {sat && <div className="text-[#B91C1C] font-semibold" data-testid="new-booking-saturday-note">Saturday – closed online. This admin booking will be tagged for the driver.</div>}
+      {isBlk && (
+        <label className="flex items-center gap-2 text-[#0B3B5C] font-semibold" data-testid="new-booking-blackout">
+          <input type="checkbox" checked={!!f.allow_blackout} onChange={(e) => setF((x) => ({ ...x, allow_blackout: e.target.checked }))} data-testid="new-booking-blackout-checkbox" />
+          Blackout date – book on blackout date (I approve)
+        </label>
+      )}
+    </div>
+  );
+}
+
 const TIP_PCTS = [10, 15, 18, 20];
 
 function GratuityPicker({ f, setF, base }) {
@@ -267,7 +290,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
         extra_luggage: Number(f.extra_luggage) || 0, car_seats: Number(f.car_seats) || 0, days: 1,
         notes: f.notes || null, payment_method: "stripe", tip_amount: Number(f.tip_amount) || 0,
       };
-      const { data } = await api.post("/admin/quotes", { payload, text_guest: !!f.customer_phone?.trim(), no_vat: !!f.no_vat, processing_fee_on: f.processing_fee_on, dropoff_time: f.service_type === "tour" ? f.dropoff_time || null : null });
+      const { data } = await api.post("/admin/quotes", { payload, text_guest: !!f.customer_phone?.trim(), no_vat: !!f.no_vat, processing_fee_on: f.processing_fee_on, allow_blackout: !!f.allow_blackout, dropoff_time: f.service_type === "tour" ? f.dropoff_time || null : null });
       toast.success(`Quote ${data.id} sent · ${money(data.total)}${data.text_sent ? " · texted" : ""}`);
       onClose();
     } catch (err) {
@@ -335,7 +358,7 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
           <Field label="Guest name"><input value={f.customer_name} onChange={set("customer_name")} className={input} required data-testid="new-booking-name" /></Field>
           <Field label="Email"><input type="email" value={f.customer_email} onChange={set("customer_email")} className={input} data-testid="new-booking-email" /></Field>
           <Field label="Phone"><input value={f.customer_phone} onChange={set("customer_phone")} onBlur={() => setF((x) => ({ ...x, customer_phone: normalizePhone(x.customer_phone) }))} placeholder="+1 242 555 0123" className={input} data-testid="new-booking-phone" /></Field>
-          <Field label="Date & time"><input type="datetime-local" value={f.booking_date} onChange={set("booking_date")} className={input} required data-testid="new-booking-date" /></Field>
+          <Field label="Date & time"><input type="datetime-local" value={f.booking_date} onChange={set("booking_date")} className={input} required data-testid="new-booking-date" /><DayNotice f={f} setF={setF} /></Field>
           <Field label="Pickup"><LocationSelect value={f.pickup_location} onChange={(v) => setF((x) => ({ ...x, pickup_location: v }))} places={places} testid="new-booking-pickup" /></Field>
           <Field label="Drop-off"><LocationSelect value={f.dropoff_location} onChange={(v) => setF((x) => ({ ...x, dropoff_location: v }))} places={places} testid="new-booking-dropoff" /></Field>
           {f.service_type === "taxi" && (

@@ -158,7 +158,7 @@ async def quote_people(qid: str, req: QuotePeople, request: Request):
         raise HTTPException(400, "Enter the number of people")
     p.pop("processing_fee", None)
     p.pop("group_discount", None)
-    with fees_module.admin_overrides(bool(q.get("no_vat")), q.get("processing_fee_on"), bool(q.get("per_person_tour")), bool(q.get("created_by"))):
+    with fees_module.admin_overrides(bool(q.get("no_vat")), q.get("processing_fee_on"), bool(q.get("per_person_tour")), bool(q.get("created_by")), bool(q.get("allow_blackout"))):
         fields = await _price(p, request)
     await _db.quotes.update_one({"id": q["id"]}, {"$set": {**fields, "payload": p, "updated_at": _now_iso()}})
     return _public({**q, **fields})
@@ -240,6 +240,7 @@ async def admin_manual_quote(payload: dict, admin=Depends(_admin_dep)):
         ManualBooking(**p)
     except ValidationError as e:
         raise HTTPException(422, e.errors()[0].get("msg", "Invalid quote")) from e
+    await fees_module.special_day_flags(_db, p.get("booking_date") or "", bool(p.get("allow_blackout")))
     if not p.get("trip_cost") or not (p.get("customer_email") or p.get("customer_phone")):
         raise HTTPException(400, "Enter the trip cost and the guest's email or phone")
     return await _save_quote(p, "manual", {**_manual_fields(p, await _manual_rates(p)), "created_by": admin})
@@ -250,16 +251,17 @@ class AdminQuote(BaseModel):
     text_guest: bool = False
     no_vat: bool = False
     processing_fee_on: Optional[bool] = None
+    allow_blackout: bool = False
     dropoff_time: Optional[str] = Field(None, max_length=10)
 
 
 @router.post("/admin/quotes")
 async def admin_create_quote(req: AdminQuote, request: Request, admin=Depends(_admin_dep)):
     ppt = req.payload.get("service_type") == "tour"
-    with fees_module.admin_overrides(req.no_vat, req.processing_fee_on, ppt, True):
+    with fees_module.admin_overrides(req.no_vat, req.processing_fee_on, ppt, True, req.allow_blackout):
         fields = await _price(req.payload, request)
     q = await _save_quote(req.payload, "booking", {**fields, "created_by": admin, "no_vat": req.no_vat,
-                                                    "processing_fee_on": req.processing_fee_on, "per_person_tour": ppt,
+                                                    "processing_fee_on": req.processing_fee_on, "per_person_tour": ppt, "allow_blackout": req.allow_blackout,
                                                     "dropoff_time": req.dropoff_time or None})
     return q
 
@@ -359,7 +361,7 @@ async def book_quote(qid: str, request: Request):
             from routes.dayof_reminders import ManualBooking, admin_create_booking  # noqa: PLC0415
             b = (await admin_create_booking(ManualBooking(**q["payload"]), q.get("created_by") or "quote"))["booking"]
         else:
-            with fees_module.admin_overrides(bool(q.get("no_vat")), q.get("processing_fee_on"), bool(q.get("per_person_tour")), bool(q.get("created_by"))):
+            with fees_module.admin_overrides(bool(q.get("no_vat")), q.get("processing_fee_on"), bool(q.get("per_person_tour")), bool(q.get("created_by")), bool(q.get("allow_blackout"))):
                 b = await _create_booking(_model(q["payload"], False), request)
     except Exception:
         await _db.quotes.update_one({"id": q["id"]}, {"$set": {"status": "open"}})
@@ -437,7 +439,7 @@ async def admin_edit_quote(qid: str, body: dict, request: Request, admin=Depends
         p.update(ch)
         p.pop("processing_fee", None)
         p.pop("group_discount", None)
-        with fees_module.admin_overrides(no_vat, fee_on, bool(q.get("per_person_tour")), True):
+        with fees_module.admin_overrides(no_vat, fee_on, bool(q.get("per_person_tour")), True, bool(q.get("allow_blackout"))):
             fields = await _price(p, request)
         fields.update({"dropoff_time": drop or None})
     exp = datetime.now(timezone.utc) + timedelta(hours=VALID_HOURS)

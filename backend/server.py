@@ -331,7 +331,7 @@ def _validate_open_day(service_type: str, booking_date: str, days: int = 1):
     global _BLACKOUT_CACHE
     if _BLACKOUT_CACHE is None or (datetime.now(timezone.utc).timestamp() - _BLACKOUT_CACHE.get("_ts", 0)) > 60:
         _refresh_blackout_cache_sync()
-    if d.isoformat() in (_BLACKOUT_CACHE or {}).get("dates", set()):
+    if d.isoformat() in (_BLACKOUT_CACHE or {}).get("dates", set()) and not fees_module.ALLOW_BLACKOUT.get():
         raise HTTPException(
             400,
             f"We're offline on {d.isoformat()} — please pick another day. Contact us if urgent.",
@@ -3242,6 +3242,8 @@ async def create_booking(req: BookingCreate, request: Request):
         booking["vat_amount"] = vat_amount
         booking["vat_pct"] = _fees["vat_pct"]
     booking["processing_fee"] = processing_fee
+    if fees_module.ADMIN_MADE.get():
+        booking.update(await fees_module.special_day_flags(db, req.booking_date, fees_module.ALLOW_BLACKOUT.get()))
     booking["processing_fee_pct"] = _fees["processing_fee_pct"]
     booking["subtotal_before_tax"] = subtotal_before_tax
 

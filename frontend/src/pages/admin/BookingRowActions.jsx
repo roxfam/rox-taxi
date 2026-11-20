@@ -82,6 +82,8 @@ export default function BookingRowActions({ booking, onEdit, onRepeat, onChanged
 
   return (
     <div className="mt-1.5 flex flex-wrap gap-1" data-testid={`admin-row-actions-${booking.id}`}>
+      {booking.admin_saturday && <span className="w-full sm:w-auto text-[10px] font-bold uppercase tracking-wide rounded bg-[#FEE2E2] text-[#B91C1C] px-2 py-0.5" data-testid={`admin-row-saturday-${booking.id}`}>Saturday – admin booked</span>}
+      {booking.admin_blackout && <span className="w-full sm:w-auto text-[10px] font-bold uppercase tracking-wide rounded bg-[#1E293B] text-white px-2 py-0.5" data-testid={`admin-row-blackout-${booking.id}`}>Blackout day – admin approved</span>}
       {request && (
         <div className="w-full flex flex-wrap items-center gap-1 rounded bg-[#FEF3C7] px-2 py-1 text-[10px] text-[#92400E]" data-testid={`admin-row-cancel-request-${booking.id}`}>
           <span className="font-bold">Guest asked to cancel</span>

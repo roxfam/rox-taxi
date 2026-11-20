@@ -1039,6 +1039,9 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Open (minor): catalog tours without child_price price flat regardless of people; Booking.tip_amount max 1000 vs manual 10000.
 - Admin catalog tour quotes (POST /admin/quotes, service tour) set quote.per_person_tour → fees.TOUR_PER_PERSON makes create_booking price flat tours (no child_price) as price × people; applies on create, admin edit, guest people change and conversion. Public website pricing unchanged.
 - Saturday closure override: admin-created quotes/bookings (fees.ADMIN_MADE contextvar set in admin quote create/edit and in re-price/convert of quotes with created_by) skip the Saturday check in _validate_open_day. Public site + public quotes still blocked. Blackout dates still apply to everyone. Manual bookings never had the check.
+- Blackout override: admin manual bookings, manual quotes and catalog quotes on a blackout date are rejected unless "Book on blackout date" is ticked (allow_blackout; fees.special_day_flags / ALLOW_BLACKOUT). Public site still blocked (via admin-refreshed cache).
+- Saturday/blackout badges: admin-made bookings store admin_saturday / admin_blackout → red/dark tags in admin booking row + "** SATURDAY - ADMIN BOOKED **" / "** HOLIDAY/BLACKOUT DAY - ADMIN APPROVED **" at top of driver texts. NewBookingDialog shows Saturday note + blackout tick box under the date.
+
 
 
 

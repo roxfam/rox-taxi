@@ -452,6 +452,7 @@ class ManualBooking(BaseModel):
     no_vat: bool = False
     processing_fee_on: Optional[bool] = None
     tip_amount: float = Field(0, ge=0, le=10000)
+    allow_blackout: bool = False
     dropoff_time: Optional[str] = Field(None, max_length=10)
     payment: str = Field("unpaid", pattern="^(unpaid|cash|zelle|card_offline)$")
     send_confirmation: bool = True
@@ -519,6 +520,7 @@ async def admin_create_booking(req: ManualBooking, admin: str = Depends(_admin_d
                                   await fees_module.is_processing(_db, req.service_type, req.item_id or "", req.item_name or ""),
                                   await fees_module.fee_rates(_db), no_vat=req.no_vat, fee_on=req.processing_fee_on)
     tip = round(req.tip_amount or 0, 2)
+    doc.update(await fees_module.special_day_flags(_db, req.booking_date, req.allow_blackout))
     doc.update({**fz, "subtotal_before_tax": round(req.total, 2), "tip_amount": tip,
                 "total": round(req.total + fz["vat_amount"] + fz["processing_fee"] + tip, 2)})
     doc.update({
