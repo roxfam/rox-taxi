@@ -225,6 +225,12 @@ export default function Pay() {
             <div className="text-xs tracking-[0.28em] uppercase text-[#64748B]">Summary</div>
             <div className="mt-4 text-[#0B3B5C] font-semibold leading-snug">{booking.item_name}</div>
             <div className="mt-1 text-xs text-[#64748B] capitalize">{booking.service_type}</div>
+            {booking.invoice_number && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl bg-[#FBF7EF] px-3 py-2 text-xs" data-testid="pay-invoice">
+                <span className="mono font-bold text-[#0B3B5C]" data-testid="pay-invoice-number">Invoice {booking.invoice_number}</span>
+                <a href={`${process.env.REACT_APP_BACKEND_URL}/api/bookings/${booking.id}/receipt.pdf`} className="underline text-[#E86A3C] font-semibold" data-testid="pay-invoice-pdf">Download invoice PDF</a>
+              </div>
+            )}
 
             <div className="mt-5 space-y-2 text-sm">
               <Row k="Guest" v={booking.customer_name} />

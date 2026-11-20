@@ -9,6 +9,8 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
   const [refundInfo, setRefundInfo] = useState(null);
   const [refund, setRefund] = useState(true);
   const [amount, setAmount] = useState("");
+  const [cfee, setCfee] = useState("");
+  const [feeInvoice, setFeeInvoice] = useState(true);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -18,6 +20,12 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
   }, [booking.id]);
 
   const canRefund = !!refundInfo?.refundable;
+  const unpaidTotal = Number(booking.total ?? booking.total_price ?? 0);
+  const setFee = (v) => {
+    setCfee(v);
+    if (canRefund) setAmount(String(Math.max(0, Math.round(((refundInfo.amount || 0) - (Number(v) || 0)) * 100) / 100)));
+  };
+  const presets = [10, 25, 50].map((p) => ({ label: `${p}%`, v: Math.round((canRefund ? refundInfo.amount : unpaidTotal) * p) / 100 }));
 
   const amt = Number(amount);
   const amountBad = canRefund && refund && (!(amt > 0) || amt > (refundInfo?.amount || 0) + 0.001);
@@ -33,8 +41,11 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
       const { data } = await api.post(`/admin/bookings/${booking.id}/cancel`, {
         reason, notify_guest: notify, refund: canRefund && refund,
         refund_amount: canRefund && refund ? Math.round(amt * 100) / 100 : null,
+        cancellation_fee: canRefund && refund ? (fee > 0.004 ? Math.round(fee * 100) / 100 : null) : (Number(cfee) > 0 ? Number(cfee) : null),
+        send_fee_invoice: !canRefund && feeInvoice && Number(cfee) > 0,
       });
       const parts = [`Cancelled ${booking.id}`];
+      if (data.fee_invoice) parts.push(`fee invoice ${money(data.fee_invoice.amount)} sent`);
       if (data.guest_notified) parts.push("guest notified");
       if (data.refund) {
         if (data.refund.ok && data.refund.refund?.refunded) parts.push(`refunded ${money(data.refund.amount)}`);
@@ -90,6 +101,26 @@ export default function CancelBookingDialog({ booking, onClose, onDone }) {
           </div>
         ) : (
           <div className="text-xs text-[#94a3b8]" data-testid="cancel-dialog-no-refund">No card payment to refund on this booking.</div>
+        )}
+        {refundInfo !== null && (
+          <div className="text-sm text-[#0B3B5C] bg-[#FFF7ED] border border-[#FED7AA] rounded-lg p-3 space-y-2" data-testid="cancel-dialog-fee-row">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold">Cancellation fee $</span>
+              <input type="number" step="0.01" min="0" value={cfee} onChange={(e) => setFee(e.target.value)}
+                className="w-24 px-2 py-1 border border-[#E2E8F0] rounded text-sm" data-testid="cancel-dialog-fee-input" />
+              {presets.map((p) => (
+                <button key={p.label} type="button" onClick={() => setFee(String(p.v))} className="text-xs underline text-[#B47F26]" data-testid={`cancel-dialog-fee-${p.label.replace("%", "pct")}`}>{p.label}</button>
+              ))}
+            </div>
+            {canRefund ? (
+              <div className="text-[11px] text-[#64748B]">The fee is kept from the Stripe refund, so the guest gets back the rest.</div>
+            ) : Number(cfee) > 0 && (
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={feeInvoice} onChange={(e) => setFeeInvoice(e.target.checked)} data-testid="cancel-dialog-fee-invoice" />
+                Email + text the guest a Stripe pay link for the {money(Number(cfee))} fee
+              </label>
+            )}
+          </div>
         )}
         <button type="button" onClick={submit} disabled={busy}
           className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#E86A3C] text-white py-2.5 text-sm font-bold disabled:opacity-60"

@@ -977,3 +977,11 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Quote lines now also show "Online booking discount" (negative) so lines add up to the total.
 - Spanish tour pages: /es/tours/nadar-con-delfines, /es/tours/blue-lagoon, /es/tours/atlantis (live per-person price from /api/tours, book via /tours?book=<id>), hreflang/sitemap clusters tour:*.
 - Quote page: A→B→C route map with leg fares + Share trip / WhatsApp / Copy link; quote PDF has a "Your route" map-style diagram.
+
+
+## 2026-11-20 — Quote people editor, quote → invoice & pay, admin quotes, cancellation fees
+- POST /api/quotes/{id}/people re-prices an open quote (passengers, or adults/kids/toddlers for child-priced tours); QuoteView "Number of people" editor.
+- "Convert to invoice & pay": /quotes/{id}/book now sets booking.invoice_number (INV-xxxxxx); Pay page shows invoice number + "Download invoice PDF"; receipt PDF titled "Invoice" while unpaid, and lists promotion/online discounts.
+- Admin: POST /api/admin/quotes (email + optional SMS link); NewBookingDialog "Send as quote instead" for taxi/tour/rental items (needs name, email, phone, date).
+- Cancel dialog: cancellation fee ($ or 10/25/50%). Paid card bookings → fee kept from the Stripe refund (booking.cancellation_fee). Unpaid → optional fee invoice (new booking source "cancellation_fee", parent_booking_id) with Stripe pay link by email + text.
+- Note: tours without child_price are priced as one flat price whatever the group size (existing behaviour) — the people editor only changes price for per-person/child-priced items.

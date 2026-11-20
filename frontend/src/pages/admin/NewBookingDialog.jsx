@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, X } from "lucide-react";
-import { api } from "../../lib/api";
+import { api, money } from "../../lib/api";
 
 const SERVICES = [
   { key: "taxi", label: "Taxi", path: "/taxi-services" },
@@ -131,6 +131,31 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
     setF((x) => ({ ...x, item_id: it?.id || "", item_name: it?.name || "", total: x.total || (it?.price ?? it?.price_per_day ?? "") }));
   };
 
+  const sendQuote = async () => {
+    const it = items.find((x) => x.id === f.item_id);
+    if (!it || !["taxi", "tour", "rental"].includes(f.service_type)) { toast.error("Pick a taxi route, tour or car from the list to send a quote"); return; }
+    if (!f.customer_name.trim() || !f.customer_email.trim() || !f.customer_phone.trim() || !f.booking_date) { toast.error("Guest name, email, phone and date are needed for a quote"); return; }
+    setBusy(true);
+    try {
+      const pax = Number(f.passengers) || 1;
+      const payload = {
+        service_type: f.service_type, item_id: it.id, item_name: it.name, price: it.price ?? it.price_per_day ?? 0,
+        customer_name: f.customer_name, customer_email: f.customer_email, customer_phone: f.customer_phone,
+        booking_date: f.booking_date, pickup_location: f.pickup_location || null, dropoff_location: f.dropoff_location || null,
+        stops: f.stops.filter((s) => s && s.trim()), passengers: pax, adults: f.service_type === "tour" ? pax : undefined,
+        extra_luggage: Number(f.extra_luggage) || 0, car_seats: Number(f.car_seats) || 0, days: 1,
+        notes: f.notes || null, payment_method: "stripe", tip_amount: 0,
+      };
+      const { data } = await api.post("/admin/quotes", { payload, text_guest: !!f.customer_phone?.trim() });
+      toast.success(`Quote ${data.id} sent · ${money(data.total)}${data.text_sent ? " · texted" : ""}`);
+      onClose();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Couldn't create the quote");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
@@ -246,6 +271,11 @@ export default function NewBookingDialog({ initial, onClose, onCreated }) {
         <button type="submit" disabled={busy} className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-[#0B3B5C] text-white py-2.5 text-sm font-bold disabled:opacity-60" data-testid="new-booking-submit">
           <Plus className="w-4 h-4" /> {busy ? "Creating…" : "Create booking"}
         </button>
+        {["taxi", "tour", "rental"].includes(f.service_type) && (
+          <button type="button" onClick={sendQuote} disabled={busy} className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-[#0B3B5C] text-[#0B3B5C] py-2.5 text-sm font-bold disabled:opacity-60" data-testid="new-booking-send-quote">
+            Send as quote instead (guest can change people, then pay)
+          </button>
+        )}
       </form>
     </div>
   );

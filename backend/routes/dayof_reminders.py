@@ -585,6 +585,38 @@ class BookingCancel(BaseModel):
     notify_guest: bool = True
     refund: bool = False
     refund_amount: Optional[float] = Field(None, gt=0, le=100000)
+    cancellation_fee: Optional[float] = Field(None, ge=0, le=100000)
+    send_fee_invoice: bool = False
+
+
+async def _fee_invoice(b: dict, fee: float, reason: str, admin: str) -> dict:
+    """Unpaid booking cancelled with a fee: create a payable fee invoice and send the Stripe pay link."""
+    import uuid  # noqa: PLC0415
+    doc = {
+        "id": str(uuid.uuid4())[:8].upper(), "service_type": "other",
+        "item_id": "", "item_name": f"Cancellation fee — booking {b['id']}",
+        "customer_name": b.get("customer_name"), "customer_email": b.get("customer_email"),
+        "customer_phone": b.get("customer_phone"), "booking_date": b.get("booking_date"),
+        "passengers": 1, "price": fee, "total": fee, "notes": reason or "Cancellation fee",
+        "parent_booking_id": b["id"], "invoice_number": f"INV-CF{b['id']}", "invoiced_at": _now_iso(),
+        "status": "confirmed", "payment_method": "stripe", "payment_status": "pending", "tip_enabled": False,
+        "source": "cancellation_fee", "created_by": admin, "created_at": _now_iso(), "updated_at": _now_iso(),
+        "status_history": [{"status": "confirmed", "at": _now_iso(), "by": admin, "note": f"Cancellation fee for {b['id']}"}],
+    }
+    await _db.bookings.insert_one(dict(doc))
+    out = {"booking_id": doc["id"], "amount": fee, "email": None, "text": None}
+    if doc.get("customer_email"):
+        from routes.admin import admin_send_payment_email, SendPaymentEmailRequest  # noqa: PLC0415
+        try:
+            out["email"] = await admin_send_payment_email(doc["id"], SendPaymentEmailRequest(), admin)
+        except HTTPException as he:
+            out["email"] = {"sent": False, "error": he.detail}
+    if doc.get("customer_phone"):
+        try:
+            out["text"] = await admin_text_pay_link(doc["id"], admin)
+        except HTTPException as he:
+            out["text"] = {"sent": False, "error": he.detail}
+    return out
 
 
 async def _paid_card_tx(booking_id: str) -> Optional[dict]:
@@ -663,7 +695,14 @@ async def admin_cancel_booking(booking_id: str, req: BookingCancel, admin: str =
                 refund = {"ok": False, "error": he.detail}
     from routes.gift_redeem import restore_for_booking  # noqa: PLC0415
     gift_back = await restore_for_booking(b)
-    return {"cancelled": True, "gift_restored": gift_back,
+    fee = round(float(req.cancellation_fee or 0), 2)
+    fee_invoice = None
+    if fee > 0:
+        await _db.bookings.update_one({"id": booking_id}, {"$set": {"cancellation_fee": fee}})
+        if req.send_fee_invoice and b.get("payment_status") not in ("paid", "partially_refunded"):
+            fee_invoice = await _fee_invoice(b, fee, reason, admin)
+            await _db.bookings.update_one({"id": booking_id}, {"$set": {"cancellation_fee_booking_id": fee_invoice["booking_id"]}})
+    return {"cancelled": True, "gift_restored": gift_back, "cancellation_fee": fee, "fee_invoice": fee_invoice,
             "guest_notified": bool(notice and (notice["email"].get("sent") or notice["sms"].get("sent"))),
             "refund": refund}
 

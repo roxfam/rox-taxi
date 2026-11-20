@@ -59,6 +59,38 @@ function ShareTrip({ q }) {
   );
 }
 
+function PeopleEditor({ q, onChange }) {
+  const child = q.adults !== null && q.adults !== undefined;
+  const [v, setV] = useState(child ? { adults: q.adults, kids: q.kids || 0, toddlers: q.toddlers || 0 } : { passengers: q.passengers || 1 });
+  const [busy, setBusy] = useState(false);
+  const dirty = child ? (v.adults !== q.adults || v.kids !== (q.kids || 0) || v.toddlers !== (q.toddlers || 0)) : v.passengers !== q.passengers;
+  const step = (k, d, min, max) => setV((x) => ({ ...x, [k]: Math.max(min, Math.min(max, (x[k] || 0) + d)) }));
+  const save = async () => {
+    setBusy(true);
+    try { const { data } = await api.post(`/quotes/${q.id}/people`, v); onChange(data); toast.success("Price updated"); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Couldn't update the quote"); } finally { setBusy(false); }
+  };
+  const fields = child ? [["adults", "Adults", 1, 40], ["kids", "Kids", 0, 40], ["toddlers", "Toddlers", 0, 20]] : [["passengers", "People", 1, 60]];
+  return (
+    <div className="print:hidden mt-6 rounded-2xl border border-[#EFE7D5] p-5" data-testid="quote-people-editor">
+      <div className="text-[10px] tracking-[0.3em] uppercase font-black text-[#8a6b1f] mb-3">Number of people</div>
+      <div className="flex flex-wrap items-center gap-5">
+        {fields.map(([k, label, min, max]) => (
+          <div key={k} className="flex items-center gap-2" data-testid={`quote-people-${k}`}>
+            <span className="text-sm text-[#64748B] w-16">{label}</span>
+            <button type="button" onClick={() => step(k, -1, min, max)} className="w-9 h-9 rounded-full border border-[#E2E8F0]" data-testid={`quote-people-${k}-minus`}>−</button>
+            <span className="mono w-6 text-center font-bold text-[#0B3B5C]" data-testid={`quote-people-${k}-count`}>{v[k]}</span>
+            <button type="button" onClick={() => step(k, 1, min, max)} className="w-9 h-9 rounded-full border border-[#E2E8F0]" data-testid={`quote-people-${k}-plus`}>+</button>
+          </div>
+        ))}
+        <button type="button" onClick={save} disabled={!dirty || busy} className="rounded-full bg-[#0B3B5C] text-white px-5 py-2 text-sm font-semibold disabled:opacity-40" data-testid="quote-people-update">
+          {busy ? "Updating…" : "Update price"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function QuoteView() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -71,7 +103,7 @@ export default function QuoteView() {
     try {
       const { data } = await api.post(`/quotes/${q.id}/book`);
       sessionStorage.removeItem("rox_quote_mode");
-      toast.success("Booked! Taking you to payment…");
+      toast.success(`Invoice ${data.invoice_number || ""} created — taking you to payment…`);
       nav(`/pay/${data.booking_id}`);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not book this quote");
@@ -106,6 +138,7 @@ export default function QuoteView() {
           <Row k="Drop-off" v={q.dropoff_location} />
           <Row k={q.service_type === "rental" ? "Rental days" : "Guests"} v={String(q.service_type === "rental" ? q.days : q.passengers || "")} />
           <RouteMap q={q} />
+          {q.status === "open" && q.kind === "booking" && <PeopleEditor key={q.total} q={q} onChange={setQ} />}
           <div className="mt-6 rounded-2xl bg-[#FBF7EF] p-5" data-testid="quote-lines">
             {q.lines.map((l) => (
               <div key={l.label} className="flex justify-between text-sm py-1"><span className="text-[#64748B]">{l.label}</span><span className="mono text-[#0B3B5C]">{money(l.amount)}</span></div>
@@ -121,10 +154,10 @@ export default function QuoteView() {
       <div className="print:hidden mt-6 flex flex-wrap gap-3">
         {q.status === "open" && (
           <button onClick={book} disabled={busy} className="btn-shine inline-flex items-center gap-2 rounded-full bg-[#E86A3C] text-white px-7 py-3.5 text-sm font-bold hover:bg-[#d55a30] transition-colors disabled:opacity-60" data-testid="quote-book-btn">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarCheck className="w-4 h-4" />} Book this quote
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarCheck className="w-4 h-4" />} Convert to invoice &amp; pay
           </button>
         )}
-        {q.status === "booked" && q.booking_id && <Link to={`/pay/${q.booking_id}`} className="rounded-full bg-[#0B3B5C] text-white px-7 py-3.5 text-sm font-bold" data-testid="quote-view-booking">View booking</Link>}
+        {q.status === "booked" && q.booking_id && <Link to={`/pay/${q.booking_id}`} className="rounded-full bg-[#0B3B5C] text-white px-7 py-3.5 text-sm font-bold" data-testid="quote-view-booking">View invoice &amp; pay</Link>}
         {q.status === "expired" && <Link to="/quote" className="rounded-full bg-[#0B3B5C] text-white px-7 py-3.5 text-sm font-bold" data-testid="quote-new-btn">Get a new quote</Link>}
         <a href={`${API}/quotes/${q.id}/pdf`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] px-6 py-3.5 text-sm font-semibold text-[#0B3B5C] hover:border-[#D4A94A] transition-colors" data-testid="quote-pdf-btn"><Download className="w-4 h-4" /> Download PDF</a>
         <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] px-6 py-3.5 text-sm font-semibold text-[#0B3B5C] hover:border-[#D4A94A] transition-colors" data-testid="quote-print-btn"><Printer className="w-4 h-4" /> Print</button>

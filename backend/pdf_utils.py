@@ -175,6 +175,7 @@ def build_receipt_pdf(booking: dict) -> bytes:
     now_iso = datetime.now(timezone.utc).isoformat()
     paid = booking.get("payment_status") == "paid"
     status_label = "PAID" if paid else "PENDING PAYMENT"
+    is_invoice = bool(booking.get("invoice_number")) and not paid
 
     story = []
     logo = _load_logo()
@@ -182,8 +183,9 @@ def build_receipt_pdf(booking: dict) -> bytes:
         story.append(logo)
         story.append(Spacer(1, 6))
     story.append(Paragraph("ROX TAXI SERVICE AND TOURS", sub))
-    story.append(Paragraph(f"Booking receipt for <font color='#D4A94A'><i>{booking.get('customer_name','')}</i></font>", title))
-    story.append(Paragraph(f"REFERENCE {booking['id']} · {status_label} · ISSUED {now_iso[:10]}", sub))
+    story.append(Paragraph(f"{'Invoice' if is_invoice else 'Booking receipt'} for <font color='#D4A94A'><i>{booking.get('customer_name','')}</i></font>", title))
+    _inv = f"INVOICE {booking['invoice_number']} · " if booking.get("invoice_number") else ""
+    story.append(Paragraph(f"{_inv}REFERENCE {booking['id']} · {status_label} · ISSUED {now_iso[:10]}", sub))
 
     rows = [["Service", booking.get("item_name", "-")]]
     rows.append(["Date", str(booking.get("booking_date", ""))])
@@ -247,6 +249,9 @@ def build_receipt_pdf(booking: dict) -> bytes:
         amt_rows.append(["Airport drop-off surcharge", f"${airport_dropoff:,.2f}"])
     # Subtotal + VAT + processing — matches the live booking API.
     amt_rows.append(["Subtotal", f"${subtotal:,.2f}"])
+    for _dk, _dl in (("promotion_discount", "Promotion"), ("online_discount", "Online booking discount")):
+        if float(booking.get(_dk) or 0):
+            amt_rows.append([_dl, f"-${float(booking[_dk]):,.2f}"])
     if vat_amount:
         amt_rows.append(["Bahamas VAT (10%)", f"${vat_amount:,.2f}"])
     if processing_fee:

@@ -7,7 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import Response
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 router = APIRouter()
 _db = _now_iso = _create_booking = _Booking = _require_admin = None
@@ -80,9 +80,8 @@ def _notify(q: dict) -> None:
         logging.warning("quote owner notify err: %s", e)
 
 
-@router.post("/quotes")
-async def create_quote(req: QuoteRequest, request: Request):
-    res = await _create_booking(_model(req.payload, True), request)
+async def _price(payload: dict, request: Request) -> dict:
+    res = await _create_booking(_model(payload, True), request)
     b = res["booking"]
     lines = [{"label": lbl, "amount": round(float(b[k]), 2) * (-1 if k in ("online_discount", "promotion_discount") else 1)}
              for k, lbl in PRICE_KEYS if b.get(k)]
@@ -95,16 +94,73 @@ async def create_quote(req: QuoteRequest, request: Request):
         rest = [x for x in lines if x["label"] not in ("Fare / service", "Paradise Island bridge toll pass (included above)")]
         lines = leg_lines + ([{"label": "Paradise Island bridge toll pass", "amount": toll}] if toll else []) \
             + ([{"label": "Luggage, extras & fees", "amount": extras}] if extras > 0 else []) + rest
-    return await _save_quote(req.payload, "booking", {
+    return {
         "service_type": b.get("service_type"), "item_name": b.get("item_name"),
         "customer_name": b.get("customer_name"), "customer_email": b.get("customer_email"),
         "customer_phone": b.get("customer_phone"), "booking_date": b.get("booking_date"),
         "pickup_location": b.get("pickup_location"), "dropoff_location": b.get("dropoff_location"),
         "stops": b.get("stops") or [], "trip_legs": legs,
         "passengers": b.get("passengers"), "days": b.get("days"),
+        "adults": b.get("adults"), "kids": b.get("kids"), "toddlers": b.get("toddlers"),
         "lines": lines,
         "total": round(float(b.get("total") or 0), 2),
-    })
+    }
+
+
+@router.post("/quotes")
+async def create_quote(req: QuoteRequest, request: Request):
+    return await _save_quote(req.payload, "booking", await _price(req.payload, request))
+
+
+class QuotePeople(BaseModel):
+    passengers: Optional[int] = Field(None, ge=1, le=60)
+    adults: Optional[int] = Field(None, ge=0, le=40)
+    kids: Optional[int] = Field(None, ge=0, le=40)
+    toddlers: Optional[int] = Field(None, ge=0, le=20)
+
+
+@router.post("/quotes/{qid}/people")
+async def quote_people(qid: str, req: QuotePeople, request: Request):
+    """Guest changes the number of people on an open quote; it is re-priced with the same rules as a booking."""
+    q = await _get(qid)
+    if _status(q) != "open" or q.get("kind") != "booking":
+        raise HTTPException(400, "This quote can't be changed any more")
+    p = dict(q["payload"])
+    if p.get("adults") is not None and req.adults is not None:
+        p.update({"adults": req.adults, "kids": req.kids or 0, "toddlers": req.toddlers or 0})
+        p["passengers"] = req.adults + (req.kids or 0) + (req.toddlers or 0)
+        if req.adults + (req.kids or 0) < 1:
+            raise HTTPException(400, "At least one paying guest is needed")
+    elif req.passengers:
+        p["passengers"] = req.passengers
+        if p.get("adults") is not None:
+            p.update({"adults": req.passengers, "kids": 0, "toddlers": 0})
+    else:
+        raise HTTPException(400, "Enter the number of people")
+    p.pop("processing_fee", None)
+    p.pop("group_discount", None)
+    fields = await _price(p, request)
+    await _db.quotes.update_one({"id": q["id"]}, {"$set": {**fields, "payload": p, "updated_at": _now_iso()}})
+    return _public({**q, **fields})
+
+
+class AdminQuote(BaseModel):
+    payload: dict
+    text_guest: bool = False
+
+
+@router.post("/admin/quotes")
+async def admin_create_quote(req: AdminQuote, request: Request, admin=Depends(_admin_dep)):
+    q = await _save_quote(req.payload, "booking", {**await _price(req.payload, request), "created_by": admin})
+    if req.text_guest and q.get("customer_phone"):
+        from notifications import send_sms  # noqa: PLC0415
+        from routes.payment_digest import _site_url  # noqa: PLC0415
+        first = (q.get("customer_name") or "there").split(" ")[0]
+        r = await asyncio.to_thread(send_sms, q["customer_phone"],
+                                    f"Hi {first}, it's Rox Taxi. Your quote {q['id']} for {q['item_name']} is ${q['total']:.2f}. "
+                                    f"Check the people, then tap to pay: {_site_url()}/quote/{q['id']}")
+        q["text_sent"] = bool(r.get("sent"))
+    return q
 
 
 CB_LINES = [("base", "Beach day package (chairs + umbrella)"), ("extra_seats_total", "Extra seats"),
@@ -204,8 +260,9 @@ async def book_quote(qid: str, request: Request):
         await _db.quotes.update_one({"id": q["id"]}, {"$set": {"status": "open"}})
         raise
     await _db.quotes.update_one({"id": q["id"]}, {"$set": {"status": "booked", "booking_id": b["id"], "booked_at": _now_iso()}})
-    await _db.bookings.update_one({"id": b["id"]}, {"$set": {"quote_id": q["id"]}})
-    return {"booking_id": b["id"]}
+    invoice_no = "INV-" + q["id"].split("-", 1)[-1]
+    await _db.bookings.update_one({"id": b["id"]}, {"$set": {"quote_id": q["id"], "invoice_number": invoice_no, "invoiced_at": _now_iso()}})
+    return {"booking_id": b["id"], "invoice_number": invoice_no}
 
 
 @router.get("/admin/quotes")
