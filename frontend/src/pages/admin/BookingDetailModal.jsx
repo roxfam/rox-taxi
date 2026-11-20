@@ -50,8 +50,9 @@ export default function BookingDetailModal({ booking: bookingProp, initialEdit =
   const resendInvoice = async () => {
     setResendBusy(true);
     try {
-      await api.post(`/admin/bookings/${bid}/resend-notification`);
-      toast.success("Invoice email re-sent to guest");
+      const { data } = await api.post(`/admin/bookings/${bid}/send-invoice`);
+      const ch = [data.email?.sent && "email", data.text?.sent && "text"].filter(Boolean).join(" + ");
+      if (ch) toast.success(`Invoice sent by ${ch}`); else toast.error("Nothing was sent — check the email/phone");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Resend failed");
     } finally {
@@ -141,11 +142,11 @@ export default function BookingDetailModal({ booking: bookingProp, initialEdit =
             </a>
             <button
               onClick={resendInvoice}
-              disabled={resendBusy || !booking.customer_email}
+              disabled={resendBusy || !(booking.customer_email || booking.customer_phone)}
               className="inline-flex items-center gap-1.5 rounded-full border border-[#D4A94A] text-[#B47F26] bg-white px-4 py-2 text-xs font-black uppercase tracking-wider hover:bg-[#D4A94A] hover:text-white active:scale-95 disabled:opacity-50"
               data-testid="booking-detail-resend-invoice"
             >
-              <Send className="w-3.5 h-3.5" /> {resendBusy ? "Sending…" : "Re-email invoice"}
+              <Send className="w-3.5 h-3.5" /> {resendBusy ? "Sending…" : "Send invoice"}
             </button>
             <button
               onClick={() => setPayEmailOpen(true)}

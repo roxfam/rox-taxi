@@ -429,6 +429,45 @@ class GuestConfirm(BaseModel):
     confirmed: bool = True
 
 
+@router.post("/admin/bookings/{booking_id}/send-invoice")
+async def admin_send_invoice(booking_id: str, admin: str = Depends(_admin_dep)):
+    """Email + text the guest their (updated) invoice PDF link, plus a pay link if unpaid."""
+    b = await _db.bookings.find_one({"id": booking_id.strip().upper()}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    if not (b.get("customer_email") or b.get("customer_phone")):
+        raise HTTPException(400, "This booking has no email or phone")
+    from notifications import send_email, send_sms  # noqa: PLC0415
+    e = _html.escape
+    first = (b.get("customer_name") or "there").split(" ")[0] or "there"
+    inv = b.get("invoice_number") or b["id"]
+    total = float(b.get("total") or b.get("total_price") or 0)
+    pdf = f"{_site_url()}/api/bookings/{b['id']}/receipt.pdf"
+    unpaid = b.get("payment_status") not in ("paid", "refunded", "partially_refunded")
+    pay = f"{_site_url()}/pay/{b['id']}"
+    out = {"email": None, "text": None}
+    if b.get("customer_email"):
+        pay_html = (f'<a href="{pay}" style="display:block;margin-top:10px;background:#E86A3C;color:#fff;text-decoration:none;'
+                    f'text-align:center;font-weight:700;padding:12px;border-radius:999px;">Pay ${total:,.2f} online</a>') if unpaid else ""
+        html = (f'<div style="font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;background:#FAF9F6;padding:28px;">'
+                f'<div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#D4A94A;font-weight:800;">Invoice {e(inv)}</div>'
+                f'<h1 style="font-family:Georgia,serif;color:#0B3B5C;font-size:22px;margin:8px 0 14px;">Hi {e(first)}, here is your Rox invoice</h1>'
+                f'<p style="color:#334155;font-size:14px;">{e(b.get("item_name") or "Your booking")} &middot; total <b>${total:,.2f}</b>'
+                f'{" &middot; paid" if not unpaid else ""}</p>'
+                f'<a href="{pdf}" style="display:block;background:#0B3B5C;color:#fff;text-decoration:none;text-align:center;font-weight:700;'
+                f'padding:12px;border-radius:999px;">Download invoice PDF</a>{pay_html}'
+                f'<p style="color:#64748B;font-size:11px;text-align:center;margin-top:14px;">Questions? WhatsApp +1 (242) 432-2587.</p></div>')
+        text = f"Hi {first}, your Rox invoice {inv} (${total:,.2f}): {pdf}" + (f"\nPay online: {pay}" if unpaid else "")
+        out["email"] = await asyncio.to_thread(send_email, b["customer_email"], f"Your Rox invoice {inv}", html, text,
+                                               category="confirmation")
+    if b.get("customer_phone"):
+        sms = f"Rox: Hi {first}, your invoice {inv} for ${total:,.2f} is ready: {pdf}" + (f" Pay: {pay}" if unpaid else "")
+        out["text"] = await asyncio.to_thread(send_sms, b["customer_phone"], sms[:600])
+    await _db.bookings.update_one({"id": b["id"]}, {"$set": {"invoice_sent_at": _now_iso()},
+                                                     "$push": {"invoice_sends": {"at": _now_iso(), "by": admin}}})
+    return out
+
+
 class ManualBooking(BaseModel):
     service_type: str = Field(..., pattern="^(taxi|tour|rental|cable_beach|other)$")
     item_id: Optional[str] = Field(None, max_length=80)

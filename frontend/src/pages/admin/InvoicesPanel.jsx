@@ -1,14 +1,39 @@
 import { useEffect, useState } from "react";
-import { Download, Pencil, Receipt, Search, X } from "lucide-react";
+import { toast } from "sonner";
+import { Download, Pencil, Receipt, Search, Send, X } from "lucide-react";
 import { api, money } from "../../lib/api";
 import BookingEditForm from "./BookingEditForm";
 
 const PDF = (id) => `${process.env.REACT_APP_BACKEND_URL}/api/bookings/${id}/receipt.pdf`;
 
+function SendInvoiceButton({ b, label = "Send" }) {
+  const [busy, setBusy] = useState(false);
+  const send = async () => {
+    if (!b.customer_email && !b.customer_phone) { toast.error("No email or phone on this booking"); return; }
+    if (!window.confirm(`Email + text invoice ${b.invoice_number || b.id} to ${b.customer_name || "the guest"}?`)) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/admin/bookings/${b.id}/send-invoice`);
+      const ch = [data.email?.sent && "email", data.text?.sent && "text"].filter(Boolean).join(" + ");
+      if (ch) toast.success(`Invoice sent by ${ch}`); else toast.error("Nothing was sent — check the email/phone");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Couldn't send the invoice");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" onClick={send} disabled={busy} className="inline-flex items-center gap-1 underline text-[#047857] font-semibold mr-3 disabled:opacity-50" data-testid={`admin-invoice-send-${b.id}`}>
+      <Send className="w-3 h-3" />{busy ? "Sending…" : label}
+    </button>
+  );
+}
+
 export default function InvoicesPanel() {
   const [rows, setRows] = useState(null);
   const [s, setS] = useState("");
   const [edit, setEdit] = useState(null);
+  const [saved, setSaved] = useState(null);
   const load = () => api.get("/admin/bookings").then(({ data }) => setRows(data)).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
   if (!rows) return null;
@@ -41,6 +66,7 @@ export default function InvoicesPanel() {
                 <td>{b.payment_status || "—"}</td>
                 <td className="whitespace-nowrap text-right">
                   <a href={PDF(b.id)} download={`rox-invoice-${b.id}.pdf`} className="inline-flex items-center gap-1 underline text-[#0B3B5C] mr-3" data-testid={`admin-invoice-download-${b.id}`}><Download className="w-3 h-3" />PDF</a>
+                  <SendInvoiceButton b={b} />
                   <button type="button" onClick={() => setEdit(b)} className="inline-flex items-center gap-1 underline text-[#E86A3C] font-semibold" data-testid={`admin-invoice-edit-${b.id}`}><Pencil className="w-3 h-3" />Edit</button>
                 </td>
               </tr>
@@ -55,8 +81,15 @@ export default function InvoicesPanel() {
               <h3 className="font-[Georgia] text-xl text-[#0B3B5C]">Edit invoice {edit.invoice_number || edit.id}</h3>
               <button type="button" onClick={() => setEdit(null)} data-testid="admin-invoice-edit-close"><X className="w-5 h-5 text-[#64748B]" /></button>
             </div>
-            <BookingEditForm booking={edit} onCancel={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />
+            <BookingEditForm booking={edit} onCancel={() => setEdit(null)} onSaved={(nb) => { setEdit(null); setSaved(nb || edit); load(); }} />
           </div>
+        </div>
+      )}
+      {saved && (
+        <div className="fixed bottom-6 right-6 z-[85] bg-white border border-[#E2E8F0] shadow-xl rounded-xl p-4 text-sm flex items-center gap-3" data-testid="admin-invoice-saved-toast">
+          <span className="text-[#0B3B5C]">Invoice {saved.invoice_number || saved.id} updated. Send it to the guest?</span>
+          <SendInvoiceButton b={saved} label="Send invoice" />
+          <button type="button" onClick={() => setSaved(null)} className="text-[#64748B]" data-testid="admin-invoice-saved-dismiss"><X className="w-4 h-4" /></button>
         </div>
       )}
     </div>

@@ -1048,6 +1048,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Quotes: "Resend quote" for open + expired (expired re-opens 48h; email includes PDF link + validity), PDF link per quote, edit allowed for Cable Beach quotes (guest details only); booked = view only.
 - Invoice edit: BookingEdit now also accepts item_name + dropoff_time.
 
+- Send invoice: POST /admin/bookings/{id}/send-invoice (email with PDF link + pay link if unpaid, SMS with links; logs invoice_sends). Buttons: Invoices list "Send", post-edit "Send invoice?" prompt, Booking detail "Send invoice" (was email-only re-send).
+
 
 
 
