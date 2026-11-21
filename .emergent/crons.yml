@@ -75,3 +75,10 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/send-unpaid-invoice-reminders"
     method: POST
     enabled: true
+
+  - name: purge-old-quotes
+    description: "Hourly: deletes quotes not turned into a booking 3 days after they were sent (or last re-sent/edited)."
+    cron: "40 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/purge-old-quotes"
+    method: POST
+    enabled: true

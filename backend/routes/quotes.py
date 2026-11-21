@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError
 
@@ -14,6 +14,7 @@ import fees as fees_module
 router = APIRouter()
 _db = _now_iso = _create_booking = _Booking = _require_admin = None
 VALID_HOURS = 48
+PURGE_AFTER_DAYS = 3
 PRICE_KEYS = [("subtotal_before_tax", "Fare / service"), ("bridge_toll_fee", "Paradise Island bridge toll pass (included above)"), ("group_discount", "Group discount (included above)"), ("promotion_discount", "Promotion"), ("online_discount", "Online booking discount"),
               ("vat_amount", "VAT"), ("processing_fee", "Processing fee"), ("deposit_amount", "Refundable deposit"),
               ("tip_amount", "Driver gratuity")]
@@ -314,6 +315,24 @@ async def create_cable_beach_quote(req: QuoteRequest):
         "dropoff_location": "Cable Beach (Goodman's Bay)",
         "lines": lines, "total": round(float(cq.get("total") or 0), 2),
     })
+
+
+@router.post("/cron/purge-old-quotes")
+async def cron_purge_old_quotes(background: BackgroundTasks, authorization: Optional[str] = Header(None)):
+    from routes.cron import _check_cron_auth  # noqa: PLC0415
+    _check_cron_auth(authorization)
+    background.add_task(purge_old_quotes)
+    return {"ok": True, "queued": True}
+
+
+async def purge_old_quotes() -> int:
+    """Deletes un-booked quotes 3 days after they were sent (or last re-sent/edited)."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=PURGE_AFTER_DAYS) + timedelta(hours=VALID_HOURS)
+    res = await _db.quotes.delete_many({"status": {"$nin": ["booked", "booking"]},
+                                        "expires_at": {"$lte": cutoff.isoformat()}})
+    if res.deleted_count:
+        logging.info("purged %s old quotes", res.deleted_count)
+    return res.deleted_count
 
 
 async def _save_quote(payload: dict, kind: str, fields: dict) -> dict:
