@@ -338,11 +338,12 @@ async def cron_quote_expiry_reminders(background: BackgroundTasks, authorization
 
 async def send_quote_expiry_reminders() -> int:
     """Open quotes expiring within 6h get one last-chance email per validity window."""
-    from notifications import send_email  # noqa: PLC0415
+    from notifications import send_email, send_sms  # noqa: PLC0415
     from routes.payment_digest import _site_url  # noqa: PLC0415
     now = datetime.now(timezone.utc)
     sent = 0
-    async for q in _db.quotes.find({"status": "open", "customer_email": {"$nin": [None, ""]},
+    async for q in _db.quotes.find({"status": "open",
+                                    "$or": [{"customer_email": {"$nin": [None, ""]}}, {"customer_phone": {"$nin": [None, ""]}}],
                                     "expires_at": {"$gt": now.isoformat(),
                                                    "$lte": (now + timedelta(hours=EXPIRY_REMINDER_HOURS)).isoformat()}},
                                    {"_id": 0, "payload": 0}):
@@ -359,12 +360,17 @@ async def send_quote_expiry_reminders() -> int:
                 f"<p style='text-align:center;margin:28px 0'><a href='{link}' style='background:#E86A3C;color:#fff;"
                 f"text-decoration:none;padding:14px 28px;border-radius:999px;font-weight:bold'>Accept my quote</a></p>"
                 f"<p style='color:#64748B;font-size:12px'>Nothing has been booked or charged yet. After it expires you'll need a new quote.</p></div>")
+        rep = {"email": None, "text": None}
         try:
-            res = await asyncio.to_thread(send_email, q["customer_email"], f"Last chance: your Rox quote {q['id']} expires soon", html)
-            await _db.quotes.update_one({"id": q["id"]}, {"$set": {"expiry_reminder_report": res}})
+            if q.get("customer_email"):
+                rep["email"] = await asyncio.to_thread(send_email, q["customer_email"], f"Last chance: your Rox quote {q['id']} expires soon", html)
+            if q.get("customer_phone"):
+                rep["text"] = await asyncio.to_thread(send_sms, q["customer_phone"],
+                                                      f"Rox: Hi {first}, your quote {q['id']} expires {q.get('expires_label', 'soon')}. Accept it now: {link}")
             sent += 1
         except Exception as e:  # noqa: BLE001
             logging.warning("quote expiry reminder err: %s", e)
+        await _db.quotes.update_one({"id": q["id"]}, {"$set": {"expiry_reminder_report": rep}})
     return sent
 
 
