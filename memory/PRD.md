@@ -1051,6 +1051,8 @@ A production-grade website for a Bahamian taxi + tours + car-rental business (Na
 - Send invoice: POST /admin/bookings/{id}/send-invoice (email with PDF link + pay link if unpaid, SMS with links; logs invoice_sends). Buttons: Invoices list "Send", post-edit "Send invoice?" prompt, Booking detail "Send invoice" (was email-only re-send).
 - Unpaid invoice reminder: cron `send-unpaid-invoice-reminders` (hourly :20, .emergent/crons.yml) → POST /api/cron/send-unpaid-invoice-reminders (Bearer WEBHOOK_CRON_SECRET, background task). Trips 23–25h out, payment not paid/refunded/authorized, not cancelled/completed, no card hold, total>0 → one email + SMS with pay + PDF links (shared _send_invoice_notice). Idempotent via unpaid_reminded_at.
 - Quote auto-purge: cron `purge-old-quotes` (hourly :40) → POST /api/cron/purge-old-quotes (Bearer WEBHOOK_CRON_SECRET). Deletes quotes not booked 3 days after sent/last re-sent/edited (expires_at + 24h). Booked quotes kept.
+- Quote last-chance email: cron `send-quote-expiry-reminders` (every 30 min) → POST /api/cron/send-quote-expiry-reminders (Bearer WEBHOOK_CRON_SECRET). Open quotes expiring within 6h get one email with "Accept my quote" link; idempotent per validity window via expiry_reminded_for (re-sent/edited quotes can be reminded again).
+
 
 
 

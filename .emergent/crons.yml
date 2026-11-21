@@ -76,6 +76,13 @@ crons:
     method: POST
     enabled: true
 
+  - name: send-quote-expiry-reminders
+    description: "Every 30 min: open quotes expiring within 6h get one last-chance email with the accept link. Idempotent per validity window via `expiry_reminded_for`."
+    cron: "*/30 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/send-quote-expiry-reminders"
+    method: POST
+    enabled: true
+
   - name: purge-old-quotes
     description: "Hourly: deletes quotes not turned into a booking 3 days after they were sent (or last re-sent/edited)."
     cron: "40 * * * *"

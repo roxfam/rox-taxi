@@ -325,6 +325,49 @@ async def cron_purge_old_quotes(background: BackgroundTasks, authorization: Opti
     return {"ok": True, "queued": True}
 
 
+EXPIRY_REMINDER_HOURS = 6
+
+
+@router.post("/cron/send-quote-expiry-reminders")
+async def cron_quote_expiry_reminders(background: BackgroundTasks, authorization: Optional[str] = Header(None)):
+    from routes.cron import _check_cron_auth  # noqa: PLC0415
+    _check_cron_auth(authorization)
+    background.add_task(send_quote_expiry_reminders)
+    return {"ok": True, "queued": True}
+
+
+async def send_quote_expiry_reminders() -> int:
+    """Open quotes expiring within 6h get one last-chance email per validity window."""
+    from notifications import send_email  # noqa: PLC0415
+    from routes.payment_digest import _site_url  # noqa: PLC0415
+    now = datetime.now(timezone.utc)
+    sent = 0
+    async for q in _db.quotes.find({"status": "open", "customer_email": {"$nin": [None, ""]},
+                                    "expires_at": {"$gt": now.isoformat(),
+                                                   "$lte": (now + timedelta(hours=EXPIRY_REMINDER_HOURS)).isoformat()}},
+                                   {"_id": 0, "payload": 0}):
+        if q.get("expiry_reminded_for") == q["expires_at"]:
+            continue
+        await _db.quotes.update_one({"id": q["id"]}, {"$set": {"expiry_reminded_for": q["expires_at"], "expiry_reminded_at": _now_iso()}})
+        link = f"{_site_url()}/quote/{q['id']}"
+        first = (q.get("customer_name") or "there").split(" ")[0]
+        html = (f"<div style='font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#0F172A'>"
+                f"<h2 style='color:#0B3B5C'>Your quote expires soon</h2><p>Hi {first},</p>"
+                f"<p>Just a friendly reminder: your quote <b>{q['id']}</b> for <b>{q.get('item_name', '')}</b> "
+                f"(<b>${float(q.get('total') or 0):.2f}</b>) expires on <b>{q.get('expires_label', '')}</b>.</p>"
+                f"<p>Accept it now to lock in this price and secure your ride.</p>"
+                f"<p style='text-align:center;margin:28px 0'><a href='{link}' style='background:#E86A3C;color:#fff;"
+                f"text-decoration:none;padding:14px 28px;border-radius:999px;font-weight:bold'>Accept my quote</a></p>"
+                f"<p style='color:#64748B;font-size:12px'>Nothing has been booked or charged yet. After it expires you'll need a new quote.</p></div>")
+        try:
+            res = await asyncio.to_thread(send_email, q["customer_email"], f"Last chance: your Rox quote {q['id']} expires soon", html)
+            await _db.quotes.update_one({"id": q["id"]}, {"$set": {"expiry_reminder_report": res}})
+            sent += 1
+        except Exception as e:  # noqa: BLE001
+            logging.warning("quote expiry reminder err: %s", e)
+    return sent
+
+
 async def purge_old_quotes() -> int:
     """Deletes un-booked quotes 3 days after they were sent (or last re-sent/edited)."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=PURGE_AFTER_DAYS) + timedelta(hours=VALID_HOURS)
